@@ -1,5 +1,5 @@
 /*
- * $Id: dvd_encoder.h,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: dvd_encoder.h,v 1.1.1.1 2006/04/30 08:38:05 stuart_hc Exp $
  *
  * Write MPEG-2 in DVD-ready program stream.
  *

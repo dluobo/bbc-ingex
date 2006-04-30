@@ -1,5 +1,5 @@
 /*
- * $Id: recorder.h,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: recorder.h,v 1.1.1.1 2006/04/30 08:38:05 stuart_hc Exp $
  *
  * Multi-threaded uncompressed video and MPEG-2 PS implementation.
  *

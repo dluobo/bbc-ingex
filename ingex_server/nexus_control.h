@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: nexus_control.h,v 1.1.1.1 2006/04/30 08:38:05 stuart_hc Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *

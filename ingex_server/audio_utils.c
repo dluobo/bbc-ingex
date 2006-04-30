@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: audio_utils.c,v 1.1.1.1 2006/04/30 08:38:05 stuart_hc Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *

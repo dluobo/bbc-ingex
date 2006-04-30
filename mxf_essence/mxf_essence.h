@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_essence.h,v 1.1 2006/04/30 08:38:05 stuart_hc Exp $
+ * $Id: mxf_essence.h,v 1.1.1.1 2006/04/30 08:38:05 stuart_hc Exp $
  *
  * Functions to support extraction of raw essence data out of MXF files.
  *
