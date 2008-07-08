@@ -1,0 +1,112 @@
+#! /bin/sh
+# $Id: dvs_setup,v 1.1 2008/07/08 16:00:17 philipn Exp $
+# Author: Stuart Cunningham
+#
+# /etc/init.d/dvs_setup
+#
+### BEGIN INIT INFO
+# Provides:          dvs_setup
+# Required-Start:    $syslog $time
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Setup up DVS SDI I/O cards
+### END INIT INFO
+
+if [ -f /etc/rc.status ]
+then
+    # SUSE init.d functions
+    . /etc/rc.status
+else
+    # Non SUSE machine so define missing functions
+    rc_reset() {
+        true
+    }
+    rc_exit() {
+        true
+    }
+    rc_status() {
+        retval=$?
+        return $retval
+    }
+fi
+
+rc_reset
+
+DVS_DEFAULT_MODE=PAL/YUV422/FRAME/AUDIO4CH
+DVS_NOAUDIO_MODE=PAL/YUV422/FRAME
+if [ -r /etc/dvs.conf ]
+then
+    # Read in DVS mode configuration
+    . /etc/dvs.conf
+fi
+
+pal_mode() {
+    env="env PCISTUDIO=PCI,card=$1"
+
+    out=`$env /usr/bin/svram mode $DVS_DEFAULT_MODE`
+    if echo $out | grep 'device not found' > /dev/null
+    then
+        # echo "DVS card $1: device not found"
+        true
+    else
+        if echo $out | grep mode > /dev/null
+        then
+            if $env /usr/bin/svram mode $DVS_NOAUDIO_MODE | grep mode
+            then
+                echo "DVS card $1: mode failed"
+            else
+                echo "DVS card $1: $DVS_NOAUDIO_MODE"
+            fi
+        else
+            echo "DVS card $1: $DVS_DEFAULT_MODE"
+        fi
+    fi
+}
+
+# See how we were called.
+case "$1" in
+    start)
+        echo -n "Starting DVS setup"
+        # Make devices
+        (cd /usr/lib/dvs && ./mkdev)
+        
+        # Load driver
+        (cd /usr/lib/dvs && ./driver_load)
+        
+        # setup all dvs cards
+        for card in 0 1 2 3 4 5 6 7
+        do
+            pal_mode $card
+        done
+
+        # At least card 0 should be there
+        /usr/bin/svram mode info > /dev/null
+
+        rc_status -v
+        ;;
+    stop)
+        echo -n "Stopping DVS setup"
+        (cd /usr/lib/dvs && ./driver_unload)
+        rc_status -v
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+        
+        # Remember status and be quiet
+        rc_status
+        ;;
+    status)
+        echo "Current status of DVS cards:"
+        /usr/bin/svram info
+        
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 start"
+        exit 1
+esac
+rc_exit

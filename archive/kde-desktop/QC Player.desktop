@@ -1,0 +1,18 @@
+[Desktop Entry]
+Comment=
+Comment[en_GB]=
+Exec=umask 002 && qc_player --tape-cache /home/qc/cache --report /home/qc/reports --dual --x11 --disable-sdi-osd --src-buf 97 --audio-mon 8 --pb-mark-mask 0xfffcffff --pb-mark-mask 0x00030000 --session-script qc_report_script.sh --session-script-opt "--log /home/qc/reports/logs"
+GenericName=Quality Check Player
+GenericName[en_GB]=Quality Check Player
+Icon=/home/qc/Desktop/qcplayer.xpm
+MimeType=
+Name=QC Player
+Name[en_GB]=QC Player
+Path=
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DCOP-ServiceType=none
+X-KDE-SubstituteUID=false
+X-KDE-Username=

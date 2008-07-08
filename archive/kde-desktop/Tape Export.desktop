@@ -1,0 +1,20 @@
+[Desktop Entry]
+Comment=
+Comment[en_GB]=
+Encoding=UTF-8
+Exec=$HOME/http_recorder/run_tape_export.sh
+GenericName=Ingex Tape Export
+GenericName[en_GB]=Ingex Tape Export
+Icon=exec
+MimeType=
+Name=Tape Export
+Name[en_GB]=Tape Export
+Path=$HOME/http_recorder/
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DCOP-ServiceType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+X-SuSE-translate=true

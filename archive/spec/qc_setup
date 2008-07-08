@@ -1,0 +1,70 @@
+#! /bin/sh
+# $Id: qc_setup,v 1.1 2008/07/08 16:00:21 philipn Exp $
+# Author: Philip de Nier
+#
+# /etc/init.d/qc_setup
+#
+### BEGIN INIT INFO
+# Provides:          qc_setup
+# Required-Start:    $syslog $time
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       Setup up Quality Checking
+### END INIT INFO
+
+if [ -f /etc/rc.status ]
+then
+	# SUSE init.d functions
+	. /etc/rc.status
+else
+	# Non SUSE machine so define missing functions
+	rc_reset() {
+		true
+	}
+	rc_exit() {
+		true
+	}
+	rc_status() {
+		retval=$?
+		return $retval
+	}
+fi
+
+rc_reset
+
+# See how we were called.
+case "$1" in
+    start)
+        echo -n "Starting QC Setup"
+
+        # Make tape drives read/write by all users
+        chmod a+rw /dev/st[0-9]* /dev/nst[0-9]* 2> /dev/null
+		
+		# improve read performance from /video
+		/sbin/blockdev --setra 4096 /dev/xxx
+
+        rc_status -v
+        ;;
+    stop)
+        echo -n "Stopping QC Setup"
+		/sbin/blockdev --setra 256 /dev/xxx
+        rc_status -v
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+
+        # Remember status and be quiet
+        rc_status
+        ;;
+    status)
+        rc_status -v
+        ;;
+    *)
+        echo "Usage: $0 start"
+        exit 1
+esac
+rc_exit

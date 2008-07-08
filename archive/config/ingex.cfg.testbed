@@ -1,0 +1,141 @@
+# Testbed configuration for the ingex recorder system
+
+############
+# common
+############
+
+log_dir = logs/
+# keep log x days before deleting 
+keep_logs = 30
+
+cache_dir = /video/http_recorder/cache
+browse_dir = /video/http_recorder/browse
+pse_dir = /video/http_recorder/pse
+
+db_host = localhost
+db_name = ingexrecorderdb
+db_user = ingex
+db_password = ingex
+
+# if not specified then the hostname is used
+#recorder_name = xyz
+
+tape_transfer_lock_file = /video/http_recorder/.tapelockfile
+
+
+############
+# recorder
+############
+
+# DEBUG or INFO or WARNING or ERROR
+recorder_log_level = DEBUG
+# default is 3, smaller means less logging, larger means more logging
+capture_log_level = 3
+
+recorder_www_root = www/recorder
+recorder_www_port = 9000
+recorder_www_replay_port = 9005
+
+# use special device DUMMY_D3 for testing with a dummy D3 VTR or DUMMY_DIGIBETA 
+# for testing with a dummy Digibeta VTR
+# use %d to indicate that the system must try with %d substituted with 0, 1, 2, 3
+recorder_vtr_device_1 = /dev/ttyUSB%d
+recorder_vtr_device_2 = /dev/ttyUSB%d
+
+# if recorder_server_barcode_scanner is false then tape_export_barcode_fifo is ignored 
+recorder_server_barcode_scanner = false
+recorder_barcode_fifo = barcode_for_recorder.fifo
+
+# buffer size (frames) used in capture system; default is 125
+ring_buffer_size = 250
+
+# browse file generation
+browse_enable = true
+browse_video_bit_rate = 2700 # video bit rate in kbps (256kbps audio)
+# number of threads to use when encoding the video; 0 means no threads
+browse_thread_count = 4
+# number of black frames encoded as a replacement of the real frames when the 
+# browse buffer overflows; ring_buffer_size is the maximum 
+browse_overflow_frames = 100
+
+# PSE analysis and report
+pse_enable = true
+
+# VBI lines containing VITC and LTC timecodes
+# format is "<line>(,<line>)*"
+# The line number is a field 1 line number: >= 15 and <= 22
+# if a line could not be read then the next one is tried in order
+vitc_lines = 19,21,20,18,22
+ltc_lines = 15,17
+
+# Digibeta barcodes must have the following prefix
+# format is "<prefix>(,<prefix>)*"
+digibeta_barcode_prefixes = "CU "
+
+# number of audio tracks to record, maximum is 8
+num_audio_tracks = 4
+
+# limit the chunking frames per second to this value if a tape transfer is in progress
+chunking_throttle_fps = 40
+
+# add a virtual 'junk' item to the end of the list of items for chunking
+enable_chunking_junk = true
+
+# allow multi-item tapes to be ingested
+enable_multi_item = true
+
+
+############
+# tape export
+############
+
+# DEBUG or INFO or WARNING or ERROR
+tape_export_log_level = DEBUG
+# default is 1, smaller means less logging, larger means more logging
+tape_log_level = 1
+
+tape_export_www_root = www/tape
+tape_export_www_port = 9001
+
+# if tape_export_server_barcode_scanner is false then tape_export_barcode_fifo is ignored 
+tape_export_server_barcode_scanner = false
+tape_export_barcode_fifo = barcode_for_tape_export.fifo
+
+tape_device = /dev/nst0
+
+# LTO barcodes must have the following prefix
+# format is "<prefix>(,<prefix>)*"
+lto_barcode_prefixes = "LTA"
+
+# maximum number of files to transfer to LTO when using the automatic transfer method
+max_auto_files_on_lto = 10
+
+# maximum size (in giga / 10e9 bytes) of files transferred to LTO (both manual and automatic transfer methods)
+max_lto_size_gb = 390
+
+
+############
+# debug
+############
+
+# if true log av sync to capture log file
+dbg_av_sync = false
+
+# if true log VITC lines to a file when failed to read
+dbg_vitc_failures = false
+
+# if true output confidence replay to X11 screen and not to the SDI output
+dbg_vga_replay = false
+
+# if true use the null barcode scanner device
+dbg_null_barcode_scanner = false
+
+# if true then do not delete the files once successfully transferred to LTO
+dbg_keep_lto_files = false
+
+# if true log the ring buffer position of the store threads in the capture system
+dbg_store_thread_buffer = false
+
+# if true log failures to open the serial port for connecting to the VTR
+dbg_serial_port_open = false
+

@@ -1,0 +1,20 @@
+[Desktop Entry]
+Comment=
+Comment[en_GB]=
+Encoding=UTF-8
+Exec=$HOME/http_recorder/run_recorder.sh
+GenericName=Ingex recorder
+GenericName[en_GB]=Ingex recorder
+Icon=exec
+MimeType=
+Name=Recorder
+Name[en_GB]=Recorder
+Path=$HOME/http_recorder/
+StartupNotify=true
+Terminal=true
+TerminalOptions=
+Type=Application
+X-DCOP-ServiceType=none
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+X-SuSE-translate=true
