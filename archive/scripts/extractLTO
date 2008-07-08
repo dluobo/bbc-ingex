@@ -1,0 +1,195 @@
+#!/usr/bin/perl -w
+#
+#  $Id: extractLTO,v 1.1 2008/07/08 16:01:36 philipn Exp $
+# 
+#
+# 
+#  Copyright (C) 2007 BBC Research, Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# 
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+# 
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+# 
+#  You should have received a copy of the GNU General Public License along
+#  with this program; if not, write to the Free Software Foundation, Inc.,
+#  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
+use Getopt::Long;
+use Cwd;
+use strict;
+
+my $opt_use_numeric_list = 0;
+my $lto_number_required = undef;
+my $tape_device = "/dev/nst0";
+GetOptions(	'n', \$opt_use_numeric_list,
+			'b=s', \$lto_number_required,
+			'd=s', \$tape_device
+		);
+
+my ($file_list, $destination);
+if (scalar @ARGV == 1) {
+	# destination specified but no filelist
+	($destination) = @ARGV;
+}
+elsif (scalar @ARGV == 2) {
+	($file_list, $destination) = @ARGV;
+}
+else {
+	usageExit();
+}
+
+my $tar_cmd = "tar -x -v -b 512 -f $tape_device";	# blocksize = 512*512 = 262144 (256kiB)
+
+setblk();
+
+chdir $destination || die "Cannot change directory to $destination: $!";
+
+# Some options require we read the index file first
+# -b LTO_number
+# [filelist to extract]
+my %tapeinfo;
+if (defined $lto_number_required ||
+	(defined $file_list && ! $opt_use_numeric_list)) {
+	read_tape_index(\%tapeinfo);
+}
+
+if (defined $lto_number_required && $tapeinfo{lto} ne $lto_number_required) {
+	die "Tape LTO spool number ($tapeinfo{lto}) does not match specified number ($lto_number_required)\n";
+}
+
+# Three modes of operation:
+# - extract all files
+# - extract files by file position number (-n 1+2+4)
+# - extract files by file name
+#
+if (!defined $file_list) {
+	print "Extracting all files to $destination:\n";
+	my $success = 0;
+	rewind();
+	while (1) {
+		my $output = `$tar_cmd 2>&1`;
+		my $res = $? >> 8;
+		#print "res=$res output=$output\n";
+		if ($output =~ /At beginning of tape/sm) {
+			$success = 1;
+			last;
+		}
+		last if ($? != 0);
+		if (length $output > 0) {
+			print " - $output";
+		}
+	}
+	if ($success) {
+		print "All files extracted\n";
+	}
+	else {
+		print "An error occurred\n";
+	}
+}
+elsif ($opt_use_numeric_list) {
+	my @file_pos = split(/\+/, $file_list);
+
+    my $lastpos = -1;
+    for my $pos (@file_pos) { 
+        if ($pos <= $lastpos) {
+            die "file positions must be in ascending order: $lastpos > $pos\n"
+        }
+        $lastpos = $pos;
+    }
+
+	rewind();
+	$lastpos = 0;
+	for my $pos (@file_pos) {
+		my $diff = $pos - $lastpos;
+		if ($diff == 0) {
+			# do nothing
+		}
+		elsif ($diff > 0) {
+			print "skipping forward $diff\n";
+			system("mt -f $tape_device fsf $diff");
+		}
+		elsif ($diff < 0) {
+			my $back = abs($diff);
+			print "skipping backwards $back\n";
+			system("mt -f $tape_device bsf $back");
+		}
+		print "extracting ";
+		system("$tar_cmd");
+		if ($? != 0) { my $r = $? >> 8; die "tar extract failed (res=$r)\n" }
+		$lastpos = $pos;
+	}
+}
+else {
+	print "Extract by filename not implemented just yet\n";
+	exit 1;
+}
+
+sub setblk
+{
+	#print "setting block size\n";
+	system("mt -f $tape_device setblk 262144");
+	if ($? != 0) {
+		die "Cound not set block size\n";
+	}
+}
+
+sub rewind
+{
+	#print "rewinding\n";
+	system("mt -f $tape_device rewind");
+	if ($? != 0) {
+		die "Cound not rewind\n";
+	}
+}
+
+sub read_tape_index
+{
+	my ($pinfo) = @_;
+
+	my $orig_dir = getcwd();
+	chdir("/tmp");
+
+	rewind();
+	my $index_name = `$tar_cmd`;
+	if ($? != 0) { my $r = $? >> 8; die "tar extract of index file failed (res=$r)\n" }
+	$index_name =~ s/\n//;		# strip newline
+
+	open(my $IN, $index_name) or die "Could not open restored index file: $!\n";
+	while (<$IN>) {
+		chomp;
+		if (/^(\w+)$/) {
+			$pinfo->{lto} = $1;
+			next;
+		}
+		# stop when empty line reached
+		last if (/^$/);
+
+		my ($num, $name, $size) = split;
+		$pinfo->{name}[$num] = $name;
+		$pinfo->{size}[$num] = $size;
+	}
+	chdir($orig_dir);
+	rewind();
+}
+
+sub usageExit
+{
+    print "Usage:\n";
+    print "  $0 [[-n] file_list] destination\n";
+    print "\n";
+    print "  -n                     treat file_list as list of numeric file positions\n";
+    print "  -b <LTO spool number>  extract files if LTO spool number matches tape idx\n";
+    print "  -d <device>            tape device name (default '/dev/nst0')\n";
+    print "\n";
+    print "E.g.\n";
+    print "  Extract all files: $0 /video\n";
+    print "  Extract file 0,2,5,6: $0 -n 0+2+5+6 /video\n";
+    exit 1;
+}

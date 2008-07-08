@@ -1,0 +1,3 @@
+#!/bin/sh
+
+mt -f /dev/nst0 rewind

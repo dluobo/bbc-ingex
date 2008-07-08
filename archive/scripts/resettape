@@ -1,0 +1,8 @@
+#!/bin/sh
+
+mt -f /dev/nst0 rewind
+
+# write one 256kiB block of zeros
+dd if=/dev/zero bs=262144 count=1 of=/dev/nst0
+
+mt -f /dev/nst0 rewind
