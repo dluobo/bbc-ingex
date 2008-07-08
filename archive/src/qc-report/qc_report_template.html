@@ -1,0 +1,332 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"></meta>
+
+	<title>Quality Check Report - $Filename1</title>
+	
+	<style type="text/css">
+		body {
+			font-family: Verdana, Ariel, Helvetica, sans-serif;
+			font-size: 80%;
+		}
+		div#title {
+			width: 740px;
+		}
+		h1 { 
+			text-align: center;
+			margin-top: 5px;
+		}
+		h2 {
+			margin-bottom: 5px;
+		}
+		.prop-name {
+			color: blue;
+			font-weight: bold;
+			width: 7em;
+			vertical-align: top;
+		}
+		.qcresult-fail {
+			color: red;
+			font-weight: bold;
+		}
+		.qcresult-pass {
+			color: green;
+			font-weight: bold;
+		}
+		.pseresult-fail {
+			color: red;
+			font-weight: bold;
+		}
+		.pseresult-pass {
+			color: green;
+			font-weight: bold;
+		}
+		table.results {
+			border: 1px solid #AAAAAA;
+			border-collapse: collapse;
+			width: 740px;
+		}
+		table.results td {
+			padding-top: 2px;
+			padding-bottom: 2px;
+			padding-left: 5px;
+			padding-right: 5px;
+			border: 1px solid #AAAAAA;
+		}
+		table.marks {
+			border-collapse: collapse;
+			width: 740px;
+			margin-bottom: 12px;
+		}
+		table#marks-header {
+			margin-bottom: 0px;
+		}
+		table#marks-header th {
+			font-size: 80%;
+			padding-top: 2px;
+			padding-bottom: 2px;
+			padding-left: 5px;
+			padding-right: 5px;
+			text-align: center;
+		}
+		table.marks td {
+			border: 1px solid #AAAAAA;
+			padding-top: 2px;
+			padding-bottom: 2px;
+			padding-left: 5px;
+			padding-right: 5px;
+			text-align: center;
+			font-size: 80%;
+		}
+		table.marks .m1 {
+			width: 50px;
+		}
+		table.marks .m2 {
+			width: 80px;
+		}
+		table.marks .m3 {
+			width: 80px;
+		}
+		table.marks .m4 {
+			width: 80px;
+		}
+		table.marks .m5 {
+			width: 50px;
+		}
+		table.marks .m6 {
+			width: 50px;
+		}
+		table.marks .m7 {
+			width: 40px;
+		}
+		table.marks .m8 {
+			width: 40px;
+		}
+		table.marks .m9 {
+			width: 40px;
+		}
+		table.marks .m10 {
+			width: 40px;
+		}
+		table.marks td.mark-frame-num {
+			text-align: right;
+		}
+		.clip-mark {
+			background-color: red;
+		}
+		.transfer-mark {
+			background-color: magenta;
+		}
+		.historic-mark {
+			background-color: #00FF00;
+		}
+		.video-fault-mark {
+			background-color: blue;
+		}
+		.audio-fault-mark {
+			background-color: cyan;
+		}
+	</style>
+
+	<style type="text/css" media="print">
+		.qcresult-fail {
+			color: red;
+			text-decoration: underline;
+		}
+		.pseresult-fail {
+			color: red;
+			text-decoration: underline;
+		}
+	</style>
+	
+</head>
+<body>
+
+<div id="title">
+<h1>Quality Check Report<br/>$Filename2</h1>
+</div>
+
+<table id="t1" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">Filename</td>
+		<td>$Filename3</td>
+		<td class="prop-name">Carrier</td>
+		<td>$Carrier ($CarrierType)</td>
+	</tr>
+</tbody>
+</table>
+
+
+<br/>
+<table id="t2" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">Prog Start</td>
+		<td>$ProgStart</td>
+		<td class="prop-name">Prog End</td>
+		<td>$ProgEnd</td>
+		<td class="prop-name">Duration</td>
+		<td>$ProgDuration</td>
+	</tr>
+</tbody>
+</table>
+
+
+<h2>Results</h2>
+<table id="t3" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">QC Result</td>
+		<td class="$ClassQCResult">$QCResult</td>
+		<td class="prop-name">PSE Result</td>
+		<td class='$PSEResultClass' colspan="3">$PSEResult</td>
+	</tr>
+</tbody>
+</table>
+
+<!-- COMMENT START MARKER -->
+
+<br/>
+<table id="t4" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">Comments</td>
+		<td id="comments">$Comments</td>
+	</tr>
+</tbody>
+</table>
+
+<!-- COMMENT END MARKER -->
+
+
+<br/>
+<table id="t5" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">Date</td>
+		<td>$ReportDate</td>
+		<td class="prop-name">Operator</td>
+		<td>$Operator</td>
+		<td class="prop-name">QC Station</td>
+		<td>$QCStation</td>
+	</tr>
+	<tr>
+		<td class="prop-name">Session</td>
+		<td colspan="5">$SessionFilename</td>
+	</tr>
+	<tr>
+		<td class="prop-name">Prev Session</td>
+		<td colspan="5">$LoadedSessionFilename</td>
+	</tr>
+</tbody>
+</table>
+
+
+<h2>Source Information</h2>
+<table id="t6" class="results">
+<tbody>
+	<tr>
+		<td class="prop-name">Src Spool</td>
+		<td>$SrcSpoolNo ($SrcSpoolType)</td>
+		<td class="prop-name">Item No</td>
+		<td>$ItemNo</td>
+		<td class="prop-name">Infax Dur</td>
+		<td>$InfaxDur</td>
+	</tr>
+	<tr>
+		<td class="prop-name">Prog no</td>
+		<td>$ProgNo</td>
+		<td class="prop-name">Tx Date</td>
+		<td colspan="3">$TxDate</td>
+	</tr>
+	<tr>
+		<td class="prop-name">Prog title</td>
+		<td colspan="2">$ProgTitle</td>
+		<td class="prop-name">Ep title</td>
+		<td colspan="2">$EpisodeTitle</td>
+	</tr>
+</tbody>
+</table>
+
+
+<!-- HEADER END -->
+
+
+<!-- MARKS HEADER START -->
+
+<h2>Operator Marks</h2>
+<table id="marks-header" class="marks">
+<thead>
+	<th class="m1">Frame</th>
+	<th class="m2">Control TC</th>
+	<th class="m3">VITC</th>
+	<th class="m4">LTC</th>
+	<th class="m5">Clip Start</th>
+	<th class="m6">Clip End</th>
+	<th class="m7">Transfer</th>
+	<th class="m8">Historic</th>
+	<th class="m9">Video Fault</th>
+	<th class="m10">Audio Fault</th>
+</thead>
+</table>
+
+<!-- MARKS HEADER END -->
+
+<!-- example marks -->
+<table class="marks">
+<tbody>
+	<tr>
+		<td class="m1 mark-frame-num">0</td>
+		<td class="m2">00:00:00:00</td>
+		<td class="m3">10:20:00:01</td>
+		<td class="m4">10:20:00:01</td>
+		<td class="m5 clip-mark">X</td>
+		<td class="m6 clip-mark">250</td>
+		<td class="m7 transfer-mark">X</td>
+		<td class="m8 historic-mark">X</td>
+		<td class="m9 video-fault-mark">X</td>
+		<td class="m10 audio-fault-mark">X</td>
+	</tr>
+	<tr>
+		<td class="m1 mark-frame-num">250</td>
+		<td class="m2">00:00:10:00</td>
+		<td class="m3">10:20:10:01</td>
+		<td class="m4">10:20:10:01</td>
+		<td class="m5 clip-mark">0</td>
+		<td class="m6 clip-mark">X</td>
+		<td class="m7"></td>
+		<td class="m8"></td>
+		<td class="m9"></td>
+		<td class="m10"></td>
+	</tr>
+</tbody>
+</table>
+
+<table class="marks">
+<tbody>
+	<tr>
+		<td class="m1 mark-frame-num">0</td>
+		<td class="m2">00:00:00:00</td>
+		<td class="m3">10:20:02:01</td>
+		<td class="m4">10:20:02:01</td>
+		<td class="m5"></td>
+		<td class="m6"></td>
+		<td class="m7"></td>
+		<td class="m8"></td>
+		<td class="m9 video-fault-mark">X</td>
+		<td class="m10 audio-fault-mark">X</td>
+	</tr>
+</tbody>
+</table>
+
+	
+<!-- MARKS FOOTER START -->
+<!-- MARKS FOOTER END -->
+
+
+
+<!-- FOOTER START -->
+</body>
+</html>

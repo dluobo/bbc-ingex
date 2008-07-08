@@ -1,0 +1,175 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+
+<head>
+	<title>TEST SUMMARY</title>
+	
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	
+	<style type='text/css'>
+		.pse-failed {
+			color: red;
+		}
+		.pse-passed {
+			color: green;
+		}
+	</style>
+	
+	<style type='text/css' media='print'>
+		.pse-failed {
+			color: red;
+			text-decoration: underline;
+		}
+	</style>
+	
+</head>
+
+<body>
+
+	<h1 style="text-align: center" title="Click to go back" onclick="history.back(-1)">TEST SUMMARY</h1>
+	
+	<p style="text-align: center">Results of analysis for compliance with ITC Guidance Notes on Flashing Images and Regular Patterns in Television (July 2001) by HardingFPA Flash and Pattern Analyser software</p>
+	
+	<table cellpadding="8">
+		<tr>
+			<td><b>PSE STATUS:</b></td>
+			<td class='$pseStatusClass'>$pseStatus</td>
+		</tr>
+		<tr>
+			<td><b>DATE OF ANALYSIS:</b></td>
+			<td>$dateOfAnalysis</td>
+		</tr>
+		<tr>
+			<td><b>FIRST ANALYSIS FRAME:</b></td>
+			<td>$firstAnalysisFrame</td>
+		</tr>
+		<tr>
+			<td><b>LAST ANALYSIS FRAME:</b></td>
+			<td>$lastAnalysisFrame</td>
+		</tr>
+		<tr>
+			<td><b>DURATION:</b></td>
+			<td>$duration</td>
+		</tr>
+		<tr>
+			<td><b>PROGRAMME TITLE:</b></td>
+			<td>$progTitle</td>
+		</tr>
+		<tr>
+			<td><b>EPISODE TITLE:</b></td>
+			<td>$episodeTitle</td>
+		</tr>
+		<tr>
+			<td><b>PROGRAMME NUMBER:</b></td>
+			<td>$progNumber</td>
+		</tr>
+		<tr>
+			<td><b>DURATION (INFAX):</b></td>
+			<td>$infaxDuration</td>
+		</tr>
+		<tr>
+			<td><b>SOURCE SPOOL NUMBER:</b></td>
+			<td>$sourceSpoolNumber</td>
+		</tr>
+	</table>
+
+	<p><b>SUMMARY OF RESULTS:</b></p>
+	
+	<table border="1" rules="all" style="margin-left: auto; margin-right: auto">
+		<tr>
+			<th valign="top">Type of violation</th>
+			<th>Number of violations<br/>
+			(frames)
+			</th>
+		</tr>
+		<tr>
+			<td>Red Flash violations</td>
+			<td align="center">$redCount</td>
+		</tr>
+		<tr>
+			<td>Spatial Pattern violations</td>
+			<td align="center">$spatialCount</td>
+		</tr>
+		<tr>
+			<td>Luminance Flash violations</td>
+			<td align="center">$luminanceCount</td>
+		</tr>
+		<tr>
+			<td>Extended Failure violations</td>
+			<td align="center">$extendedCount</td>
+		</tr>
+	</table>
+	
+	<p><b>Failed material should be re-analysed in its entirety for compliance after any changes.</b></p>
+	
+	
+	<hr/>
+	
+<!-- HEADER END -->
+
+
+<!-- FAILURES HEADER START -->
+
+	<p style="align: center; page-break-before: always">
+		<b>Table of the $failureShowCount most severe $failureDescription.</b>
+	</p>
+
+	<table width="100%">
+		<tr>
+			<td></td>
+			<td align="right"><b>DATE OF ANALYSIS:</b>
+			$dateOfAnalysis
+			</td>
+		</tr>
+		<tr>
+			<td></td>
+			<td align="right"><b>DURATION:</b>
+			$duration
+			</td>
+		</tr>
+	</table>
+
+
+	<table border="1" rules="all" cellpadding="4">
+		<colgroup/>
+		<colgroup/>
+		<colgroup/>
+		<colgroup/>
+		<colgroup width="12%"/>
+		<colgroup width="12%"/>
+		<colgroup width="12%"/>
+		<colgroup/>
+		<thead>
+			<tr>
+				<th>FRAME</th>
+				<th>control TC</th>
+				<th>VITC</th>
+				<th>LTC</th>
+				<th>RED</th>
+				<th>SPAT</th>
+				<th>LUM</th>
+				<th>X</th>
+			</tr>
+		</thead>
+		<tbody>
+<!-- FAILURES HEADER END -->
+
+<!-- example failures -->
+			<tr><td align="right">66239</td><td>00:44:09:14</td><td>11:44:01:17</td><td>11:44:01:17</td><td align="center">0.0</td><td align="center">0.1</td><td align="center">0.5</td><td> </td></tr>
+			<tr><td align="right">66240</td><td>00:44:09:15</td><td>11:44:01:18</td><td>11:44:01:18</td><td align="center">0.0</td><td align="center">0.1</td><td align="center">0.9</td><td> </td></tr>
+			<tr><td align="right">66241</td><td>00:44:09:16</td><td>11:44:01:19</td><td>11:44:01:19</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">0.9</td><td> </td></tr>
+			<tr><td align="right">66242</td><td>00:44:09:17</td><td>11:44:01:20</td><td>11:44:01:20</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">0.9</td><td> </td></tr>
+			<tr><td align="right">66243</td><td>00:44:09:18</td><td>11:44:01:21</td><td>11:44:01:21</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">1.3</td><td> </td></tr>
+			<tr><td align="right">66244</td><td>00:44:09:19</td><td>11:44:01:22</td><td>11:44:01:22</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">1.5</td><td> </td></tr>
+			<tr><td align="right">66245</td><td>00:44:09:20</td><td>11:44:01:23</td><td>11:44:01:23</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">1.6</td><td> </td></tr>
+			<tr><td align="right">66246</td><td>00:44:09:21</td><td>11:44:01:24</td><td>11:44:01:24</td><td align="center">0.0</td><td align="center">0.0</td><td align="center">0.7</td><td> </td></tr>
+			
+<!-- FAILURES FOOTER START -->
+		</tbody>
+	</table>
+<!-- FAILURES FOOTER END -->
+
+<!-- FOOTER START -->
+</body>
+</html>
+
