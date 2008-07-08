@@ -1,0 +1,44 @@
+@import url("common.css");
+
+
+div#page-content {
+	margin-top: 8em;
+}
+
+
+#cache-contents table {
+	background-color: #FFFFCC;
+}
+
+#cache-contents td {
+	font-size: 80%;                            
+	background-color: #FFFFCC;
+	border: 1px solid black;
+	padding: 5px;
+}
+
+#cache-contents .started-status {
+	color:black;
+}
+
+#cache-contents .completed-status {
+	color:green;
+}
+
+#cache-contents .aborted-status {
+	color:red;
+}
+
+#cache-contents a {
+	color: black; 
+	text-decoration: none; 
+	display: block; 
+	background-color: lightgrey; 
+	border-top: 4px solid #CCCCCC; 
+	border-right: 4px solid #555555;
+	border-bottom: 4px solid #555555; 
+	border-left: 2px solid #CCCCCC;
+	padding: 0.5em;
+}
+
+

@@ -1,0 +1,72 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>VTR Control</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/index.js"/>
+
+<link href="styles/main.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+
+</head>
+
+<body onload="init_index()">
+
+<h2>VTR Control</h2>
+
+<table>
+	<tr>
+		<td style="color:blue">Status:</td>
+		<td id="status">Not Connected</td>
+	</tr>
+</table>
+
+<table>
+	<tr>
+		<td style="color:blue">Device:</td>
+		<td id="device-type">Unknown (0x00)</td>
+	</tr>
+</table>
+
+<table>
+	<tr>
+		<td valign="top" style="color:blue">Timecodes</td>
+		<td valign="top">
+			<table class="timecodes">
+				<tr><td>VITC</td><td id="vitc">00:00:00:00</td></tr>
+				<tr><td>LTC</td><td id="ltc">00:00:00:00</td></tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<table>
+	<tr>
+		<td style="color:blue">Last Playback Error:</td>
+		<td id="playback-error">None</td>
+	</tr>
+	<tr>
+		<td style="color:blue">Last Playback Error LTC:</td>
+		<td id="playback-error-ltc">00:00:00:00</td>
+	</tr>
+</table>
+<br/>
+
+<table id="vtr-control-buttons">
+	<tr>
+		<td><input id="fr-button" type="button" value="Fast Rewind" onclick="vtr_control_command('fr')"/></td>
+		<td><input id="play-button" type="button" value="Play" onclick="vtr_control_command('play')"/></td>
+		<td><input id="stop-button" type="button" value="Stop" onclick="vtr_control_command('stop')"/></td>
+		<td><input id="standby-button" type="button" value="Standby" onclick="toggle_standby()"/></td>
+		<td><input id="record-button" type="button" value="Record" onclick="vtr_control_command('record')" disabled="true"/></td>
+		<td><input id="ff-button" type="button" value="Fast Forward" onclick="vtr_control_command('ff')"/></td>
+		<td><input id="eject-button" type="button" value="Eject" onclick="vtr_control_command('eject')"/></td>
+	</tr>
+</table>
+
+</body>
+</html>
+

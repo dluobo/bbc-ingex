@@ -1,0 +1,150 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Recording</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/replay_control.js"/>
+<script type="text/javascript" src="scripts/record.js"/>
+
+<link href="styles/record.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_record()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="select-source-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" class="current-page-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- Record controls -->
+
+<br/>
+<br/>
+<table id="record-control">
+	<tr>
+		<td><input id="start-record-button" type="button" value="Record" onclick="start_record()" disabled="true"/></td>
+		<td><input id="stop-record-button" type="button" value="Stop" onclick="stop_record()" disabled="true"/></td>
+		<td width="130px"/>
+		<td><input id="abort-button" type="button" value="Abort X" onclick="abort_session()" disabled="true"/></td>
+	</tr>
+</table>
+<br/>
+
+
+
+<!-- Record state -->
+
+<table id="record-state">
+	<tr>
+		<td valign="top" class="heading">Status</td>
+		<td id="session-status-message"></td>
+		<td valign="top" class="heading">VTR State</td>
+		<td id="d3-vtr-state"></td>
+		<td valign="top" class="heading">VTR Errors</td>
+		<td id="d3-vtr-error-count">0</td>
+	</tr>
+	<tr>
+		<td valign="top" class="heading">Start TC</td>
+		<td valign="top">
+			<table class="timecodes">
+				<tr><td>VITC</td><td id="start-vitc"></td></tr>
+				<tr><td>LTC</td><td id="start-ltc"></td></tr>
+			</table>
+		</td>
+		<td valign="top" class="heading">Current TC</td>
+		<td valign="top">
+			<table class="timecodes">
+				<tr><td>VITC</td><td id="current-vitc"></td></tr>
+				<tr><td>LTC</td><td id="current-ltc"></td></tr>
+			</table>
+		</td>
+		<td valign="top" class="heading">Length</td>
+		<td id="duration" valign="top"></td>
+		<td valign="top" class="heading">ETA</td>
+		<td id="eta" valign="top"></td>
+	</tr>
+	<tr>
+		<td valign="top" class="heading">Filename</td>
+		<td id="filename" valign="top"></td>
+		<td valign="top" class="heading">File size</td>
+		<td id="file-size" valign="top"></td>
+		<td valign="top" class="heading">Disk space</td>
+		<td id="disk-space" valign="top"></td>
+	</tr>
+	<tr id="browse-line">
+		<td valign="top" class="heading">Browse copy</td>
+		<td id="browse-filename" valign="top"></td>
+		<td valign="top" class="heading">Browse copy size</td>
+		<td id="browse-filesize" valign="top"></td>
+	</tr>
+</table>
+
+
+
+<!-- Comments -->
+
+<div id="comments-sec">
+	<h3>Comments&nbsp;<span class="comments-heading-comment">(max 120 characters)</span></h3>
+	<textarea id="comments" rows="3" cols="40" onkeypress="return filter_replay_controls(event)" onfocus="this.setAttribute('style', 'background-color:#ffff66')" onblur="this.setAttribute('style', '')"></textarea>
+</div>
+
+<!-- Items link -->
+
+
+<table id="items-link">
+<tbody>
+	<tr>
+		<td><a href="items.html" target="_top">Items</a></td>
+	</tr>
+</tbody>
+</table>
+
+
+</div>
+
+
+</body>
+</html>
+

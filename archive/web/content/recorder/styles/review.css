@@ -1,0 +1,288 @@
+@import url("common.css");
+
+
+/***************************************************/
+/* Results and Comments */
+/***************************************************/
+
+#content-top {
+	padding-top: 10px;
+}
+
+div#content-top-left {
+	float: left;
+	padding-right: 30px;
+}
+
+table#review-status {
+	width: 440px;
+}
+
+.results-heading {
+	color: blue;
+	font-size: 120%;
+	margin-bottom: 5px;
+}
+
+.comments-heading {
+	color: blue;
+	font-size: 120%;
+}
+
+#content-top-right {
+}
+
+#last-session-result {
+	margin-top: 15px;
+	margin-bottom: 5px;
+	font-size: 120%;
+}
+
+.last-session-completed-result {
+	color: green;
+}
+
+.last-session-failed-result {
+	color: red;
+}
+
+.review-item-heading {
+	color: blue;
+	width: 120px;
+}
+
+#review-status {
+	background-color: #FFFFCC;
+	border-collapse: collapse;
+	padding-right: 70px;
+}
+
+#review-status td {
+	border: 1px solid grey;
+	padding: 3px;
+	text-align: left;
+}
+
+textarea#comments {
+	font-size: 120%;
+	height: 5em;
+}
+
+span.comments-heading-comment {
+	font-size: 70%;
+}
+
+
+
+/***************************************************/
+/* Mark and Replay Control */
+/***************************************************/
+
+#content-middle {
+	padding-top: 10px;
+}
+
+div#content-middle-left {
+	float: left;
+	padding-right: 20px;
+}
+
+div#content-middle-right {
+}
+
+
+div#content-middle-left-left {
+	float: left;
+	padding-right: 20px;
+}
+
+div#content-middle-left-right {
+	padding-top: 10px;
+}
+
+
+#progress-bar {
+	position: relative;
+	padding: 0px;
+	margin: 0px;
+}
+
+#progress-bar-input {
+	background: white url(../images/longprogressbar_bg.png) top left no-repeat;
+	padding: 0px;
+	margin: 0px 0px 0px 0px;
+	background-position: 0px 0px;
+	outline: none;
+}
+
+#progress-bar-pointer {
+	position: absolute;
+	top: 2px;
+}
+
+
+.progress-bar-mark {
+	position: absolute;
+	top: 2px;
+}
+
+#chunk-percentage {
+	font-size: 140%;
+	font-weight: bold;
+	position: relative;
+	top: -8px;
+	left: 5px;
+}
+
+
+
+#play-info {
+	margin-top: 10px;
+	background-color: #FFFFCC;
+	border-collapse: collapse;
+	width: 180px;
+}
+
+#play-info td {
+	border: 1px solid grey;
+	padding: 3px;
+	padding-left: 5px;
+	padding-right: 5px;
+	text-align: left;
+	font-size: 120%;
+}
+
+#play-info td.play-info-heading {
+	color: blue;
+	font-size: 80%;
+	width: 4em;
+}
+
+table#items-link {
+	margin-top: 20px;
+	margin-left: 30px;
+}
+
+table#items-link a {
+	color: #000000; 
+	font-size: 100%;
+	font-weight: bold;
+	text-decoration: none; 
+	display: block; 
+	background-color: #C0C0C0; 
+	border-width: 4px;
+	border-style: solid;
+	border-top-color: #DFDFDF;
+	border-right-color: #595959;
+	border-bottom-color: #333333;
+	border-left-color: #9E9E9E;
+	padding: 0.5em;
+	outline: none;
+}
+
+
+
+#item-control {
+}
+
+#mark-control-buttons {
+}
+
+#mark-control-buttons td {
+	padding-left: 10px;
+	padding-right: 10px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	background-color:#FFFFAA;
+	border: 8px solid Khaki;
+}
+
+#mark-control-buttons input[disabled] {
+	opacity: 0.25;
+}
+
+
+#review-replay {
+	padding-left: 20px;
+}
+
+#review-replay-buttons td {
+	padding-left: 10px;
+	padding-right: 10px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	background-color:#FFFFAA;
+	border: 5px solid #FFFFAA;
+}
+
+
+
+/***************************************************/
+/* Chunk, Complete and Abort */
+/***************************************************/
+
+#content-bottom {
+	padding-top: 10px;
+}
+
+
+#review-control {
+	float: left;
+	list-style: none;
+	margin: 0px;
+	margin-top: 10px;
+	margin-left: 10px;
+	padding: 0px;
+}
+
+#review-control li {
+	float: left;
+}
+
+#review-control li.review-control-separator {
+	padding-left: 50px;
+	padding-right: 50px;
+}
+
+
+#complete-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: green;
+	border: 2px solid green;
+	padding: 0.3em;
+}
+
+#complete-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+#abort-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: red;
+	border: 2px solid red;
+	padding: 0.3em;
+}
+
+#abort-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+#chunk-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: black;
+	border: 2px solid black;
+	padding: 0.3em;
+}
+
+#chunk-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+
+

@@ -1,0 +1,117 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Tape Export - Transfer Session</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/transfer.js"/>
+
+<link href="styles/main.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+
+</head>
+
+<body onload="init_transfer()">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="tape-device-status" class="status-element">Tape Device</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="prepare-tape-link" href="prepare.html">Prepare Transfer</a></td>
+		<td><a id="session-link" class="current-page-link" href="transfer.html">Transfer Session</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+
+<!-- transfer status -->
+
+<br/>
+<div id="session-message" style="color:red;"></div>
+<br/>
+
+
+<!-- abort -->
+
+<input id="abort-button" type="button" value="Abort X" onclick="abort_session()" disabled="true"/>
+<br/>
+<br/>
+
+<!-- LTO -->
+
+<table>
+	<tr>
+		<td style="color: blue">Session Status</td>
+		<td id="session-status"></td>
+	</tr>
+	<tr>
+		<td style="color: blue">Tape Status</td>
+		<td id="tape-dev-status"></td>
+	</tr>
+	<tr>
+		<!-- empty row -->
+		<td>&nbsp;</td>
+		<td>&nbsp;</td>
+	</tr>
+	<tr>
+		<td style="color: blue">Tape Spool number</td>
+		<td id="spool-num"></td>
+	</tr>
+	<tr>
+		<td style="color: blue">Transfer method</td>
+		<td id="transfer-method"></td>
+	</tr>
+	<tr>
+		<td style="color: blue">Total size</td>
+		<td id="total-size"></td>
+	</tr>
+	<tr>
+		<td style="color: blue">Number files</td>
+		<td id="num-files"></td>
+	</tr>
+</table>
+<br/>
+
+
+<!-- lto contents and transfer status -->
+
+<table id="lto-contents">
+	<tr style="color:green">
+		<td>Status</td>
+		<td>Started</td>
+		<td>Ended</td>
+		<td>Filename</td>
+		<td>Cache Filename</td>
+		<td>Size</td>
+		<td>Duration</td>
+		<td>Spool No</td>
+		<td>Item No</td>
+		<td>Prog No</td>
+	</tr>
+	<tr>
+	</tr>
+</table>
+<br/>
+
+
+
+</body>
+</html>
+

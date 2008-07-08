@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://web.resource.org/cc/"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="800"
+   height="30"
+   id="svg2"
+   sodipodi:version="0.32"
+   inkscape:version="0.45.1"
+   version="1.0"
+   sodipodi:docbase="/home/philipn/project/ap/ingex/archive/http_recorder/stuff"
+   sodipodi:docname="longprogressbar.svg"
+   inkscape:output_extension="org.inkscape.output.svg.inkscape"
+   inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/test.png"
+   inkscape:export-xdpi="89.959198"
+   inkscape:export-ydpi="89.959198">
+  <defs
+     id="defs4">
+    <linearGradient
+       id="linearGradient3230">
+      <stop
+         id="stop3232"
+         offset="0"
+         style="stop-color:#e30000;stop-opacity:1;" />
+      <stop
+         id="stop3234"
+         offset="1"
+         style="stop-color:#e30000;stop-opacity:0;" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient3220">
+      <stop
+         style="stop-color:#e30000;stop-opacity:1;"
+         offset="0"
+         id="stop3222" />
+      <stop
+         style="stop-color:#e30000;stop-opacity:0;"
+         offset="1"
+         id="stop3224" />
+    </linearGradient>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     gridtolerance="10000"
+     guidetolerance="10"
+     objecttolerance="10"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.5848428"
+     inkscape:cx="399.84015"
+     inkscape:cy="15.068969"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     width="800px"
+     height="30px"
+     inkscape:window-width="1280"
+     inkscape:window-height="739"
+     inkscape:window-x="0"
+     inkscape:window-y="0" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="opacity:1;fill:#3232fb;fill-opacity:1;stroke:none;stroke-width:1.99999988;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5221"
+       width="799.86853"
+       height="29.546051"
+       x="-8.8101292"
+       y="-62.680309"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_bg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198"
+       transform="matrix(0.9999998,-6.7946921e-4,0,1,0,0)" />
+    <rect
+       style="opacity:1;fill:#f0e68c;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5227"
+       width="28.092148"
+       height="29.989222"
+       x="1.2351741e-07"
+       y="0.010779284"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <path
+       sodipodi:type="arc"
+       style="opacity:1;fill:#1312e2;fill-opacity:1;stroke:#1312e2;stroke-width:4.00795698;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="path3275"
+       sodipodi:cx="68.210808"
+       sodipodi:cy="14.762682"
+       sodipodi:rx="24.403517"
+       sodipodi:ry="12.380322"
+       d="M 70.062216,27.107324 A 24.403517,12.380322 0 1 1 69.688255,2.4050696"
+       sodipodi:start="1.4948569"
+       sodipodi:end="4.7729684"
+       sodipodi:open="true"
+       transform="matrix(1,0,0,1.0464576,-41.426458,-0.4545622)"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <rect
+       style="opacity:1;fill:#f0e68c;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5229"
+       width="27.993326"
+       height="30.026453"
+       x="772.086"
+       y="-0.026453018"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <path
+       sodipodi:type="arc"
+       style="opacity:1;fill:#1312e2;fill-opacity:1;stroke:#1312e2;stroke-width:4.00813627;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="path3277"
+       sodipodi:cx="68.210808"
+       sodipodi:cy="14.762682"
+       sodipodi:rx="24.403517"
+       sodipodi:ry="12.380322"
+       d="M 69.678226,27.120602 A 24.403517,12.380322 0 1 1 69.688255,2.4050696"
+       sodipodi:start="1.5106286"
+       sodipodi:end="4.7729684"
+       sodipodi:open="true"
+       transform="matrix(-1,0,0,1.0463636,841.49269,-0.4520114)"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <path
+       style="fill:#1312e2;fill-opacity:1;fill-rule:evenodd;stroke:#1312e2;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 27.905591,1.026 L 771.84717,1.026"
+       id="path3279"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <path
+       style="fill:#1312e2;fill-opacity:1;fill-rule:evenodd;stroke:#1312e2;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 27.932361,29 L 771.85802,29"
+       id="path4250"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/longprogressbar_fg.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <rect
+       style="opacity:1;fill:#ff2e00;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5223"
+       width="2.7164173"
+       height="26.005278"
+       x="481.10269"
+       y="2.0098844"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/progress_mark.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+    <rect
+       style="opacity:1;fill:#a2ad00;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect5225"
+       width="7.1059661"
+       height="25.942778"
+       x="518.94623"
+       y="2.0403831"
+       inkscape:export-filename="/home/philipn/project/ap/ingex/archive/http_recorder/www/recorder/images/progress_pointer.png"
+       inkscape:export-xdpi="89.959198"
+       inkscape:export-ydpi="89.959198" />
+  </g>
+</svg>

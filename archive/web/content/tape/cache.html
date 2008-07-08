@@ -1,0 +1,81 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Tape Export - Cache</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/cache.js"/>
+
+<link href="styles/main.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+
+
+</head>
+
+<body onload="init_cache()">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="tape-device-status" class="status-element">Tape Device</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="prepare-tape-link" href="prepare.html">Prepare Transfer</a></td>
+		<td><a id="session-link" href="transfer.html">Transfer Session</a></td>
+		<td><a id="cache-link" class="current-page-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+
+
+<!-- cache contents -->
+
+<h2>Cache contents</h2>
+
+<p>
+	<span style="color:blue">Cache directory:</span> &nbsp;<span id="cache-path"/>
+</p>
+
+
+<table id="cache-contents">
+	<tr style="color:blue">
+		<td></td>
+		<td>Spool No</td>
+		<td>Item No</td>
+		<td>Prog No</td>
+		<td>Date Recorded</td>
+		<td>Status</td>
+		<td>Filename</td>
+		<td>Size</td>
+		<td>Duration</td>
+		<td>PSE Report</td>
+	</tr>
+	<tr>
+	</tr>
+</table>
+<span style="color:blue">Selected files:&nbsp;</span><span id="num-selected_items">0</span>,&nbsp;
+<span style="color:blue">Total size:&nbsp;</span><span id="total-size">0B</span>
+<br/>
+<br/>
+<input class="formbutton" id="delete-button" type="button" value="Delete Items" onclick="delete_items()"/>
+<br/>
+
+
+</body>
+</html>
+

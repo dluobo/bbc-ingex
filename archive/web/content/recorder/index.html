@@ -1,0 +1,101 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<link rel="icon" href="favicon.ico" type="image/x-icon"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/index.js"/>
+
+<link href="styles/index.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_index()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" class="current-page-link" href="index.html">Home</a></td>
+		<td><a id="select-source-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- Ingex Recorder information -->
+
+<h2>System Status</h2>
+
+<table id="system-status">
+	<tr>
+		<td style="color:blue;">Recorder name:</td>
+		<td id="recorder-name"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Version: </td>
+		<td id="recorder-version"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Audio tracks:</td>
+		<td id="num-audio-tracks"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Disk space:</td>
+		<td id="disk-space"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Est. recording time:</td>
+		<td id="recording-time"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">D3 VTR state:</td>
+		<td id="d3-vtr-state"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Digibeta VTR state:</td>
+		<td id="digibeta-vtr-state"></td>
+	</tr>
+</table>
+
+</div>
+
+
+</body>
+</html>

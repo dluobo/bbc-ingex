@@ -1,0 +1,17 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+	<title>PSE Report Framed</title>
+	<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1"/>
+</head>
+<frameset rows="10%, 100%">
+	<frame name="controlframe" src="psereport_control.html" scrolling="0"/>
+	<frame name="reportframe" src="<!--#call get_pse_report_url-->"/>
+	<noframe> 
+		<p>
+			<a href="<!--#call get_pse_report_url-->">PSE Report</a> 
+		</p> 
+	</noframe> 
+</frameset>
+</html>
+

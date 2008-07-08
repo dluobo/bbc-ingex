@@ -1,0 +1,249 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Review</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/replay_control.js"/>
+<script type="text/javascript" src="scripts/progressbar.js"/>
+<script type="text/javascript" src="scripts/review.js"/>
+
+<link href="styles/review.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_review()" onkeydown="handle_replay_key_down(event)" onkeyup="handle_replay_key_up(event)">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html" target="_top">Home</a></td>
+		<td><a id="select-source-link" href="source.html" target="_top">Prepare</a></td>
+		<td><a id="record-link" href="record.html" target="_top">Record</a></td>
+		<td><a id="review-link" class="current-page-link" href="review.html" target="_top">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html" target="_top">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html" target="_top">Cache</a></td>
+	</tr>
+</table>
+
+</div>
+
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- last session result -->
+
+<div id="last-session-result" style="display: none">
+</div>
+
+
+<div id="content-top">
+
+
+	<!-- review results -->
+	
+	<div id="content-top-left">
+	
+		<div class="results-heading">Results:</div>
+		<table id="review-status">
+			<tr>
+				<td valign="top" class="review-item-heading">D3 Spool</td>
+				<td id="d3-spool-no"></td>
+				<td valign="top" class="review-item-heading">Digi Spool</td>
+				<td id="digibeta-spool-no"></td>
+			</tr>
+			<tr>
+				<td valign="top" class="review-item-heading">Rec Len</td>
+				<td id="duration"></td>
+				<td valign="top" class="review-item-heading">Infax Len</td>
+				<td id="infax-duration"></td>
+			</tr>
+			<tr>
+				<td valign="top" class="review-item-heading">PSE Result</td>
+				<td id="pse-result"></td>
+				<td valign="top" class="review-item-heading">VTR Errors</td>
+				<td id="d3-vtr-error-count"></td>
+			</tr>
+		</table>
+		
+	</div>
+	
+	<div id="content-top-right">
+	
+		<div class="comments-heading">Comments&nbsp;<span class="comments-heading-comment">(max 120 characters)</span></div>
+		<table id="review-comments">
+			<tr>
+				<td>
+					<textarea id="comments" rows="3" cols="40" onkeypress="return filter_replay_controls(event)" onfocus="this.setAttribute('style', 'background-color:#ffff66')" onblur="this.setAttribute('style', '')" value=""></textarea>
+				</td>
+			</tr>
+		</table>
+	
+	</div>
+
+</div>
+<div class="clear"/>
+
+
+
+
+<div id="content-middle">
+
+	<div id="progress-bar">
+	
+		<!-- progress bar -->
+	
+		<input id="progress-bar-input" type="image" src="images/longprogressbar_fg.png" onclick="handle_progressbar_click(this, event)"/>
+		<span id="chunk-percentage" class="hide-node"></span>
+		<img id="progress-bar-pointer" src="images/progress_pointer.png"/>
+	
+		<br/>
+		<br/>
+	
+	</div>
+	<div class="clear"/>
+	
+	<div id="content-middle-left">
+
+		<div id="content-middle-left-left">
+	
+			<!-- player info -->
+			
+			<table id="play-info">
+			<tbody>
+				<tr>
+					<td class="play-info-heading">Item</td><td id="play-item-index"></td>
+				</tr>
+				<tr>
+					<td class="play-info-heading">Pos</td><td id="play-item-position"></td>
+				</tr>
+				<tr>
+					<td class="play-info-heading">File Pos</td><td id="play-file-position"></td>
+				</tr>
+			</tbody>
+			</table>
+			
+			<table id="items-link">
+			<tbody>
+				<tr>
+					<td><a href="items.html" target="_top">Items</a></td>
+				</tr>
+			</tbody>
+			</table>
+			
+		</div>
+		
+		
+		<!-- item selection controls -->
+		
+		<div id="content-middle-left-right">
+		
+			<div id="item-control">
+				<table id="mark-control-buttons">
+					<tr>
+						<td><input id="mark-start-button" type="image" src="images/mark_clip_symbol.png" title="mark item start" onclick="mark_item_start()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+						<td><input id="clear-mark-button" type="image" src="images/clear_clip_mark_symbol.png" title="clear item" onclick="clear_item()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)" disabled="true"/></td>
+					</tr>
+					<tr>
+						<td><input id="prev-mark-button" type="image" src="images/prev_clip_mark_symbol.png" title="previous item" onclick="play_prev_item()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+						<td><input id="next-mark-button" type="image" src="images/next_clip_mark_symbol.png" title="next item" onclick="play_next_item()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+						<td><input id="eop-button" type="image" src="images/end_of_programme_symbol.png" title="seek to end of programme" onclick="seek_to_eop()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+					</tr>
+				</table>
+			</div>
+		
+		</div>
+
+	</div>
+
+
+	<div id="content-middle-right">
+	
+		<!-- player controls -->
+	
+		<table id="review-replay-buttons">
+			<tr>
+				<td><input id="home-cmd" type="image" src="images/home_symbol.png" title="home" onclick="seek_home()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="fast-rewind-cmd" type="image" src="images/fr_symbol.png" title="fast rewind" onclick="fast_rewind_factor(2)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="play-cmd" type="image" src="images/play_symbol.png" title="play" onclick="play()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="pause-cmd" type="image" src="images/pause_symbol.png" title="pause" onclick="pause()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="fast-forward-cmd" type="image" src="images/ff_symbol.png" title="fast forward" onclick="fast_forward_factor(2)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="end-cmd" type="image" src="images/end_symbol.png" title="end" onclick="seek_end()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+			</tr>
+			<tr>
+				<td><input id="prev-mark-cmd" type="image" src="images/prevmark_symbol.png" title="previous mark" onclick="seek_prev_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="seek-back-pc-cmd" type="image" src="images/seekb_symbol.png" title="seek 10% backwards" onclick="seek_10p_backwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="step-backward-cmd" type="image" src="images/stepb_symbol.png" title="step backwards" onclick="step_backwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="step-forward-cmd" type="image" src="images/stepf_symbol.png" title="step forwards" onclick="step_forwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="seek-forward-pc-cmd" type="image" src="images/seekf_symbol.png" title="seek 10% forwards" onclick="seek_10p_forwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="next-mark-cmd" type="image" src="images/nextmark_symbol.png" title="next mark" onclick="seek_next_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+			</tr>
+			<tr>
+				<td/>
+				<td/>
+				<td><input id="next-osd-cmd" type="image" src="images/osd_symbol.png" title="toggle display" onclick="next_osd_screen()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="next-tc-cmd" type="image" src="images/tc_symbol.png" title="toggle timecode" onclick="next_osd_timecode()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="review-cmd" type="image" src="images/review_symbol.png" title="review 10 sec" onclick="review()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+				<td><input id="toggle-mbar-cmd" type="image" src="images/toggle_marks_bar_symbol.png" title="toggle active marks bar" onclick="toggle_marks_bar()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+			</tr>
+		</table>
+		
+	</div>
+
+
+</div>
+<div class="clear"></div>
+
+
+
+<div id="content-bottom">
+
+	<!-- complete/abort/chunk controls -->
+
+	<ul id="review-control">
+		<li>
+			<input id="chunk-button" type="button" value="Chunk File" onclick="chunk_file()" disabled="true"/>
+		</li>
+		<li class="review-control-separator">&nbsp;</li>
+		<li>
+			<input id="complete-button" type="button" value="Complete &#x221A;" onclick="complete_session()" disabled="true"/>
+		</li>
+		<li class="review-control-separator">&nbsp;</li>
+		<li>
+			<input id="abort-button" type="button" value="Abort X" onclick="abort_session()" disabled="true"/>
+		</li>
+	</ul>
+
+</div>
+
+</body>
+</html>
+

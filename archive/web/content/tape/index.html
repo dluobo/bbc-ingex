@@ -1,0 +1,74 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Tape Export</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/index.js"/>
+
+<link href="styles/main.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+
+</head>
+
+<body onload="init_index()">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="tape-device-status" class="status-element">Tape Device</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" class="current-page-link" href="index.html">Home</a></td>
+		<td><a id="prepare-tape-link" href="prepare.html">Prepare Transfer</a></td>
+		<td><a id="session-link" href="transfer.html">Transfer Session</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+
+
+<!-- Ingex Recorder Tape Export information -->
+
+<h2>System Status</h2>
+
+<table id="system-status">
+	<tr>
+		<td style="color:blue;">Recorder name:</td>
+		<td id="recorder-name"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Version: </td>
+		<td id="tape-export-version"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Disk space:</td>
+		<td id="disk-space"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Est. recording time:</td>
+		<td id="recording-time"></td>
+	</tr>
+	<tr>
+		<td style="color:blue;">Tape state:</td>
+		<td id="tape-state"></td>
+	</tr>
+</table>
+
+
+</body>
+</html>
+

@@ -1,0 +1,127 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Cache</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/replay_control.js"/>
+<script type="text/javascript" src="scripts/cache.js"/>
+
+<link href="styles/cache.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+
+</head>
+
+<body onload="init_cache()" onkeydown="handle_replay_key_down(event)" onkeyup="handle_replay_key_up(event)">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="select-source-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" class="current-page-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+</div>
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- replay -->
+
+
+<div id="conf-replay-buttons" style="display: none">
+
+<h3>Replay <span id="replay-filename"></span></h3>
+
+<table>
+	<tr>
+		<td><input id="home-cmd" type="image" src="images/home_symbol.png" title="home" onclick="seek_home()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="fast-rewind-cmd" type="image" src="images/fr_symbol.png" title="fast rewind" onclick="fast_rewind_factor(2)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="play-cmd" type="image" src="images/play_symbol.png" title="play" onclick="play()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="pause-cmd" type="image" src="images/pause_symbol.png" title="pause" onclick="pause()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="fast-forward-cmd" type="image" src="images/ff_symbol.png" title="fast forward" onclick="fast_forward_factor(2)" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="end-cmd" type="image" src="images/end_symbol.png" title="end" onclick="seek_end()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+	</tr>
+	<tr>
+		<td><input id="prev-mark-cmd" type="image" src="images/prevmark_symbol.png" title="previous mark" onclick="seek_prev_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="seek-back-pc-cmd" type="image" src="images/seekb_symbol.png" title="seek 10% backwards" onclick="seek_10p_backwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="step-backward-cmd" type="image" src="images/stepb_symbol.png" title="step backwards" onclick="step_backwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="step-forward-cmd" type="image" src="images/stepf_symbol.png" title="step forwards" onclick="step_forwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="seek-forward-pc-cmd" type="image" src="images/seekf_symbol.png" title="seek 10% forwards" onclick="seek_10p_forwards()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="next-mark-cmd" type="image" src="images/nextmark_symbol.png" title="next mark" onclick="seek_next_mark()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+	</tr>
+	<tr>
+		<td><input id="stop-cmd" type="image" src="images/eject_symbol.png" title="stop" onclick="stop()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td/>
+		<td><input id="next-osd-cmd" type="image" src="images/osd_symbol.png" title="toggle display" onclick="next_osd_screen()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="next-tc-cmd" type="image" src="images/tc_symbol.png" title="toggle timecode" onclick="next_osd_timecode()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td><input id="review-cmd" type="image" src="images/review_symbol.png" title="review 10 sec" onclick="review()" onmousedown="flat_button_down(this)" onmouseup="flat_button_up(this)"/></td>
+		<td/>
+	</tr>
+</table>
+
+</div>
+
+
+
+<!-- cache contents -->
+
+<h2>Cache contents</h2>
+
+<p>
+	<span style="color:blue">Cache directory:</span> &nbsp;<span id="cache-path"/>
+</p>
+
+<table id="cache-contents">
+	<tr style="color:blue">
+		<td>Spool No</td>
+		<td>Item No</td>
+		<td>Prog No</td>
+		<td>Ingest Date</td>
+		<td>Ingest Status</td>
+		<td>Filename</td>
+		<td>Size</td>
+		<td>Duration</td>
+		<td>PSE Report</td>
+		<td>Play</td>
+	</tr>
+</table>
+
+</div>
+
+
+</body>
+</html>

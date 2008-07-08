@@ -1,0 +1,147 @@
+@import url("common.css");
+
+
+
+/***************************************************/
+/* Record Control */
+/***************************************************/
+
+#record-control td {
+	padding-right: 5.0em;
+}
+
+
+#start-record-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: red;
+	border: 2px solid red;
+	padding: 0.3em;
+}
+
+#start-record-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+#stop-record-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: blue;
+	padding: 0.3em;
+	border: 2px solid blue;
+}
+
+#stop-record-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+
+#complete-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: green;
+	border: 2px solid green;
+	padding: 0.3em;
+}
+
+#complete-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+
+#abort-button {
+	font-weight: bold;
+	font-size: 140%;
+	color: red;
+	border: 2px solid red;
+	padding: 0.3em;
+}
+
+#abort-button[disabled] {
+	color: #BBBBBB;
+	border-color: #BBBBBB;
+}
+
+
+/***************************************************/
+/* Record State */
+/***************************************************/
+
+#record-state {
+	width: 850px;
+}
+
+#record-state td {
+	background-color: #FFFFCC;
+	font-size: 90%;
+	border: 1px solid grey;
+	padding: 5px;
+}
+
+#record-state .timecodes td {
+	border-collapse: collapse;
+	border: none;
+	padding: 0px;
+}
+
+#record-state td.heading {
+	color: blue;
+}
+
+td#eta.eta-zero {
+	background-color: #5EFB6E;
+}
+
+#browse-filename.browse-overflow {
+	background-color: #FF6F00;
+}
+
+#browse-filesize.browse-overflow {
+	background-color: #FF6F00;
+}
+
+div#comments-sec {
+	float: left;
+}
+
+textarea#comments {
+	font-size: 120%;
+}
+
+span.comments-heading-comment {
+	font-size: 70%;
+}
+
+
+/***************************************************/
+/* Items link */
+/***************************************************/
+
+table#items-link {
+	margin-top: 4em;
+	margin-left: 70px;
+}
+
+table#items-link a {
+	color: #000000; 
+	font-size: 100%;
+	font-weight: bold;
+	text-decoration: none; 
+	display: block; 
+	background-color: #C0C0C0; 
+	border-width: 4px;
+	border-style: solid;
+	border-top-color: #DFDFDF;
+	border-right-color: #595959;
+	border-bottom-color: #333333;
+	border-left-color: #9E9E9E;
+	padding: 0.5em;
+	outline: none;
+}
+
+
+
+

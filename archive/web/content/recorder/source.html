@@ -1,0 +1,137 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Select Source</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/source.js"/>
+
+<link href="styles/source.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_source()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="select-source-link" class="current-page-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- Source Selection-->
+
+<table id="source-selection">
+	<tr>
+		<td style="color:blue" colspan="2"><h3>D3 Source</h3></td>
+		<td>&nbsp;</td>
+		<td style="color: blue" colspan="2"><h3>Digibeta Destination</h3></td>
+	</tr>
+	<tr id="vtr-status">
+		<td>VTR Status:</td>
+		<td id="d3-vtr-state"></td>
+		<td>&nbsp;</td>
+		<td>VTR Status:</td>
+		<td id="digibeta-vtr-state"></td>
+	</tr>
+	<tr id="source-select-entry">
+		<td colspan="2">
+			<form name="sourcebarcodeform" action="javascript:select_d3(document.forms.sourcebarcodeform.sourcebarcodeinput)" method="get">
+				<input class="formbutton" type="button" value="C" onclick="clear_source_input()"/>&nbsp;
+				<input class="forminlinetextbox" name="sourcebarcodeinput" type="text" size="10" maxlength="16" onfocus="this.setAttribute('style', 'background-color:#ffff66'); this.hasFocus=true" onblur="this.setAttribute('style', ''); this.hasFocus=false"/>&nbsp;
+				<input class="formbutton" type="submit" value="Select"/>
+			</form>
+		</td>
+		<td>&nbsp;</td>
+		<td colspan="2">
+			<form name="digibetabarcodeform" action="javascript:select_digibeta(document.forms.digibetabarcodeform.digibetabarcodeinput)" method="get">
+				<input class="formbutton" type="button" value="C" onclick="clear_digibeta_input()"/>&nbsp;
+				<input class="forminlinetextbox" name="digibetabarcodeinput" type="text" size="10" maxlength="16" onfocus="this.setAttribute('style', 'background-color:#ffff66'); this.hasFocus=true" onblur="this.setAttribute('style', ''); this.hasFocus=false"/>&nbsp;
+				<input class="formbutton" type="submit" value="Select"/>
+			</form>
+		</td>
+	</tr>
+	<tr id="source-select-status">
+		<td id="source-status" colspan="2">No source selected</td>
+		<td>&nbsp;</td>
+		<td id="digibeta-status" colspan="2">No Digibeta selected</td>
+	</tr>
+</table>
+<br/>
+
+
+<!-- Start ingest session -->
+
+<input class="formbutton" id="start-session-button" type="button" onclick="start_new_session()" value="Start Ingest Session" disabled="true"/>
+<br/>
+
+<div id="start-session-error"></div>
+<br/>
+
+
+
+<!-- Source info -->
+
+<table id="tape-info" class="source-info-table">
+<tbody>
+	<tr>
+		<td class="item-heading">Spool No</td><td colspan="2" id="src-spool-no"></td>
+		<td class="item-heading">Stock Date</td><td colspan="4" id="src-stock-date"></td>
+	</tr>
+	<tr>
+		<td class="item-heading">Infax Duration</td><td colspan="2" id="src-total-duration"></td>
+		<td class="item-heading">Format</td><td id="src-format"></td>
+		<td class="item-heading">Spool Status</td><td id="src-spool-status"></td>
+	</tr>
+</tbody>
+</table>
+<br/>
+
+<div id="items-info">
+</div>
+
+
+</div>
+
+
+</body>
+</html>
+

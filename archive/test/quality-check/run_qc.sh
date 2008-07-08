@@ -1,0 +1,1 @@
+../../../player/ingex_player/qc_player --tape-cache `pwd`/cache --report `pwd`/reports --x11 --src-buf 97 --audio-mon 8 --pb-mark-mask 0xfffcffff --pb-mark-mask 0x00030000 --session-script ../../src/qc-report/qc_report_script.sh --session-script-opt "--log report-logs"

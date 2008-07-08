@@ -1,0 +1,21 @@
+body {
+	font-family: Tahoma, Arial, sans;
+}
+
+
+#vtr-control-buttons table {
+	background-color: #FFFFFF;
+	border-collapse: collapse;
+}
+
+#vtr-control-buttons td {
+	font-size: 80%;
+	background-color: #FFFFFF;
+	border: 1px solid black;
+	padding: 5px;
+}
+
+.active-button {
+	font-weight: bold;
+	background-color: #00CC00;
+}

@@ -1,0 +1,74 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder - Items</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/replay_control.js"/>
+<script type="text/javascript" src="scripts/progressbar.js"/>
+<script type="text/javascript" src="scripts/items.js"/>
+
+<link href="styles/items.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_items()" onkeydown="handle_replay_key_down(event)" onkeyup="handle_replay_key_up(event)">
+
+
+<div id="page-top">
+
+	<!-- Back button and progress bar -->
+	
+	<div>
+		<table>
+		<tbody>
+			<tr>
+				<td id="back-button"><a href="javascript:history.back()">Back</a></td>
+				<td>
+					<div id="progress-bar">
+						<input id="progress-bar-input" type="image" src="images/longprogressbar_fg.png" onclick="handle_progressbar_click(this, event)"/>
+						<span id="chunk-percentage" class="hide-node"></span>
+						<img id="progress-bar-pointer" src="images/progress_pointer.png"/>
+					</div>
+				</td>
+			</tr>
+		</tbody>
+		</table>
+	</div>
+
+</div>
+<div class="clear"/>
+
+
+<div id="page-content">
+
+	<!-- Tape -->
+	
+	<table id="tape-info">
+		<tr>
+			<td class="item-heading">Spool No</td><td colspan="2" id="src-spool-no"></td>
+			<td class="item-heading">Stock Date</td><td colspan="4" id="src-stock-date"></td>
+		</tr>
+		<tr>
+			<td class="item-heading">Infax Duration</td><td colspan="2" id="src-total-duration"></td>
+			<td class="item-heading">Format</td><td id="src-format"></td>
+			<td class="item-heading">Spool Status</td><td id="src-spool-status"></td>
+		</tr>
+	</table>
+	<br/>
+	
+	<!-- Items -->
+	
+	<div id="items-info">
+	</div>
+
+
+</div>
+
+
+</body>
+</html>
+

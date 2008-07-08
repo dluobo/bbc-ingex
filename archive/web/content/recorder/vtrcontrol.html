@@ -1,0 +1,119 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Recorder</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/vtrcontrol.js"/>
+
+<link href="styles/vtrcontrol.css" rel="stylesheet" rev="stylesheet" type="text/css"/>
+
+</head>
+
+<body onload="init_vtrcontrol()">
+
+
+<!-- page top -->
+
+<div id="page-top">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="sdi-card-status" class="status-element">SDI Card</td>
+		<td id="video-status" class="status-element">Video Signal</td>
+		<td id="audio-status" class="status-element">Audio Signal</td>
+		<td id="vtr-status" class="status-element">VTR</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="select-source-link" href="source.html">Prepare</a></td>
+		<td><a id="record-link" href="record.html">Record</a></td>
+		<td><a id="review-link" href="review.html">Review</a></td>
+		<td><a id="vtr-control-link" class="current-page-link" href="vtrcontrol.html">VTR Control</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+</div>
+
+
+
+<!-- page content -->
+
+<div id="page-content">
+
+
+<!-- D3 VTR control -->
+
+<h2>D3 VTR Control</h2>
+
+<table>
+	<tr>
+		<td style="color:blue">Status:</td>
+		<td id="d3-status">Not Connected</td>
+	</tr>
+	<tr>
+		<td style="color:blue">Device:</td>
+		<td id="d3-device-type">Unknown (0x00)</td>
+	</tr>
+</table>
+
+<table id="d3-vtr-control-buttons">
+	<tr>
+		<td><div class="vtr-button"><input id="d3-fr-button" type="image" src="images/fr_large_symbol.png" title="Fast Rewind" onclick="vtr_control_command('fr', true)"/></div></td>
+		<td><div class="vtr-button"><input id="d3-play-button" type="image" src="images/play_large_symbol.png" title="Play" onclick="vtr_control_command('play', true)"/></div></td>
+		<td><div class="vtr-button"><input id="d3-stop-button" type="image" src="images/stop_large_symbol.png" title="Stop" onclick="vtr_control_command('stop', true)"/></div></div></td>
+		<td><div class="vtr-button"><input id="d3-standby-button" type="image" src="images/standby_large_symbol.png" title="Standby" onclick="toggle_standby(true)"/></div></td>
+		<td><div class="vtr-button"><input id="d3-ff-button" type="image" src="images/ff_large_symbol.png" title="Fast Forward" onclick="vtr_control_command('ff', true)"/></div></td>
+		<td><div class="vtr-button"><input id="d3-eject-button" type="image" src="images/eject_large_symbol.png" title="Eject" onclick="vtr_control_command('eject', true)"/></div></td>
+	</tr>
+</table>
+
+
+<!-- Digibeta VTR control -->
+
+<h2>Digibeta VTR Control</h2>
+
+<table>
+	<tr>
+		<td style="color:blue">Status:</td>
+		<td id="digibeta-status">Not Connected</td>
+	</tr>
+	<tr>
+		<td style="color:blue">Device:</td>
+		<td id="digibeta-device-type">Unknown (0x00)</td>
+	</tr>
+</table>
+
+<table id="digibeta-vtr-control-buttons">
+	<tr>
+		<td><div class="vtr-button"><input id="digibeta-fr-button" type="image" src="images/fr_large_symbol.png" title="Fast Rewind" onclick="vtr_control_command('fr', false)"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-play-button" type="image" src="images/play_large_symbol.png" title="Play" onclick="vtr_control_command('play', false)"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-stop-button" type="image" src="images/stop_large_symbol.png" title="Stop" onclick="vtr_control_command('stop', false)"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-standby-button" type="image" src="images/standby_large_symbol.png" title="Standby" onclick="toggle_standby(false)"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-ff-button" type="image" src="images/ff_large_symbol.png" title="Fast Forward" onclick="vtr_control_command('ff', false)"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-record-button" type="image" src="images/record_large_symbol.png" title="Record (disabled)" style="background-color:#CCCCCC" disabled="true"/></div></td>
+		<td><div class="vtr-button"><input id="digibeta-eject-button" type="image" src="images/eject_large_symbol.png" title="Eject" onclick="vtr_control_command('eject', false)"/></div></td>
+	</tr>
+</table>
+
+</div>
+
+</body>
+</html>
+

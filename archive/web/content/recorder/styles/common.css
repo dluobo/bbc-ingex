@@ -1,0 +1,124 @@
+body {
+	font-family: Tahoma, Arial, sans;
+	background-color: Khaki;
+	margin-top: 8px;
+	margin-left: 8px;
+}
+
+
+.clear {
+	clear: both;
+}
+
+.clear-right {
+	clear: right;
+}
+
+.hide-node {
+	display: none;
+}
+
+
+/***************************************************/
+/* Page top with status and Links */
+/***************************************************/
+
+div#page-top {
+	display: block;
+	position: fixed;
+	background-color: Khaki;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	padding-top: 8px;
+	padding-left: 8px;
+}
+
+div#page-content {
+	margin-top: 6.5em;
+}
+
+#status-line td {
+	font-size: 100%;
+	font-weight: bold;
+	border: 2px solid black;
+	padding: 0.3em;
+}
+
+
+#link-line td {
+	font-size: 100%;
+	font-weight: bold;
+	padding-right: 1em;
+}
+
+
+#link-line a {
+	color: #000000; 
+	text-decoration: none; 
+	display: block; 
+	background-color: #C0C0C0; 
+	border-width: 4px;
+	border-style: solid;
+	border-top-color: #DFDFDF;
+	border-right-color: #595959;
+	border-bottom-color: #333333;
+	border-left-color: #9E9E9E;
+	padding: 0.5em;
+	outline: none;
+}
+
+#link-line a.current-page-link {
+	color: #343434; 
+	background-color: #CBCBCB; 
+	border-bottom-color: #DFDFDF;
+	border-left-color: #737373;
+	border-top-color: #4D4D4D;
+	border-right-color: #ABABAB;
+}
+
+#link-line a.active-page-link {
+	background-color: #FFA200; 
+}
+
+
+/***************************************************/
+/* Confidence replay */
+/***************************************************/
+
+#conf-replay-buttons td {
+	padding-left: 10px;
+	padding-right: 10px;
+	padding-top: 5px;
+	padding-bottom: 5px;
+	background-color:#FFFFAA;
+	border: 5px solid #FFFFAA;
+}
+
+
+
+/***************************************************/
+/* Recorder Service Descriptions */
+/***************************************************/
+
+.service-descr {
+	text-indent: 1em;
+}
+
+.service-args {
+	text-indent: 1em;
+}
+
+.service-arg {
+	text-indent: 2em;
+}
+
+.service-examples {
+	text-indent: 1em;
+}
+
+.service-example {
+	text-indent: 2em;
+}
+
+

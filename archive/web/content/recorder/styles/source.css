@@ -1,0 +1,56 @@
+@import url("common.css");
+
+
+
+
+
+#vtr-status {
+	border-bottom: 8px solid white;
+}
+
+#source-select-status {
+	border-top: 8px solid white;
+}
+
+
+.formbutton {
+	font-size: 180%;
+}
+
+.forminlinetextbox {
+	font-size: 180%;
+}
+
+
+/***************************************************/
+/* Source Info */
+/***************************************************/
+
+.source-info-table {
+	background-color: #FFFFCC;
+	border-collapse: collapse;
+	width: 800px;
+}
+
+.source-info-table td {
+	border: 1px solid grey;
+	padding: 3px;
+	text-align: left;
+}
+
+.source-info-table td.item-heading {
+	color: blue;
+	font-size: 80%;
+}
+
+.source-info-table th {
+	background-color: Khaki;
+	color: black;
+	font-weight: bold;
+	text-align: left;
+	border: 0px;
+}
+
+
+
+

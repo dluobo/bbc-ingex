@@ -1,0 +1,55 @@
+@import url("common.css");
+
+
+div#page-content {
+	margin-top: 8em;
+}
+
+
+#d3-vtr-control-buttons td {
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+}
+
+#digibeta-vtr-control-buttons td {
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+}
+
+
+
+.vtr-button {
+	background-color: #6188FF;
+	color: #FFFFFF;
+	font-weight: bold;
+	text-align: center;
+	text-decoration: none;
+	border-width: 4px;
+	border-style: solid;
+	border-top-color: #DFDFDF;
+	border-right-color: #595959;
+	border-bottom-color: #333333;
+	border-left-color: #9E9E9E;
+	outline: none;
+}
+
+.active-vtr-button {
+	background-color: #C1D7FF;
+	border-bottom-color: #DFDFDF;
+	border-left-color: #737373;
+	border-top-color: #4D4D4D;
+	border-right-color: #ABABAB;
+}
+
+.vtr-button input[disabled] {
+	background-color: #CED4E3;
+	color: #B1B889;
+	opacity:.4;
+}
+
+
+

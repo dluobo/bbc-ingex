@@ -1,0 +1,13 @@
+@import url("common.css");
+
+
+div#page-content {
+	margin-top: 8em;
+}
+
+#system-status {
+	border-collapse: collapse;
+	font-size: 120%;
+}
+
+

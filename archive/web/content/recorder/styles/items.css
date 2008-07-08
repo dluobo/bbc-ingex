@@ -1,0 +1,200 @@
+@import url("common.css");
+
+
+/***************************************************/
+/* Progress Bar */
+/***************************************************/
+
+
+div#page-top {
+	display: block;
+	position: fixed;
+	background-color: Khaki;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	padding-top: 8px;
+	padding-left: 8px;
+	padding-bottom: 20px;
+}
+
+div#page-content {
+	margin-top: 80px;
+}
+
+td#back-button {
+	padding-right: 20px;
+}
+
+td#back-button a {
+	color: #000000; 
+	font-size: 100%;
+	font-weight: bold;
+	text-decoration: none; 
+	display: block; 
+	background-color: #C0C0C0; 
+	border-width: 4px;
+	border-style: solid;
+	border-top-color: #DFDFDF;
+	border-right-color: #595959;
+	border-bottom-color: #333333;
+	border-left-color: #9E9E9E;
+	padding: 0.5em;
+	outline: none;
+}
+
+div#progress-bar {
+	position: relative;
+	margin: 0px;
+	padding: 0px;
+}
+
+#progress-bar-input {
+	background: white url(../images/longprogressbar_bg.png) top left no-repeat;
+	padding: 0px;
+	margin: 0px 0px 0px 0px;
+	background-position: 0px 0px;
+	outline: none;
+}
+
+#progress-bar-pointer {
+	position: absolute;
+	top: 2px;
+}
+
+
+.progress-bar-mark {
+	position: absolute;
+	top: 2px;
+}
+
+#chunk-percentage {
+	font-size: 140%;
+	font-weight: bold;
+	position: relative;
+	top: -8px;
+	left: 5px;
+}
+
+
+/***************************************************/
+/* Item Tables */
+/***************************************************/
+
+table#tape-info {
+	background-color: #FFFFCC;
+	border-collapse: collapse;
+	width: 850px;
+}
+
+table#tape-info td {
+	border: 1px solid grey;
+	padding: 3px;
+	text-align: left;
+}
+
+table#tape-info td.item-heading {
+	color: blue;
+	font-size: 80%;
+}
+
+
+.item-table {
+	background-color: #F6F6D0;
+	border-collapse: collapse;
+	width: 850px;
+	margin-bottom: 4px;
+}
+
+.item-table.playing {
+	background-color: #FFFFCC;
+}
+
+.item-table.junk-item {
+	background-color: #555;
+}
+
+.item-table td {
+	border: 1px solid grey;
+	padding: 3px;
+	text-align: left;
+}
+
+.item-table td.item-heading {
+	color: blue;
+	font-size: 80%;
+}
+
+.item-table th {
+	background-color: Khaki;
+	color: black;
+	font-weight: bold;
+	text-align: left;
+	border: 0px;
+}
+
+.item-table td.chunk-item-info {
+	background-color: #C1C19F;
+	font-size: 100%;
+}
+
+.item-table.playing td.chunk-item-info {
+	background-color: #FFFF00;
+}
+
+.item-table td.chunk-item-info-heading {
+	color: blue;
+}
+
+.item-table.moved-item {
+	background-color: #CCFF99;
+}
+
+.item-table.moved-item td.chunk-item-info {
+	background-color:#99FF00;
+}
+
+.item-table.item-clip-changed {
+	background-color: #CCFFFF;
+}
+
+.item-table.item-clip-changed td.chunk-item-info {
+	background-color:#00CCCC;
+}
+
+.item-table.disabled-item-table {
+	background-color: #FF9900;
+}
+
+.item-table.disabled-item-table td.chunk-item-info {
+	background-color:#FF3300;
+}
+
+.move-item-control {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+
+.enable-disable-item {
+	width: 40px;
+}
+
+.enable-disable-item input {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.play-item-field {
+	width: 30px;
+}
+
+.play-item-control {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+

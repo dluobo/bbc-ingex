@@ -1,0 +1,138 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Ingex Tape Export - Prepare Transfer</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+
+<script type="text/javascript" src="scripts/common.js"/>
+<script type="text/javascript" src="scripts/prepare.js"/>
+
+<link href="styles/main.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+
+
+</head>
+
+<body onload="init_prepare()">
+
+
+<!-- Status line -->
+
+<table id="status-line">
+	<tr>
+		<td id="connection-status" class="status-element">Connection</td>
+		<td id="database-status" class="status-element">Database</td>
+		<td id="tape-device-status" class="status-element">Tape Device</td>
+	</tr>		
+</table>
+
+
+<!-- Links -->
+
+<table id="link-line" cellspacing="5">
+	<tr>
+		<td><a id="index-link" href="index.html">Home</a></td>
+		<td><a id="prepare-tape-link" class="current-page-link" href="prepare.html">Prepare Transfer</a></td>
+		<td><a id="session-link" href="transfer.html">Transfer Session</a></td>
+		<td><a id="cache-link" href="cache.html">Cache</a></td>
+	</tr>
+</table>
+
+
+
+<!-- Tape Selection-->
+
+<h3>Select tape</h3>
+
+<table>
+	<tr id="tape-status-row">
+		<td style="color:blue">Tape Status:</td>
+		<td id="tape-state"></td>
+	</tr>
+	<tr id="tape-select-entry">
+		<td colspan="2">
+			<form name="barcodeform" action="javascript:check_selection(document.forms.barcodeform.barcodeinput)" method="get">
+				<input class="formbutton" type="button" value="C" onclick="clear_barcode_input()"/>&nbsp;
+				<input class="forminlinetextbox" name="barcodeinput" type="text" size="10" maxlength="16" onfocus="this.setAttribute('style', 'background-color:#ffff66')" onblur="this.setAttribute('style', '')"/>&nbsp;
+				<input class="formbutton" type="submit" value="Select"/>
+			</form>
+		</td>
+	</tr>
+</table>
+<br/>
+
+
+<!-- Selection status -->
+
+<div id="selection-status">No tape selected</div>
+<br/>
+
+
+
+<!-- transfer method -->
+
+<table id="select-transfer-method">
+	<tr>
+		<td>
+			<input class="active-form-button" id="select-automatic-transfer-method" type="button" value="Automatic Transfer" onclick="select_automatic_transfer_method()"/>
+		</td>
+		<td>
+			<input class="inactive-form-button" id="select-manual-transfer-method" type="button" value="Manual Transfer" onclick="select_manual_transfer_method()"/>
+		</td>
+	</tr>
+</table>
+<br/>
+
+
+<div id="transfer-method">
+	<div id="automatic-transfer-method">
+	
+		<br/>
+		<input class="formbutton" id="start-automatic-transfer-button" type="button" value="Start automatic transfer" onclick="start_automatic_transfer()" disabled="true"/>
+		<br/>
+		
+		<div id="start-automatic-transfer-message"></div>
+	</div>
+	<div id="manual-transfer-method" class="hidediv">
+		<h3>Select cache items</h3>
+		
+		<table id="cache-contents">
+			<tr style="color:blue">
+				<td></td>
+				<td>Spool No</td>
+				<td>Item No</td>
+				<td>Prog No</td>
+				<td>Date Recorded</td>
+				<td>Filename</td>
+				<td>Size</td>
+				<td>Duration</td>
+			</tr>
+			<tr>
+			</tr>
+		</table>
+		<span style="color:blue">Number files:&nbsp;</span><span id="num-selected_items">0</span>,&nbsp;
+		<span style="color:blue">Total size:&nbsp;</span><span id="total-size">0B</span>
+		<br/>
+		<br/>
+		<table id="manual-transfer-selection">
+			<tr>
+				<td><input class="formbutton" id="auto-select-items" type="button" value="Auto Select" onclick="auto_select_items()"/></td>
+				<td><input class="formbutton" id="clear-items" type="button" value="Clear All" onclick="clear_items()"/></td>
+			</tr>
+		<table>
+		<br/>
+
+		<input class="formbutton" id="start-manual-transfer-button" type="button" value="Transfer selected items" onclick="start_manual_transfer()" disabled="true"/>
+		<br/>
+		
+		<div id="start-manual-transfer-message"></div>
+	</div>
+</div>
+
+
+
+
+</body>
+</html>
