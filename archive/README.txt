@@ -11,15 +11,15 @@ files over a 6 year period.
 The 4fsc digital composite PAL video data on the D3 tape is converted to digital
 component video using the BBC transform PAL decoder. The video data with VITC, 4
 digital audio tracks and LTC embedded in the VBI are combined in an SDI signal
-which is input into the Ingex Archive Recorder. The cue and timecode analogue
-audio tracks are optional and can be embedded alongside the digital audio tracks
-after analogue-to-digital conversion.
+which is input into the machine running the Ingex Archive Recorder. The cue and
+timecode analogue audio tracks are optional and can be embedded alongside the
+digital audio tracks after analogue-to-digital conversion.
 
 The MXF file format is used to store the data from the D3 tapes. It includes
 8-bit uncompressed UYVY 4:2:2 video data, 20-bit 48kHz PCM audio data, VITC and
 LTC timecodes and metadata such as D3 VTR playback errors, Photosensitive
 Epilepsy (PSE) analysis results, descriptive and identification information. The
-MXF files are stored on LTO-3 tapes. An LTO-3 tape store around 5 hours of
+MXF files are stored on LTO-3 tapes. An LTO-3 tape stores around 5 hours of
 content and therefore 1 LTO-3 tape replaces 10 half-hour D3 tapes.
 
 The Ingex Archive Recorder and Tape Export services run on a server machine with
@@ -42,7 +42,7 @@ audio/video faults occur and whether these faults require a retransfer.
 1. Hardware requirements
 
 
-1.1 Recorder / Tape Export
+1.1 Recorder / Tape Export services
 
 The Recorder requires a server machine that supports simultaneous browse copy
 encoding (3Mbps) and PSE analysis. The Recorder writes data to disk at a rate of
@@ -55,8 +55,8 @@ signal. The DVS card's SDI input is used to capture the video, audio and
 timecode data and the card's SDI output is used to monitor the capture and for
 playback. The newer Centaurus II card has not (yet) being tested in the system.
 
-A D3 VTR is used to playback the tapes and a Digibeta VTR is used record onto a
-Digibeta tape in parallel to the SDI capture in the recorder. The D3 and
+A D3 VTR is used to playback the tapes and a Digibeta VTR is used to record onto
+a Digibeta tape in parallel to the SDI capture in the recorder. The D3 and
 Digibeta VTRs are controlled by the recorder using the RS-422 serial port
 interface. A set of serial-to-USB converters are used on the recorder side to
 utilise the available USB ports.
@@ -202,9 +202,9 @@ The src/ directory contains the following sub-directories:
 * barcode-scanner/
     Classes for reading barcodes from a barcode scanner device. Also includes a
     commandline utility for reading the output from a barcode scanner and
-    writing to 1 or more fifo files. This utility allows a single barcode
-    scanner to be used on the server side for both the Recorder and Tape Export
-    applications.
+    writing to 1 or more FIFO (named pipe) files. This utility allows a single
+    barcode scanner to be used on the server side for both the Recorder and Tape
+    Export applications.
 * browse-encoder/
     Classes for creating MPEG-2 browse copy files from the uncompressed video
     and audio data
@@ -305,23 +305,24 @@ database server or on the Recorder / Tape Export server.
 
 The postgres system user's home directory can be changed from the default
 /var/lib/pgsql to /home/postgres to allow it to be located on a different disk
-setup with better I/O performance. Open YaST and select User Admin, filter on
-system users and then change the home directory of the posgres user.
+setup with better I/O performance. Open YaST and select Security and Users and
+User Management. Open Set Filter and select System Users. Select the postgres
+user and change the home directory.
 
 Set the access privileges to allow access to the database from the Recorder and
 Tape Export servers. For example, for an isolated network 10.100.x.x edit
-/home/postgres/data/pg_hba.conf and add the following lines and comment out the
-existing lines: 
+/home/postgres/data/pg_hba.conf as root user and add the following lines and
+comment out the existing lines:
         local   all         all                               trust
         host    all         all         127.0.0.1/32          trust
         host    all         all         ::1/128               trust
         host    all         all         10.100.0.0/16         trust
 
-Edit the postgresql configuration file, /home/postgres/data/postgresql.conf, and
-allow access from all servers on the network
+Edit the postgresql configuration file, /home/postgres/data/postgresql.conf, as
+root user and set to allow access from all servers on the network
         listen_addresses = '*'
-and make a couple of changes to make it easier to import data without causing
-tons of warnings
+Make a couple of changes to make it easier to import data without causing tons
+of warnings
         backslash_quote = on
         escape_string_warning = off
         standard_conforming_strings = off
@@ -334,7 +335,7 @@ Create a database using the script in the database/ directory
 This will create a 'ingexrecorderdb' database from IngexRecorderDb.sql and
 populate it with test D3 source information from test_d3_source.sql.
 
-You can test access by running
+You can test access by running this command in a terminal
     psql -U ingex -d ingexrecorderdb -c "SELECT * FROM Version"
 which should return
     ver_identifier | ver_version
