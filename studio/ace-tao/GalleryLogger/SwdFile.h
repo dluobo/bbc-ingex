@@ -1,5 +1,27 @@
-// SwdFile.h
-	
+/*
+ * $Id: SwdFile.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ *
+ * Class to read ScriptWriter II files.
+ *
+ * Copyright (C) 2007  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+    
 #ifndef SwdFile_h
 #define swdFile_h
 
@@ -28,7 +50,7 @@
 #elif defined(__MWERKS__) && defined(__MACH__)
 #define OM_OS_MACOSX
 #elif defined(__sgi) || defined(__linux__) || defined (__FreeBSD__) || \
-	  defined (__APPLE__) || defined(__CYGWIN__)
+      defined (__APPLE__) || defined(__CYGWIN__)
 #define OM_OS_UNIX
 #elif defined (sun)
 #define OM_OS_SOLARIS
@@ -116,75 +138,75 @@ typedef OMUInt16 OMCharacter;
 class SwdFile 
 {
 public:
-	SwdFile (void);
+    SwdFile (void);
 
-	struct Seq
-	{
-		std::string section;
-		std::string number;
-		std::string name;
-	};
+    struct Seq
+    {
+        std::string section;
+        std::string number;
+        std::string name;
+    };
     //vector <string> OrderedSequence; // containing ordered data
-	std::vector <Seq> OrderedSequence; // containing ordered data
+    std::vector <Seq> OrderedSequence; // containing ordered data
     char* baseName(char* fullName);
-	size_t warningCount;
-	size_t errorCount;
-	void SsfFile (const char* fileName);
-	std::string skt; // ordermode of file
+    size_t warningCount;
+    size_t errorCount;
+    void SsfFile (const char* fileName);
+    std::string skt; // ordermode of file
    
 
 private:
 
     void ReadStorage(IStorage* storage,STATSTG* statstg,
-					 char* pathName,int isRoot);
-	void openStorage(const char* fileName, IStorage** storage);
-	//void StoreOrder(string slt);
-	void FindOrder(IStream* stream, STATSTG* statstg, char* pathName);
-	void StoreData(IStream* stream, STATSTG* statstg, char* pathName);
+                     char* pathName,int isRoot);
+    void openStorage(const char* fileName, IStorage** storage);
+    //void StoreOrder(string slt);
+    void FindOrder(IStream* stream, STATSTG* statstg, char* pathName);
+    void StoreData(IStream* stream, STATSTG* statstg, char* pathName);
     char map(int c);
     static char table[128];
-	void ReadStream (IStream* stream, STATSTG* statstg, char* pathName, std::string &str );
+    void ReadStream (IStream* stream, STATSTG* statstg, char* pathName, std::string &str );
 
-	void fatalError(char* routineName, char* message);
-	void error(char* routineName, char* message);
-	void warning(char* routineName, char* message);
-	int checkStatus(const char* fileName, DWORD resultCode);
-	#if defined(OM_UNICODE_APIS)
-	void convert(wchar_t* wcName, size_t length, const char* name);
-	void convert(char* cName, size_t length, const wchar_t* name);
-	#else
-	void convert(char* cName, size_t length, const OMCharacter* name);
-	#endif
- 	void convert(char* cName, size_t length, const char* name);
-	void convertName(char* cName,
-							size_t length,
-							OMCHAR* wideName,
-							char** tag);
-	void resetStatistics(void);
-	void GetOrderedData(void);
-	static void initializeCOM(void);
-	static void finalizeCOM(void);
+    void fatalError(char* routineName, char* message);
+    void error(char* routineName, char* message);
+    void warning(char* routineName, char* message);
+    int checkStatus(const char* fileName, DWORD resultCode);
+    #if defined(OM_UNICODE_APIS)
+    void convert(wchar_t* wcName, size_t length, const char* name);
+    void convert(char* cName, size_t length, const wchar_t* name);
+    #else
+    void convert(char* cName, size_t length, const OMCharacter* name);
+    #endif
+    void convert(char* cName, size_t length, const char* name);
+    void convertName(char* cName,
+                            size_t length,
+                            OMCHAR* wideName,
+                            char** tag);
+    void resetStatistics(void);
+    void GetOrderedData(void);
+    static void initializeCOM(void);
+    static void finalizeCOM(void);
   
 
 
 
-	bool verboseFlag;
-	// Statistics gathering
-	//
-	size_t totalStorages;
-	size_t totalStreams;
+    bool verboseFlag;
+    // Statistics gathering
+    //
+    size_t totalStorages;
+    size_t totalStreams;
 
-	size_t totalPropertyBytes;
-	size_t totalObjects;
-	size_t totalProperties;
+    size_t totalPropertyBytes;
+    size_t totalObjects;
+    size_t totalProperties;
 
-	size_t totalStreamBytes;
-	size_t totalFileBytes;
+    size_t totalStreamBytes;
+    size_t totalFileBytes;
 
-	// Validity checking
+    // Validity checking
 
-	std::vector <Seq> SeqList;  	//// containing unordered data
-	std::vector <std::string> OrderList;  // containing sequence order
+    std::vector <Seq> SeqList;      //// containing unordered data
+    std::vector <std::string> OrderList;  // containing sequence order
 
 
 };

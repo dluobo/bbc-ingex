@@ -1,4 +1,26 @@
-// Take.h
+/*
+ * $Id: Take.h,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ *
+ * Class to represent a "take".
+ *
+ * Copyright (C) 2007  British Broadcasting Corporation.
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
 
 #ifndef Take_h
 #define Take_h
@@ -16,7 +38,7 @@ public:
     enum ResultEnum { UNKNOWN, NG, GOOD };
 
     /// Default constructor
-	Take();
+    Take();
 
     /// Construction from a database take
     Take(const prodauto::Take * pt);
@@ -27,29 +49,29 @@ public:
     /// Copy to a database take
     void CopyTo(prodauto::Take *) const;
 
-	void Clear();
+    void Clear();
 
-	void Number(int n) { mNumber = n; }
-	int Number() const { return mNumber; }
+    void Number(int n) { mNumber = n; }
+    int Number() const { return mNumber; }
 
-	void Comment(const char * s) { mComment = s; }
-	const char * Comment() const { return mComment.c_str(); }
-	bool HasComment() const { return !mComment.empty(); }
+    void Comment(const char * s) { mComment = s; }
+    const char * Comment() const { return mComment.c_str(); }
+    bool HasComment() const { return !mComment.empty(); }
 
-	void In(Timecode & tc) { mInTime = tc; }
-	Timecode In() const { return mInTime; }
+    void In(Timecode & tc) { mInTime = tc; }
+    Timecode In() const { return mInTime; }
 
-	void Out(Timecode & tc) { mOutTime = tc; }
-	Timecode Out() const { return mOutTime; }
+    void Out(Timecode & tc) { mOutTime = tc; }
+    Timecode Out() const { return mOutTime; }
 
-	//Timecode Duration() const { return mOutTime - mInTime; }
+    //Timecode Duration() const { return mOutTime - mInTime; }
 
     std::string DateText() const;
 
     void Result(ResultEnum r) { mResult = r; }
     ResultEnum Result() { return mResult; }
     void IsGood(bool b) { mResult = (b ? GOOD : NG); }
-	bool IsGood() const { return mResult == GOOD; }
+    bool IsGood() const { return mResult == GOOD; }
     const char * ResultText();
     long Location() const { return mLocation; }
 
@@ -60,30 +82,30 @@ public:
     void Day(int d) { mDay = d; }
     int Day() const { return mDay; }
 
-	//const char * Sources();
+    //const char * Sources();
 
-	//int SourceCount() const { return mRecordedSources.size(); }
-	//::RecordedSource & RecordedSource(int i) { return mRecordedSources[i]; }
-	//const ::RecordedSource & RecordedSource(int i) const { return mRecordedSources[i]; }
-	//void AddRecordedSource(const ::RecordedSource & rs) { mRecordedSources.push_back(rs); }
-	//::RecordedSource & LastRecordedSource() { return mRecordedSources.back(); }
+    //int SourceCount() const { return mRecordedSources.size(); }
+    //::RecordedSource & RecordedSource(int i) { return mRecordedSources[i]; }
+    //const ::RecordedSource & RecordedSource(int i) const { return mRecordedSources[i]; }
+    //void AddRecordedSource(const ::RecordedSource & rs) { mRecordedSources.push_back(rs); }
+    //::RecordedSource & LastRecordedSource() { return mRecordedSources.back(); }
 
 private:
-	int mNumber;
-	std::string mComment;
-	ResultEnum mResult;
-	Timecode mInTime;
-	Timecode mOutTime;
-	std::string mDate;
+    int mNumber;
+    std::string mComment;
+    ResultEnum mResult;
+    Timecode mInTime;
+    Timecode mOutTime;
+    std::string mDate;
     int mYear;
     int mMonth;
     int mDay;
     long mLocation;
     std::string mLocationText;
 
-	//std::vector<::RecordedSource> mRecordedSources;
+    //std::vector<::RecordedSource> mRecordedSources;
 
-	//std::string mSources; // Used only for const char * return value;
+    //std::string mSources; // Used only for const char * return value;
 };
 
 #endif //#ifndef Take_h
