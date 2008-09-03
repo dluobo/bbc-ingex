@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: material.pl,v 1.1 2007/09/11 14:08:46 stuart_hc Exp $
+# $Id: material.pl,v 1.2 2008/09/03 15:32:39 john_f Exp $
 #
 # 
 #
@@ -337,7 +337,7 @@ sub get_page_content
                             }
                         }
 
-                        if (scalar @{ $sourcePackage->{"tracks"} } == 1) # expecting 1 track in the file package
+                        if (scalar @{ $sourcePackage->{"tracks"} } >= 1) # expecting at least 1 track in the file package
                         {
                             my $sourceTrack = $sourcePackage->{"tracks"}[0];
                             $sourceClip = $sourceTrack->{"sourceclip"};

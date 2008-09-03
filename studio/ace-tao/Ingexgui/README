@@ -12,12 +12,16 @@ HOW TO BUILD INGEXGUI
 
 (Don't worry about the CIAO_ROOT and DDS_ROOT warnings.)
 
-4) Build and install wxGTK:
+4) Install wxGTK:
 
-Install gtk2-devel package if you don't have it.
+Using YaST, make sure gtk2-devel package is installed.
+
+Either:
+Use YaST to install wxGTK-devel
+
+Or:
 Download latest wxGTK from http://www.wxwidgets.org/
 Untar/configure/make/install.
-
 # ldconfig
 
 5) Build ingexgui:
@@ -29,3 +33,6 @@ In this directory:
 > autoreconf
 > ./configure
 > make
+
+The executable is created in ./src/
+

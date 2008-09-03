@@ -6,8 +6,12 @@ Requirements:
 /srv/www/cgi-bin
 * perl CGI, CGI::Pretty, Text::Template, DBI, PostgreSQL DBD modules
 
-You can install these modules using YaST or via CPAN as follows:
-eg. perl -MCPAN -e 'install Text::Template'
+CGI and CGI::Pretty should already be present as part of perl.
+perl-DBI and perl-DBD-Pg can be installed using YaST.
+
+Text::Template can be installed via CPAN as follows:
+$ su - root
+root> perl -MCPAN -e 'install Text::Template'
 
 
 1) edit the configuration file "conf/ingex.conf" to match your system setup

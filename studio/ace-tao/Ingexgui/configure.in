@@ -63,7 +63,7 @@ AC_DEFUN([PLAYERTEST],
 				DVS_LDFLAGS="-L$DVSSDK/linux-x86/lib -L$DVSSDK/linux-x86_64/lib -ldvsoem"
 			else
 				AC_MSG_RESULT([no])
-				AC_MSG_ERROR([You need to define the DVSSDK environment variable.])
+				AC_MSG_WARN([You need to define the DVSSDK environment variable before you build the project.])
 			fi
 		else
 			AC_MSG_RESULT([no])
@@ -84,7 +84,7 @@ AC_DEFUN([ACETAOTEST],
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
-		AC_MSG_ERROR([You need to define ACE_ROOT and TAO_ROOT environment variables.])
+		AC_MSG_WARN([You need to define ACE_ROOT and TAO_ROOT environment variables before you build the project.])
 	fi
 	IDLLOC=`pwd | sed 's/\(.*\)\/Ingexgui.*\?/\1\/IDL/'`
 	IDLLIB="libidl.a"
@@ -102,7 +102,7 @@ ACETAOTEST
 
 CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS $DVS_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$INGEXROOT/player/ingex_player -I$INGEXROOT/player/IngexPlayer"
 CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L$IDLLOC $IDLLOC/$IDLLIB -L/usr/X11R6/lib $INGEXROOT/player/IngexPlayer/$PLAYERLIB $INGEXROOT/common/libcommon.a $INGEXROOT/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lportaudio $DVS_LDFLAGS"
+LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L$IDLLOC $IDLLOC/$IDLLIB -L/usr/X11R6/lib $INGEXROOT/player/IngexPlayer/$PLAYERLIB $INGEXROOT/common/libcommon.a $INGEXROOT/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
 
