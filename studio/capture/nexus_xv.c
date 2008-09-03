@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_xv.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
+ * $Id: nexus_xv.c,v 1.3 2008/09/03 14:13:34 john_f Exp $
  *
  * Utility to display current video frame on X11 display.
  *
@@ -271,7 +271,7 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
-	int				channelnum = 0, yuv_mode = 1;
+	int				channelnum = 0, yuv420_mode = 1;
 
 	int n;
 	for (n = 1; n < argc; n++)
@@ -293,7 +293,7 @@ extern int main(int argc, char *argv[])
 		}
 		else if (strcmp(argv[n], "-uyvy") == 0)
 		{
-			yuv_mode = 0;
+			yuv420_mode = 0;
 		}
 		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
 		{
@@ -347,6 +347,17 @@ extern int main(int argc, char *argv[])
 			printf("  attached to channel[%d]\n", i);
 	}
 
+	if (yuv420_mode == 0 && pctl->pri_video_format != Format422UYVY) {
+		printf("Cannot display UYVY buffer since primary video format is %s\n", nexus_capture_format_name(pctl->pri_video_format));
+		return 1;
+	}
+
+	if (yuv420_mode == 1 &&
+		(pctl->sec_video_format != Format420PlanarYUV && pctl->sec_video_format != Format420PlanarYUVShifted)) {
+		printf("Cannot display YUV 4:2:0 buffer since secondary video format is %s\n", nexus_capture_format_name(pctl->sec_video_format));
+		return 1;
+	}
+
 	int						xvport;
 	Display					*display;
 	Window					window;
@@ -364,7 +375,7 @@ extern int main(int argc, char *argv[])
 	    /* Check that we have access to an XVideo port providing this chroma	*/
 		/* Commonly supported chromas: YV12, I420, UYVY, YUY2					*/
 	    xvport = XVideoGetPort( display,
-				yuv_mode ? X11_FOURCC('I','4','2','0') :
+				yuv420_mode ? X11_FOURCC('I','4','2','0') :
 							X11_FOURCC('U','Y','V','Y'),
 									-1);
 	    if ( xvport < 0 )
@@ -398,7 +409,7 @@ extern int main(int argc, char *argv[])
 		// Uncompressed video will be written into video_buffer[0] by libdv
 		XShmSegmentInfo			yuv_shminfo;
 		yuv_image = XvShmCreateImage(display, xvport,
-							yuv_mode ? X11_FOURCC('I','4','2','0') :
+							yuv420_mode ? X11_FOURCC('I','4','2','0') :
 										X11_FOURCC('U','Y','V','Y'),
 										0, width, height, &yuv_shminfo);
 		yuv_shminfo.shmid = shmget(IPC_PRIVATE, yuv_image->data_size,
@@ -421,7 +432,7 @@ extern int main(int argc, char *argv[])
  	int frame_size = width*height*2;
 	int video_offset = 0;
 	char tcstr[32], ltcstr[32];
-	if (yuv_mode) {
+	if (yuv420_mode) {
 		frame_size = width*height*3/2;
 		video_offset = pctl->sec_video_offset;
 	}

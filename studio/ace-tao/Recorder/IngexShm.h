@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.4 2008/04/18 16:15:32 john_f Exp $
+ * $Id: IngexShm.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -26,6 +26,10 @@
 #define IngexShm_h
 
 #include <string>
+#include <sys/types.h>
+#include <signal.h>
+#include <errno.h>
+
 //#include <ace/Log_Msg.h>
 #include "integer_types.h"
 
@@ -68,10 +72,10 @@ public:
             PTHREAD_MUTEX_UNLOCK(&mpControl->channel[channel_i].m_lastframe)
 #endif
         }
-		if (frame < 0)
-		{
-			frame = 0;
-		}
+        if (frame < 0)
+        {
+            frame = 0;
+        }
         return frame;
     }
 
@@ -86,7 +90,7 @@ public:
 
     int32_t Timecode(unsigned int channel, unsigned int frame)
     {
-		//ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
+        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
         uint8_t * p_tc = mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + (mTcMode == LTC ? mpControl->ltc_offset : mpControl->vitc_offset);
         return * (int32_t *) p_tc;
@@ -107,18 +111,18 @@ public:
     unsigned int Width() { return mpControl->width; }
     unsigned int Height() { return mpControl->height; }
 
-    uint8_t * pVideo422(int channel, int frame)
+    uint8_t * pVideoPri(int channel, int frame)
     {
         return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen);
     }
     //int sizeVideo422() { return mpControl->width*mpControl->height*2; }
 
-    uint8_t * pVideo420(unsigned int channel, unsigned int frame)
+    uint8_t * pVideoSec(unsigned int channel, unsigned int frame)
     {
         return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
             + mpControl->sec_video_offset;
     }
-    //unsigned int sizeVideo420() { return  mpControl->width*mpControl->height*3/2; }
+    //unsigned int sizeVideoSec() { return  mpControl->width*mpControl->height*3/2; }
 
     int32_t * pAudio12(unsigned int channel, unsigned int frame)
     {
@@ -172,6 +176,18 @@ public:
         }
     }
 
+    // Informational updates from Recorder to shared memory
+    void InfoSetup(std::string name);
+    int InfoGetRecIdx(void);
+    void InfoResetChannels(void);
+    void InfoReset(unsigned int channel, int index, bool quad_video);
+    void InfoSetEnabled(unsigned int channel, int index, bool quad_video, bool enabled);
+    void InfoSetRecording(unsigned int channel, int index, bool quad_video, bool recording);
+    void InfoSetDesc(unsigned int channel, int index, bool quad_video, const char *fmt, ...);
+    void InfoSetRecordError(unsigned int channel, int index, bool quad_video, const char *fmt, ...);
+    void InfoSetFramesWritten(unsigned int channel, int index, bool quad_video, int frames_written);
+    void InfoSetFramesDropped(unsigned int channel, int index, bool quad_video, int frames_dropped);
+    void InfoSetBacklog(unsigned int channel, int index, bool quad_video, int frames_in_backlog);
 
 
 protected:

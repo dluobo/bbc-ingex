@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.1 2008/05/09 09:26:25 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.2 2008/09/03 14:13:29 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -211,8 +211,12 @@ extern int main(int argc, char *argv[])
 	int width = pctl->width;
 	int height = pctl->height;
 
-	// get the alternative video frame (4:2:0 planar)
-	int video_offset = pctl->sec_video_offset;;
+	// get the alternative video frame (4:2:0 or 4:2:2 planar)
+	int video_offset = pctl->sec_video_offset;
+	int video_422yuv = 0;
+	if (pctl->sec_video_format == Format422PlanarYUV || pctl->sec_video_format == Format422PlanarYUVShifted)
+		video_422yuv = 1;
+	printf("Using secondary video buffer with format %s\n", nexus_capture_format_name(pctl->sec_video_format));
 
 	uint8_t *scaled_frame = (uint8_t *)malloc(out_width * out_height * 3/2);
 
@@ -260,7 +264,10 @@ extern int main(int argc, char *argv[])
 
 		if (signal_ok) {
 			// scale down video suitable for multicast
-			scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+			if (video_422yuv)
+				scale_video422_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+			else
+				scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
 
 			// reformat audio to two mono channels one after the other
 			// i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
@@ -282,8 +289,8 @@ extern int main(int argc, char *argv[])
 
 		if (verbose) {
 			char tcstr[32], ltcstr[32];
-			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
-					channelnum, pc->lastframe,
+			printf("\rcam%d lastframe=%d %s  tc=%10d  %s   ltc=%11d  %s ",
+					channelnum, pc->lastframe, signal_ok ? "ok" : "--",
 					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
 			fflush(stdout);
 		}

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.4 2008/04/18 16:15:28 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -51,9 +51,9 @@
 Constructor clears all member data.
 The name parameter is used when reading config from database.
 */
-IngexRecorder::IngexRecorder(prodauto::Recorder * rec)
-: mpCompletionCallback(0), mRecorder(rec), mTargetDuration(0),
-  mRecordingOK(true), mDroppedFrames(false)
+IngexRecorder::IngexRecorder(RecorderImpl * impl, unsigned int index)
+: mpCompletionCallback(0), mpImpl(impl), mTargetDuration(0),
+  mRecordingOK(true), mIndex(index), mDroppedFrames(false)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
 }
@@ -75,13 +75,21 @@ IngexRecorder::~IngexRecorder()
 void IngexRecorder::Setup(
                 framecount_t start_timecode,
                 const std::vector<bool> & channel_enables,
-                const std::vector<bool> & track_enables)
+                const std::vector<bool> & track_enables,
+                const char * project)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
 
-    // Get current recorder settings from database
+    // Get ProjectName associated with supplied name.
+    prodauto::ProjectName project_name;
+    GetProjectFromDb(project, project_name);
+
+    // Store project name and recording description
+    mProjectName = project_name;
+
+    // Get current recorder settings
     RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(mRecorder);
+    settings->Update(mpImpl->Recorder());
 
     switch (settings->timecode_mode)
     {
@@ -123,7 +131,8 @@ void IngexRecorder::Setup(
         it != settings->encodings.end(); ++it)
     {
         FileUtils::CreatePath(it->dir);
-        if (it->wrapping == Wrapping::MXF)
+        // For MXF we also use "creating" and "failures" directories
+        if (it->file_format == MXF_FILE_FORMAT_TYPE)
         {
             std::ostringstream creating_path;
             creating_path << it->dir << '/' << settings->mxf_subdir_creating;
@@ -133,12 +142,6 @@ void IngexRecorder::Setup(
             FileUtils::CreatePath(failures_path.str());
         }
     }
-
-
-    //if (settings->quad_mpeg2 || settings->browse_audio)
-    //{
-    //    FileUtils::CreatePath(settings->browse_dir);
-    //}
 
     // Set up encoding threads
     int encoding_i = 0;
@@ -159,7 +162,7 @@ void IngexRecorder::Setup(
                     tp.p_opt->index = encoding_i;
                     
                     tp.p_opt->resolution = it->resolution;
-                    tp.p_opt->wrapping = it->wrapping;
+                    tp.p_opt->file_format = it->file_format;
                     tp.p_opt->bitc = it->bitc;
                     tp.p_opt->dir = it->dir;
 
@@ -177,7 +180,7 @@ void IngexRecorder::Setup(
             tp.p_opt->index = 0;
             tp.p_opt->quad = true;
             tp.p_opt->resolution = it->resolution;
-            tp.p_opt->wrapping = it->wrapping;
+            tp.p_opt->file_format = it->file_format;
             tp.p_opt->bitc = it->bitc;
             tp.p_opt->dir = it->dir;
 
@@ -195,7 +198,7 @@ void IngexRecorder::Setup(
         tp.p_opt->index = 2;
         
         tp.p_opt->resolution = 8;
-        tp.p_opt->wrapping = Wrapping::MXF;
+        tp.p_opt->file_format = MXF_FILE_FORMAT_TYPE;
         tp.p_opt->bitc = true;
         tp.p_opt->dir = "/video/mxf_offline";
 
@@ -203,10 +206,14 @@ void IngexRecorder::Setup(
     }
 #endif
 
-    // Create and store filenames based on source, target timecode and date
+    // Create and store filenames based on source, target timecode and date.
     ::Timecode tc(start_timecode);
     std::string date = DateTime::DateNoSeparators();
     const char * tcode = tc.TextNoSeparators();
+
+    // We also include project name to help with copying to project-based
+    // directories on a file-server.
+    // NB. need to remove unsuitable characters such as space or ampersand)
 
     // Set filename stems in RecordOptions.
     for (std::vector<ThreadParam>::iterator
@@ -214,7 +221,9 @@ void IngexRecorder::Setup(
     {
         const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
         std::ostringstream ident;
-        ident << date << "_" << tcode << "_" << mRecorder->name
+        ident << date << "_" << tcode
+            << "_" << project
+            << "_" << mpImpl->Name()
             << "_" << src_name
             << "_" << it->p_opt->index;
         it->p_opt->file_ident = ident.str();
@@ -468,21 +477,23 @@ bool IngexRecorder::Start()
 
 bool IngexRecorder::Stop( framecount_t & stop_timecode,
                 framecount_t post_roll,
-                const char * project,
-                const char * description)
+                const char * description,
+                const std::vector<Locator> & locs)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
         Timecode(stop_timecode).Text(), post_roll));
 
-    // Get ProjectName associated with supplied name.
-    prodauto::ProjectName project_name;
-    GetProjectFromDb(project, project_name);
-
-    // Store project name and recording description
-    mProjectName = project_name;
     mUserComments.clear();
     mUserComments.push_back(
-        prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description));
+        prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description, STATIC_COMMENT_POSITION, 0));
+
+    // Store locators
+    for (std::vector<Locator>::const_iterator it = locs.begin(); it != locs.end(); ++it)
+    {
+        int64_t position = it->timecode - mStartTimecode;
+        mUserComments.push_back(
+            prodauto::UserComment(POSITIONED_COMMENT_NAME, it->comment, position, it->colour));
+    }
 
     // Really want to pass stop_timecode and post_roll to the record threads
     // or do some kind of "prepare_stop"

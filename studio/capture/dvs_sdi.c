@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.5 2008/04/18 16:41:12 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.6 2008/09/03 14:13:26 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -53,6 +53,16 @@
 #include "video_conversion.h"
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
+
+#if defined(__x86_64__)
+#define PFi64 "ld"
+#define PFu64 "lu"
+#define PFoff "ld"
+#else
+#define PFi64 "lld"
+#define PFu64 "llu"
+#define PFoff "lld"
+#endif
 
 //#define MAX_CHANNELS 8  (defined in nexus_control.h)
 // each DVS card can have 2 channels, so 4 cards gives 8 channels
@@ -221,7 +231,7 @@ static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, un
 
 // Read available physical memory stats and
 // allocate shared memory ring buffers accordingly
-static int allocate_shared_buffers(int num_channels)
+static int allocate_shared_buffers(int num_channels, long long max_memory)
 {
 	long long	k_shmmax = 0;
 	int			ring_len, i;
@@ -236,11 +246,17 @@ static int allocate_shared_buffers(int num_channels)
 	fscanf(procfp, "%lld", &k_shmmax);
 	fclose(procfp);
 
-	// Reduce maximum to 1GiB to avoid misleading shmmat errors since
-	// Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
-	if (k_shmmax > 0x40000000) {
-		printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
-		k_shmmax = 0x40000000;	// 1GiB
+	if (max_memory > 0) {
+		// Limit to specified maximum memory usage
+		k_shmmax = max_memory;
+	}
+	else {
+		// Reduce maximum to 1GiB to avoid misleading shmmat errors since
+		// Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
+		if (k_shmmax > 0x40000000) {
+			printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
+			k_shmmax = 0x40000000;	// 1GiB
+		}
 	}
 
 	// calculate reasonable ring buffer length
@@ -251,7 +267,7 @@ static int allocate_shared_buffers(int num_channels)
 	printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
 	if (ring_len < 10)
 	{
-		printf("ring_len=%d too small - try increasing shmmax:\n", ring_len);
+		printf("ring_len=%d too small (< 10) - try increasing shmmax:\n", ring_len);
 		printf("  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
 		return 0;
 	}
@@ -290,28 +306,24 @@ static int allocate_shared_buffers(int num_channels)
 
 	p_control->audio12_offset = audio_offset;
 	p_control->audio34_offset = audio_offset + audio_pair_size;
-    if (audio8ch)
-    {
-	    p_control->audio56_offset = audio_offset + audio_pair_size * 2;
-	    p_control->audio78_offset = audio_offset + audio_pair_size * 3;
-    }
-    else
-    {
-	    p_control->audio56_offset = 0;
-	    p_control->audio78_offset = 0;
-    }
+	if (audio8ch) {
+		p_control->audio56_offset = audio_offset + audio_pair_size * 2;
+		p_control->audio78_offset = audio_offset + audio_pair_size * 3;
+	}
+	else {
+		p_control->audio56_offset = 0;
+		p_control->audio78_offset = 0;
+	}
 	p_control->audio_size = audio_size;
 
 	p_control->vitc_offset = vitc_offset;
 	p_control->ltc_offset = ltc_offset;
 	p_control->signal_ok_offset = signal_ok_offset;
 	p_control->sec_video_offset = dma_video_size + audio_size;
-    
-    p_control->source_name_update = 0;
-    if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
-    {
-        fprintf(stderr, "Mutex init error\n");
-    }
+
+	p_control->source_name_update = 0;
+	if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+		fprintf(stderr, "Mutex init error\n");
 
 	// Allocate multiple element ring buffers containing video + audio + tc
 	//
@@ -348,8 +360,8 @@ static int allocate_shared_buffers(int num_channels)
 		}
 		p_control->channel[i].lastframe = -1;
 		p_control->channel[i].hwdrop = 0;
-        sprintf(p_control->channel[i].source_name, "ch%d", i);
-        p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
+		sprintf(p_control->channel[i].source_name, "ch%d", i);
+		p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
 
 		// initialise mutex in shared memory
 		if (pthread_mutex_init(&p_control->channel[i].m_lastframe, NULL) != 0)
@@ -360,6 +372,37 @@ static int allocate_shared_buffers(int num_channels)
 	}
 
 	return 1;
+}
+
+// Given a 64bit time-of-day corresponding to when a frame was captured,
+// calculate a derived timecode from the global master timecode.
+static int derive_timecode_from_master(int64_t tod_rec, int64_t *p_diff_to_master)
+{
+	int derived_tc = 0;
+	int64_t diff_to_master = 0;
+
+	PTHREAD_MUTEX_LOCK( &m_master_tc )
+
+	// if master_tod is not set, derived_tc is also left as 0
+	if (master_tod) {
+		// compute offset between this chan's recorded frame's time-of-day and master's
+		diff_to_master = tod_rec - master_tod;
+		int int_diff = diff_to_master;
+		int div;
+		if (int_diff < 0)	// -ve range is from -20000 to -1
+			div = (int_diff - 19999) / 40000;
+		else				// +ve range is from 0 to 19999
+			div = (int_diff + 20000) / 40000;
+		derived_tc = master_tc + div;
+	}
+
+	PTHREAD_MUTEX_UNLOCK( &m_master_tc )
+
+	// return diff_to_master for logging purposes
+	if (p_diff_to_master)
+		*p_diff_to_master = diff_to_master;
+
+	return derived_tc;
 }
 
 //
@@ -480,11 +523,20 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     }
 
 	if (video_secondary_format != FormatNone) {
-		// Downconvert to 4:2:0 YUV buffer located just after audio
-		uyvy_to_yuv420(width, height,
-					video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
-					dma_dest,									// input
-					vid_dest + (audio_offset + audio_size));	// output
+		if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted) {
+			// Repack to planar YUV 4:2:2
+			uyvy_to_yuv422(	width, height,
+							video_secondary_format == Format422PlanarYUVShifted,	// do DV50 line shift?
+							dma_dest,									// input
+							vid_dest + (audio_offset + audio_size));	// output
+		}
+		else {
+			// Downconvert to 4:2:0 YUV buffer located just after audio
+			uyvy_to_yuv420(	width, height,
+							video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
+							dma_dest,									// input
+							vid_dest + (audio_offset + audio_size));	// output
+		}
 	}
 
 	// Handle buggy field order (can happen with misconfigured camera)
@@ -528,22 +580,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
 		}
 		else {
-			// if master_tod not set, derived_tc is left as 0 (meaning dischaned)
-
-			PTHREAD_MUTEX_LOCK( &m_master_tc )
-			if (master_tod) {
-				// compute offset between this chan's recorded frame's time-of-day and master's
-				diff_to_master = tod_rec - master_tod;
-				int int_diff = diff_to_master;
-				//int div = (int_diff + 20000) / 40000;
-				int div;
-				if (int_diff < 0)	// -ve range is from -20000 to -1
-					div = (int_diff - 19999) / 40000;
-				else				// +ve range is from 0 to 19999
-					div = (int_diff + 20000) / 40000;
-				derived_tc = master_tc + div;
-			}
-			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
+			derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
 
 			// Save calculated timecode
 			if (master_type == MasterLTC)
@@ -554,27 +591,31 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	}
 
 	// Lookup last frame's timecodes to calculate timecode discontinuity
-	int last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
-	int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+	int last_vitc = 0;
+	int last_ltc = 0;
+	if (pc->lastframe > -1) {		// Only process discontinuity when not the first frame
+		last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
+		last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
 
-	// Check number of frames to recover if any
-	// A maximum of 50 frames will be recovered.
-	int recover_diff = (recover_timecode_type == RecoverVITC) ? vitc_as_int - last_vitc : ltc_as_int - last_ltc;
-	if (recover_from_video_loss && recover_diff > 1 && recover_diff < 52) {
-		logTF("chan %d: Need to recover %d frames\n", chan, recover_diff);
+		// Check number of frames to recover if any
+		// A maximum of 50 frames will be recovered.
+		int recover_diff = (recover_timecode_type == RecoverVITC) ? vitc_as_int - last_vitc : ltc_as_int - last_ltc;
+		if (recover_from_video_loss && recover_diff > 1 && recover_diff < 52) {
+			logTF("chan %d: Need to recover %d frames\n", chan, recover_diff);
 
-		vitc_as_int += recover_diff - 1;
-		ltc_as_int += recover_diff - 1;
+			vitc_as_int += recover_diff - 1;
+			ltc_as_int += recover_diff - 1;
 
-		// Increment pc->lastframe by amount to avoid discontinuity
-		pc->lastframe += recover_diff - 1;
+			// Increment pc->lastframe by amount to avoid discontinuity
+			pc->lastframe += recover_diff - 1;
 
-		// Ideally we would copy the dma transferred frame into its correct position
-		// but this needs testing.
-		//uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
-		//memcpy(tmp_frame, vid_dest, width*height*2);
-		//free(tmp_frame);
-		logTF("chan %d: Recovered.  lastframe=%d ltc=%d\n", chan, pc->lastframe, ltc_as_int);
+			// Ideally we would copy the dma transferred frame into its correct position
+			// but this needs testing.
+			//uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
+			//memcpy(tmp_frame, vid_dest, width*height*2);
+			//free(tmp_frame);
+			logTF("chan %d: Recovered.  lastframe=%d ltc=%d\n", chan, pc->lastframe, ltc_as_int);
+		}
 	}
 
 	// Copy timecode into last 4 bytes of element_size
@@ -627,7 +668,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		if (info.dropped != pc->hwdrop)
 			logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, vitc_as_int, ltc_as_int, info.dropped);
 
-		logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12lld  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
+		logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PFi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
 			pbuffer->control.tick,
 			pbuffer->control.clock_high, pbuffer->control.clock_low,
 			diff_to_master,
@@ -636,6 +677,14 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			info.dropped);
 
 		PTHREAD_MUTEX_UNLOCK( &m_log )		// end logging guard
+	}
+
+	// Query hardware health (once a second to reduce excessive sv_query calls)
+	if ((pc->lastframe+1) % 25 == 0) {
+		int temp;
+		if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK) {
+			pc->hwtemperature = ((double)temp) / 65536.0;
+		}
 	}
 
 	// signal frame is now ready
@@ -647,7 +696,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	return SV_OK;
 }
 
-static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick_last_dummy_frame)
+static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, int tick_last_dummy_frame, int64_t tod_tc_read)
 {
 	// No video so copy "no video" frame instead
 	//
@@ -664,6 +713,11 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 		else
 			num_dummy_frames = current_frame_tick - tick_last_dummy_frame;
 
+		// first dummy frame will get the closest timecode to the master timecode
+		// subsequent dummy frames will increment by 1
+		int last_vitc = derive_timecode_from_master(tod_tc_read, NULL);
+		int last_ltc = derive_timecode_from_master(tod_tc_read, NULL);
+
 		int i;
 		for (i = 0; i < num_dummy_frames; i++) {
 			// Read ring buffer info
@@ -677,12 +731,14 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 			// write silent 4 channels of 32bit audio
 			memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, 1920*4*4);
 
-			// Increment timecode by 1
-			int last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
-			int last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+			// Increment timecode by 1 for dummy frames after the first
+			if (i > 0) {
+				last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
+				last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+				last_vitc++;
+				last_ltc++;
+			}
 			int last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + tick_offset);
-			last_vitc++;
-			last_ltc++;
 			last_ftk++;
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &last_vitc, sizeof(int));
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &last_ltc, sizeof(int));
@@ -771,7 +827,7 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
 		int current_frame_tick = current_tick / 2;
 
 		// Write dummy frames to chan's ring buffer and return tick of last frame written
-		tick_last_dummy_frame = write_dummy_frames(sv, chan, current_frame_tick, tick_last_dummy_frame);
+		tick_last_dummy_frame = write_dummy_frames(sv, chan, current_frame_tick, tick_last_dummy_frame, tod_tc_read);
 
 		usleep(18*1000);		// sleep slightly less than one tick (20,000)
 	}
@@ -868,12 +924,15 @@ static void usage_exit(void)
 	fprintf(stderr, "                         UYVY   - UYVY 4:2:2 16bpp\n");
 	fprintf(stderr, "    -s <secondary fmt>   uncompressed video format for the secondary video buffer:\n");
 	fprintf(stderr, "                         None   - secondary buffer disabled (default)\n");
+	fprintf(stderr, "                         YUV422 - secondary buffer is planar YUV 4:2:2 16bpp\n");
+	fprintf(stderr, "                         DV50   - secondary buffer is planar YUV 4:2:2 with field order line shift\n");
 	fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
 	fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
 	fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
 	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
 	fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
+	fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB\n");
 	fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
 	fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
 	fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
@@ -888,8 +947,9 @@ static void usage_exit(void)
 
 int main (int argc, char ** argv)
 {
-	int					n, max_channels = MAX_CHANNELS;
-	const char * logfiledir = ".";
+	int				n, max_channels = MAX_CHANNELS;
+	long long		opt_max_memory = 0;
+	const char		*logfiledir = ".";
 
 	time_t now;
 	struct tm *tm_now;
@@ -981,6 +1041,15 @@ int main (int argc, char ** argv)
 			}
 			n++;
 		}
+		else if (strcmp(argv[n], "-m") == 0)
+        {
+            if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
+                fprintf(stderr, "-m requires integer maximum memory in MB\n");
+                return 1;
+            }
+            opt_max_memory = opt_max_memory * 1024 * 1024;
+            n++;
+        }
 		else if (strcmp(argv[n], "-c") == 0)
 		{
 			if (argc <= n+1)
@@ -1034,6 +1103,12 @@ int main (int argc, char ** argv)
 			if (strcmp(argv[n+1], "None") == 0) {
 				video_secondary_format = FormatNone;
 			}
+			else if (strcmp(argv[n+1], "YUV422") == 0) {
+				video_secondary_format = Format422PlanarYUV;
+			}
+			else if (strcmp(argv[n+1], "DV50") == 0) {
+				video_secondary_format = Format422PlanarYUVShifted;
+			}
 			else if (strcmp(argv[n+1], "MPEG") == 0) {
 				video_secondary_format = Format420PlanarYUV;
 			}
@@ -1055,7 +1130,7 @@ int main (int argc, char ** argv)
 		case Format422UYVY:
 				logTF("Capturing video as UYVY (4:2:2)\n"); break;
 		case Format422PlanarYUV:
-				logTF("Capturing video as planar YUV 4:2:2\n"); break;
+				logTF("Capturing video as YUV 4:2:2 planar\n"); break;
 		case Format422PlanarYUVShifted:
 				logTF("Capturing video as YUV 4:2:2 planar with picture shifted down by one line\n"); break;
 		default:
@@ -1066,6 +1141,10 @@ int main (int argc, char ** argv)
 	switch (video_secondary_format) {
 		case FormatNone:
 				logTF("Secondary video buffer is disabled\n"); break;
+		case Format422PlanarYUV:
+				logTF("Secondary video buffer is YUV 4:2:2 planar\n"); break;
+		case Format422PlanarYUVShifted:
+				logTF("Secondary video buffer is YUV 4:2:2 planar with picture shifted down by one line\n"); break;
 		case Format420PlanarYUV:
 				logTF("Secondary video buffer is YUV 4:2:0 planar\n"); break;
 		case Format420PlanarYUVShifted:
@@ -1303,13 +1382,17 @@ int main (int argc, char ** argv)
     tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
     signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
 
+	// Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
+	int secondary_video_size = width*height*3/2;
+	if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted)
+		secondary_video_size = width*height*2;
+
 	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
 	dma_total_size = dma_video_size		// video frame as captured by dma transfer
 					+ audio_size;		// DVS internal structure for audio channels
 										
 
-    element_size = dma_total_size
-					+ width*height*3/2;	// YUV 4:2:0 video buffer
+    element_size = dma_total_size + secondary_video_size;
 
 
 	// Create "NO VIDEO" frame
@@ -1345,7 +1428,7 @@ int main (int argc, char ** argv)
 	}
 
     // Allocate shared memory buffers
-	if (! allocate_shared_buffers(num_sdi_threads))
+	if (! allocate_shared_buffers(num_sdi_threads, opt_max_memory))
 	{
 		return 1;
 	}
@@ -1363,7 +1446,12 @@ int main (int argc, char ** argv)
 		}
 	}
 
-	// SDI monitor threads never terminate so a waiting in a join will wait forever
+	// Update the heartbeat 10 times a second
+	p_control->owner_pid = getpid();
+	while (1) {
+		gettimeofday(&p_control->owner_heartbeat, NULL);
+		usleep(100 * 1000);
+	}
 	pthread_join(sdi_thread[0], NULL);
 
 	return 0; // silence gcc warning

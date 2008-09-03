@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.4 2008/04/18 16:15:31 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -64,7 +64,7 @@ void recording_completed(IngexRecorder * rec)
 // Implementation skeleton constructor
 // Note that CopyManager mode is set here.
 IngexRecorderImpl::IngexRecorderImpl (void)
-: mRecording(false), mCopyManager(CopyMode::NEW)
+: mRecording(false), mRecordingIndex(1), mCopyManager(CopyMode::NEW)
 {
     mInstance = this;
 }
@@ -72,8 +72,8 @@ IngexRecorderImpl::IngexRecorderImpl (void)
 // Initialise the recorder
 bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string db_pw)
 {
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C, %C, %C)\n"),
-	    name.c_str(), db_user.c_str(), db_pw.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C, %C, %C)\n"),
+        name.c_str(), db_user.c_str(), db_pw.c_str()));
 
     // Shared memory initialisation
     bool result = IngexShm::Instance()->Init();
@@ -87,6 +87,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
     const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
     RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
+
 
     // Store video source names in shared memory
     UpdateShmSourceNames();
@@ -114,6 +115,28 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
 
     mCopyManager.RecorderName(name);
 
+    // Register this Recorder in the monitoring area of shared memory
+    // and initialise encoding enabled/disabled flags for all channels and encodings
+    IngexShm::Instance()->InfoSetup(mRecorder->name);
+    for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
+    {
+        int enc_idx = 0;
+        for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin(); it != settings->encodings.end(); ++it, ++enc_idx)
+        {
+            bool quad_video = it->source == Input::QUAD;
+            IngexShm::Instance()->InfoSetEnabled(channel_i, enc_idx, quad_video, true);
+            IngexShm::Instance()->InfoSetDesc(channel_i, enc_idx, quad_video,
+                "%s%s %s",
+                DatabaseEnums::Instance()->ResolutionName(it->resolution).c_str(),
+                //(settings->ResolutionName(it->resolution)),
+                quad_video ? "(quad)" : "",
+                it->file_format == MXF_FILE_FORMAT_TYPE ? "MXF" : "OTHER"
+                );
+
+        }
+    }
+
+
     // Set timecode mode
     switch (settings->timecode_mode)
     {
@@ -129,7 +152,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     }
 
     // Start copy process
-    this->StartCopying();
+    this->StartCopying(0);
 
     char buf[256];
     if (ACE_OS::hostname(buf, 256) == 0)
@@ -205,6 +228,7 @@ char * IngexRecorderImpl::RecordingFormat (
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::CORBA::BooleanSeq & rec_enable,
+    const char * project,
     ::CORBA::Boolean test_only
   )
   throw (
@@ -215,7 +239,6 @@ char * IngexRecorderImpl::RecordingFormat (
     framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
     ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
         start_tc.Text(), pre, DateTime::Timecode().c_str()));
-    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("project \"%C\", description \"%C\"\n"), project, description));
 
     // Enforce start-stop-start sequence
     if (mRecording)
@@ -224,18 +247,23 @@ char * IngexRecorderImpl::RecordingFormat (
         DoStop(-1, 0);
     }
 
-    // Stop any copy process to reduce disc activity.
-    mCopyManager.StopCopying();
+    // Clear previous monitoring data for enabled channels
+    IngexShm::Instance()->InfoResetChannels();
 
-    // Make sure we are up-to-date with source config from database
-    //UpdateSources();  Now done in IngexRecorder::PrepareStart()
-    // No, source update not needed because MXF writing deals direct with database.
-    // Our track config only used for CORBA Tracks method.
-    // Do need to update record parameters and this is indeed on
-    // in PrepareStart().
+    // Stop any copy process to reduce disc activity.
+    mCopyManager.StopCopying(mRecordingIndex);
+
+    // Make sure we are up-to-date with source config and
+    // settings from database.
+    // Also happens when controller requests tracks.
+    // By updating again here, the controller may get
+    // out of sync if track config changes.  However, the
+    // alternative (not updating here) would mean you rely
+    // on controller disconnecting and reconnecting to
+    // force an update.
+    UpdateFromDatabase();
 
     // Translate enables to per-track and per-channel.
-
     std::vector<bool> channel_enables;
     std::vector<bool> track_enables;
     for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
@@ -273,11 +301,9 @@ char * IngexRecorderImpl::RecordingFormat (
         // Set channel enable
         channel_enables.push_back(ce);
     }
-    // NB. We don't do anything about quad-split here, that is a
-    // lower level matter.
 
     // Make a new IngexRecorder to manage this recording.
-    mpIngexRecorder = new IngexRecorder(mRecorder.get());
+    mpIngexRecorder = new IngexRecorder(this, mRecordingIndex++);
 
     // Set-up callback for completion of recording
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
@@ -313,7 +339,8 @@ char * IngexRecorderImpl::RecordingFormat (
     mpIngexRecorder->Setup(
         start,
         channel_enables,
-        track_enables);
+        track_enables,
+        project);
 
     // Start
     if (!test_only)
@@ -327,10 +354,7 @@ char * IngexRecorderImpl::RecordingFormat (
         // Set status info
         if (ok)
         {
-            ProdAuto::StatusItem status;
-            status.name = CORBA::string_dup("recording");
-            status.value = CORBA::string_dup("starting");
-            mStatusDist.SendStatus(status);
+            mStatusDist.SendStatus("event", "recording starting");
 
             for (CORBA::ULong i = 0; i < mTracksStatus->length(); ++i)
             {
@@ -353,8 +377,8 @@ char * IngexRecorderImpl::RecordingFormat (
 ::ProdAuto::Recorder::ReturnCode IngexRecorderImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
-    const char * project,
     const char * description,
+    const ::ProdAuto::LocatorSeq & locators,
     ::CORBA::StringSeq_out files
   )
   throw (
@@ -378,12 +402,23 @@ char * IngexRecorderImpl::RecordingFormat (
     files = new ::CORBA::StringSeq;
     files->length(mTracks->length());
 
+    // Translate the locators
+    std::vector<Locator> locs;
+    for (CORBA::ULong i = 0; i < locators.length(); ++i)
+    {
+        Locator lo;
+        lo.comment = locators[i].comment;
+        lo.colour = TranslateLocatorColour(locators[i].colour);
+        lo.timecode = locators[i].timecode.samples;
+        locs.push_back(lo);
+    }
+
     // Tell recorder when to stop.
     if (mpIngexRecorder)
     {
         mpIngexRecorder->Stop(stop_timecode, post_roll,
-            project,
-            description);
+            description,
+            locs);
 
         // Return the expected "out time"
         mxf_stop_timecode.undefined = false;
@@ -422,9 +457,10 @@ Simplified Stop without returning filenames etc.
 void IngexRecorderImpl::DoStop(framecount_t timecode, framecount_t post_roll)
 {
     // Tell recorder when to stop.
+    std::vector<Locator> locs;
     if (mpIngexRecorder)
     {
-        mpIngexRecorder->Stop(timecode, post_roll, "Ingex", "recording halted");
+        mpIngexRecorder->Stop(timecode, post_roll, "recording halted", locs);
     }
     mpIngexRecorder = 0;  // It will be deleted when it signals completion
 
@@ -441,29 +477,25 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
 {
     ACE_DEBUG((LM_INFO, "IngexRecorderImpl::NotifyCompletion()\n"));
 
-    ProdAuto::StatusItem status;
-    status.name = CORBA::string_dup("recording");
     if (!rec->mRecordingOK)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Recording failed!\n")));
-        status.value = CORBA::string_dup("failed");
+        mStatusDist.SendStatus("error", "recording failed");
     }
     else if (rec->DroppedFrames())
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Recording dropped frames!\n")));
-        status.value = CORBA::string_dup("dropped frames");
+        mStatusDist.SendStatus("error", "recording dropped frames");
     }
     else
     {
-        status.value = CORBA::string_dup("completed");
+        mStatusDist.SendStatus("event", "recording completed");
     }
 
-    mStatusDist.SendStatus(status);
-
-    this->StartCopying();
+    this->StartCopying(rec->mIndex);
 }
 
-void IngexRecorderImpl::StartCopying()
+void IngexRecorderImpl::StartCopying(unsigned int index)
 {
     mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
@@ -473,7 +505,7 @@ void IngexRecorderImpl::StartCopying()
         mCopyManager.AddSrcDest(it->dir, it->dest);
     }
 
-    mCopyManager.StartCopying();
+    mCopyManager.StartCopying(index);
 }
 
 void IngexRecorderImpl::UpdateShmSourceNames()
@@ -518,5 +550,43 @@ void IngexRecorderImpl::UpdateShmSourceNames()
     }
 }
 
+int IngexRecorderImpl::TranslateLocatorColour(ProdAuto::LocatorColour::EnumType e)
+{
+    // database values are defined in DatabaseEnums.h
+
+    int i;
+    switch (e)
+    {
+    case ProdAuto::LocatorColour::WHITE:
+        i = USER_COMMENT_WHITE_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::RED:
+        i = USER_COMMENT_RED_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::YELLOW:
+        i = USER_COMMENT_YELLOW_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::GREEN:
+        i = USER_COMMENT_GREEN_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::CYAN:
+        i = USER_COMMENT_CYAN_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::BLUE:
+        i = USER_COMMENT_BLUE_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::MAGENTA:
+        i = USER_COMMENT_MAGENTA_COLOUR;
+        break;
+    case ProdAuto::LocatorColour::BLACK:
+        i = USER_COMMENT_BLACK_COLOUR;
+        break;
+    default:
+        i = USER_COMMENT_RED_COLOUR;
+        break;
+    }
+
+    return i;
+}
 
 

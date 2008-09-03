@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.4 2008/04/18 16:15:33 john_f Exp $
+ * $Id: RecordOptions.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Class for channel-specific (i.e. thread-specific) recording data.
  *
@@ -43,12 +43,12 @@ public:
     RecordOptions();
 
     int channel_num;
+    long source_id; ///< Identifies SourceConfig being encoded
     int index; ///< To distinguish multiple encodings on the same input/channel.
     bool quad; ///< True for encoding from multiple inputs/channels.
 
-    Coding::EnumType coding;
-    int resolution; // using this rather than coding
-    Wrapping::EnumType wrapping;
+    int resolution;
+    int file_format;
     std::string dir;
     bool bitc; ///< True for burnt-in timecode
 

@@ -1,5 +1,5 @@
 /*
- * $Id: testgen.c,v 1.3 2008/04/18 16:41:13 john_f Exp $
+ * $Id: testgen.c,v 1.4 2008/09/03 14:13:36 john_f Exp $
  *
  * Dummy SDI input for testing shared memory video & audio interface.
  *
@@ -114,18 +114,18 @@ static void catch_sigint(int sig_number)
 // allocate shared memory ring buffers accordingly
 static int allocate_shared_buffers(int num_channels, long long max_memory)
 {
-    long long   k_shmmax = 0;
-    int         ring_len, i;
-    FILE        *procfp;
+	long long	k_shmmax = 0;
+	int			ring_len, i;
+	FILE		*procfp;
 
-    // Linux specific way to read shmmax value
-    if ((procfp = fopen("/proc/sys/kernel/shmmax", "r")) == NULL)
-    {
-        perror("fopen(/proc/sys/kernel/shmmax)");
-        return 0;
-    }
-    fscanf(procfp, "%lld", &k_shmmax);
-    fclose(procfp);
+	// Linux specific way to read shmmax value
+	if ((procfp = fopen("/proc/sys/kernel/shmmax", "r")) == NULL)
+	{
+		perror("fopen(/proc/sys/kernel/shmmax)");
+		return 0;
+	}
+	fscanf(procfp, "%lld", &k_shmmax);
+	fclose(procfp);
 
 	if (max_memory > 0) {
 		// Limit to specified maximum memory usage
@@ -136,45 +136,45 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 		// Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
 		if (k_shmmax > 0x40000000) {
 			printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
-			k_shmmax = 0x40000000;  // 1GiB
+			k_shmmax = 0x40000000;	// 1GiB
 		}
 	}
 
-    // calculate reasonable ring buffer length
-    // reduce by small number 5 to leave a little room for other shared mem
-    ring_len = k_shmmax / num_channels / element_size - 5;
-    printf("shmmax=%lld (%.3fMiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
+	// calculate reasonable ring buffer length
+	// reduce by small number 5 to leave a little room for other shared mem
+	ring_len = k_shmmax / num_channels / element_size - 5;
+	printf("shmmax=%lld (%.3fMiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
 
-    printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
-    if (ring_len < 10)
-    {
-        printf("ring_len=%d too small (< 10)- try increasing shmmax:\n", ring_len);
-        printf("  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
-        return 0;
-    }
+	printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
+	if (ring_len < 10)
+	{
+		printf("ring_len=%d too small (< 10) - try increasing shmmax:\n", ring_len);
+		printf("  echo 1073741824 >> /proc/sys/kernel/shmmax\n");
+		return 0;
+	}
 
-    // Allocate memory for control structure which is fixed size
-    if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
-    {
-        if (errno == EEXIST)
-        {
-            fprintf(stderr, "shmget: shm segment exists, deleting all related segments\n");
-            cleanup_shared_mem();
-            if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
-            {
-                perror("shmget control key 9");
-                return 0;
-            }
-        }
-        else
-        {
-            perror("shmget control key 9");
-            return 0;
-        }
-    }
-    p_control = (NexusControl*)shmat(control_id, NULL, 0);
+	// Allocate memory for control structure which is fixed size
+	if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
+	{
+		if (errno == EEXIST)
+		{
+			fprintf(stderr, "shmget: shm segment exists, deleting all related segments\n");
+			cleanup_shared_mem();
+			if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
+			{
+				perror("shmget control key 9");
+				return 0;
+			}
+		}
+		else
+		{
+			perror("shmget control key 9");
+			return 0;
+		}
+	}
+	p_control = (NexusControl*)shmat(control_id, NULL, 0);
 
-    p_control->channels = num_channels;
+	p_control->channels = num_channels;
 	p_control->ringlen = ring_len;
 	p_control->elementsize = element_size;
 
@@ -194,9 +194,9 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	p_control->signal_ok_offset = signal_ok_offset;
 	p_control->sec_video_offset = dma_video_size + audio_size;
 
-    p_control->source_name_update = 0;
-    if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
-        fprintf(stderr, "Mutex init error\n");
+	p_control->source_name_update = 0;
+	if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+		fprintf(stderr, "Mutex init error\n");
 
 	// Allocate multiple element ring buffers containing video + audio + tc
 	//
@@ -233,8 +233,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 		}
 		p_control->channel[i].lastframe = -1;
 		p_control->channel[i].hwdrop = 0;
-        sprintf(p_control->channel[i].source_name, "ch%d", i);
-        p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
+		sprintf(p_control->channel[i].source_name, "ch%d", i);
+		p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
 
 		// initialise mutex in shared memory
 		if (pthread_mutex_init(&p_control->channel[i].m_lastframe, NULL) != 0)
@@ -244,7 +244,7 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 		// memset(ring[i], 0x80, element_size * ring_len);
 	}
 
-    return 1;
+	return 1;
 }
 
 static int fill_buffers(int num_channels, int shift)

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.4 2008/04/18 16:15:31 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -49,6 +49,7 @@ const int SEARCH_GUARD = 5;
 #include "Database.h"  // For Recorder
 #include "RecordOptions.h"
 #include "recorder_types.h" // for framecount_t
+#include "RecorderImpl.h"
 
 class IngexRecorder;
 
@@ -74,6 +75,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);
 ACE_THR_FUNC_RETURN start_quad_thread(void *p_arg);
 ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg);
 
+struct Locator
+{
+    std::string comment;
+    int colour;
+    int64_t timecode;
+};
+
 /**
 Low-level interface to Ingex recorder.
 Make one instance of this class for each recording.
@@ -85,12 +93,13 @@ class IngexRecorder
 
 // Per-recording functions
 public:
-    IngexRecorder(prodauto::Recorder * rec);
+    IngexRecorder(RecorderImpl * impl, unsigned int index);
     ~IngexRecorder();
 
     void Setup( framecount_t start_timecode,
                 const std::vector<bool> & channel_enables,
-                const std::vector<bool> & track_enables);
+                const std::vector<bool> & track_enables,
+                const char * project);
 
     bool CheckStartTimecode(
                 std::vector<bool> & channel_enables,
@@ -102,8 +111,8 @@ public:
 
     bool Stop(framecount_t & stop_timecode,
                 framecount_t post_roll,
-                const char * project,
-                const char * description);
+                const char * description,
+                const std::vector<Locator> & locs);
 
     void SetCompletionCallback(void(*p_fn)(IngexRecorder *)) { mpCompletionCallback = p_fn; }
 
@@ -144,7 +153,8 @@ private:
     // Current RecorderConfig
     // May be better to return a unique ptr for thread safety
     // - can't do that as tape names are only stored in the instance
-    prodauto::Recorder * Recorder() const { return mRecorder; }
+    //prodauto::Recorder * Recorder() const { return mRecorder; }
+    prodauto::Recorder * Recorder() const { return mpImpl->Recorder(); }
 
     bool GetProjectFromDb(const std::string & name, prodauto::ProjectName & project_name);
     void DoCompletionCallback() { if(mpCompletionCallback) (*mpCompletionCallback)(this); }
@@ -165,8 +175,8 @@ private:
 
     ACE_thread_t mManageThreadId;
 
-// Database objects
-    prodauto::Recorder * mRecorder;
+// The RecorderImpl which holds source configs etc.
+    RecorderImpl * mpImpl;
 
 // Duration
     framecount_t mTargetDuration;           ///< To signal when capture should stop
@@ -185,6 +195,7 @@ public:
     std::string mFileNames[MAX_CHANNELS * 5];
 
     bool mRecordingOK;
+    unsigned int mIndex;
 
     //RecordOptions   record_opt[MAX_RECORD];
 private:

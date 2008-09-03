@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.2 2008/02/06 16:59:01 john_f Exp $
+ * $Id: nexus_save.c,v 1.3 2008/09/03 14:13:30 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -57,7 +57,6 @@ static char *framesToStr(int tc, char *s)
 	if (tc < 0 || frames < 0 || hours < 0 || minutes < 0 || seconds < 0
 		|| hours > 59 || minutes > 59 || seconds > 59 || frames > 24)
 		sprintf(s, "             ");
-		//sprintf(s, "* INVALID *  ");
 	else
 		sprintf(s, "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames);
 	return s;
@@ -72,7 +71,7 @@ static void usage_exit(void)
     fprintf(stderr, "    -r res     encoder resolution (JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
 	fprintf(stderr, "               DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,DMIH264) [default is uncompressed]\n");
 #endif
-    fprintf(stderr, "    -s         save the secondary (4:2:0) video frame\n");
+    fprintf(stderr, "    -s         save video from the secondary buffer (either 4:2:2 or 4:2:0)\n");
     fprintf(stderr, "    -q         quiet operation (fewer messages)\n");
 	exit(1);
 }
@@ -204,7 +203,9 @@ extern int main(int argc, char *argv[])
 		}
 		ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
 		if (verbose)
-			printf("  attached to channel[%d]\n", i);
+			printf("  attached to channel[%d], pri=%s, sec=%s\n", i,
+						nexus_capture_format_name(pctl->pri_video_format),
+						nexus_capture_format_name(pctl->sec_video_format));
 	}
 
 	NexusBufCtl *pc;
@@ -221,8 +222,16 @@ extern int main(int argc, char *argv[])
 	int audio_size = pctl->audio_size;
 
 	if (sec_video) {
-		// get the alternative video frame (4:2:0 planar)
-		frame_size = width*height*3/2;
+		if (pctl->sec_video_format == FormatNone) {
+			printf("sec_video_format is FormatNone, cannot save secondary buffer\n");
+			return 1;
+		}
+
+		// get the alternative video frame (4:2:0 or 4:2:2 planar)
+		if (pctl->sec_video_format == Format422PlanarYUV || pctl->sec_video_format == Format422PlanarYUVShifted)
+			frame_size = width*height*2;
+		else
+			frame_size = width*height*3/2;
 		video_offset = pctl->sec_video_offset;
 	}
 
@@ -249,6 +258,32 @@ extern int main(int argc, char *argv[])
 		out = (uint8_t *)malloc(frame_size);	// worst case compressed size
 	}
 
+	// Check that video buffer is compatible
+	switch (res) {
+	case FF_ENCODER_RESOLUTION_JPEG:
+	case FF_ENCODER_RESOLUTION_DV50:
+	case FF_ENCODER_RESOLUTION_IMX30:
+	case FF_ENCODER_RESOLUTION_IMX40:
+	case FF_ENCODER_RESOLUTION_IMX50:
+	case FF_ENCODER_RESOLUTION_DNX36p:
+	case FF_ENCODER_RESOLUTION_DNX120p:
+	case FF_ENCODER_RESOLUTION_DNX185p:
+	case FF_ENCODER_RESOLUTION_DNX120i:
+	case FF_ENCODER_RESOLUTION_DNX185i:
+		if (pctl->pri_video_format != Format422PlanarYUV) {
+			fprintf(stderr, "specified encoder resolution requires primary format of Format422PlanarYUV\n");
+			return 1;
+		}
+		break;
+	case FF_ENCODER_RESOLUTION_DV25:
+	case FF_ENCODER_RESOLUTION_DMIH264:
+		if (pctl->sec_video_format != Format420PlanarYUV) {
+			fprintf(stderr, "specified encoder resolution requires secondary format of Format420PlanarYUV\n");
+			return 1;
+		}
+		video_offset = pctl->sec_video_offset;
+		break;
+	}
 #endif
 
 	while (1)
@@ -288,7 +323,7 @@ extern int main(int argc, char *argv[])
 				perror("fwrite video");
 				return 1;					
 			}
-			if (fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
+			if (audiofp && fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
 				perror("fwrite audio");
 				return 1;					
 			}
@@ -298,7 +333,7 @@ extern int main(int argc, char *argv[])
 			perror("fwrite video");
 			return 1;					
 		}
-		if (fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
+		if (audiofp && fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
 			perror("fwrite audio");
 			return 1;					
 		}

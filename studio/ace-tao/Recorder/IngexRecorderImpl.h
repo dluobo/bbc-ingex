@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.2 2008/04/18 16:15:31 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.3 2008/09/03 14:09:05 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -76,6 +76,7 @@ public:
       ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
       const ::CORBA::BooleanSeq & rec_enable,
+      const char * project,
       ::CORBA::Boolean test_only
    )
     throw (
@@ -86,8 +87,8 @@ public:
   ::ProdAuto::Recorder::ReturnCode Stop (
       ::ProdAuto::MxfTimecode & stop_timecode,
       const ::ProdAuto::MxfDuration & post_roll,
-      const char * project,
       const char * description,
+      const ::ProdAuto::LocatorSeq & locators,
       ::CORBA::StringSeq_out files
     )
     throw (
@@ -100,9 +101,11 @@ private:
 // methods
 	void DoStop(framecount_t timecode, framecount_t post_roll);
     void UpdateShmSourceNames();
-    void StartCopying();
+    void StartCopying(unsigned int index);
+    int TranslateLocatorColour(ProdAuto::LocatorColour::EnumType e);
 // data
 	bool mRecording;
+    unsigned int mRecordingIndex;
 	IngexRecorder * mpIngexRecorder;
     CopyManager mCopyManager;
     std::string mHostname;

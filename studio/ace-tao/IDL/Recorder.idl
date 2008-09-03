@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.2 2008/04/18 16:07:57 john_f Exp $
+ * $Id: Recorder.idl,v 1.3 2008/09/03 14:04:24 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -46,6 +46,21 @@ module ProdAuto
     };
     typedef sequence<TrackStatus> TrackStatusList;
 
+    /// Colour of Locator.
+    module LocatorColour
+    {
+        enum EnumType { DEFAULT_COLOUR, WHITE, RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA, BLACK };
+    };
+
+    /// A cue-point to carry through to post-production.
+    struct Locator
+    {
+        string comment;
+        LocatorColour::EnumType colour;
+        MxfTimecode timecode;
+    };
+    typedef sequence<Locator> LocatorSeq;
+
 
 
     /// Interface for an audio/video recorder with a single input or
@@ -80,6 +95,11 @@ module ProdAuto
         /// Select recorder config
         boolean SelectConfig(in string config);
 
+        /// List currently existing project names
+        readonly attribute CORBA::StringSeq ProjectNames;
+
+        /// Add project names
+        void AddProjectNames(in CORBA::StringSeq project_names);
 
         /// Maximum pre-roll available before StartRecord received
         readonly attribute MxfDuration MaxPreRoll;
@@ -99,6 +119,7 @@ module ProdAuto
             inout MxfTimecode start_timecode,
             in MxfDuration pre_roll,
             in CORBA::BooleanSeq rec_enable,
+            in string project,
             in boolean test_only
         );
 
@@ -111,15 +132,15 @@ module ProdAuto
         /// @param post_roll Duration to be included at end of recording.
         /// @param project A label to be used when grouping recordings - e.g. the project name.
         /// @param description Information about this particular recording.
+        /// @param locators List of cue points to carry through to post-production.
         /// @param files One filename per track.  Where multiple tracks are recorded in
         /// one file, the filename is repeated for each track.
         /// @return Indication of success or failure.
         ReturnCode Stop(
             inout MxfTimecode stop_timecode,
             in MxfDuration post_roll,
-            in string project,
             in string description,
-            //out StringList files
+            in LocatorSeq locators,
             out CORBA::StringSeq files           
         );
 

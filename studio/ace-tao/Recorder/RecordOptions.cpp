@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.cpp,v 1.1 2007/09/11 14:08:30 stuart_hc Exp $
+ * $Id: RecordOptions.cpp,v 1.2 2008/09/03 14:09:05 john_f Exp $
  *
  * Class for thread-specific recording data.
  *
@@ -25,6 +25,6 @@
 #include "RecordOptions.h"
 
 RecordOptions::RecordOptions()
- : quad(false), bitc(false), mFramesWritten(0), mFramesDropped(0)
+ : source_id(0), quad(false), bitc(false), mFramesWritten(0), mFramesDropped(0)
 {
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.4 2008/04/18 16:15:36 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.5 2008/09/03 14:09:06 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -28,18 +28,21 @@
 #include "RecorderSettings.h"
 #include "Logfile.h"
 #include "Timecode.h"
-#include "dvd_encoder.h"
 #include "AudioMixer.h"
 #include "audio_utils.h"
-#include "quad_split_I420.h"
 #include "ffmpeg_encoder.h"
 #include "ffmpeg_encoder_av.h"
 #include "mjpeg_compress.h"
 #include "tc_overlay.h"
 
+#include "YUVlib/YUV_frame.h"
+#include "YUVlib/YUV_quarter_frame.h"
+
 // prodautodb lib
 #include "Database.h"
 #include "DBException.h"
+#include "DatabaseEnums.h"
+#include "Utilities.h"
 
 // prodautodb recordmxf
 #include "MXFWriter.h"
@@ -54,7 +57,16 @@
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
 
-const bool THREADED_MJPEG = false;
+const bool THREADED_MJPEG = true;
+#define USE_SOURCE 0 // Eventually will move to encoding a source, rather than a hardware input
+
+// Macro to log an error using both the ACE_DEBUG() macro and the
+// shared memory placeholder for error messages
+// Note that format directives are not always the same
+// e.g. %C with ACE_DEBUG vs. %s with printf
+#define LOG_RECORD_ERROR(fmt, args...) { \
+    ACE_DEBUG((LM_ERROR, ACE_TEXT( fmt ), ## args)); \
+    IngexShm::Instance()->InfoSetRecordError(channel_i, p_opt->index, quad_video, fmt, ## args); }
 
 
 /**
@@ -63,24 +75,50 @@ Thread function to encode and record a particular source.
 ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 {
     ThreadParam * param = (ThreadParam *)p_arg;
-    IngexRecorder * p_rec = param->p_rec;
     RecordOptions * p_opt = param->p_opt;
+    IngexRecorder * p_rec = param->p_rec;
+    RecorderImpl * p_impl = p_rec->mpImpl;
 
     bool quad_video = p_opt->quad;
+
+    std::string src_name;
+#if USE_SOURCE
+    prodauto::SourceConfig * sc = 0;
+    if (p_impl->mSourceConfigs.find(p_opt->source_id) != p_impl->mSourceConfigs.end())
+    {
+        sc = p_impl->mSourceConfigs[p_opt->source_id];
+    }
+    if (sc)
+    {
+        src_name = (quad_video ? QUAD_NAME : sc->name);
+    }
+#else
     int channel_i = p_opt->channel_num;
-    const char * src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[channel_i]);
+    src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[channel_i]);
+#endif
 
     // ACE logging to file
     std::ostringstream id;
     id << "record_" << src_name << "_" << p_opt->index;
     Logfile::Open(id.str().c_str(), false);
 
+    // Reset informational data in shared memory
+    IngexShm::Instance()->InfoReset(channel_i, p_opt->index, quad_video);
+    IngexShm::Instance()->InfoSetEnabled(channel_i, p_opt->index, quad_video, true);
+
     // Convenience variable
     const int ring_length = IngexShm::Instance()->RingLength();
 
     // Recording starts from start_frame.
-    int start_frame = p_rec->mStartFrame[channel_i];
-    int start_tc = p_rec->mStartTimecode; // passed as metadata to MXFWriter
+    //int start_frame = p_rec->mStartFrame[channel_i];
+    int start_frame[MAX_CHANNELS];
+    for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
+    {
+        start_frame[i] = p_rec->mStartFrame[i];
+    }
+
+    // Start timecode passed as metadata to MXFWriter
+    int start_tc = p_rec->mStartTimecode;
 
     // We make sure these offsets are positive numbers.
     // For quad, channel_i is first enabled channel.
@@ -90,7 +128,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     int quad3_offset = (p_rec->mStartFrame[3] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
 
 
-    //int size_422_video = IngexShm::Instance()->sizeVideo422();
     const int WIDTH = IngexShm::Instance()->Width();
     const int HEIGHT = IngexShm::Instance()->Height();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
@@ -137,10 +174,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
+    int file_format = p_opt->file_format;
     bool uncompressed_video = (UNC_MATERIAL_RESOLUTION == resolution);
 
-    bool mxf = (Wrapping::MXF == p_opt->wrapping);
+    bool mxf = (MXF_FILE_FORMAT_TYPE == file_format);
+    bool one_file_per_track = mxf;
     bool raw = !mxf;
+
+    // Encode parameters
+    prodauto::Rational image_aspect = settings->image_aspect;
+    int raw_audio_bits = settings->raw_audio_bits;
+    int mxf_audio_bits = settings->mxf_audio_bits;
+    int browse_audio_bits = settings->browse_audio_bits;
 
     // burnt-in timecode settings
     bool bitc = p_opt->bitc;
@@ -163,16 +208,166 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     ACE_DEBUG((LM_INFO,
         ACE_TEXT("start_record_thread(%C, start_tc=%C res=%d bitc=%C)\n"),
-        src_name, Timecode(start_tc).Text(), resolution, (bitc ? "on" : "off")));
+        src_name.c_str(), Timecode(start_tc).Text(), resolution, (bitc ? "on" : "off")));
+
+    // Set up packages and tracks
+    prodauto::Recorder * rec = p_rec->Recorder();
+
+    prodauto::RecorderConfig * rc = 0;
+    if (rec && rec->hasConfig())
+    {
+        rc = rec->getConfig();
+    }
+    prodauto::RecorderInputConfig * ric = 0;
+    if (rc)
+    {
+        ric = rc->getInputConfig(channel_i + 1); // index starts from 1
+    }
+    if (mxf && (0 == rc))
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("MXF metadata unavailable.\n")));
+        mxf = false;
+    }
+#if 0
+    // I'll start all this with the SourcePackage I'm recording and will
+    // assume only one being recorded in this thread.  (Not necessarily
+    // the case at the moment but it will be eventually.)
+    prodauto::RecorderInputTrackConfig * ritc = 0;
+    if (ric)
+    {
+        ritc = ric->getTrackConfig(1); // index starts from 1
+    }
+    prodauto::SourceConfig * sc = 0;
+    if (ritc)
+    {
+        sc = ritc->sourceConfig;
+    }
+    prodauto::SourcePackage * rsp = 0;
+    if (sc)
+    {
+        rsp = sc->getSourcePackage();
+    }
+    // So, rsp is the SourcePackage to be recorded.
+
+    // Now make a material package for this recording.
+
+    prodauto::ProjectName project_name;
+    std::vector<prodauto::UserComment> user_comments;
+    p_rec->GetMetadata(project_name, user_comments); // user comments empty at the moment
+
+    prodauto::Timestamp now = prodauto::generateTimestampNow();
+
+    // Go through tracks
+    std::vector<prodauto::Track *>::const_iterator track_it = rsp->tracks.begin();
+
+    // Need to check if track enabled here
+        
+
+    // Create file packages
+    std::vector<prodauto::SourcePackage *> file_packages;
+    unsigned int n_files = (one_file_per_track ? rsp->tracks.size() : 1);
+    for (unsigned int i = 0; i < n_files; ++i)
+    {
+        // Create FileEssenceDescriptor
+        prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
+        fd->fileLocation = "filename"; // need filename
+        if (mxf)
+        {
+            fd->fileFormat = MXF_FILE_FORMAT_TYPE;
+        }
+        else
+        {
+            fd->fileFormat = UNSPECIFIED_FILE_FORMAT_TYPE;
+        }
+        fd->videoResolutionID = resolution;
+        fd->imageAspectRatio = image_aspect;
+        fd->audioQuantizationBits = mxf_audio_bits;
+
+        // Create file SourcePackage
+        prodauto::SourcePackage * fp = new prodauto::SourcePackage();
+        fp->uid = prodauto::generateUMID();
+        fp->name = p_opt->file_ident;
+        fp->creationDate = now;
+        fp->projectName = project_name;
+        fp->sourceConfigName = src_name;
+        fp->descriptor = fd;
+
+        // Add to vector of file packages
+        file_packages.push_back(fp);
+
+        // Create file package tracks
+        unsigned int n_tracks_per_file = (one_file_per_track ? 1 : rsp->tracks.size());
+        for (unsigned int i = 0; i < n_tracks_per_file; ++i)
+        {
+            prodauto::Track * src_trk = *track_it;
+            prodauto::Track * trk = new prodauto::Track();
+            fp->tracks.push_back(trk);
+            trk->id = src_trk->id; // using same id as src track makes things easier later on
+            trk->dataDef = src_trk->dataDef;
+            trk->name = src_trk->name;
+            trk->number = src_trk->number;
+
+            // Add track SourceClip refering to source/track being recorded
+            trk->sourceClip = new prodauto::SourceClip();
+            trk->sourceClip->sourcePackageUID = rsp->uid;
+            trk->sourceClip->sourceTrackID = src_trk->id;
+            trk->sourceClip->position = start_tc;
+
+            ++track_it;
+        }
+    }
+
+    // Create MaterialPackage
+    prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
+    mp->uid = prodauto::generateUMID();
+    mp->name = p_opt->file_ident;
+    mp->creationDate = now;
+    mp->projectName = project_name;
+
+    // Create material package tracks
+    for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
+    {
+        prodauto::Track * src_trk = rsp->tracks[i];
+
+        prodauto::Track * trk = new prodauto::Track();
+        mp->tracks.push_back(trk);
+
+        trk->id = src_trk->id;
+        trk->dataDef = src_trk->dataDef;
+        trk->number = src_trk->number;
+        trk->name = src_trk->name;
+
+        // Add track SourceClip refering to file package.
+        trk->sourceClip = new prodauto::SourceClip();
+        if (one_file_per_track)
+        {
+            trk->sourceClip->sourcePackageUID = file_packages[i]->uid;
+        }
+        else
+        {
+            trk->sourceClip->sourcePackageUID = file_packages[0]->uid;
+        }
+        trk->sourceClip->sourceTrackID = src_trk->id; // file package track id is same as source track id
+        trk->sourceClip->position = 0;
+        trk->sourceClip->length = 0; // will need to be filled in with p_opt->FramesWritten();
+    }
+
+
+#endif
 
     // Set some flags based on encoding type
-    enum {PIXFMT_420, PIXFMT_422} pix_fmt;
-    enum {ENCODER_NONE, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder;
-    // Initialising these just to avoid compiler warnings
-    ffmpeg_encoder_resolution_t    ff_res    = FF_ENCODER_RESOLUTION_IMX30;
-    ffmpeg_encoder_av_resolution_t ff_av_res = FF_ENCODER_RESOLUTION_MOV;
-    MJPEGResolutionID              mjpeg_res = MJPEG_20_1;
 
+    // Initialising these to defaults which you will get for unsupported
+    // resolution/file_format combinations.
+    ffmpeg_encoder_resolution_t    ff_res    = FF_ENCODER_RESOLUTION_IMX30;
+    ffmpeg_encoder_av_resolution_t ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
+
+    // Initialising these just to avoid compiler warnings
+    MJPEGResolutionID mjpeg_res = MJPEG_20_1;
+    enum {PIXFMT_420, PIXFMT_422} pix_fmt = PIXFMT_422;
+    enum {ENCODER_NONE, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder = ENCODER_NONE;
+
+    std::string filename_extension;
     switch (resolution)
     {
     // DV formats
@@ -180,11 +375,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         pix_fmt = PIXFMT_420;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV25;
+        ff_av_res = FF_ENCODER_RESOLUTION_DV25_MOV;
+        filename_extension = ".dv";
         break;
     case DV50_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV50;
+        filename_extension = ".dv";
         break;
     // MJPEG formats
     case MJPEG21_MATERIAL_RESOLUTION:
@@ -222,16 +420,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX30;
+        filename_extension = ".m2v";
         break;
     case IMX40_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX40;
+        filename_extension = ".m2v";
         break;
     case IMX50_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX50;
+        filename_extension = ".m2v";
         break;
     // DNxHD formats
     case DNX36p_MATERIAL_RESOLUTION:
@@ -259,59 +460,113 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185i;
         break;
+    // H264
+    case DMIH264_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_420;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DMIH264;
+        filename_extension = ".h264";
+        break;
     // Browse formats
     case DVD_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
         encoder = ENCODER_FFMPEG_AV;
         ff_av_res = FF_ENCODER_RESOLUTION_DVD;
-        bitc = true;
         mxf = false;
         raw = false;
+        filename_extension = ".mpg";
         break;
-    case MOV_MATERIAL_RESOLUTION:
+    case MPEG4_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
         encoder = ENCODER_FFMPEG_AV;
-        ff_av_res = FF_ENCODER_RESOLUTION_MOV;
-        bitc = true;
+        ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
         mxf = false;
         raw = false;
         break;
-    default:
+    case UNC_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_NONE;
+        filename_extension = ".yuv";
+        break;
+    default:
         break;
     }
 
+    // Override file name extension for non-raw formats
+    switch (file_format)
+    {
+    case MXF_FILE_FORMAT_TYPE:
+        filename_extension = ".mxf";
+        break;
+    case MOV_FILE_FORMAT_TYPE:
+        encoder = ENCODER_FFMPEG_AV;
+        filename_extension = ".mov";
+        raw = false;
+        break;
+    case UNSPECIFIED_FILE_FORMAT_TYPE:
+    default:
+        break;
+    }
+
+    // (video) filename
+    std::ostringstream filename;
+    filename << p_opt->dir << p_opt->file_ident << filename_extension;
+
+    // video resolution name
+    std::string resolution_name = DatabaseEnums::Instance()->ResolutionName(resolution);
+
+    // Work out whether the primary video buffer (4:2:2 only) or the secondary
+    // video (4:2:2 or 4:2:0) is to be used as the video input for encoding.
+    bool use_primary_video = true;
     if (PIXFMT_422 == pix_fmt)
     {
-        if (IngexShm::Instance()->PrimaryCaptureFormat() != Format422PlanarYUV
-            && IngexShm::Instance()->PrimaryCaptureFormat() != Format422PlanarYUVShifted)
+        // Of the 4:2:2 formats only DV50 requires the line shift
+        if (DV50_MATERIAL_RESOLUTION == resolution)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Wrong 422 capture format!\n")));
+            if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUVShifted)
+            {
+                use_primary_video = true;
+            }
+            else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUVShifted)
+            {
+                use_primary_video = false;
+            }
+            else
+            {
+                LOG_RECORD_ERROR("Incompatible 422 capture format for encoding resolution %s\n", resolution_name.c_str());
+            }
+        }
+        else // all other 4:2:2 resolutions
+        {
+            if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV)
+                use_primary_video = true;
+            else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV)
+                use_primary_video = false;
+            else
+                LOG_RECORD_ERROR("Incompatible 422 capture format for encoding resolution %s\n", resolution_name.c_str());
         }
     }
     else if (PIXFMT_420 == pix_fmt)
     {
-        if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUV
-            && IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUVShifted)
+        // Only the secondary buffer supports 4:2:0
+        use_primary_video = false;
+
+        // Of the 4:2:0 formats only DV25 requires the line shift
+        if (DV25_MATERIAL_RESOLUTION == resolution)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Wrong 420 capture format!\n")));
+            if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUVShifted)
+                LOG_RECORD_ERROR("Incompatible 420 capture format for encoding resolution %s\n", resolution_name.c_str());
+        }
+        else // all other 4:2:0 resolutions
+        {
+            if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUV)
+                LOG_RECORD_ERROR("Incompatible 420 capture format for encoding resolution %s\n", resolution_name.c_str());
         }
     }
 
     // Directories
-    //const std::string & raw_dir = settings->raw_dir;
-    //const std::string & browse_dir = settings->browse_dir;
-    //const std::string & mxf_dir = settings->mxf_dir;
     const std::string & mxf_subdir_creating = settings->mxf_subdir_creating;
     const std::string & mxf_subdir_failures = settings->mxf_subdir_failures;
-
-    // Encode parameters
-    prodauto::Rational image_aspect = settings->image_aspect;
-    int raw_audio_bits = settings->raw_audio_bits;
-    int mxf_audio_bits = settings->mxf_audio_bits;
-    int browse_audio_bits = settings->browse_audio_bits;
-    //int mpeg2_bitrate = settings->mpeg2_bitrate;
 
     // File pointers
     FILE * fp_video = NULL;
@@ -324,41 +579,23 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialisation for raw (non-MXF) files
     if (raw && enable_video)
     {
-        std::ostringstream fname;
-        fname << p_opt->dir << p_opt->file_ident;
-        switch (resolution)
-        {
-        case DV25_MATERIAL_RESOLUTION:
-        case DV50_MATERIAL_RESOLUTION:
-            fname << ".dv";
-            break;
-        case IMX30_MATERIAL_RESOLUTION:
-        case IMX40_MATERIAL_RESOLUTION:
-        case IMX50_MATERIAL_RESOLUTION:
-            fname << ".m2v";
-            break;
-        default:
-            fname << ".yuv";
-            break;
-        }
-        const char * f = fname.str().c_str();
+        // We have already created the video filename
 
-        if (NULL == (fp_video = fopen(f, "wb")))
+        if (NULL == (fp_video = fopen(filename.str().c_str(), "wb")))
         {
             enable_video = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), filename.str().c_str()));
         }
     }
     if (raw && enable_audio12)
     {
         std::ostringstream fname;
         fname << p_opt->dir << p_opt->file_ident << "_12.wav";
-        const char * f = fname.str().c_str();
 
-        if (NULL == (fp_audio12 = fopen(f, "wb")))
+        if (NULL == (fp_audio12 = fopen(fname.str().c_str(), "wb")))
         {
             enable_audio12 = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), fname.str().c_str()));
         }
         else
         {
@@ -369,12 +606,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         std::ostringstream fname;
         fname << p_opt->dir << p_opt->file_ident << "_34.wav";
-        const char * f = fname.str().c_str();
 
-        if (NULL == (fp_audio34 = fopen(f, "wb")))
+        if (NULL == (fp_audio34 = fopen(fname.str().c_str(), "wb")))
         {
             enable_audio34 = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), fname.str().c_str()));
         }
         else
         {
@@ -385,12 +621,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         std::ostringstream fname;
         fname << p_opt->dir << p_opt->file_ident << "_56.wav";
-        const char * f = fname.str().c_str();
 
-        if (NULL == (fp_audio56 = fopen(f, "wb")))
+        if (NULL == (fp_audio56 = fopen(fname.str().c_str(), "wb")))
         {
             enable_audio56 = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), fname.str().c_str()));
         }
         else
         {
@@ -401,12 +636,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         std::ostringstream fname;
         fname << p_opt->dir << p_opt->file_ident << "_78.wav";
-        const char * f = fname.str().c_str();
 
-        if (NULL == (fp_audio78 = fopen(f, "wb")))
+        if (NULL == (fp_audio78 = fopen(fname.str().c_str(), "wb")))
         {
             enable_audio78 = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), fname.str().c_str()));
         }
         else
         {
@@ -442,7 +676,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ffmpeg_encoder = ffmpeg_encoder_init(ff_res);
         if (!ffmpeg_encoder)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
         }
     }
     
@@ -461,10 +695,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
     }
 
-    // Initialisation for browse av files
-    std::ostringstream browse_filename;
-    browse_filename << p_opt->dir << p_opt->file_ident;
-
+    // Initialisation for av files
     // ffmpeg av encoder
     ffmpeg_encoder_av_t * enc_av = 0;
     if (ENCODER_FFMPEG_AV == encoder)
@@ -474,31 +705,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         // and also "format not registered".
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        if (0 == (enc_av = ffmpeg_encoder_av_init(browse_filename.str().c_str(),
-            ff_av_res)))
+        if (0 == (enc_av = ffmpeg_encoder_av_init(filename.str().c_str(),
+            ff_av_res, start_tc)))
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name.c_str()));
             encoder = ENCODER_NONE;
         }
     }
 
     // Initialisation for MXF files
-    prodauto::Recorder * rec = p_rec->Recorder();
-
-    //prodauto::RecorderInputConfig * ric = 0;
-    prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
-    {
-        rc = rec->getConfig();
-        //ric = rc->getInputConfig(channel_i + 1); // Index starts from 1
-    }
-    
-    if (mxf && (0 == rc))
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("MXF metadata unavailable.\n")));
-        mxf = false;
-    }
-
     std::auto_ptr<prodauto::MXFWriter> writer;
     if (mxf)
     {
@@ -516,8 +731,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         try
         {
             prodauto::MXFWriter * p = new prodauto::MXFWriter(
-                                            rc,
-                                            channel_i + 1, // index starts from 1
+                                            ric,
                                             resolution,
                                             image_aspect,
                                             mxf_audio_bits,
@@ -534,13 +748,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         catch (const prodauto::DBException & dbe)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database exception: %C\n"),
-                dbe.getMessage().c_str()));
+            LOG_RECORD_ERROR("Database exception: %C\n", dbe.getMessage().c_str());
             mxf = false;
         }
         catch (const prodauto::MXFWriterException & e)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+            LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
             mxf = false;
         }
 
@@ -600,25 +813,26 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Buffer to receive quad-split video
-    //uint8_t  p_quadvideo[720*576*3/2];
-    //memset(p_quadvideo,               0x10, 720*576);           // Y black
-    //memset(p_quadvideo + 720*576,     0x80, 720*576/4);         // U neutral
-    //memset(p_quadvideo + 720*576*5/4, 0x80, 720*576/4);         // V neutral
 
-    uint8_t * p_quadvideo = 0;
-    if (quad_video && pix_fmt == PIXFMT_420)
+    YUV_frame quad_frame;
+    uint8_t * quad_workspace = 0;
+    formats format = I420;
+    if (quad_video)
     {
-        p_quadvideo = new uint8_t[SIZE_420];
-        memset(p_quadvideo,                        0x10, WIDTH * HEIGHT);           // Y black
-        memset(p_quadvideo + WIDTH * HEIGHT,       0x80, WIDTH * HEIGHT / 4);       // U neutral
-        memset(p_quadvideo + WIDTH * HEIGHT * 5/4, 0x80, WIDTH * HEIGHT / 4);       // V neutral
-    }
-    else if (quad_video && pix_fmt == PIXFMT_422)
-    {
-        p_quadvideo = new uint8_t[SIZE_422];
-        memset(p_quadvideo,                        0x10, WIDTH * HEIGHT);           // Y black
-        memset(p_quadvideo + WIDTH * HEIGHT,       0x80, WIDTH * HEIGHT / 2);       // U neutral
-        memset(p_quadvideo + WIDTH * HEIGHT * 3/2, 0x80, WIDTH * HEIGHT / 2);       // V neutral
+        switch (pix_fmt)
+        {
+        case PIXFMT_422:
+            format = YV16;
+            break;
+        case PIXFMT_420:
+        default:
+            format = I420;
+            break;
+        }
+        alloc_YUV_frame(&quad_frame, WIDTH, HEIGHT, format);
+        clear_YUV_frame(&quad_frame);
+
+        quad_workspace = new uint8_t[WIDTH * 3];
     }
     
 
@@ -627,12 +841,24 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // ***************************************************
 
     // This makes the record start at the target frame
-    int last_saved = start_frame - 1;
+    int last_saved = start_frame[channel_i] - 1;
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("start_frame=%d\n"), start_frame));
 
     // Initialise last_tc which will be used to check for timecode discontinuities.
     framecount_t last_tc = IngexShm::Instance()->Timecode(channel_i, last_saved);
 
+    // Update Record info
+    IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, true);
+    IngexShm::Instance()->InfoSetDesc(channel_i, p_opt->index, quad_video,
+                "%s%s %s%s%s%s%s",
+                resolution_name.c_str(),
+                quad_video ? "(quad)" : "",
+                raw ? "RAW" : "MXF",
+                enable_audio12 ? " A12" : "",
+                enable_audio34 ? " A34" : "",
+                enable_audio56 ? " A56" : "",
+                enable_audio78 ? " A78" : ""
+                );
 
     p_opt->FramesWritten(0);
     p_opt->FramesDropped(0);
@@ -654,22 +880,24 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             // Caught up to latest available frame - sleep for a while.
             const int sleep_ms = 20;
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms\n"), src_name, sleep_ms));
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms\n"), src_name.c_str(), sleep_ms));
             ACE_OS::sleep(ACE_Time_Value(0, sleep_ms * 1000));
             slept = true;
         }
         if (slept)
         {
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C processing %d frame(s)\n"), src_name, diff));
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C processing %d frame(s)\n"), src_name.c_str(), diff));
         }
+
+        IngexShm::Instance()->InfoSetBacklog(channel_i, p_opt->index, quad_video, diff);
 
         // Now we have some frames to save, check the backlog.
         int allowed_backlog = ring_length - 3;
         if (diff > allowed_backlog / 2)
         {
             // Warn about backlog
-            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C frames waiting = %d, max = %d\n"),
-                src_name, diff, allowed_backlog));
+            ACE_DEBUG((LM_WARNING, ACE_TEXT("%C thread %d res=%d frames waiting = %d, max = %d\n"),
+                src_name.c_str(), p_opt->index, resolution, diff, allowed_backlog));
         }
         if (diff > allowed_backlog)
         {
@@ -679,8 +907,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             last_saved += drop;
             p_opt->IncFramesDropped(drop);
             p_rec->NoteDroppedFrames();
+            IngexShm::Instance()->InfoSetFramesDropped(channel_i, p_opt->index, quad_video, p_opt->FramesDropped());
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C dropped %d frames!\n"),
-                src_name, drop));
+                src_name.c_str(), drop));
         }
 
 #if 1
@@ -706,11 +935,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             int frame2 = (frame + quad2_offset) % ring_length;
             int frame3 = (frame + quad3_offset) % ring_length;
 
-            // Pointer to 422 video
-            void * p_422_video = IngexShm::Instance()->pVideo422(channel_i, frame);
-
-            // Pointer to 420 video
-            void * p_420_video = IngexShm::Instance()->pVideo420(channel_i, frame);
+            // Either the primary or secondary buffer can be used as input
+            void * p_inp_video;
+            if (use_primary_video)
+            {
+                p_inp_video = IngexShm::Instance()->pVideoPri(channel_i, frame);
+            }
+            else
+            {
+                p_inp_video = IngexShm::Instance()->pVideoSec(channel_i, frame);
+            }
 
             // Pointer to audio12
             int32_t * p_audio12 = IngexShm::Instance()->pAudio12(channel_i, frame);
@@ -731,7 +965,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (tc_i != last_tc + 1)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Timecode discontinuity: %d frames missing at frame=%d tc=%C\n"),
-                    src_name,
+                    src_name.c_str(),
                     p_opt->index,
                     tc_i - last_tc - 1,
                     frame,
@@ -739,83 +973,87 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
             // Make quad split
-            // Note that at the moment quad split is not supported for 422 pix_fmt
-            if (quad_video && pix_fmt == PIXFMT_420)
+            if (quad_video)
             {
-                I420_frame in;
-                in.size = SIZE_420;
-                in.w = WIDTH;
-                in.h = HEIGHT;
-                // Other elements set below
+                // Setup input frame as YUV_frame and
+                // set source for encoding to the quad frame.
+                YUV_frame in_frame;
+                uint8_t * quad_input0 = 0;
+                uint8_t * quad_input1 = 0;
+                uint8_t * quad_input2 = 0;
+                uint8_t * quad_input3 = 0;
 
-                I420_frame out;
-                out.cbuff = p_quadvideo;
-                out.size = SIZE_420;
-                out.Ybuff = out.cbuff;
-                out.Ubuff = out.cbuff + WIDTH * HEIGHT;
-                out.Vbuff = out.cbuff + WIDTH * HEIGHT * 5/4;
-                out.w = WIDTH;
-                out.h = HEIGHT;
+                // Possibly need more checking on whether 422 should
+                // in fact come from secondary buffer
 
-                // NB. p_quadvideo was filled with black earlier.
+                if (pix_fmt == PIXFMT_420)
+                {
+                    quad_input0 = IngexShm::Instance()->pVideoSec(0, frame0);
+                    quad_input1 = IngexShm::Instance()->pVideoSec(1, frame1);
+                    quad_input2 = IngexShm::Instance()->pVideoSec(2, frame2);
+                    quad_input3 = IngexShm::Instance()->pVideoSec(3, frame3);
+                }
+                else if (pix_fmt == PIXFMT_422)
+                {
+                    quad_input0 = IngexShm::Instance()->pVideoPri(0, frame0);
+                    quad_input1 = IngexShm::Instance()->pVideoPri(1, frame1);
+                    quad_input2 = IngexShm::Instance()->pVideoPri(2, frame2);
+                    quad_input3 = IngexShm::Instance()->pVideoPri(3, frame3);
+                }
 
                 // top left - channel0
                 if (p_rec->mChannelEnable[0])
                 {
-                    in.cbuff = IngexShm::Instance()->pVideo420(0, frame0);
-                    in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
-                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
+                    YUV_frame_from_buffer(&in_frame, quad_input0,
+                        WIDTH, HEIGHT, format);
 
-                    quarter_frame_I420(&in, &out,
+                    quarter_frame(&in_frame, &quad_frame,
                                     0,      // x offset
                                     0,      // y offset
                                     1,      // interlace?
                                     1,      // horiz filter?
-                                    1);     // vert filter?
+                                    1,      // vert filter?
+                                    quad_workspace);
                 }
 
                 // top right - channel1
                 if (p_rec->mChannelEnable[1])
                 {
-                    in.cbuff = IngexShm::Instance()->pVideo420(1, frame1);
-                    in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
-                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
+                    YUV_frame_from_buffer(&in_frame, quad_input1,
+                        WIDTH, HEIGHT, format);
 
-                    quarter_frame_I420(&in, &out,
+                    quarter_frame(&in_frame, &quad_frame,
                                     WIDTH/2, 0,
-                                    1, 1, 1);
+                                    1, 1, 1,
+                                    quad_workspace);
                 }
 
                 // bottom left - channel2
                 if (p_rec->mChannelEnable[2])
                 {
-                    in.cbuff = IngexShm::Instance()->pVideo420(2, frame2);
-                    in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
-                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
+                    YUV_frame_from_buffer(&in_frame, quad_input2,
+                        WIDTH, HEIGHT, format);
 
-                    quarter_frame_I420(&in, &out,
-                                        0, HEIGHT/2,
-                                        1, 1, 1);
+                    quarter_frame(&in_frame, &quad_frame,
+                                    0, HEIGHT/2,
+                                    1, 1, 1,
+                                    quad_workspace);
                 }
 
                 // bottom right - channel3
                 if (p_rec->mChannelEnable[3])
                 {
-                    in.cbuff = IngexShm::Instance()->pVideo420(3, frame3);
-                    in.Ybuff = in.cbuff;
-                    in.Ubuff = in.cbuff + WIDTH * HEIGHT;
-                    in.Vbuff = in.cbuff + WIDTH * HEIGHT * 5/4;
+                    YUV_frame_from_buffer(&in_frame, quad_input3,
+                        WIDTH, HEIGHT, format);
 
-                    quarter_frame_I420(&in, &out,
-                                        WIDTH/2, HEIGHT/2,
-                                        1, 1, 1);
+                    quarter_frame(&in_frame, &quad_frame,
+                                    WIDTH/2, HEIGHT/2,
+                                    1, 1, 1,
+                                    quad_workspace);
                 }
 
                 // Source for encoding is now the quad buffer
-                p_420_video = p_quadvideo;
+                p_inp_video = quad_frame.Y.buff;
             }
 
             // Add timecode overlay
@@ -826,25 +1064,25 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     // 420
                     // Need to copy video as can't overwrite shared memory
-                    memcpy(tc_overlay_buffer, p_420_video, SIZE_420);
+                    memcpy(tc_overlay_buffer, p_inp_video, SIZE_420);
                     uint8_t * p_y = tc_overlay_buffer;
                     uint8_t * p_u = p_y + WIDTH * HEIGHT;
                     uint8_t * p_v = p_u + WIDTH * HEIGHT / 4;
                     tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC420);
                     // Source for encoding is now the timecode overlay buffer
-                    p_420_video = tc_overlay_buffer;
+                    p_inp_video = tc_overlay_buffer;
                 }
                 else
                 {
                     // 422
                     // Need to copy video as can't overwrite shared memory
-                    memcpy(tc_overlay_buffer, p_422_video, SIZE_422);
+                    memcpy(tc_overlay_buffer, p_inp_video, SIZE_422);
                     uint8_t * p_y = tc_overlay_buffer;
                     uint8_t * p_u = p_y + WIDTH * HEIGHT;
                     uint8_t * p_v = p_u + WIDTH * HEIGHT / 2;
                     tc_overlay_apply(tco, p_y, p_u, p_v, WIDTH, HEIGHT, tc_xoffset, tc_yoffset, TC422);
                     // Source for encoding is now the timecode overlay buffer
-                    p_422_video = tc_overlay_buffer;
+                    p_inp_video = tc_overlay_buffer;
                 }
             }
 
@@ -864,7 +1102,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // encode to browse av formats
             if (ENCODER_FFMPEG_AV == encoder)
             {
-                if (ffmpeg_encoder_av_encode(enc_av, (uint8_t *)p_420_video, mixed_audio) != 0)
+                if (ffmpeg_encoder_av_encode(enc_av, (uint8_t *)p_inp_video, mixed_audio) != 0)
                 {
                     ACE_DEBUG((LM_ERROR, ACE_TEXT("dvd_encoder_encode failed\n")));
                     encoder = ENCODER_NONE;
@@ -875,23 +1113,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             uint8_t * p_enc_video;
             int size_enc_video = 0;
 
-            // Encode with FFMPEG (IMX, DV)
+            // Encode with FFMPEG (IMX, DV, H264)
             if (ENCODER_FFMPEG == encoder)
             {
-                if (PIXFMT_420 == pix_fmt)
-                {
-                    size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)p_420_video, &p_enc_video);
-                }
-                else
-                {
-                    size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)p_422_video, &p_enc_video);
-                }
+                size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)p_inp_video, &p_enc_video);
             }
 
             // Encode MJPEG
             if (ENCODER_MJPEG == encoder)
             {
-                uint8_t * y = (uint8_t *)p_422_video;
+                uint8_t * y = (uint8_t *)p_inp_video;
                 uint8_t * u = y + WIDTH * HEIGHT;
                 uint8_t * v = u + WIDTH * HEIGHT / 2;
                 if (THREADED_MJPEG)
@@ -910,7 +1141,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 if (uncompressed_video)
                 {
-                    fwrite(p_422_video, SIZE_422, 1, fp_video);
+                    fwrite(p_inp_video, SIZE_422, 1, fp_video);
                 }
                 else
                 {
@@ -951,7 +1182,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     if (UNC_MATERIAL_RESOLUTION == resolution)
                     {
                         // write uncompressed video data to input track 1
-                        writer->writeSample(1, 1, (uint8_t *)p_422_video, SIZE_422);
+                        writer->writeSample(1, 1, (uint8_t *)p_inp_video, SIZE_422);
                     }
                     else
                     {
@@ -961,7 +1192,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                     p_rec->NoteFailure();
                     mxf = false;
                 }
@@ -982,7 +1213,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                     p_rec->NoteFailure();
                     mxf = false;
                 }
@@ -1003,7 +1234,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                     p_rec->NoteFailure();
                     mxf = false;
                 }
@@ -1024,7 +1255,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                     p_rec->NoteFailure();
                     mxf = false;
                 }
@@ -1045,7 +1276,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+                    LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                     p_rec->NoteFailure();
                     mxf = false;
                 }
@@ -1056,6 +1287,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             last_saved = frame;
             last_tc = tc_i;
 
+            IngexShm::Instance()->InfoSetFramesWritten(channel_i, p_opt->index, quad_video, p_opt->FramesWritten());
+
             // Finish when we've reached target duration
             framecount_t target = p_rec->TargetDuration();
             framecount_t written = p_opt->FramesWritten();
@@ -1065,12 +1298,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 Timecode out_tc(last_tc + 1);
                 ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d) out frame %C\n"),
-                    src_name, p_opt->index, target, total, written, dropped, out_tc.Text()));
+                    src_name.c_str(), p_opt->index, target, total, written, dropped, out_tc.Text()));
                 finished_record = true;
             }
+
         } // Save all frames which have not been saved
 
-        //last_saved = lastframe;
     }
     // ************************
     // End of main record loop
@@ -1110,7 +1343,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         if (ffmpeg_encoder_av_close(enc_av) != 0)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: dvd_encoder_close() failed\n"), src_name));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: dvd_encoder_close() failed\n"), src_name.c_str()));
         }
     }
 
@@ -1121,7 +1354,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         if (ffmpeg_encoder_close(ffmpeg_encoder) != 0)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_close() failed\n"), src_name));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_close() failed\n"), src_name.c_str()));
         }
     }
 
@@ -1143,7 +1376,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     delete [] tc_overlay_buffer;
 
     // cleanup quad buffer
-    delete [] p_quadvideo;
+    if (quad_video)
+    {
+        free_YUV_frame(&quad_frame);
+        delete [] quad_workspace;
+    }
+
+    IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, false);
 
 
     // Complete MXF writing and save packages to database
@@ -1155,24 +1394,135 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         try
         {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C record thread %d completing MXF save\n"), src_name, p_opt->index));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C record thread %d completing MXF save\n"), src_name.c_str(), p_opt->index));
             //writer->completeAndSaveToDatabase();
             writer->completeAndSaveToDatabase(user_comments, project_name);
         }
         catch (const prodauto::DBException & e)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database exception: %C\n"), e.getMessage().c_str()));
+            LOG_RECORD_ERROR("Database exception: %C\n", e.getMessage().c_str());
             p_rec->NoteFailure();
         }
         catch (const prodauto::MXFWriterException & e)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("MXFWriterException: %C\n"), e.getMessage().c_str()));
+            LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
             p_rec->NoteFailure();
         }
     }
 
+#if 1
+    // Store non-MXF recordings in database
+    if (ENCODER_FFMPEG_AV == encoder)
+    {
+        prodauto::ProjectName project_name;
+        std::vector<prodauto::UserComment> user_comments;
+        p_rec->GetMetadata(project_name, user_comments);
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("%C record thread %d exiting\n"), src_name, p_opt->index));
+        prodauto::Timestamp now = prodauto::generateTimestampNow();
+
+        // Create FileEssenceDescriptor
+        prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
+        fd->fileLocation = filename.str();
+        fd->fileFormat = UNSPECIFIED_FILE_FORMAT_TYPE;
+        fd->videoResolutionID = resolution;
+
+        // Create file SourcePackage
+        prodauto::SourcePackage * fp = new prodauto::SourcePackage();
+        fp->uid = prodauto::generateUMID();
+        fp->name = p_opt->file_ident;
+        fp->creationDate = now;
+        fp->projectName = project_name;
+        fp->sourceConfigName = src_name;
+        fp->descriptor = fd;
+
+        // Create file package tracks
+        {
+            // Just one for now
+            prodauto::Track * trk = new prodauto::Track();
+            fp->tracks.push_back(trk);
+            trk->id = 1;
+            trk->dataDef = PICTURE_DATA_DEFINITION;
+            trk->name = "V";
+
+            // Get tape source package for the track
+            prodauto::RecorderInputTrackConfig * ritc = 0;
+            if (ric)
+            {
+                ritc = ric->getTrackConfig(1);
+            }
+            prodauto::SourceConfig * sc = 0;
+            if (ritc)
+            {
+                sc = ritc->sourceConfig;
+            }
+            prodauto::SourcePackage * sp = 0;
+            if (sc)
+            {
+                sp = sc->getSourcePackage();
+            }
+            // and track SourceClip refering to tape package
+            if (sp)
+            {
+                trk->sourceClip = new prodauto::SourceClip();
+                trk->sourceClip->sourcePackageUID = sp->uid;
+                trk->sourceClip->sourceTrackID = 1;
+                trk->sourceClip->position = start_tc;
+            }
+        }
+
+        // Create MaterialPackage
+        prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
+        mp->uid = prodauto::generateUMID();
+        mp->name = p_opt->file_ident;
+        mp->creationDate = now;
+        mp->projectName = project_name;
+
+        // Create material package tracks
+        {
+            // just one for now
+            prodauto::Track * trk = new prodauto::Track();
+            mp->tracks.push_back(trk);
+            trk->id = 1;
+            trk->dataDef = PICTURE_DATA_DEFINITION;
+            trk->name = "V";
+            trk->number = 1;
+
+            // and track SourceClip refering to file package
+            trk->sourceClip = new prodauto::SourceClip();
+            trk->sourceClip->sourcePackageUID = fp->uid;
+            trk->sourceClip->sourceTrackID = 1;
+            trk->sourceClip->position = 0;
+            trk->sourceClip->length = p_opt->FramesWritten();
+        }
+
+        // Now save packages in database
+        prodauto::Database * db = 0;
+        try
+        {
+            db = prodauto::Database::getInstance();
+            std::auto_ptr<prodauto::Transaction> transaction(db->getTransaction());
+        
+            // Save the file source package first because material package has
+            // foreign key referencing it.
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving file package\n")));
+            db->savePackage(fp, transaction.get());
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving material package\n")));
+            db->savePackage(mp, transaction.get());
+
+            transaction->commitTransaction();
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+
+        delete mp;
+        delete fp;
+        // ed gets deleted by file SourcePackage destructor
+    }
+#endif
+
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C record thread %d exiting\n"), src_name.c_str(), p_opt->index));
     return 0;
 }
 

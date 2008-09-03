@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.4 2008/04/18 16:15:31 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -140,5 +140,143 @@ void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
     }
 }
 
+// Informational updates from Recorder to shared memory
+void IngexShm::InfoSetup(std::string name)
+{
+    // Called once on Recorder startup to register this Recorder in shared mem
+    int pid = getpid();
+    for (int i=0; i < MAX_RECORDERS; i++) {
+        if (mpControl->record_info[i].pid == 0) {
+            // This slot is free, so take it
+            memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
+            mpControl->record_info[i].pid = pid;
+            strncpy(mpControl->record_info[i].name, name.c_str(), sizeof(mpControl->record_info[i].name));
+            return;
+        }
+        // Check if process is dead, if so take over slot
+        if (kill(mpControl->record_info[i].pid, 0) == -1 && errno != EPERM) {
+            memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
+            mpControl->record_info[i].pid = pid;
+            strncpy(mpControl->record_info[i].name, name.c_str(), sizeof(mpControl->record_info[i].name));
+            return;
+        }
+    }
+}
 
+int IngexShm::InfoGetRecIdx(void)
+{
+    // Find the index into the list of Recorder processes listed in shared mem
+    int pid = getpid();
+    for (int i=0; i < MAX_RECORDERS; i++) {
+        if (mpControl->record_info[i].pid == pid)
+            return i;
+    }
+    return 0;
+}
 
+// Reset all enabled flags for this Recorder
+void IngexShm::InfoResetChannels()
+{
+    int recidx = InfoGetRecIdx();
+	for (int i=0; i < mpControl->channels; i++) {
+		for (int j=0; j < MAX_ENCODES_PER_CHANNEL; j++) {
+			mpControl->record_info[recidx].channel[i][j].enabled = 0;
+		}
+	}
+	mpControl->record_info[recidx].quad.enabled = 0;
+}
+
+// Reset a single encoding for a single channel
+void IngexShm::InfoReset(unsigned int channel, int index, bool quad_video)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        memset(&mpControl->record_info[recidx].quad, 0, sizeof(NexusRecordEncodingInfo));
+    else
+        memset(&mpControl->record_info[recidx].channel[channel][index], 0, sizeof(NexusRecordEncodingInfo));
+}
+
+void IngexShm::InfoSetEnabled(unsigned int channel, int index, bool quad_video, bool enabled)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        mpControl->record_info[recidx].quad.enabled = enabled ? 1 : 0;
+    else
+        mpControl->record_info[recidx].channel[channel][index].enabled = enabled ? 1 : 0;
+}
+
+void IngexShm::InfoSetRecording(unsigned int channel, int index, bool quad_video, bool recording)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        mpControl->record_info[recidx].quad.recording = recording ? 1 : 0;
+    else
+        mpControl->record_info[recidx].channel[channel][index].recording = recording ? 1 : 0;
+}
+
+void IngexShm::InfoSetDesc(unsigned int channel, int index, bool quad_video, const char *fmt, ...)
+{
+    int recidx = InfoGetRecIdx();
+    char buf[sizeof(mpControl->record_info[0].channel[0][0].desc)];
+    va_list    ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+    va_end(ap);
+    buf[sizeof(buf)-1] = '\0';
+
+    if (quad_video) {
+        strncpy(mpControl->record_info[recidx].quad.desc, buf, sizeof(buf));
+    }
+    else {
+        strncpy(mpControl->record_info[recidx].channel[channel][index].desc, buf, sizeof(buf));
+    }
+}
+
+void IngexShm::InfoSetRecordError(unsigned int channel, int index, bool quad_video, const char *fmt, ...)
+{
+    int recidx = InfoGetRecIdx();
+    char buf[sizeof(mpControl->record_info[0].channel[0][0].error)];
+    va_list    ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+    va_end(ap);
+    buf[sizeof(buf)-1] = '\0';
+    if (buf[strlen(buf)-1] == '\n')    // Remove trailing newline if any
+        buf[strlen(buf)-1] = '\0';
+
+    if (quad_video) {
+        mpControl->record_info[recidx].quad.record_error = 1;
+        strncpy(mpControl->record_info[recidx].quad.error, buf, sizeof(buf));
+    }
+    else {
+        mpControl->record_info[recidx].channel[channel][index].record_error = 1;
+        strncpy(mpControl->record_info[recidx].channel[channel][index].error, buf, sizeof(buf));
+    }
+}
+
+void IngexShm::InfoSetFramesWritten(unsigned int channel, int index, bool quad_video, int frames_written)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        mpControl->record_info[recidx].quad.frames_written = frames_written;
+    else
+        mpControl->record_info[recidx].channel[channel][index].frames_written = frames_written;
+}
+
+void IngexShm::InfoSetFramesDropped(unsigned int channel, int index, bool quad_video, int frames_dropped)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        mpControl->record_info[recidx].quad.frames_dropped = frames_dropped;
+    else
+        mpControl->record_info[recidx].channel[channel][index].frames_dropped = frames_dropped;
+}
+
+void IngexShm::InfoSetBacklog(unsigned int channel, int index, bool quad_video, int frames_in_backlog)
+{
+    int recidx = InfoGetRecIdx();
+    if (quad_video)
+        mpControl->record_info[recidx].quad.frames_in_backlog = frames_in_backlog;
+    else
+        mpControl->record_info[recidx].channel[channel][index].frames_in_backlog = frames_in_backlog;
+}

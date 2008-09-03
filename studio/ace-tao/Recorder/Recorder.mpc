@@ -6,7 +6,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   includes += ../IDL/Generated
   includes += ../common
   includes += ../../common
-  includes += ../../processing/offline
+  includes += ../../../common
   includes += ../../capture
   includes += ../../database/src
   includes += ../../mxfwriter
@@ -14,14 +14,15 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   specific(vc71) {
     includes += $(LIBODBCPP)/include
   }
-  libs += avformat avcodec avutil z mp3lame x264 a52 faac faad
+  libs += avformat avcodec avutil bz2 z mp3lame x264 a52 faac faad
   libs += jpeg
   //libs += jpeg-mmx
   libs += uuid
   libs += odbc++
+  libs += common
   libs += common2
+  libs += YUVlib
   libs += encode
-  libs += encode2
   libs += MXF
   libs += writeavidmxf
   libs += mxfwriter
@@ -29,6 +30,8 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += idl
   libpaths += ../common
   libpaths += ../../common
+  libpaths += ../../../common
+  libpaths += ../../../common/YUVlib
   libpaths += ../../processing/offline
   libpaths += ../../mxfwriter
   libpaths += ../../database/src
