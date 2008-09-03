@@ -20,7 +20,7 @@ endif
 ifndef DISABLE_FFMPEG
 	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; test -e $$f/libavcodec && echo $$f && break; done)
 	ifeq "$(FFMPEG_INCLUDE_PATH)" ""
-$(warning: no FFMPEG library found - DV stream connector not available)
+$(warning no FFMPEG library found - DV stream connector not available)
 	endif
 endif	
 	

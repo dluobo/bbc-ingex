@@ -15,9 +15,9 @@ $(warning no DVS available - set the DVS_SDK_INSTALL environment variable to the
 endif
 
 ifndef DISABLE_FFMPEG
-	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; done)
+	FFMPEG_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg && echo $$f && break; test -e $$f/libavcodec && echo $$f && break; done)
 	ifeq "$(FFMPEG_INCLUDE_PATH)" ""
-$(warning: no FFMPEG library found - DV stream connector not available)
+$(warning no FFMPEG library found - DV stream connector not available)
 	endif
 endif	
 
@@ -65,18 +65,28 @@ endif
 
 
 ifdef FFMPEG_INCLUDE_PATH
-# Use the following alternative link line for ffmpeg rpm installed ffmpeg
-FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES || rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
-FFMPEG_DNXHD := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
-ifeq "$(FFMPEG_RPM)" "YES"
-	LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
-	ifeq  "$(FFMPEG_DNXHD)" "YES"
-		CFLAGS += -DHAVE_DNXHD
-endif
-else
-	LIBS += -lavformat -lavcodec -lavutil -lm
-endif
+
 	CFLAGS += -DHAVE_FFMPEG
+
+	# Check for old-style FFMPEG header locations and if needed add -DFFMPEG_OLD_INCLUDE_PATHS
+	FFMPEG_OLDSTYLE_INCLUDE := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/avcodec.h && echo $$f && break; done)
+	ifneq "$(FFMPEG_OLDSTYLE_INCLUDE)" ""
+		CFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
+	endif
+
+	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
+	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
+	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
+	ifeq "$(FFMPEG_RPM)" "YES"
+		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+	else
+		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
+			LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+			CFLAGS += -DHAVE_DNXHD
+		else
+			LIBS += -lavformat -lavcodec -lavutil -lm
+		endif
+	endif
 else
 	CFLAGS += -Werror
 endif
