@@ -1,4 +1,4 @@
-# $Id: dvs_sdk_paths.mk,v 1.2 2008/07/08 14:59:18 philipn Exp $
+# $Id: dvs_sdk_paths.mk,v 1.3 2008/09/03 10:51:22 john_f Exp $
 #
 # Setup DVS_INCLUDE and DVS_LIB paths
 #
@@ -34,4 +34,3 @@ ifdef DVSDUMMY
 	HARDWARE_LIB=-L$(TMP_INGEX_ROOT)/common/tools/dvs_hardware -ldvsoem_dummy
     $(info CURDIR=$(CURDIR) TMP_ROOT=$(TMP_ROOT) HARDWARE_LIB=$(HARDWARE_LIB))
 endif
-

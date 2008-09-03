@@ -22,11 +22,12 @@ typedef struct
     component	Y, U, V;
 } YUV_frame;
 
+// list of "fourcc" codes (see www.fourcc.org) for usable video formats
 typedef enum
 {
     YV12, IF09, YVU9, IYUV,
     UYVY, YUY2, YVYU, HDYC,
-    Y42B, I420
+    Y42B, I420, YV16
 } formats;
 
 typedef enum
