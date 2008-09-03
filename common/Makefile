@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.6 2008/07/08 14:59:18 philipn Exp $
+# $Id: Makefile,v 1.7 2008/09/03 15:07:07 john_f Exp $
 #
 # Makefile for building common functions
 #
@@ -30,8 +30,9 @@ HEADERS=$(wildcard *.h)
 CFILES=$(wildcard *.c)
 # filter out test programs with a main()
 CFILES:=$(filter-out %unittests.c,$(CFILES))
+CPPFILES=$(wildcard *.cpp)
 
-OBJECTS=$(CFILES:%.c=%.o)
+OBJECTS=$(CFILES:%.c=%.o) $(CPPFILES:%.cpp=%.o)
 
 LIBCOMMON=libcommon.a
 
