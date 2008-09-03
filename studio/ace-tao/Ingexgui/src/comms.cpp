@@ -172,7 +172,7 @@ void Comms::StartGettingRecorders(WXTYPE eventType, int id)
 }
 
 /// Indicates whether the object is happy.
-/// @param errMsg This will return empty unless there is a problem, whereupon it will contain a decription of the error.
+/// @param errMsg This will return empty unless there is a problem, whereupon it will contain a description of the error.
 /// @return True if OK.
 bool Comms::GetStatus(wxString & errMsg)
 {
@@ -201,7 +201,7 @@ wxThread::ExitCode Comms::Entry()
  			Exit();
  		}
 		mCondition->Wait(); //unlock (if locked) and wait for a signal
-		mMutex.Unlock(); //prevent Stop() (or Start()) blocking - doesn't matter if a signal is lost at this point
+		mMutex.Unlock(); //prevent CORBA calls blocking - doesn't matter if a signal is lost at this point
  		if (mDie) {
  			//asked to die
  			Exit();
@@ -453,8 +453,8 @@ wxThread::ExitCode Comms::Entry()
 		//	svclist.push_back("Naming Service Error!");
 		//}
 
-		mMutex.Lock();
 //		mOK = ok;
+		mMutex.Lock();
 		wxCommandEvent event(mEventType, mEventId);
 		mHandler->AddPendingEvent(event);
 	}

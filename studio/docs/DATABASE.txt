@@ -20,9 +20,12 @@ root> /etc/init.d/postgresql start
 
 root> cd /var/lib/pgsql/data
 
-Edit the file "pg_hba.conf" and add entries to allow access for the hosts
-which need to access the database, e.g.
+Edit the file "pg_hba.conf" and change the local ident method to "trust".
+Also modify/add entries to allow access for the hosts which need to access
+the database, e.g.
 
+  local   all         all                          trust
+  host    all         all    127.0.0.1/32          trust
   host    all         all    192.168.1.0/24        trust
 
 Edit the file "postgresql.conf" and allow access from required hosts, e.g.

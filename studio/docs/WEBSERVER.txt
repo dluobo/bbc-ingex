@@ -1,7 +1,7 @@
 Instructions for building the components needed on a web server machine
 =======================================================================
 
-(see also ingex/studio/web/manage/README.txt
+see also ingex/studio/web/WebIngex/README.txt
 
 
 Prerequisites
@@ -15,13 +15,6 @@ YaST - make sure the following are installed
   unixODBC-devel
   psqlODBC
 
-CPAN - install the perl Text::Template module
-
-Do the following from a root login shell.  That way you will get helpful
-prompts when configuring proxies etc.
-
-root> perl -MCPAN -e 'install Text::Template'
-
 
 Database access
 ---------------
@@ -32,12 +25,17 @@ Create and edit:
 
 (details in ingex/studio/database/install/INSTALL.txt)
 
+Install libodbc++
+    ingex> wget http://ingex.sourceforge.net/studio/rpms/libodbc++-0.2.4pre3-1.i586.rpm
+    ingex> sudo rpm -ivh libodbc++-0.2.4pre3-1.i586.rpm
+
+
 
 Installation
 ------------
 
-1) edit the configuration file "conf/ingex.conf" to match your system setup
-2) run "sudo install/install.sh" to install the files.
+1) edit the configuration file "ingex-conf/ingex.conf" to match your system setup
+2) run "sudo install.sh" to install the files.
 
 
 AAF file creation
@@ -72,4 +70,20 @@ writeable by user www-run
 Usage
 -----
 
-Open your web browser to the page http://<host name>/cgi-bin/ingex/index.pl
+Open your web browser to the page http://<host name>/ingex
+
+
+Older Web Interface
+--------------------
+'WebIngex' is a newer web interface which provides a superset of the functionality of the old 'manage' interface. It should be adequate to use it instead of the older interface, bt they can be run side-by-side if desired.
+
+Extra Dependencies:
+     CPAN - install the perl Text::Template module
+
+     Do the following from a root login shell.  That way you will get helpful
+     prompts when configuring proxies etc.
+
+     root> perl -MCPAN -e 'install Text::Template'
+
+Usage:
+     Open your web browser to the page http://<host name>/cgi-bin/ingex/index.pl

@@ -1,5 +1,5 @@
 /*
- * $Id: DataTypes.h,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: DataTypes.h,v 1.2 2008/09/03 15:20:24 john_f Exp $
  *
  * General data types
  *
@@ -182,6 +182,7 @@ inline bool operator != (const Rational& l, const Rational& r)
 static const Rational g_nullRational = {0, 0};
 
 static const Rational g_palEditRate = {25, 1};
+static const Rational g_ntscEditRate = {30000, 1001};
 static const Rational g_audioEditRate = {48000, 1};
 
 

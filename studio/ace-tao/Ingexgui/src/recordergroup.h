@@ -44,8 +44,14 @@ class RecorderGroupCtrl : public wxListBox
 		void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
 		void RecordAll(const ProdAuto::MxfTimecode);
 		void Record(const wxString &, const CORBA::BooleanSeq &);
-		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const wxString &);
+		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
 		void EnableForInput(const bool = true);
+		void PollRapidly(const wxString &, bool = true);
+		void SetProjectNames(const wxSortedArrayString &);
+		const wxSortedArrayString & GetProjectNames();
+		void SetCurrentProjectName(const wxString &);
+		const wxString & GetCurrentProjectName();
+		void Deselect(unsigned int);
 		enum RecorderGroupCtrlEventType {
 			DISABLE_REFRESH,
 			ENABLE_REFRESH,
@@ -70,7 +76,6 @@ class RecorderGroupCtrl : public wxListBox
 		void OnUnwantedMouseDown(wxMouseEvent &);
 		void OnControllerEvent(ControllerThreadEvent &);
 		void Insert(const wxString &, unsigned int);
-		void Deselect(unsigned int);
 		const wxString GetName(unsigned int);
 		void Connect(unsigned int);
 		void Disconnect(unsigned int);
@@ -83,6 +88,8 @@ class RecorderGroupCtrl : public wxListBox
 		bool mTimecodeRecorderStuck;
 		ProdAuto::MxfTimecode mStartTimecode;
 		const wxXmlDocument * mDoc;
+		wxSortedArrayString mProjectNames;
+		wxString mCurrentProject;
 		DECLARE_EVENT_TABLE()
 };
 
@@ -107,14 +114,15 @@ class RecorderData
 
 /// Class storing a recorder name and a controller object, to be attached to each entry in the list control.
 /// This class is used to allow names in the list to be remembered while messages such as "Connecting..." are displayed.
-/// Recorder name must be present; controller object is created and destroyed with the Start() and Stop() methods.
+/// Recorder name must be present; controller object is created and destroyed with the Start(), Stop() and Del() methods.
 class ControllerContainer : public wxClientData
 {
 	public:
 		ControllerContainer(const wxString & name) : mName(name), mController(0) {};
 		~ControllerContainer() { if (mController) { delete mController; } };
-		void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will delete it
-		void Stop() { if (mController) { mController->Destroy(); mController = 0; } };
+		void Start(Comms * comms, wxEvtHandler * handler) { mController = new Controller(mName, comms, handler); }; //the controller's Destroy() method will send a message when ready to delete itself
+		void Stop() { if (mController) { mController->Destroy(); } };
+		void Del() { if (mController) { delete mController; mController = 0; } };
 		const wxString GetName() { return mName; };
 		Controller * GetController() { return mController; };
 	private:

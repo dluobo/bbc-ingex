@@ -40,6 +40,9 @@
 #define EVENT_FONT_SIZE 10 //point - if >10 then text is cut off in the list ctrl
 
 #define TOOLTIP_DELAY 1000 //ms
+#define TITLE wxT("Ingex Control")
+
+#define CUE_LABEL wxT("Cue")
 
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
 
@@ -63,26 +66,32 @@ WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
 WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
 
 /// Class holding information about a take, for later replay.
-/// Holds the position of the take within the displayed list of events, the project name, an array of lists of video files
+/// Holds the position of the take within the displayed list of events, the project name, an array of lists of files
 /// (one for each recorder) and an array of lists of track names (ditto).
+/// Also arrays of cue point colour codes, timecodes and frame numbers.
 class TakeInfo
 {
 	public:
-		TakeInfo(unsigned long startIndex, const wxString & projectName) : mStartIndex(startIndex), mProjectName(projectName) {};
-		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);};
+		TakeInfo(const unsigned long startIndex, const wxString & projectName) : mStartIndex(startIndex), mProjectName(projectName) {};
+		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
+		void AddCuePoint(const int64_t frame, const ProdAuto::MxfTimecode timecode, const ProdAuto::LocatorColour::EnumType colourCode) {mCuePointFrames.push_back(frame); mCueTimecodes.push_back(timecode); mCueColourCodes.push_back(colourCode);}; //no text here because it's stored in the event list (which means it can be edited)
+		void DeleteCuePoint(const unsigned long index) {mCuePointFrames.erase(mCuePointFrames.begin() + index); mCueColourCodes.erase(mCueColourCodes.begin() + index); mCueTimecodes.erase(mCueTimecodes.begin() + index);};
+
 		const unsigned long GetStartIndex() {return mStartIndex;};
 		ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
 		const wxString GetProjectName() {return mProjectName;};
 		ArrayOfTrackList_var * GetTracks() {return &mTracks;};
-		void AddCuePoint(int64_t cuePoint) {mCuePoints.push_back(cuePoint);};
-		std::vector<int64_t> * GetCuePoints() {return &mCuePoints;};
+		std::vector<int64_t> * GetCuePointFrames() {return &mCuePointFrames;};
+		std::vector<ProdAuto::LocatorColour::EnumType> * GetCueColourCodes() {return &mCueColourCodes;};
+		std::vector<ProdAuto::MxfTimecode> * GetCueTimecodes() {return &mCueTimecodes;};
 	private:
 		const unsigned long mStartIndex; //the index in the event list for the start of this take
 		ArrayOfStringSeq_var mFiles;
 		const wxString mProjectName;
 		ArrayOfTrackList_var mTracks; //deletes itself
-		std::vector<int64_t> mCuePoints;
-
+		std::vector<int64_t> mCuePointFrames;
+		std::vector<ProdAuto::LocatorColour::EnumType> mCueColourCodes;
+		std::vector<ProdAuto::MxfTimecode> mCueTimecodes;
 };
 
 WX_DECLARE_OBJARRAY(TakeInfo, TakeInfoArray);
@@ -94,6 +103,7 @@ namespace prodauto {
 class RecordButton;
 class HelpDlg;
 class RecorderGroupCtrl;
+class CuePointsDlg;
 
 /// The main displayed frame, at the heart of the application
 class IngexguiFrame : public wxFrame
@@ -105,6 +115,7 @@ class IngexguiFrame : public wxFrame
 		MENU_About = wxID_HIGHEST + 1,
 		MENU_Help,
 		MENU_SetRolls,
+		MENU_SetCues,
 		MENU_SetProjectName,
 		MENU_Record,
 		MENU_MarkCue,
@@ -148,6 +159,7 @@ class IngexguiFrame : public wxFrame
 		CHECKLIST_Sources,
 		BUTTON_PrevTake,
 		BUTTON_NextTake,
+		BUTTON_DeleteCue,
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
@@ -166,15 +178,17 @@ class IngexguiFrame : public wxFrame
 		STOPPED,
 		RUNNING_UP,
 		RECORDING,
+		RUNNING_DOWN,
 		PLAYING,
 		PAUSED,
 		PLAYING_BACKWARDS,
 //		UNKNOWN,
 	};
-		void OnClose(wxCloseEvent &);
+		void OnClose(wxCloseEvent&);
 		void OnHelp(wxCommandEvent&);
 		void OnAbout(wxCommandEvent&);
 		void OnSetRolls(wxCommandEvent&);
+		void OnSetCues(wxCommandEvent&);
 		void OnSetProjectName(wxCommandEvent&);
 		void OnRecord(wxCommandEvent&);
 		void OnRecorderListRefresh(wxCommandEvent&);
@@ -187,27 +201,31 @@ class IngexguiFrame : public wxFrame
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
 		void OnEventActivated(wxListEvent&);
+		void OnEventBeginEdit(wxListEvent&);
+		void OnEventEndEdit(wxListEvent&);
+		void OnRestoreListLabel(wxCommandEvent&);
 		void OnRefreshTimer(wxTimerEvent&);
 		void OnPrevTake(wxCommandEvent&);
 		void OnNextTake(wxCommandEvent&);
+		void OnDeleteCue(wxCommandEvent&);
 		void OnJumpToTimecode(wxCommandEvent&);
 		void OnPlayerEvent(wxCommandEvent&);
 		void OnRecorderGroupEvent(wxCommandEvent&);
 		void OnTestDlgEvent(wxCommandEvent&);
-		void OnTreeEvent(wxCommandEvent& event);
+		void OnTreeEvent(wxCommandEvent&);
 		void OnPlaybackSourceSelect(wxCommandEvent&);
-		void OnShortcut(wxCommandEvent &);
-		void OnDisablePlayer(wxCommandEvent &);
-		void OnClearDescription(wxCommandEvent &);
-		void OnDescriptionChange(wxCommandEvent &);
-		void OnDescriptionEnterKey(wxCommandEvent &);
-		void OnFocusGot(wxFocusEvent &);
-		void OnFocusLost(wxFocusEvent &);
-		void OnTestMode(wxCommandEvent &);
+		void OnShortcut(wxCommandEvent&);
+		void OnDisablePlayer(wxCommandEvent&);
+		void OnClearDescription(wxCommandEvent&);
+		void OnDescriptionChange(wxCommandEvent&);
+		void OnDescriptionEnterKey(wxCommandEvent&);
+		void OnFocusGot(wxFocusEvent&);
+		void OnFocusLost(wxFocusEvent&);
+		void OnTestMode(wxCommandEvent&);
 
 		void UpdatePlayerAndEventControls(bool = false);
 		void UpdateTextShortcutStates();
-		void AddEvent(EventType);
+		void AddEvent(EventType, const wxString = wxT(""), ProdAuto::MxfTimecode = InvalidMxfTimecode, const int64_t = 0, const wxString = wxT(""), const wxColour = wxT("WHITE"), const wxColour = wxT("BLACK"), const ProdAuto::LocatorColour::EnumType = ProdAuto::LocatorColour::DEFAULT_COLOUR);
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
 		bool AtStopEvent();
@@ -218,6 +236,7 @@ class IngexguiFrame : public wxFrame
 		void Play(const bool = false);
 		void ResetToDisconnected();
 		void Log(const wxString &);
+		void SetProjectName();
 		void EnableButtonReliably(wxButton *, bool = true);
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
@@ -235,21 +254,22 @@ class IngexguiFrame : public wxFrame
 		wxTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
-
+		wxButton * mDeleteCueButton;
 		DragButtonList * mPlaybackSourceSelector;
 		HelpDlg * mHelpDlg;
+		CuePointsDlg * mCuePointsDlg;
 		wxStaticBoxSizer * mTimecodeBox;
 
 		Stat mStatus;
 		long mStartEvent, mEndEvent;
 		long mEditRateNumerator, mEditRateDenominator;
 		TakeInfoArray mTakeInfoArray;
-		wxString mProjectName;
 		Timepos * mTimepos;
 		TakeInfo * mCurrentTakeInfo;
 		unsigned long mCurrentSelectedEvent;
 		prodauto::Player * mPlayer;
 		wxXmlDocument mSavedState;
+		wxString mSavedStateFilename;
 		bool mLastPlayingBackwards;
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;

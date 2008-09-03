@@ -30,9 +30,15 @@ DECLARE_EVENT_TYPE(wxEVT_TREE_MESSAGE, -1)
 class wxXmlDocument;
 class wxXmlNode;
 
-#define VIDEO_TRACK_COLOUR wxColour(wxT("ORANGE"))
-#define AUDIO_TRACK_COLOUR wxColour(wxT("YELLOW"))
-#define ROUTER_TRACK_COLOUR wxColour(wxT("GREEN"))
+#define VIDEO_TRACK_COLOUR wxColour(wxT("#00A000"))
+#define AUDIO_TRACK_COLOUR wxColour(wxT("#0000B0"))
+#define ROUTER_TRACK_COLOUR wxColour(wxT("#00A0A0"))
+#define NO_SIGNAL_COLOUR wxColour(wxT("#FF8000"))
+
+// flags
+#define TAPE_IDS_OK 1
+#define ALL_SIGNALS 2
+#define TRACK_NODE 4
 
 /// A class derived from a tree control, allowing record enables to be set and status to be displayed for multiple recorders.
 class TickTreeCtrl : public wxTreeCtrl
@@ -44,7 +50,7 @@ class TickTreeCtrl : public wxTreeCtrl
 
 		void Clear();
 		void EnableChanges(bool = true);
-		bool GetRecorderData(const wxString &, CORBA::BooleanSeq &);
+		bool GetRecordEnables(const wxString &, CORBA::BooleanSeq &);
 		void SetTrackStatus(const wxString &, bool, ProdAuto::TrackStatusList_var);
 		bool SomeEnabled();
 		bool IsRecording();
@@ -54,6 +60,7 @@ class TickTreeCtrl : public wxTreeCtrl
 		bool IsUnknown();
 		bool IsRouterRecorder(const wxString &);
 		bool HasProblem();
+		bool HasAllSignals();
 		bool RecordingSuccessfully();
 		void SetRecorderStateUnknown(const wxString &, const wxString &);
 		void SetRecorderStateProblem(const wxString &, const wxString &);
@@ -73,21 +80,20 @@ class TickTreeCtrl : public wxTreeCtrl
 	private:
 		wxTreeItemId FindRecorder(const wxString &);
 		void OnLMouseDown(wxMouseEvent &);
-		bool SelectRecursively(wxTreeItemId, bool = true, bool = false, bool = false);
+		int SelectRecursively(wxTreeItemId, bool = true, bool = false, bool = false);
 		void SetRecorderState(const wxString &, bool, const wxString &);
 		void ReportState(wxTreeItemId, bool = true);
 		void ScanPackageNames(wxArrayString *, std::vector<bool> *, wxXmlNode * = 0);
 		void AddMessage(const wxTreeItemId item, const wxString &);
 		const wxString RetrieveMessage(const wxTreeItemId item);
 		void RemoveMessage(const wxTreeItemId item);
-		void SetItemState(const wxTreeItemId, const TickTreeCtrl::state, const bool = false);
-		void SetItemState(const wxTreeItemId, const TickTreeCtrl::state, const wxString &);
+		void SetNodeState(const wxTreeItemId, const TickTreeCtrl::state, const bool = false, const wxString & = wxT(""));
 		bool UsingTapeIds();
-
-//		DECLARE_DYNAMIC_CLASS(TickTreeCtrl)
+		void SetSignalPresentStatus(const wxTreeItemId, const bool);
 		bool mEnableChanges;
 		wxXmlNode * mTapeIdsNode;
 		wxString mName;
+		wxColour mDefaultBackgroundColour;
     		DECLARE_EVENT_TABLE()
 };
 
@@ -95,10 +101,10 @@ class TickTreeCtrl : public wxTreeCtrl
 /// root node:
 ///	int: -
 ///	bool: enabled track(s) that aren't router recorders all have tape ID(s)
-///	string: -
+///	string: top-level name (without messages appended)
 /// recorder node:
 ///	int: total number of tracks (including those without sources)
-///	bool: enabled tracks(s) that aren't router recorders all have tape ID(s)
+///	bool: enabled track(s) that aren't router recorders all have tape ID(s)
 ///	string: recorder name (without messages appended)
 /// package name node:
 ///	int: non-zero if a router recorder
@@ -106,7 +112,7 @@ class TickTreeCtrl : public wxTreeCtrl
 ///	string: package name (without tape ID appended)
 /// track node:
 ///	int: track index
-///	bool: record enable state
+///	bool: record enable state (these determine the enable state for all ancestors)
 ///	string: track name (without messages appended)
 /// NB ints and strings are constant
 class ItemData : public wxTreeItemData

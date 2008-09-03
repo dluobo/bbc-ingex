@@ -14,6 +14,9 @@ YaST - make sure the following are installed:
   unixODBC
   unixODBC-devel
   psqlODBC
+  Xerces-c
+  libXerces-c-27
+  libXerces-c-devel
 
 RPMs - make sure these are installed:
   codecs-for-ffmpeg-671-1.i586.rpm
@@ -69,12 +72,14 @@ Set environment variable "workspace" to the directory where you checked out
 the ingex module.
 
 ingex> cd $workspace/ingex/common
-ingex> make
+ingex> make libcommon.a
 
 ingex> cd $workspace/ingex/studio/capture
+
+If you have a DVS card:
 ingex> make
 
-If you are not using a DVS card, you can do the following:
+Or, if you are not using a DVS card, you can do the following:
 ingex> make testgen nexus_multicast
 
 You should now have the capture programme, "dvs_sdi" (or at least "testgen").
@@ -86,10 +91,6 @@ ingex> cd $workspace/ingex/studio/mxfwriter
 ingex> make
 
 ingex> cd $workspace/ingex/studio/common
-ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
-ingex> make
-
-ingex> cd $workspace/ingex/studio/processing/offline
 ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
 ingex> make
 

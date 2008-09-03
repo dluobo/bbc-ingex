@@ -75,7 +75,7 @@ void RecorderGroupCtrl::StartGettingRecorders()
 	mComms->StartGettingRecorders(wxEVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
 }
 
-/// Enables or disables the control for input, sending an event to the parent
+/// Enables or disables the control for input, by sending an event to the parent
 /// @param enable The requested state
 void RecorderGroupCtrl::EnableForInput(const bool enable)
 {
@@ -233,32 +233,47 @@ void RecorderGroupCtrl::OnUnwantedMouseDown(wxMouseEvent & WXUNUSED(event))
 /// @param event The controller thread event.
 void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 {
-	if (Controller::CONNECT == event.GetCommand()) {
-		//complete connection process if successful, or reset and report failure otherwise
-		unsigned int i;
+	if (Controller::DIE == event.GetCommand()) {
 		//find the entry in the list
-		for (i = 0; i < GetCount(); i++) {
-			if (event.GetName() == GetName(i)) {
+		unsigned int pos;
+		for (pos = 0; pos < GetCount(); pos++) {
+			if (event.GetName() == GetName(pos)) {
 				break;
 			}
 		}
-		if (i < GetCount() && GetController(i)) { //sanity checks
+		if (pos < GetCount() && GetController(pos)) { //sanity checks
+			((ControllerContainer *) GetClientObject(pos))->Del();
+			SetString(pos, event.GetName());
+		}
+	}
+	else if (Controller::CONNECT == event.GetCommand()) {
+		//complete connection process if successful, or reset and report failure
+
+		//find the entry in the list
+		unsigned int pos;
+		for (pos = 0; pos < GetCount(); pos++) {
+			if (event.GetName() == GetName(pos)) {
+				break;
+			}
+		}
+		if (pos < GetCount() && GetController(pos)) { //sanity checks
 			if (Controller::SUCCESS == event.GetResult()) {
 				//check edit rate compatibility
 				wxArrayInt selectedItems;
-				if (!GetSelections(selectedItems) || (GetController(i)->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && GetController(i)->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only recorder, or compatible edit rate (assume MaxPostroll has same edit rate)
+				if (!GetSelections(selectedItems) || (GetController(pos)->GetMaxPreroll().edit_rate.numerator == mMaxPreroll.edit_rate.numerator && GetController(pos)->GetMaxPreroll().edit_rate.denominator == mMaxPreroll.edit_rate.denominator)) { //the only recorder, or compatible edit rate (assume MaxPostroll has same edit rate)
 					//everything about the recorder is now checked
-					Select(i);
+					Select(pos);
 					//populate the source tree
 					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, NEW_RECORDER);
 					frameEvent.SetString(event.GetName());
+					frameEvent.SetInt(pos); //to allow quick disconnection
 					RecorderData * recorderData = new RecorderData(event.GetTrackStatusList(), event.GetTrackList()); //must be deleted by event handler
 					frameEvent.SetClientData(recorderData);
-					frameEvent.SetInt(GetController(i)->IsRouterRecorder());
+					frameEvent.SetInt(GetController(pos)->IsRouterRecorder());
 					AddPendingEvent(frameEvent);
 					//preroll and postroll
 					if (!selectedItems.GetCount()) { //the only recorder
-						mMaxPreroll = GetController(i)->GetMaxPreroll();
+						mMaxPreroll = GetController(pos)->GetMaxPreroll();
 						mPreroll = mMaxPreroll; //for the edit rate values
 						wxXmlNode * node = mDoc->GetRoot()->GetChildren();
 						while (node && node->GetName() != wxT("Preroll")) {
@@ -271,7 +286,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 						else {
 							mPreroll.samples = DEFAULT_PREROLL;
 						}
-						mMaxPostroll = GetController(i)->GetMaxPostroll();
+						mMaxPostroll = GetController(pos)->GetMaxPostroll();
 						mPostroll = mMaxPostroll; //for the edit rate values
 						node = mDoc->GetRoot()->GetChildren();
 						while (node && node->GetName() != wxT("Postroll")) {
@@ -284,27 +299,50 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 							mPostroll.samples = DEFAULT_POSTROLL;
 						}
 					}
-					if (GetController(i)->GetMaxPreroll().samples < mMaxPreroll.samples) {
+					if (GetController(pos)->GetMaxPreroll().samples < mMaxPreroll.samples) {
 						//limit mMaxPreroll (and possibly mPreroll) to new maximum
-						mMaxPreroll.samples = GetController(i)->GetMaxPreroll().samples;
-						mPreroll.samples = mPreroll.samples > GetController(i)->GetMaxPreroll().samples ? GetController(i)->GetMaxPreroll().samples : mPreroll.samples;
+						mMaxPreroll.samples = GetController(pos)->GetMaxPreroll().samples;
+						mPreroll.samples = mPreroll.samples > GetController(pos)->GetMaxPreroll().samples ? GetController(pos)->GetMaxPreroll().samples : mPreroll.samples;
 					}
-					if (GetController(i)->GetMaxPostroll().samples < mMaxPostroll.samples) {
+					if (GetController(pos)->GetMaxPostroll().samples < mMaxPostroll.samples) {
 						//limit mMaxPostroll (and possibly mPostroll) to new maximum
-						mMaxPostroll.samples = GetController(i)->GetMaxPostroll().samples;
-						mPostroll.samples = mPostroll.samples > GetController(i)->GetMaxPostroll().samples ? GetController(i)->GetMaxPostroll().samples : mPostroll.samples;
+						mMaxPostroll.samples = GetController(pos)->GetMaxPostroll().samples;
+						mPostroll.samples = mPostroll.samples > GetController(pos)->GetMaxPostroll().samples ? GetController(pos)->GetMaxPostroll().samples : mPostroll.samples;
+					}
+					//synchronise project names
+					CORBA::StringSeq_var strings = event.GetStrings();
+					wxSortedArrayString namesToSend = mProjectNames;
+					for (size_t i = 0; i < strings->length(); i++) {
+						wxString projectName = wxString((*strings)[i], *wxConvCurrent);
+						int index = namesToSend.Index(projectName);
+						if (wxNOT_FOUND == index) { //new name for the controller
+							mProjectNames.Add(projectName);
+						}
+						else { //not a new name for the recorder
+							namesToSend.RemoveAt(index);
+						}
+					}
+					if (namesToSend.GetCount()) {
+						CORBA::StringSeq CorbaNames;
+						CorbaNames.length(namesToSend.GetCount());
+						// Assignment to the CORBA::StringSeq element must be from a const char *
+						// and should use ISO Latin-1 character set.
+						for (size_t i = 0; i < namesToSend.GetCount(); i++) {
+							CorbaNames[i] = (const char *) namesToSend[i].mb_str(wxConvISO8859_1);
+						}
+						GetController(pos)->AddProjectNames(CorbaNames);
 					}
 				}
 				else { //edit rate incompatibility
-					wxMessageBox(wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxT("") : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(i)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(i)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION);
-					Disconnect(i);
+					wxMessageBox(wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxT("") : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION);
+					Disconnect(pos);
 				}
 			}
 			else { //failure or comm failure
-				Disconnect(i);
+				Disconnect(pos);
 				wxMessageBox(wxT("Couldn't connect to recorder \"") + event.GetName() + wxT("\": ") + event.GetMessage(), wxT("Initialisation failure"), wxICON_EXCLAMATION);
 			}
-			SetString(i, event.GetName());
+			SetString(pos, event.GetName());
 		}
 	}
 	if (GetController(FindString(event.GetName(), true))) { //not been disconnected earlier in this function due to a reconnect failure, or has been destroyed (which can still result in an event being sent)
@@ -334,7 +372,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, STOPPED);
 					frameEvent.SetString(event.GetName());
 					frameEvent.SetInt (Controller::SUCCESS == event.GetResult());
-					RecorderData * recorderData = new RecorderData(event.GetTrackList(), event.GetFileList(), event.GetTimecode()); //must be deleted by event handler
+					RecorderData * recorderData = new RecorderData(event.GetTrackList(), event.GetStrings(), event.GetTimecode()); //must be deleted by event handler
 					frameEvent.SetClientData(recorderData);
 					AddPendingEvent(frameEvent);
 					break;
@@ -468,7 +506,7 @@ void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::S
 }
 
 /// Initiate a recording by sending an event for each recorder asking for its enable states and tape IDs.
-/// @param startTimecode First frame in recording after preroll period
+/// @param startTimecode First frame in recording after preroll period.
 void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
 {
 	EnableForInput(false); //don't want recorders being removed/added while recording
@@ -489,20 +527,30 @@ void RecorderGroupCtrl::RecordAll(const ProdAuto::MxfTimecode startTimecode)
 void RecorderGroupCtrl::Record(const wxString & recorderName, const CORBA::BooleanSeq & enableList)
 {
 	if (GetController(FindString(recorderName, true))) { //sanity check
-		GetController(FindString(recorderName, true))->Record(mStartTimecode, mPreroll, enableList);
+		GetController(FindString(recorderName, true))->Record(mStartTimecode, mPreroll, mCurrentProject, enableList);
+	}
+}
+
+/// Tell the given recorder to start or stop polling rapidly for status
+/// @param recorderName The recorder in question.
+/// @param rapidly True to poll rapidly.
+void RecorderGroupCtrl::PollRapidly(const wxString & recorderName, bool rapidly)
+{
+	if (GetController(FindString(recorderName, true))) { //sanity check
+		GetController(FindString(recorderName, true))->PollRapidly(rapidly);
 	}
 }
 
 /// Issue a stop command to all recorders.
 /// @param stopTimecode First frame in recording of postroll period.
-/// @param project Project name.
 /// @param description Recording description.
-void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const wxString & project, const wxString & description)
+/// @param locators Locator information.
+void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const wxString & description, const ProdAuto::LocatorSeq & locators)
 {
-	//It doesn't matter if a non-recording recorder gets a stop command
+	//(it doesn't matter if a non-recording recorder gets a stop command)
 	for (unsigned int i = 0; i < GetCount(); i++) {
 		if (GetController(i) && GetController(i)->IsOK()) {
-			GetController(i)->Stop(stopTimecode, mPostroll, project, description);
+			GetController(i)->Stop(stopTimecode, mPostroll, description, locators);
 		}
 	}
 	EnableForInput(); //do it here for safety (in case we get no response)
@@ -517,4 +565,51 @@ void RecorderGroupCtrl::SetTimecodeRecorder(wxString name)
 	wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, DISPLAY_TIMECODE_SOURCE);
 	frameEvent.SetString(mTimecodeRecorder);
 	AddPendingEvent(frameEvent);
+}
+
+/// Replace the project names list, sending any new names to the recorders.
+/// @param names The project names.
+void RecorderGroupCtrl::SetProjectNames(const wxSortedArrayString & names)
+{
+	CORBA::StringSeq CorbaNames;
+	for (size_t i = 0; i < names.GetCount(); i++) {
+		if (wxNOT_FOUND == mProjectNames.Index(names[i])) { //a new name
+			CorbaNames.length(CorbaNames.length() + 1);
+			// Assignment to the CORBA::StringSeq element must be from a const char *
+			// and should use ISO Latin-1 character set.
+			CorbaNames[CorbaNames.length() - 1] = (const char *) names[i].mb_str(wxConvISO8859_1);
+		}
+	}
+
+	//tell all the recorders we're connected to
+	for (unsigned int i = 0; i < GetCount(); i++) { //the recorders in the list
+		if (GetController(i) && GetController(i)->IsOK()) { //connected to this one
+			GetController(i)->AddProjectNames(CorbaNames);
+		}
+	}
+
+	//update the list
+	mProjectNames = names;
+}
+
+/// Get the array of project names.
+/// @return The project names (sorted).
+const wxSortedArrayString & RecorderGroupCtrl::GetProjectNames()
+{
+	return mProjectNames;
+}
+
+/// Set the project name sent at each recording.  If it is not in the list of project names, add it
+void RecorderGroupCtrl::SetCurrentProjectName(const wxString & name)
+{
+	mCurrentProject = name;
+	if (wxNOT_FOUND == mProjectNames.Index(mCurrentProject)) {
+		mProjectNames.Add(mCurrentProject);
+	}
+}
+
+/// Get the project name sent at each recording.
+const wxString & RecorderGroupCtrl::GetCurrentProjectName()
+{
+	return mCurrentProject;
 }

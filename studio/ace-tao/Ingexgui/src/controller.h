@@ -39,20 +39,15 @@ class Controller : public wxEvtHandler, wxThread //each controller handles its o
 
 public:
 	Controller(const wxString &, Comms *, wxEvtHandler *);
-//	ProdAuto::TrackStatusList * Create(wxString, Comms *, wxEvtHandler *); //not 0 indicates success, in which case pointer deletion required
+	~Controller();
 	bool IsOK();
-//	void RecEnableChange(); this is needed if there is a reason for sources to handle these events
-//	const bool SomeEnabled();
 	void SetTapeIds(const CORBA::StringSeq &, const CORBA::StringSeq &);
-	void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const CORBA::BooleanSeq &);
-	void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const wxString &);
+	void AddProjectNames(const CORBA::StringSeq &);
+	void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
+	void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
+	void PollRapidly(bool = true);
 	bool IsRouterRecorder();
 	void Destroy();
-//	const bool IsRecording();
-//	const bool SetRolls(const bool = false);
-//	void AddPackageName(wxString);
-//	void NewPackageName(wxString);
-//	void PackageNameSelected(wxString);
 	const ProdAuto::MxfDuration GetMaxPreroll();
 	const ProdAuto::MxfDuration GetMaxPostroll();
 	void EnableTrack(unsigned int, bool = true);
@@ -62,6 +57,7 @@ public:
 		NONE,
 		CONNECT,
 		SET_TAPE_IDS,
+		ADD_PROJECT_NAMES,
 		RECONNECT,
 		STATUS,
 		RECORD,
@@ -95,6 +91,7 @@ private:
 	bool mTimecodeRunning;
 	bool mReconnecting;
 	bool mRouterRecorder;
+	bool mPollRapidly;
 	Command mPendingCommand;
 	wxDateTime mLastTimecodeRequest;
 	ProdAuto::MxfTimecode mLastTimecodeReceived;
@@ -103,6 +100,7 @@ private:
 	Command mCommand;
 	CORBA::BooleanSeq mEnableList;
 	CORBA::StringSeq mSourceNames;
+	CORBA::StringSeq mProjectNames;
 	CORBA::StringSeq mTapeIds;
 	wxString mProject;
 	wxString mDescription;
@@ -110,7 +108,7 @@ private:
 	ProdAuto::MxfDuration mMaxPreroll, mMaxPostroll;
 	ProdAuto::SourceList mSourceList;
 	ProdAuto::TrackList_var mTrackList;
-//	ProdAuto::TrackList mTrackList;
+	ProdAuto::LocatorSeq mLocators; 
 	ProdAuto::MxfTimecode mStartTimecode;
 	ProdAuto::MxfTimecode mStopTimecode;
 	DECLARE_EVENT_TABLE()
@@ -144,18 +142,18 @@ public:
 	void SetTrackStatusList(ProdAuto::TrackStatusList_var trackStatusList) { mTrackStatusList = trackStatusList; };
 	void SetCommand(Controller::Command command) { mCommand = command; };
 	void SetResult(Controller::Result result) { mResult = result; };
-	void SetFileList(CORBA::StringSeq_var files) { mFiles = files; };
+	void SetStrings(CORBA::StringSeq_var strings) { mStrings = strings; };
 	void SetTimecode(ProdAuto::MxfTimecode_var timecode) { mTimecode = timecode; };
 	void SetTimecodeState(Controller::TimecodeState state) { mTimecodeState = state; };
 	void SetTimecodeStateChanged(bool changed = true) { mTimecodeStateChanged = changed; };
 	const wxString GetName() { return mName; };
 	const wxString GetMessage() { return mMessage; };
-	ProdAuto::TrackList_var GetTrackList() {return mTrackList; };
-	ProdAuto::TrackStatusList_var GetTrackStatusList() {return mTrackStatusList; };
+	ProdAuto::TrackList_var GetTrackList() { return mTrackList; };
+	ProdAuto::TrackStatusList GetTrackStatusList() { return mTrackStatusList; };
 	const Controller::Command GetCommand() { return mCommand; };
 	const Controller::Result GetResult() { return mResult; };
-	const CORBA::StringSeq_var GetFileList() {return mFiles; };
-	const ProdAuto::MxfTimecode GetTimecode() {return mTimecode; };
+	CORBA::StringSeq_var GetStrings() { return mStrings; };
+	const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
 	const Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
 	bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
 	DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
@@ -166,7 +164,7 @@ private:
 	ProdAuto::TrackStatusList_var mTrackStatusList; //deletes itself
 	Controller::Command mCommand;
 	Controller::Result mResult;
-	CORBA::StringSeq_var mFiles; //deletes itself
+	CORBA::StringSeq_var mStrings; //deletes itself
 	ProdAuto::MxfTimecode mTimecode; //deletes itself
 	Controller::TimecodeState mTimecodeState;
 	bool mTimecodeStateChanged;

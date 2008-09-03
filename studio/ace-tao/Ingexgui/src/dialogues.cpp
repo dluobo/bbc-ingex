@@ -22,6 +22,9 @@
 #include "help.h" //for StyleAndWrite()
 #include <wx/spinctrl.h>
 #include <wx/tglbtn.h>
+#include <wx/colordlg.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(SetRollsDlg, wxDialog)
 	EVT_SCROLL(SetRollsDlg::OnRollChange)
@@ -33,8 +36,8 @@ END_EVENT_TABLE()
 /// @param maxPreroll The maximum allowed preroll.
 /// @param postroll The current postroll value.
 /// @param maxPostroll The maximum allowed postroll.
-SetRollsDlg::SetRollsDlg(wxWindow * parent, const ProdAuto::MxfDuration preroll, const ProdAuto::MxfDuration maxPreroll, const ProdAuto::MxfDuration postroll, const ProdAuto::MxfDuration maxPostroll)
-: wxDialog(parent, wxID_ANY, (const wxString &) wxT("Pre-roll and Post-roll")), mMaxPreroll(maxPreroll), mMaxPostroll(maxPostroll)
+SetRollsDlg::SetRollsDlg(wxWindow * parent, const ProdAuto::MxfDuration preroll, const ProdAuto::MxfDuration maxPreroll, const ProdAuto::MxfDuration postroll, const ProdAuto::MxfDuration maxPostroll, wxXmlDocument & savedState)
+: wxDialog(parent, wxID_ANY, (const wxString &) wxT("Pre-roll and Post-roll")), mMaxPreroll(maxPreroll), mMaxPostroll(maxPostroll), mSavedState(savedState)
 {
 	wxBoxSizer * sizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(sizer);
@@ -112,6 +115,33 @@ ProdAuto::MxfDuration SetRollsDlg::SetRoll(const wxChar * label, int proportion,
 	return roll;
 }
 
+/// Overloads Show Modal to update the XML document
+int SetRollsDlg::ShowModal()
+{
+	int rc = wxDialog::ShowModal();
+	if (wxID_OK == rc) {
+		//Remove old nodes
+		wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
+		while (node) {
+			if (wxT("Preroll") == node->GetName() || wxT("Postroll") == node->GetName()) {
+				wxXmlNode * deadNode = node;
+				node = node->GetNext();
+				mSavedState.GetRoot()->RemoveChild(deadNode);
+				delete deadNode;
+			}
+			else {
+				node = node->GetNext();
+			}
+		}
+		//Create new nodes (element nodes containing text nodes)
+		new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Preroll")), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), GetPreroll().samples));
+		new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Postroll")), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), GetPostroll().samples));
+	}
+	return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 BEGIN_EVENT_TABLE( SetProjectDlg, wxDialog )
 	EVT_BUTTON(ADD, SetProjectDlg::OnAdd)
 	EVT_BUTTON(DELETE, SetProjectDlg::OnDelete)
@@ -119,12 +149,13 @@ BEGIN_EVENT_TABLE( SetProjectDlg, wxDialog )
 	EVT_CHOICE(wxID_ANY, SetProjectDlg::OnChoice)
 END_EVENT_TABLE()
 
-/// Reads project names from the XML document and displays a dialogue to manipulate them if there are none or if forced.
-/// Updates the document if user changes data.
+/// Displays list of project names from the recorders and the selected project from the XML doc and allows the list to be added to
+/// Updates the document if user changes the selected project.
 /// @param parent The parent window.
+/// @param projectNamees The current list of project names (can be empty)
 /// @param doc The XML document to read and modify.
-/// @param force Set true to display the dialogue regardless.
-SetProjectDlg::SetProjectDlg(wxWindow * parent, wxXmlDocument & doc, bool force) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mUpdated(false)
+/// @param force When true, disables the cancel button etc to force the user to press OK.
+SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & projectNames, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Select a project name"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mProjectNames(projectNames), mSavedState(savedState)
 {
 	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(mainSizer);
@@ -136,75 +167,76 @@ SetProjectDlg::SetProjectDlg(wxWindow * parent, wxXmlDocument & doc, bool force)
 	mainSizer->Add(buttonSizer1, 0, wxEXPAND);
 	wxButton * addButton = new wxButton(this, ADD, wxT("Add"));
 	buttonSizer1->Add(addButton, 0, wxALL, CONTROL_BORDER);
-	mDeleteButton = new wxButton(this, DELETE, wxT("Delete"));
-	buttonSizer1->AddStretchSpacer();
-	buttonSizer1->Add(mDeleteButton, 0, wxALL, CONTROL_BORDER);
-	mEditButton = new wxButton(this, EDIT, wxT("Edit"));
-	buttonSizer1->AddStretchSpacer();
-	buttonSizer1->Add(mEditButton, 0, wxALL, CONTROL_BORDER);
+//	mDeleteButton = new wxButton(this, DELETE, wxT("Delete"));
+//	buttonSizer1->AddStretchSpacer();
+//	buttonSizer1->Add(mDeleteButton, 0, wxALL, CONTROL_BORDER);
+//	mEditButton = new wxButton(this, EDIT, wxT("Edit"));
+//	buttonSizer1->AddStretchSpacer();
+//	buttonSizer1->Add(mEditButton, 0, wxALL, CONTROL_BORDER);
 	wxBoxSizer * buttonSizer2 = new wxBoxSizer(wxHORIZONTAL);
 	mainSizer->Add(buttonSizer2, 1, wxEXPAND);
 	mOKButton = new wxButton(this, wxID_OK, wxT("OK"));
 	buttonSizer2->Add(mOKButton, 1, wxALL, CONTROL_BORDER);
 	wxButton * CancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
 	buttonSizer2->Add(CancelButton, 1, wxALL, CONTROL_BORDER);
-
-	//read/create/recreate state from XML doc
-	wxXmlNode * projectsNode = doc.GetRoot()->GetChildren();
-	while (projectsNode && projectsNode->GetName() != wxT("Projects")) {
-		projectsNode = projectsNode->GetNext();
-	}
-	if (!projectsNode) {
-		projectsNode = new wxXmlNode(doc.GetRoot(), wxXML_ELEMENT_NODE, wxT("Projects"));
+	mProjectList->Append(mProjectNames);
+	wxString selectedProject = GetCurrentProjectName(mSavedState);
+	if (selectedProject.IsEmpty() && mProjectList->GetCount()) { //recorder has returned project names but no selected project from the file
+		mProjectList->SetSelection(0); //just select something as a default project
 	}
 	else {
-		mSelectedProject = projectsNode->GetPropVal(wxT("selected"), wxT(""));
-		wxXmlNode * projectNode = projectsNode->GetChildren();
-		while (projectNode) {
-			if (wxT("Project") == projectNode->GetName() && !IsEmpty(projectNode->GetNodeContent())) {
-				mProjectList->Append(projectNode->GetNodeContent());
-			}
-			projectNode = projectNode->GetNext();
-		}
-	}
-	if (!mProjectList->GetCount()) { //no projects
-		//create default project
-		wxDateTime now;
-		now.SetToCurrent();
-		mProjectList->Append(now.Format());
-		new wxXmlNode(new wxXmlNode(projectsNode, wxXML_ELEMENT_NODE, wxT("Project")), wxXML_TEXT_NODE, wxT(""), mProjectList->GetString(0));
+		mProjectList->SetSelection(mProjectNames.Index(selectedProject)); //could be nothing
 	}
 	Fit();
 	SetMinSize(GetSize());
-	if (!mSelectedProject.IsEmpty()) {
-		mProjectList->Select(mProjectList->FindString(mSelectedProject));
-		if (wxNOT_FOUND == mProjectList->GetSelection()) {
-			//duff selected project
-			mSelectedProject.Clear();
-		}
+	mOKButton->SetFocus(); //especially useful to get through the dialogue quickly when it immediately brings up an add project box when there are no project names
+}
+
+/// Obtains the currently selected project name from the supplied XML document; returns an empty string if not found
+const wxString SetProjectDlg::GetCurrentProjectName(const wxXmlDocument & doc)
+{
+	wxXmlNode * projectNode = doc.GetRoot()->GetChildren();
+	while (projectNode && projectNode->GetName() != wxT("CurrentProject")) {
+		projectNode = projectNode->GetNext();
 	}
-	//selection and update
-	if (mSelectedProject.IsEmpty() || force) {
-		if (mSelectedProject.IsEmpty()) {
-			//make default selection
-			mProjectList->Select(mProjectList->GetCount() - 1);
-			mSelectedProject = mProjectList->GetStringSelection();
-			projectsNode->SetProperties(new wxXmlProperty(wxT("selected"), mSelectedProject)); //don't worry about any existing properties - this will only happen once when the app is run
-			mUpdated = true;
-		}
-		if (wxID_OK == ShowModal()) {
-			//delete existing projects
-			doc.GetRoot()->RemoveChild(projectsNode); //also gets rid of any rubbish in the file
-			delete projectsNode;
-			//create new list of projects
-			mSelectedProject = mProjectList->GetStringSelection();
-			projectsNode = new wxXmlNode(doc.GetRoot(), wxXML_ELEMENT_NODE, wxT("Projects"), wxT(""), new wxXmlProperty(wxT("selected"), mSelectedProject));
-			//add new projects
-			for (unsigned int i = mProjectList->GetCount(); i > 0;) { //backwards to preserve order
-				new wxXmlNode(new wxXmlNode(projectsNode, wxXML_ELEMENT_NODE, wxT("Project")), wxXML_TEXT_NODE, wxT(""), mProjectList->GetString(--i));
+	if (projectNode) {
+		return projectNode->GetNodeContent();
+	}
+	else {
+		return wxT("");
+	}
+}
+
+/// Overloads Show Modal to prompt the addition of one project name if there are none, and to update the XML document
+int SetProjectDlg::ShowModal()
+{
+	if (!mProjectList->GetCount()) { //must enter at least one project name
+		EnterName(wxT("No project names stored: enter a project name"), wxT("New Project"));
+	}
+	if (mProjectList->GetCount()) { //names obtained from recorder(s), or selected name from rc file, or name has just been entered
+		int rc = wxDialog::ShowModal();
+		if (wxID_OK == rc) {
+			//Remove old node(s)
+			wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
+			while (node) {
+				if (wxT("CurrentProject") == node->GetName()) {
+					wxXmlNode * deadNode = node;
+					node = node->GetNext();
+					mSavedState.GetRoot()->RemoveChild(deadNode);
+					delete deadNode;
+				}
+				else {
+					node = node->GetNext();
+				}
 			}
-			mUpdated = true;
+			//create a new element node "CurrentProject" containing a new text node with the section of the tape ID
+			new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("CurrentProject"), wxT("")), wxXML_TEXT_NODE, wxT(""), mProjectList->GetStringSelection());
+			//projectNode->SetContent(dlg.GetSelectedProject()); this doesn't seem to work - creates a new node with no content
 		}
+		return rc;
+	}
+	else { //cancel has been pressed in the EnterName box above
+		return wxID_CANCEL;
 	}
 }
 
@@ -231,16 +263,16 @@ void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, in
 {
 	while (true) {
 		wxString name = wxGetTextFromUser(msg, caption, mProjectList->GetString(item));
-		name = name.Trim(false);
-		name = name.Trim(true);
+		name = name.Trim(true).Trim(false);
 		if (name.IsEmpty()) {
 			break;
 		}
 		mProjectList->Delete(item); //so that searching for duplicates is accurate
 		if (wxNOT_FOUND == mProjectList->FindString(name)) { //case-insensitive match
 			if (wxNOT_FOUND == item) { //adding a new name
-				mProjectList->Append(name);
-				mProjectList->Select(mProjectList->GetCount() - 1);
+				int index = mProjectNames.Add(name);
+				mProjectList->Insert(name, index);
+				mProjectList->Select(index);
 			}
 			else {
 				mProjectList->Insert(name, item);
@@ -281,26 +313,28 @@ void SetProjectDlg::OnChoice( wxCommandEvent& WXUNUSED( event ) )
 	EnableButtons(true);
 }
 
-/// @return True if the user updated information while the dialogue was shown.
-bool SetProjectDlg::IsUpdated()
-{
-	return mUpdated;
-}
-
 /// @return The name of the project that was selected when the dialogue was closed.
 const wxString SetProjectDlg::GetSelectedProject()
 {
-	return mSelectedProject;
+	return mProjectList->GetStringSelection();
+}
+
+/// @return Sorted list of project names.
+const wxSortedArrayString & SetProjectDlg::GetProjectNames()
+{
+	return mProjectNames;
 }
 
 /// Enable or disable all dialogue's "Add", "Delete" and "Edit" buttons.
 /// @param state True to enable.
 void SetProjectDlg::EnableButtons(bool state)
 {
-	mDeleteButton->Enable(state);
-	mEditButton->Enable(state);
+//	mDeleteButton->Enable(state);
+//	mEditButton->Enable(state);
 	mOKButton->Enable(state);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(MyGrid, wxGrid)
 	EVT_CHAR(MyGrid::OnChar)
@@ -319,7 +353,6 @@ BEGIN_EVENT_TABLE(SetTapeIdsDlg, wxDialog)
 	EVT_BUTTON(GROUPINC, SetTapeIdsDlg::OnGroupIncrement)
 	EVT_BUTTON(HELP, SetTapeIdsDlg::OnHelp)
 	EVT_BUTTON(CLEAR, SetTapeIdsDlg::OnClear)
-	EVT_CHAR(SetTapeIdsDlg::OnChar)
 	EVT_INIT_DIALOG(SetTapeIdsDlg::OnInitDlg)
 END_EVENT_TABLE()
 WX_DECLARE_STRING_HASH_MAP(wxString, StringHash);
@@ -425,7 +458,7 @@ SetTapeIdsDlg::SetTapeIdsDlg(wxWindow * parent, wxXmlDocument & doc, wxArrayStri
 				//a new element node "TapeId" with property "PackageName"
 				tapeIdNode = new wxXmlNode(tapeIdsNode, wxXML_ELEMENT_NODE, wxT("TapeId"), wxT(""), new wxXmlProperty(wxT("PackageName"), mGrid->GetCellValue(i, 0)));
 				for (int sectionCol = 2; sectionCol < mGrid->GetNumberCols(); sectionCol++) {
-					//a new element node "Section" containing a text node with the section of the tape ID
+					//a new element node "Section" containing a new text node with the section of the tape ID
 					new wxXmlNode(new wxXmlNode(tapeIdNode, wxXML_ELEMENT_NODE, wxT("Section"), wxT(""), new wxXmlProperty(wxT("Number"), wxString::Format(wxT("%d"), sectionCol - 1))), wxXML_TEXT_NODE, wxT(""), mGrid->GetCellValue(i, sectionCol));
 				}
 			}
@@ -455,7 +488,7 @@ wxXmlNode * SetTapeIdsDlg::GetTapeIdsNode(wxXmlDocument & doc)
 		//clean up
 		wxXmlNode * childNode = tapeIdsNode->GetChildren();
 		while (childNode) {
-//std::cerr << childNode->GetName().mb_str(*wxConvCurrent) << std::endl;
+//std::cerr << childNode->GetName() << std::endl;
 			if (wxT("TapeId") != childNode->GetName()) {
 				wxXmlNode * deadNode = childNode;
 				childNode = childNode->GetNext();
@@ -732,7 +765,7 @@ void SetTapeIdsDlg::FillCol(const bool copy, const bool inc) {
 		if (numerical) {
 			wxULongLong_t number;
 			mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).ToULongLong(&number);
-			wxString format = wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).Len()) + wxT(wxLongLongFmtSpec "u"); //handles leading zeros
+			wxString format = wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).Len()) + wxLongLongFmtSpec + wxT("u"); //handles leading zeros
 			for (int row = sourceRow + 1; row < mGrid->GetNumberRows(); row++) {
 				if (mGrid->GetCellValue(row, mGrid->GetSelectedCols()[0]).IsEmpty()) { //destination cell is empty
 					mGrid->SetCellValue(row, mGrid->GetSelectedCols()[0], wxString::Format(format, ++number));
@@ -741,21 +774,21 @@ void SetTapeIdsDlg::FillCol(const bool copy, const bool inc) {
 			}
 		}
 		else { //alphabetical
-			char value = mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).mb_str(*wxConvCurrent)[0];
+			wxChar value = mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0])[0];
 			for (int row = sourceRow + 1; row < mGrid->GetNumberRows(); row++) {
 				if (mGrid->GetCellValue(row, mGrid->GetSelectedCols()[0]).IsEmpty()) { //destination cell is empty
-					if ('Z' == value) {
+					if (wxT('Z') == value) {
 						//upper case wrap
-						value = 'A';
+						value = wxT('A');
 					}
-					else if ('z' == value) {
+					else if (wxT('z') == value) {
 						//lower case wrap
-						value = 'a';
+						value = wxT('a');
 					}
 					else {
 						value++;
 					}
-					mGrid->SetCellValue(row, mGrid->GetSelectedCols()[0], wxString::FromAscii(value));
+					mGrid->SetCellValue(row, mGrid->GetSelectedCols()[0], wxString(value));
 					UpdateRow(row);
 				}
 			}
@@ -801,7 +834,7 @@ void SetTapeIdsDlg::IncrementAsGroup(const bool commit)
 	if (groupSize > 1 && commit) { //can do something useful
 		for (int row = 0; row <= sourceRow; row++) {
 			if (!mGrid->GetCellValue(row, col).IsEmpty()) { //not empty, or we ignore it
-				mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxT(wxLongLongFmtSpec "u"), ++number));
+				mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxLongLongFmtSpec + wxT("u"), ++number));
 				UpdateRow(row);
 			}
 		}
@@ -856,7 +889,7 @@ bool SetTapeIdsDlg::ManipulateCell(const int row, const int col, const bool inc,
 		changeable = true;
 		if (commit) {
 			//set cell to incremented number, including any leading zeros
-			mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxT(wxLongLongFmtSpec "u"), ++number));
+			mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxLongLongFmtSpec + wxT("u"), ++number));
 			UpdateRow(row);
 		}
 		if (returnNumber) {
@@ -871,11 +904,6 @@ bool SetTapeIdsDlg::ManipulateCell(const int row, const int col, const bool inc,
 		}
 	}
 	return changeable;
-}
-
-void SetTapeIdsDlg::OnChar(wxKeyEvent & WXUNUSED(event))
-{
-std::cerr << "char" << std::endl;
 }
 
 /// Responds to the "Help" button being pressed.
@@ -909,6 +937,8 @@ bool SetTapeIdsDlg::IsUpdated()
 {
 	return mUpdated;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(JumpToTimecodeDlg, wxDialog)
 	EVT_TEXT(wxID_ANY, JumpToTimecodeDlg::OnTextChange)
@@ -1027,6 +1057,8 @@ return;
 void JumpToTimecodeDlg::OnEnter(wxCommandEvent & WXUNUSED(event))
 {
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(TestModeDlg, wxDialog)
 	EVT_SPINCTRL(MIN_REC, TestModeDlg::OnChangeMinRecTime)
@@ -1154,4 +1186,326 @@ void TestModeDlg::Record(bool rec)
 			mTimer->Start(dur * 1000, wxTIMER_ONE_SHOT);
 		}
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define N_COLOURS 9 //including default - make sure this matches number of entries in array below
+const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAuto::LocatorColour::EnumType code;} colours[9] = {
+	{ "#FF0000", "#000000", "DEFAULT", ProdAuto::LocatorColour::DEFAULT_COLOUR }, //this must come first
+	{ "#FFFFFF", "#000000", "White", ProdAuto::LocatorColour::WHITE },
+	{ "#FF0000", "#000000", "Red", ProdAuto::LocatorColour::RED },
+	{ "#FFFF00", "#000000", "Yellow", ProdAuto::LocatorColour::YELLOW },
+	{ "#00FF00", "#000000", "Green", ProdAuto::LocatorColour::GREEN },
+	{ "#00FFFF", "#000000", "Cyan", ProdAuto::LocatorColour::CYAN },
+	{ "#0000FF", "#FFFFFF", "Blue", ProdAuto::LocatorColour::BLUE },
+	{ "#FF00FF", "#000000", "Magenta", ProdAuto::LocatorColour::MAGENTA },
+	{ "#000000", "#FFFFFF", "Black", ProdAuto::LocatorColour::BLACK }
+};
+
+DEFINE_EVENT_TYPE (wxEVT_SET_GRID_ROW);
+
+BEGIN_EVENT_TABLE(CuePointsDlg, wxDialog)
+	EVT_GRID_EDITOR_SHOWN(CuePointsDlg::OnEditorShown)
+	EVT_GRID_EDITOR_HIDDEN(CuePointsDlg::OnEditorHidden)
+	EVT_MENU(wxID_ANY, CuePointsDlg::OnMenu)
+	EVT_BUTTON(wxID_OK, CuePointsDlg::OnOK)
+	EVT_GRID_CELL_LEFT_CLICK(CuePointsDlg::OnCellLeftClick)
+	EVT_GRID_LABEL_LEFT_CLICK(CuePointsDlg::OnLabelLeftClick)
+	EVT_COMMAND(wxID_ANY, wxEVT_SET_GRID_ROW, CuePointsDlg::OnSetGridRow)
+//	EVT_GRID_CELL_RIGHT_CLICK(CuePointsDlg::OnCellRightClick) //don't use right click because it ignores the mouse pointer position
+END_EVENT_TABLE()
+
+/// Sets up dialogue.
+/// @param parent The parent window.
+/// @param savedState The setup file
+CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT(""),  wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), mCurrentRow(0)
+{
+	//accelerator table
+	wxAcceleratorEntry entries[11]; //NB number used below and later IDs used for colour menu
+	for (int entry = 0; entry < 10; entry++) {
+		entries[entry].Set(wxACCEL_NORMAL, (int) '0' + entry, wxID_HIGHEST + N_COLOURS + 2 + entry); //ID corresponds to key so we can find out which key is pressed
+	}
+	entries[10].Set(wxACCEL_NORMAL, WXK_F2, wxID_HIGHEST + N_COLOURS + 1);
+	wxAcceleratorTable accel(11, entries); //NB number used above
+	SetAcceleratorTable(accel);
+
+	//controls
+	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+	SetSizer(mainSizer);
+
+	mTimecodeDisplay = new wxStaticText(this, wxID_ANY, wxT(""));
+	wxFont * font = wxFont::New(TIME_FONT_SIZE, wxFONTFAMILY_MODERN); //this way works under GTK
+	mTimecodeDisplay->SetFont(*font);
+	mainSizer->Add(mTimecodeDisplay, 0, wxALL | wxALIGN_CENTRE, CONTROL_BORDER);
+
+	mGrid = new MyGrid(this, wxID_ANY);
+	mainSizer->Add(mGrid, 0 , wxEXPAND | wxALL, CONTROL_BORDER);
+
+	mMessage = new wxStaticText(this, wxID_ANY, wxT("Press a number key or click a label\nto choose a cue point;\npress ENTER to choose the highlighted cue point;\npress F2 to generate a default cue point;\nclick the highlighted cell to edit it."), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE);
+	mTextColour = mMessage->GetForegroundColour();
+	mBackgroundColour = mMessage->GetBackgroundColour();
+	mainSizer->Add(mMessage, 0 , wxEXPAND | wxALL, CONTROL_BORDER);
+
+	wxBoxSizer * buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+	mainSizer->Add(buttonSizer);
+
+	mOkButton = new wxButton(this, wxID_OK, wxT("OK"));
+	buttonSizer->Add(mOkButton, 1, wxEXPAND | wxALL, CONTROL_BORDER);
+
+	buttonSizer->AddStretchSpacer();
+
+	wxButton * cancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
+	buttonSizer->Add(cancelButton, 1, wxEXPAND | wxALL, CONTROL_BORDER);
+
+	//set up the grid
+	mGrid->CreateGrid(10, 2);
+	for (int row = 0; row < 10; row++) {
+		mGrid->SetRowLabelValue(row, wxString::Format(wxT("%d"), (row + 1) % 10));
+	}
+	mGrid->SetColLabelValue(0, wxT("Description"));
+	mGrid->SetColLabelValue(1, wxT("Colour"));
+	wxGridCellAttr * readOnly = new wxGridCellAttr;
+	readOnly->SetReadOnly();
+	mGrid->SetColAttr(1, readOnly); //prevent editing of this column, which is possible if you get to it by tabbing
+	mCuePointsNode = savedState.GetRoot()->GetChildren();
+	while (mCuePointsNode && mCuePointsNode->GetName() != wxT("CuePoints")) {
+		mCuePointsNode = mCuePointsNode->GetNext();
+	}
+	if (!mCuePointsNode) {
+		Reset();
+		mCuePointsNode = new wxXmlNode(savedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("CuePoints"));
+	}
+	else {
+		//read in existing data
+		Load();
+	}
+}
+
+/// Loads the grid with default values
+void CuePointsDlg::Reset()
+{
+	mGrid->ClearGrid();
+	for (int i = 0; i < 10; i++) {
+		SetColour(i, 0); //default
+	}
+}
+
+/// Loads the grid contents from the XML document.
+void CuePointsDlg::Load()
+{
+	//remove current values as may not be overwriting everything
+	Reset();
+	//load new values
+	wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
+	while (cuePointNode) {
+		wxString shortcut, colour;
+		unsigned long shortcutVal, colourVal;
+		if (wxT("CuePoint") == cuePointNode->GetName() //the right sort of node
+		 && cuePointNode->GetPropVal(wxT("Shortcut"), &shortcut) //has a required attribute...
+		 && shortcut.ToULong(&shortcutVal) //... which is a number...
+		 && shortcutVal < 10 //...in the right range
+		 && cuePointNode->GetPropVal(wxT("Colour"), &colour) //has a required attribute...
+		 && colour.ToULong(&colourVal) //... which is a number...
+		 && colourVal < N_COLOURS) { //...in the right range
+			shortcutVal = (shortcutVal == 0) ? 9 : shortcutVal - 1; //row number
+			mGrid->SetCellValue(shortcutVal, 0, cuePointNode->GetNodeContent().Trim(false).Trim(true));
+			SetColour(shortcutVal, colourVal);
+		}
+		cuePointNode = cuePointNode->GetNext();
+	}
+	mGrid->AutoSizeColumns();
+	Fit();
+}
+
+/// Shows the dialogue and saves the grid if OK is pressed.
+/// @param timecode If present, displays this at the top of the window and goes into add cue mode - shortcut keys enabled.
+int CuePointsDlg::ShowModal(const wxString timecode)
+{
+	mTimecodeDisplay->SetLabel(timecode);
+	mTimecodeDisplay->Show(!timecode.IsEmpty());
+	mMessage->Show(!timecode.IsEmpty());
+	Fit();
+
+	if (timecode.IsEmpty()) {
+		SetTitle(wxT("Edit Cue Point Descriptions"));
+		mGrid->SetFocus(); //typing will immediately start editing
+	}
+	else {
+		SetTitle(wxT("Choose/edit Cue Point"));
+		mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
+		mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
+	}
+	int rc;
+	if (wxID_OK == (rc = wxDialog::ShowModal())) {
+		//remove old state
+		wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
+		while (cuePointNode) {
+			wxXmlNode * deadNode = cuePointNode;
+			cuePointNode = cuePointNode->GetNext();
+			mCuePointsNode->RemoveChild(deadNode);
+			delete deadNode;
+		}
+		//store new state
+ 		for (int row = 0; row < 10; row++) {
+			wxString description = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
+			if (!description.IsEmpty() || mDescrColours[row]) { //something to store
+				//create a new element node "CuePoint" containing a new text node with the description
+				new wxXmlNode(
+					new wxXmlNode(
+						mCuePointsNode,
+						wxXML_ELEMENT_NODE,
+						wxT("CuePoint"),
+						wxT(""),
+						new wxXmlProperty(
+							wxT("Shortcut"),
+							wxString::Format(wxT("%d"), (row + 1) % 10),
+							new wxXmlProperty(wxT("Colour"), wxString::Format(wxT("%d"), mDescrColours[row]))
+						)
+					),
+					wxXML_TEXT_NODE,
+					wxT(""),
+					description
+				);
+			}
+		}
+	}
+	else {
+		//reload old state
+		Load();
+	}
+	return rc;
+}
+
+/// Disables shortcut keys so that they can be used for text entry
+void CuePointsDlg::OnEditorShown(wxGridEvent & WXUNUSED(event))
+{
+	mMessage->SetForegroundColour(mBackgroundColour); //disable shortcuts
+}
+
+/// Adjusts the grid and window sizes to reflect any editing changes.
+void CuePointsDlg::OnEditorHidden(wxGridEvent & WXUNUSED(event))
+{
+	mGrid->AutoSizeColumns();
+//	mGrid->ForceRefresh(); //sometimes makes a mess if you don't
+	Fit();
+	if (mTimecodeDisplay->IsShown()) {
+		mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
+		mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
+		//Prevent it jumping down a cell because it's likely you want to submit the just-edited value as the cue point
+		wxCommandEvent event(wxEVT_SET_GRID_ROW, mCurrentRow);
+		AddPendingEvent(event);
+	}
+	else {
+		mGrid->SetFocus(); //typing will immediately start editing
+		mCurrentRow = mGrid->GetCursorRow(); //this is needed if you press ENTER, and then return later to press ENTER to create a cue point, as the cursor moves down
+	}
+}
+
+/// Sets the grid cursor to the row specified by the event ID - this has to be done this way because it doesn't like you doing it in a grid event handler
+void CuePointsDlg::OnSetGridRow(wxCommandEvent & event)
+{
+	mGrid->SetGridCursor(event.GetId(), 0);
+}
+
+/// Depending on the ID, sets a new locator colour (i.e. called from the pop-up colour menu), or, if enabled to do so, closes the dialogue, setting the selected locator accordingly (i.e. called with a shortcut key)
+/// @param event Contains the menu ID.
+void CuePointsDlg::OnMenu(wxCommandEvent & event)
+{
+	if (event.GetId() < wxID_HIGHEST + 1 + N_COLOURS) { //a colour menu selection
+		SetColour(mCurrentRow, event.GetId() - wxID_HIGHEST - 1);
+		//Move the grid cursor away from the right hand column as it can't be "edited" as such
+		wxCommandEvent event(wxEVT_SET_GRID_ROW, mCurrentRow);
+		AddPendingEvent(event);
+	}
+	else if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
+		if (wxID_HIGHEST + N_COLOURS + 1 == event.GetId()) { //function key pressed
+			//return a blank event
+			mDescription.Clear();
+			mColour = 0;
+		}
+		else {
+			int row = event.GetId() == wxID_HIGHEST + N_COLOURS + 2 ? 9 : event.GetId() - N_COLOURS - wxID_HIGHEST - 3;
+			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
+			mColour = mDescrColours[row];
+		}
+		EndModal(wxID_OK);
+	}
+	else { //editing
+		event.Skip();
+	}
+}
+
+/// Sets the selected locator values.
+void CuePointsDlg::OnOK(wxCommandEvent & event)
+{
+	//Get current row
+	mDescription = mGrid->GetCellValue(mCurrentRow, 0).Trim(false).Trim(true);
+	mColour = mDescrColours[mCurrentRow];
+	event.Skip();
+}
+
+/// Produces a pop-up colour menu if the correct column has been clicked.
+/// @param event Indicates the column of the grid which was clicked.
+void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
+{
+	mCurrentRow = event.GetRow(); //Note the row for ENTER being pressed in add cue mode, or if a colour is going to be set
+	if (mTimecodeDisplay->IsShown()) {
+		wxCommandEvent rowEvent(wxEVT_SET_GRID_ROW, mCurrentRow); //undo the "jump to the edited cell" from OnEditorHidden()
+		AddPendingEvent(rowEvent);
+		mOkButton->SetFocus(); //makes sure ENTER can still be pressed after clicking on a different event
+	}
+	if (1 == event.GetCol()) { //clicked in the colour column
+		wxMenu colourMenu(wxT("Choose colour"));
+		for (unsigned int i = 0; i < N_COLOURS; i++) {
+			colourMenu.Append(wxID_HIGHEST + 1 + i, wxString(colours[i].label, *wxConvCurrent));
+		}
+		PopupMenu(&colourMenu);
+	}
+	event.Skip();
+}
+
+/// Sets the selected event and closes the dialogue if in cue point setting mode
+void CuePointsDlg::OnLabelLeftClick(wxGridEvent & event)
+{
+	if (mTimecodeDisplay->IsShown() && mTextColour == mMessage->GetForegroundColour() && event.GetRow() > -1) { //make sure it isn't a click in a column heading
+		mDescription = mGrid->GetCellValue(event.GetRow(), 0).Trim(false).Trim(true);
+		mColour = mDescrColours[event.GetRow()];
+		EndModal(wxID_OK);
+	}
+}
+
+/// Sets text, text colour and background colour to correspond to an event colour index
+/// @param row The row to set
+/// @param colour The colour index to be used
+void CuePointsDlg::SetColour(const int row, const int colour)
+{
+	mGrid->SetCellValue(row, 1, wxString(colours[colour].label, *wxConvCurrent));
+	mGrid->SetCellBackgroundColour(row, 1, wxString(colours[colour].colour, *wxConvCurrent));
+	mGrid->SetCellTextColour(row, 1, wxString(colours[colour].labelColour, *wxConvCurrent));
+	mDescrColours[row] = colour;
+}
+
+/// Returns the currently selected locator's description
+const wxString CuePointsDlg::GetDescription()
+{
+	return mDescription;
+}
+
+/// Returns the currently selected locator's colour code
+const ProdAuto::LocatorColour::EnumType CuePointsDlg::GetColourCode()
+{
+	return colours[mColour].code;
+}
+
+/// Returns the currently selected locator's displayed colour
+const wxColour CuePointsDlg::GetColour()
+{
+	return wxColour(wxString(colours[mColour].colour, *wxConvCurrent));
+}
+
+/// Returns the currently selected locator's displayed label text colour
+const wxColour CuePointsDlg::GetLabelColour()
+{
+	return wxColour(wxString(colours[mColour].labelColour, *wxConvCurrent));
 }

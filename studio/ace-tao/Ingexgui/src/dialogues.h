@@ -28,7 +28,8 @@
 class SetRollsDlg : public wxDialog
 {
 	public:
-		SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration);
+		SetRollsDlg(wxWindow *, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, const ProdAuto::MxfDuration, wxXmlDocument &);
+		int ShowModal();
 		const ProdAuto::MxfDuration GetPreroll();
 		const ProdAuto::MxfDuration GetPostroll();
 	private:
@@ -40,6 +41,7 @@ class SetRollsDlg : public wxDialog
 		wxStaticBoxSizer * mPostrollBox;
 		ProdAuto::MxfDuration mMaxPreroll;
 		ProdAuto::MxfDuration mMaxPostroll;
+		wxXmlDocument & mSavedState;
 
 	enum
 	{
@@ -57,9 +59,11 @@ class wxGridEvent;
 class SetProjectDlg : public wxDialog
 {
 	public:
-		SetProjectDlg(wxWindow *, wxXmlDocument &, bool);
-		bool IsUpdated();
+		SetProjectDlg(wxWindow *, const wxSortedArrayString &, wxXmlDocument &);
+		int ShowModal();
 		const wxString GetSelectedProject();
+		const wxSortedArrayString & GetProjectNames();
+		static const wxString GetCurrentProjectName(const wxXmlDocument &);
 	private:
 		enum {
 			ADD = wxID_HIGHEST + 1,
@@ -78,8 +82,8 @@ class SetProjectDlg : public wxDialog
 		wxButton * mEditButton;
 		wxButton * mOKButton;
 		wxChoice * mProjectList;
-		bool mUpdated;
-		wxString mSelectedProject;
+		wxSortedArrayString mProjectNames; //needed because there is no sort style for a wxChoice
+		wxXmlDocument & mSavedState;
 	DECLARE_EVENT_TABLE()
 };
 
@@ -124,7 +128,6 @@ class SetTapeIdsDlg : public wxDialog
 		void OnFillInc(wxCommandEvent &);
 		void OnHelp(wxCommandEvent &);
 		void OnClear(wxCommandEvent &);
-		void OnChar(wxKeyEvent &);
 		bool ManipulateCells(const bool, const bool);
 		bool ManipulateCell(const int, const int, const bool, const bool, wxULongLong_t * = 0);
 		void FillCol(const bool, const bool);
@@ -215,6 +218,43 @@ class TestModeDlg : public wxDialog
 		wxButton * mCancelButton;
 		wxTimer * mTimer;
 		bool mRecording;
+	DECLARE_EVENT_TABLE()
+};
+
+
+class CuePointsDlg : public wxDialog
+{
+	public:
+		CuePointsDlg(wxWindow *, wxXmlDocument &);
+		int ShowModal(const wxString = wxT(""));
+		const wxString GetDescription();
+		const wxColour GetColour();
+		const wxColour GetLabelColour();
+		const ProdAuto::LocatorColour::EnumType GetColourCode();
+	private:
+		void OnEditorShown(wxGridEvent &);
+		void OnEditorHidden(wxGridEvent &);
+		void Load();
+		void OnMenu(wxCommandEvent &);
+		void OnOK(wxCommandEvent &);
+		void OnCellLeftClick(wxGridEvent &);
+		void OnSetGridRow(wxCommandEvent &);
+		void OnLabelLeftClick(wxGridEvent &);
+		void SetColour(const int, const int);
+		void Reset();
+
+		wxGrid * mGrid;
+		wxButton * mOkButton;
+		wxStaticText * mTimecodeDisplay;
+		wxStaticText * mMessage;
+
+		wxXmlNode * mCuePointsNode;
+		wxString mDescription;
+		wxColour mTextColour;
+		wxColour mBackgroundColour;
+		int mColour;
+		int mCurrentRow;
+		int mDescrColours[10];
 	DECLARE_EVENT_TABLE()
 };
 

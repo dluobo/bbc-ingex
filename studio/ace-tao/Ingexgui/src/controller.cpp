@@ -27,7 +27,7 @@ IMPLEMENT_DYNAMIC_CLASS(ControllerThreadEvent, wxEvent)
 
 BEGIN_EVENT_TABLE( Controller, wxEvtHandler )
 	EVT_CONTROLLER_THREAD(Controller::OnThreadEvent)
-	EVT_TIMER( -1, Controller::OnTimer )
+	EVT_TIMER( wxID_ANY, Controller::OnTimer )
 END_EVENT_TABLE()
 
 /// Starts the thread, and resolves and connects to a recorder.
@@ -36,14 +36,17 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPollRapidly(false), mPendingCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
 {
 	mCondition = new wxCondition(mMutex);
 	SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
 	wxString msg;
 	mWatchdogTimer = new wxTimer(this);
 	mMutex.Lock(); //to allow a test for the thread being ready, when it unlocks the mutex with Wait();
-	if (wxTHREAD_NO_ERROR != wxThread::Create()) {
+	if (!mCondition->IsOk()) {
+		msg = wxT("Could not create condition object for recorder.");
+	}
+	else if (wxTHREAD_NO_ERROR != wxThread::Create()) {
 		msg = wxT("Could not create thread for recorder.");
 	}
 	else if (wxTHREAD_NO_ERROR != wxThread::Run()) {
@@ -65,6 +68,12 @@ Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * hand
 	}
 }
 
+Controller::~Controller()
+{
+	wxDELETE(mWatchdogTimer); //may not exist
+	delete mCondition;
+}
+
 /// Returns status.
 /// @return True if OK.
 bool Controller::IsOK()
@@ -84,9 +93,9 @@ const ProdAuto::MxfDuration Controller::GetMaxPostroll()
 	return mMaxPostroll;
 }
 
-/// Signals to the thread to tell the recorder the tape IDs, or stores the command for later execution
-/// @param sourceNames The names of the video sources
-/// @param tapeIDs The Tape ID of each source, as identified in sourceNames
+/// Signals to the thread to tell the recorder the tape IDs, or stores the command for later execution.
+/// @param sourceNames The names of the video sources.
+/// @param tapeIDs The Tape ID of each source, as identified in sourceNames.
 void Controller::SetTapeIds(const CORBA::StringSeq & sourceNames, const CORBA::StringSeq & tapeIds)
 {
 	//Set up the parameters
@@ -95,22 +104,42 @@ void Controller::SetTapeIds(const CORBA::StringSeq & sourceNames, const CORBA::S
 	mTapeIds = tapeIds;
 	mMutex.Unlock();
 	if (mReconnecting) { //can't send a command now
-		Signal(RECONNECT); //try to get things moving immediately; SET_TAPE_IDs will always be sent after reconnection
+		Signal(RECONNECT); //try to get things moving immediately; SET_TAPE_IDs will always be signalled after reconnection
 	}
 	else {
 		Signal(SET_TAPE_IDS);
 	}
 }
 
+/// Signals to the thread to tell the recorder a project name, or stores the command for later execution.
+/// @param name The project name.
+void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
+{
+	mMutex.Lock();
+	mProjectNames = projectNames;
+	mMutex.Unlock();
+	if (mReconnecting) { //can't send a command now
+		if (NONE == mPendingCommand) { //nothing more important is happening - adding a project name is not a vital thing to do
+			mPendingCommand = ADD_PROJECT_NAMES; //will send the name upon reconnection
+			Signal(RECONNECT); //try to get things moving immediately
+		}
+	}
+	else {
+		Signal(ADD_PROJECT_NAMES);
+	}
+}
+
 /// Signals to the thread to tell the recorder to start recording, or stores the command for later execution.
 /// @param startTimecode The first frame to be recorded after preroll.
 /// @param preroll The preroll to be applied to the recording.
+/// @param project The project name to be applied to the recording.
 /// @param enableList True for each source that should record (in order of source index).
-void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & preroll, const CORBA::BooleanSeq & enableList)
+void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & preroll, const wxString & project, const CORBA::BooleanSeq & enableList)
 {
 	//Set up the parameters
 	mMutex.Lock();
 	mPreroll = preroll;
+	mProject = project;
 	mEnableList = enableList;
 	if (mReconnecting) { //can't send a command now
 		mPendingCommand = RECORD; //will act on this when we can
@@ -128,15 +157,15 @@ void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdA
 /// Signals to the thread to tell the recorder to stop recording, or stores the command for later execution.
 /// @param stopTimecode The first frame of the postroll period.
 /// @param postroll The postroll to be applied to the recording.
-/// @param project The project name to be applied to the recording.
 /// @param description The description to be applied to the recording.
-void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto::MxfDuration & postroll, const wxString & project, const wxString & description)
+/// @param locators Locator (timecode, description, colour) information for the recording.
+void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto::MxfDuration & postroll, const wxString & description, const ProdAuto::LocatorSeq & locators)
 {
 	//Set up the parameters
 	mMutex.Lock();
 	mPostroll = postroll;
-	mProject = project;
 	mDescription = description;
+	mLocators = locators; 
 	if (mReconnecting) { //can't send a command now
 		mPendingCommand = STOP; //will act on this when we can
 		mStopTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
@@ -150,26 +179,39 @@ void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto
 	}
 }
 
+/// Enables or disables continuous polling of the recorder at the rate normally reserved for problem situations
+void Controller::PollRapidly(bool pollRapidly)
+{
+	mPollRapidly = pollRapidly; //will cause timer always to be started with a short interval
+	if (mWatchdogTimer->IsRunning()) {
+		//Short circuit the timer so that status is requested immediately
+		mWatchdogTimer->Stop();
+		wxTimerEvent event(wxID_ANY);
+		AddPendingEvent(event);
+	}
+}
+
 /// @return True if this is a router recorder
 bool Controller::IsRouterRecorder()
 {
 	return mRouterRecorder;
 }
 
-/// If thread isn't running, deletes this controller immediately.
-/// Otherwise, signals to the thread to tell it to die, which will (at its leisure) send an event resulting in this controller deleting itself.
+/// If thread isn't running, immediately sends an event confirming this controller can be deleted.
+/// Otherwise, signals to the thread to tell it to die, which will (at its leisure) generate the above event and exit, and the event will be passed on once the thread has exited.
 /// This allows the controller to be deleted without waiting for a pending CORBA command.
 /// Once this function has been called, the controller should be considered unusable.
 void Controller::Destroy()
 {
+	wxDELETE(mWatchdogTimer); //stops it too!
 	if (IsAlive()) { //won't be if initialisation failed
 		Signal(DIE);
-		delete mWatchdogTimer; //don't want any stray events
-		mWatchdogTimer = 0; //to prevent it being started again
 	}
-	else {
-		delete mCondition;
-		delete this;
+	else { //write a suicide note now
+		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		event.SetName(mName);
+		event.SetCommand(DIE);
+		GetNextHandler()->AddPendingEvent(event);
 	}
 }
 
@@ -193,8 +235,8 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 	mReconnecting = COMM_FAILURE == event.GetResult();
 	if (DIE == event.GetCommand()) { //the thread is on its last legs
 		Wait(); //on the offchance the thread is still running
-		delete mCondition;
-		delete this;
+//std::cerr << "die notification" << std::endl;
+		GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 	}
 	else if (mWatchdogTimer) { //not waiting to die
 		if (CONNECT == event.GetCommand() && SUCCESS != event.GetResult()) { //failure to connect - fatal
@@ -245,7 +287,7 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 //std::cerr << "ordinary notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event);
 			//start the timer
-			if (WATCHDOG_TIMER_SHORT_INTERVAL == mWatchdogTimer->GetInterval() && RUNNING == event.GetTimecodeState()) {
+			if (WATCHDOG_TIMER_SHORT_INTERVAL == mWatchdogTimer->GetInterval() && RUNNING == event.GetTimecodeState() && !mPollRapidly) {
 				//everything is fine so wake up after a while
 				mWatchdogTimer->Start(WATCHDOG_TIMER_LONG_INTERVAL, wxTIMER_ONE_SHOT);
 			}
@@ -300,7 +342,7 @@ wxThread::ExitCode Controller::Entry()
 		//do the work...
 		ProdAuto::Recorder::ReturnCode rc = ProdAuto::Recorder::SUCCESS;
 		wxString msg;
-		CORBA::StringSeq_var files; //deletes itself
+		CORBA::StringSeq_var strings; //deletes itself
 		ProdAuto::MxfTimecode timecode; //structure so deletes itself
 		//send a recorder command, if any
 		for (int i = 0; i < 2; i++) { //always good to try things twice with CORBA
@@ -323,6 +365,7 @@ wxThread::ExitCode Controller::Entry()
 							maxPostroll = mRecorder->MaxPostRoll();
 							event.SetTrackStatusList(mRecorder->TracksStatus());
 							routerRecorder = wxString(mRecorder->RecordingFormat(), *wxConvCurrent).MakeUpper().Matches(wxT("*ROUTER*"));
+							strings = mRecorder->ProjectNames();
 						}
 						catch (const CORBA::Exception & e) {
 //std::cerr << "connect/reconnect exception" << std::endl;
@@ -439,15 +482,29 @@ wxThread::ExitCode Controller::Entry()
 					rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by SetTapeNames()
 					break;
 				}
+				case ADD_PROJECT_NAMES: {
+					mMutex.Lock();
+					CORBA::StringSeq projectNames = mProjectNames;
+					mMutex.Unlock();
+					try {
+						mRecorder->AddProjectNames(projectNames);
+					}
+					catch (const CORBA::Exception & e) {
+//std::cerr << "AddProjectNames exception" << std::endl;
+						event.SetResult(COMM_FAILURE);
+					}
+					rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by AddProject()
+					break;
+				}
 				case RECORD: {
 					mMutex.Lock();
 					timecode = mStartTimecode;
 					ProdAuto::MxfDuration preroll = mPreroll;
 					CORBA::BooleanSeq rec_enable = mEnableList;
-					CORBA::StringSeq tapeIds = mTapeIds;
+					char * project = CORBA::string_dup(mProject.mb_str(*wxConvCurrent));
 					mMutex.Unlock();
 					try {
-						rc = mRecorder->Start(timecode, preroll, rec_enable, false);
+						rc = mRecorder->Start(timecode, preroll, rec_enable, project, false);
 					}
 					catch (const CORBA::Exception & e) {
 //std::cerr << "start exception" << std::endl;
@@ -459,11 +516,11 @@ wxThread::ExitCode Controller::Entry()
 					mMutex.Lock();
 					timecode = mStopTimecode;
 					ProdAuto::MxfDuration postroll = mPostroll;
-					char * project = CORBA::string_dup(mProject.mb_str(*wxConvCurrent));
 					char * description = CORBA::string_dup(mDescription.mb_str(*wxConvCurrent));
+					ProdAuto::LocatorSeq locators = mLocators; 
 					mMutex.Unlock();
 					try {
-						rc = mRecorder->Stop(timecode, postroll, project, description, files.out());
+						rc = mRecorder->Stop(timecode, postroll, description, locators, strings.out());
 					}
 					catch (const CORBA::Exception & e) {
 //std::cerr << "stop exception" << std::endl;
@@ -477,7 +534,7 @@ wxThread::ExitCode Controller::Entry()
 			}
 			if (COMM_FAILURE != event.GetResult()) {
 				if (ProdAuto::Recorder::SUCCESS == rc) {
-					event.SetFileList(files); //only relevant for STOP
+					event.SetStrings(strings); //only relevant for STOP (list of files) and CONNECT (list of project names)
 					event.SetTimecode(timecode); //only relevant for START and STOP
 				}
 				else {

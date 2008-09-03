@@ -47,7 +47,7 @@ class Timepos : public wxEvtHandler
 		const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
 		const wxString GetPosition();
 		const wxString GetStartPosition();
-		const wxString FormatTimecode(const ProdAuto::MxfTimecode tc);
+		static const wxString FormatTimecode(const ProdAuto::MxfTimecode tc);
 		unsigned long GetFrameCount();
 	private:
 		void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));

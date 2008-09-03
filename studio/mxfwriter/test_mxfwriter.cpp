@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.3 2008/05/07 17:16:11 philipn Exp $
+ * $Id: test_mxfwriter.cpp,v 1.4 2008/09/03 15:23:32 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -129,7 +129,7 @@ void* start_record_routine(void* data)
         // create writer for input (mask all except track 1,2,3)
         Rational imageAspectRatio = {16, 9};
         auto_ptr<MXFWriter> writer(new MXFWriter(
-            recordData->recorder->getConfig(), recordData->inputIndex,
+            recordData->recorder->getConfig()->getInputConfig(recordData->inputIndex),
             resolutionId, imageAspectRatio,
             16, 0xffffffff, recordData->startPosition, recordData->creatingFilePath,
             recordData->destinationFilePath, recordData->failuresFilePath,
@@ -253,6 +253,7 @@ static void usage(const char* prog)
     fprintf(stderr, "%s [options] <filename prefix>\n", prog);
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    -h | --help          Show this usage message and exit\n");
     fprintf(stderr, "    --dv50 <filename>    Essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --old-session\n");
     fprintf(stderr, "    -r <recorder name>   Recorder name to use to connect to database (default '%s')\n", g_defaultRecorderName);
@@ -280,6 +281,16 @@ int main(int argc, const char* argv[])
         return 1;
     }
     
+    if (argc == 2)
+    {
+        if (strcmp(argv[cmdlnIndex], "--help") == 0 ||
+            strcmp(argv[cmdlnIndex], "-h") == 0)
+        {
+            usage(argv[0]);
+            return 0;
+        }
+    }        
+    
     // set logging
     Logging::initialise(LOG_LEVEL_DEBUG);
     
@@ -288,7 +299,13 @@ int main(int argc, const char* argv[])
     
     while (cmdlnIndex + 1 < argc)
     {
-        if (strcmp(argv[cmdlnIndex], "--dv50") == 0)
+        if (strcmp(argv[cmdlnIndex], "--help") == 0 ||
+            strcmp(argv[cmdlnIndex], "-h") == 0)
+        {
+            usage(argv[0]);
+            return 0;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--dv50") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
             {
@@ -494,9 +511,15 @@ int main(int argc, const char* argv[])
                 recordData[i].recorder = recorder.get();
                 recordData[i].inputIndex = 1 + (i % NUM_RECORDER_INPUTS);
                 recordData[i].userComments.push_back(UserComment(AVID_UC_COMMENTS_NAME, 
-                    "a test file"));
+                    "a test file", STATIC_COMMENT_POSITION, 0));
                 recordData[i].userComments.push_back(UserComment(AVID_UC_DESCRIPTION_NAME, 
-                    "an mxfwriter test file produced by test_mxfwriter"));
+                    "an mxfwriter test file produced by test_mxfwriter", STATIC_COMMENT_POSITION, 0));
+                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                    "event at position 0", 0, 1));
+                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                    "event at position 1", 1, (i % 8) + 1));
+                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                    "event at position 10000", 10000, 3));
                 recordData[i].projectName = projectName;
                 
                 if (dv50Filename != NULL)

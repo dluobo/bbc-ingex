@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.3 2008/02/06 16:59:12 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.4 2008/09/03 15:30:29 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -35,10 +35,13 @@
 
 extern "C"
 {
-// TODO: fix compile warning
-// /usr/local/include/ffmpeg/avcodec.h:3048:5: warning: "EINVAL" is not defined
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
+#else
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
 
 #include <mxf/mxf.h>
 #include <mxf/mxf_avid.h>

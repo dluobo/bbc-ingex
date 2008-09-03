@@ -14,10 +14,8 @@ noinst_HEADERS =
 bin_PROGRAMS = ingexgui
 
 # the application source, library search path, and link libraries
-ingexgui_SOURCES = IngexPlayer.h \
-	LocalIngexPlayer.h \
-	activity.xpm blank.xpm \
-	comms.cpp controller.cpp dialogues.cpp dragbuttonlist.cpp \
+ingexgui_SOURCES = IngexPlayer.h LocalIngexPlayer.h activity.xpm blank.xpm \
+	comms.cpp concerned.xpm controller.cpp dialogues.cpp dragbuttonlist.cpp \
 	exclamation.xpm ffx16.xpm ffx2.xpm ffx32.xpm ffx4.xpm ffx64.xpm ffx8.xpm frx16.xpm \
 	frx2.xpm frx32.xpm frx4.xpm frx64.xpm frx8.xpm happy.xpm help.cpp ingexgui.cpp \
 	ingexgui.xpm keyboard_input.h keyboard_input_connect.h noactivity.xpm \
