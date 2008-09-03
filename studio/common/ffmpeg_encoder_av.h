@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.h,v 1.1 2007/09/11 14:08:36 stuart_hc Exp $
+ * $Id: ffmpeg_encoder_av.h,v 1.2 2008/09/03 14:22:47 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -34,7 +34,8 @@ extern "C" {
 typedef void ffmpeg_encoder_av_t;
 typedef enum {
     FF_ENCODER_RESOLUTION_DVD,
-    FF_ENCODER_RESOLUTION_MOV
+    FF_ENCODER_RESOLUTION_MPEG4_MOV,
+    FF_ENCODER_RESOLUTION_DV25_MOV
 } ffmpeg_encoder_av_resolution_t;
 
 /*
@@ -44,7 +45,7 @@ typedef enum {
 * Return           : Pointer to AVFormatContext object if successful
 *                    NULL if a problem occurred
 */
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res);
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int64_t start_tc);
 
 /*
 * dvd_encoder_encode : Encodes the input video and audio frames to the format

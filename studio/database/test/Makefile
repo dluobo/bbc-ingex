@@ -15,12 +15,11 @@ DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 all: test
 
 
-.PHONY: libprodautodb.a
-libprodautodb.a:
+$(DATABASELIB_DIR)/libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) $@
 
 
-test: libprodautodb.a $(OBJECTS)
+test: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
 	$(CC) $(OBJECTS) -L$(DATABASELIB_DIR) -lprodautodb -lodbc++ -luuid -lpthread -o $@
 
 	

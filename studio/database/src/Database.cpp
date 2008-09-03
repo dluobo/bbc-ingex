@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.2 2008/02/06 16:59:06 john_f Exp $
+ * $Id: Database.cpp,v 1.3 2008/09/03 14:27:23 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -2889,7 +2889,9 @@ void Database::deleteProjectName(ProjectName* projectName, Transaction* transact
     SELECT \
         uct_identifier, \
         uct_name, \
-        uct_value \
+        uct_value, \
+        uct_position, \
+        uct_colour \
     FROM UserComment \
     WHERE \
         uct_package_id = ? \
@@ -3230,6 +3232,16 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         userComment.wasLoaded(result3->getInt(1));
         userComment.name = result3->getString(2);
         userComment.value = result3->getString(3);
+        userComment.position = result3->getLong(4);
+        if (result3->wasNull())
+        {
+            userComment.position = STATIC_COMMENT_POSITION;
+        }
+        userComment.colour = result3->getInt(5);
+        if (result3->wasNull())
+        {
+            userComment.colour = 0;
+        }
         newPackage->_userComments.push_back(userComment);
     }
     
@@ -3274,10 +3286,12 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         uct_identifier, \
         uct_package_id, \
         uct_name, \
-        uct_value \
+        uct_value, \
+        uct_position, \
+        uct_colour \
     ) \
     VALUES \
-    (?, ?, ?, ?) \
+    (?, ?, ?, ?, ?, ?) \
 "
 
 #define SQL_UPDATE_PACKAGE_USER_COMMENT \
@@ -3285,7 +3299,9 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     UPDATE UserComment \
     SET uct_package_id = ?, \
         uct_name = ?, \
-        uct_value = ? \
+        uct_value = ?, \
+        uct_position = ?, \
+        uct_colour = ? \
     WHERE \
         uct_identifier = ? \
 "
@@ -3676,6 +3692,22 @@ void Database::savePackage(Package* package, Transaction* transaction)
             prepStatement->setInt(paramIndex++, nextPackageDatabaseID);
             prepStatement->setString(paramIndex++, userComment.name);
             prepStatement->setString(paramIndex++, userComment.value);
+            if (userComment.position < 0)
+            {
+                prepStatement->setNull(paramIndex++, SQL_INTEGER);
+            }
+            else
+            {
+                prepStatement->setLong(paramIndex++, userComment.position);
+            }
+            if (userComment.colour <= 0)
+            {
+                prepStatement->setNull(paramIndex++, SQL_INTEGER);
+            }
+            else
+            {
+                prepStatement->setInt(paramIndex++, userComment.colour);
+            }
             
             // update
             if (userComment.isPersistent())
@@ -4009,4 +4041,58 @@ void Database::checkVersion()
     }
     END_QUERY_BLOCK("Failed to read database version")
 }
+
+#define SQL_GET_ALL_RESOLUTION_NAMES \
+" \
+    SELECT \
+        vrn_identifier, \
+        vrn_name \
+    FROM VideoResolution \
+"
+
+void Database::loadResolutionNames(std::map<int, std::string> & resolution_names)
+{
+    auto_ptr<Connection> connection(getConnection());
+    resolution_names.clear();
+
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::Statement> statement(connection->createStatement());
+        
+        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_PROJECT_NAMES);
+        while (result->next())
+        {
+            resolution_names[result->getInt(1)] = result->getString(2);
+        }
+    }
+    END_QUERY_BLOCK("Failed to load all project names")
+}
+
+#define SQL_GET_ALL_FILE_FORMAT_NAMES \
+" \
+    SELECT \
+        fft_identifier, \
+        fft_name \
+    FROM FileFormat \
+"
+
+void Database::loadFileFormatNames(std::map<int, std::string> & file_format_names)
+{
+    auto_ptr<Connection> connection(getConnection());
+    file_format_names.clear();
+
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::Statement> statement(connection->createStatement());
+        
+        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_FILE_FORMAT_NAMES);
+        while (result->next())
+        {
+            file_format_names[result->getInt(1)] = result->getString(2);
+        }
+    }
+    END_QUERY_BLOCK("Failed to load all project names")
+}
+
+
 

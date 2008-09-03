@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.2 2008/02/06 16:59:02 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.3 2008/09/03 14:22:46 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -24,8 +24,14 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
+#else
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
 
 #include "ffmpeg_encoder.h"
 
@@ -327,6 +333,18 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
 
 
     avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
+
+    //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
+    // Actually the active picture is less than 720 wide, the correct numbers appear below
+#if 0
+    // 4:3
+    encoder->codec_context->sample_aspect_ratio.num = 59;
+    encoder->codec_context->sample_aspect_ratio.den = 54;
+#else
+    // 16:9
+    encoder->codec_context->sample_aspect_ratio.num = 118;
+    encoder->codec_context->sample_aspect_ratio.den = 81;
+#endif
 
     /* prepare codec */
     if (avcodec_open(encoder->codec_context, encoder->codec) < 0)

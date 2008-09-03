@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.3 2008/05/07 17:13:27 philipn Exp $
+ * $Id: Package.h,v 1.4 2008/09/03 14:27:23 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -39,7 +39,8 @@
 #define AVID_UC_DESCRIPTION_NAME    "Descript"
 #define AVID_UC_SHOOT_DATE_NAME     "Shoot Date"
 
-
+#define STATIC_COMMENT_POSITION     (-1)
+#define POSITIONED_COMMENT_NAME     "Comment" 
 
 
 namespace prodauto
@@ -73,12 +74,14 @@ class UserComment : public DatabaseObject
 {
 public:
     UserComment();
-    UserComment(std::string name, std::string value);
+    UserComment(std::string name, std::string value, int64_t position, int colour);
     UserComment(const UserComment& tv);
     virtual ~UserComment();
     
     std::string name;
     std::string value;
+    int64_t position;
+    int colour;
 };
 
 class Package : public DatabaseObject
@@ -96,7 +99,7 @@ public:
     
     virtual PackageType getType() = 0;
 
-    void addUserComment(std::string, std::string value);
+    void addUserComment(std::string, std::string value, int64_t position, int colour);
     std::vector<UserComment> getUserComments(std::string name); 
     std::vector<UserComment> getUserComments();
     void clearUserComments();

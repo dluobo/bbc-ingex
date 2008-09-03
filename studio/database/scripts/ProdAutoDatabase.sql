@@ -227,6 +227,16 @@ CREATE TABLE Package
 ) WITHOUT OIDS;
 
 
+CREATE SEQUENCE ucc_id_seq;
+CREATE TABLE UserCommentColour
+(
+    ucc_identifier INTEGER DEFAULT nextval('ucc_id_seq') NOT NULL,
+    ucc_name VARCHAR(256) NOT NULL,
+    CONSTRAINT ucc_key UNIQUE (ucc_name),
+    CONSTRAINT ucc_pkey PRIMARY KEY (ucc_identifier)
+) WITHOUT OIDS;
+
+
 CREATE SEQUENCE uct_id_seq;
 CREATE TABLE UserComment
 (
@@ -234,8 +244,11 @@ CREATE TABLE UserComment
     uct_package_id INTEGER NOT NULL,
     uct_name VARCHAR(256) NOT NULL,
     uct_value VARCHAR(256) NOT NULL,
+    uct_position BIGINT,
+    uct_colour INTEGER,
     CONSTRAINT uct_package_fkey FOREIGN KEY (uct_package_id) REFERENCES Package (pkg_identifier)
         ON DELETE CASCADE,
+    CONSTRAINT uct_colour_fkey FOREIGN KEY (uct_colour) REFERENCES UserCommentColour (ucc_identifier),
     CONSTRAINT uct_pkey PRIMARY KEY (uct_identifier)
 ) WITHOUT OIDS;
 
@@ -694,6 +707,20 @@ CREATE TABLE Transcode
 ) WITHOUT OIDS;
 
 
+-- NODES FOR INGEXWEB INTERFACE
+
+CREATE SEQUENCE node_id_seq;
+CREATE TABLE Nodes
+(
+    node_id INTEGER NOT NULL,
+    node_name VARCHAR(256) NOT NULL,
+	node_ip VARCHAR(256) NOT NULL,
+	node_type VARCHAR(256) NOT NULL,
+	node_volumes VARCHAR(512),
+    CONSTRAINT node_key UNIQUE (node_name),
+    CONSTRAINT node_pkey PRIMARY KEY (node_id)
+) WITHOUT OIDS;
+
 
 ------------------------------------
 -- VIEWS
@@ -857,8 +884,9 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (14, 'DNX-120p');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (15, 'DNX-185p');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (16, 'DNX-120i');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (17, 'DNX-185i');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (18, 'H264-DMI');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (20, 'DVD');
-INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MOV');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MPEG4');
 
 
 INSERT INTO RecorderParameterType (rpt_identifier, rpt_name) VALUES (1, 'Any');
@@ -881,6 +909,15 @@ INSERT INTO TranscodeStatus (tcs_identifier, tcs_name) VALUES(5, 'NotForTranscod
 INSERT INTO TranscodeStatus (tcs_identifier, tcs_name) VALUES(6, 'NotSupported');
 
 
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (1, 'White');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (2, 'Red');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (3, 'Yellow');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (4, 'Green');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (5, 'Cyan');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (6, 'Blue');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (7, 'Magenta');
+INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (8, 'Black');
+
 
 
 -- extensible enumerations
@@ -890,6 +927,7 @@ SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM RecordingLocation;
 
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (1, 'Unspecified');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (2, 'MXF');
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (3, 'MOV');
 SELECT setval('fft_id_seq', max(fft_identifier)) FROM FileFormat;
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.3 2008/05/07 17:13:26 philipn Exp $
+ * $Id: Package.cpp,v 1.4 2008/09/03 14:27:23 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -77,15 +77,16 @@ bool ProjectName::operator<(const ProjectName& pn) const
 
 
 UserComment::UserComment()
-: DatabaseObject()
+: DatabaseObject(), position(-1), colour(0)
 {}
 
-UserComment::UserComment(string n, string v)
-: DatabaseObject(), name(n), value(v)
+UserComment::UserComment(string n, string v, int64_t p, int c)
+: DatabaseObject(), name(n), value(v), position(p), colour(c)
 {}
 
 UserComment::UserComment(const UserComment& userComment)
-: DatabaseObject(userComment), name(userComment.name), value(userComment.value)
+: DatabaseObject(userComment), name(userComment.name), value(userComment.value), position(userComment.position),
+colour(userComment.colour)
 {}
 
 UserComment::~UserComment()
@@ -140,7 +141,7 @@ Track* Package::getTrack(uint32_t id)
     return 0;
 }
     
-void Package::addUserComment(string name, string value)
+void Package::addUserComment(string name, string value, int64_t position, int colour)
 {
     vector<UserComment>::iterator iter;
     for (iter = _userComments.begin(); iter != _userComments.end(); iter++)
@@ -152,7 +153,7 @@ void Package::addUserComment(string name, string value)
         }
     }
     
-    _userComments.push_back(UserComment(name, value));
+    _userComments.push_back(UserComment(name, value, position, colour));
 }
 
 vector<UserComment> Package::getUserComments(string name)

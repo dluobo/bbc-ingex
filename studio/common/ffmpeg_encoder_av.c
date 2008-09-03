@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.1 2007/09/11 14:08:36 stuart_hc Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.2 2008/09/03 14:22:47 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -22,10 +22,20 @@
  * 02110-1301, USA.
  */
 
-#include <ffmpeg/avformat.h>
-#include <ffmpeg/avcodec.h>
+/*
+This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
+*/
+
 #include <string.h>
 #include <stdlib.h>
+
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
+#include <ffmpeg/avcodec.h>
+#include <ffmpeg/avformat.h>
+#else
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#endif
 
 #include "ffmpeg_encoder_av.h"
 
@@ -36,6 +46,7 @@ typedef struct
 {
     AVFormatContext * oc; ///< output format context
     AVStream * audio_st; ///< audio stream
+    int audio_enc_samples_per_frame;
     int16_t * audio_inbuf;
     int audio_inbuf_size;
     int audio_inbuf_offset;
@@ -45,6 +56,7 @@ typedef struct
     AVFrame * inputFrame;
     uint8_t * video_outbuf;
     int video_outbuf_size;
+    int64_t video_pts;
 } internal_ffmpeg_encoder_t;
 
 
@@ -54,16 +66,15 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
-    /* We use the default codec for DVD format (mpeg2video) */
-    const int codec_id = enc->oc->oformat->video_codec;
+    /* mpeg2video is the default codec for DVD format */
+    codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
+    codec_context->codec_type = CODEC_TYPE_VIDEO;
 
     const int dvd_kbit_rate = 5000;
 
     enc->video_st->r_frame_rate.num = 25;
     enc->video_st->r_frame_rate.den = 1;
 
-    codec_context->codec_id = codec_id;
-    codec_context->codec_type = CODEC_TYPE_VIDEO;
 
     /* put dvd parameters */
     codec_context->bit_rate = dvd_kbit_rate * 1000;
@@ -143,13 +154,13 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     return 0;
 }
 
-/* initialise video stream for MOV encoding */
-static int init_video_mov(internal_ffmpeg_encoder_t * enc)
+/* initialise video stream for MPEG-4 encoding */
+static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
-    /* We use the default codec for MOV format (mpeg4) */
-    const int codec_id = enc->oc->oformat->video_codec;
+    /* mpeg4 is the default codec for MOV format */
+    const int codec_id = CODEC_ID_MPEG4;
 
     /* bit rate */
     const int kbit_rate = 800;
@@ -222,6 +233,91 @@ static int init_video_mov(internal_ffmpeg_encoder_t * enc)
     return 0;
 }
 
+/* initialise video stream for DV25 encoding */
+static int init_video_dv25(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
+{
+    AVCodecContext * codec_context = enc->video_st->codec;
+
+    enc->video_st->r_frame_rate.num = 25;
+    enc->video_st->r_frame_rate.den = 1;
+
+    codec_context->codec_id = CODEC_ID_DVVIDEO;
+    codec_context->codec_type = CODEC_TYPE_VIDEO;
+    codec_context->pix_fmt = PIX_FMT_YUV420P;
+    const int encoded_frame_size = 144000;
+
+    /* resolution must be a multiple of two */
+    codec_context->width = 720;  
+    codec_context->height = 576;
+#if 0
+    // 4:3
+    codec_context->sample_aspect_ratio.num = 59;
+    codec_context->sample_aspect_ratio.den = 54;
+#elif 0
+    // 16:9
+    codec_context->sample_aspect_ratio.num = 118;
+    codec_context->sample_aspect_ratio.den = 81;
+#else
+    // bodge for FCP
+    codec_context->sample_aspect_ratio.num = 1;
+    codec_context->sample_aspect_ratio.den = 1;
+#endif
+
+    /* time base: this is the fundamental unit of time (in seconds) in terms
+       of which frame timestamps are represented. for fixed-fps content,
+       timebase should be 1/framerate and timestamp increments should be
+       identically 1. */
+    codec_context->time_base.num = 1;
+    codec_context->time_base.den = 25;
+
+    /* Setting this gives us a timecode track in MOV format */
+    codec_context->timecode_frame_start = start_tc;
+
+
+    // some formats want stream headers to be seperate
+    if(!strcmp(enc->oc->oformat->name, "mp4")
+        || !strcmp(enc->oc->oformat->name, "mov")
+        || !strcmp(enc->oc->oformat->name, "3gp"))
+    {
+        codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+    /* find the video encoder */
+    AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
+    if (!codec)
+    {
+        fprintf(stderr, "video codec id=%d not found\n",
+            codec_context->codec_id);
+        return -1;
+    }
+
+    /* open the codec */
+    if (avcodec_open(codec_context, codec) < 0)
+    {
+        fprintf(stderr, "could not open video codec\n");
+        return -1;
+    }
+
+    /* allocate input video frame */
+    enc->inputFrame = avcodec_alloc_frame();
+    if (!enc->inputFrame)
+    {
+        fprintf(stderr, "Could not allocate input frame\n");
+        return 0;
+    }
+    enc->inputFrame->top_field_first = 1;
+
+    /* allocate output buffer */
+    enc->video_outbuf = NULL;
+    if (!(enc->oc->oformat->flags & AVFMT_RAWPICTURE))
+    {
+        enc->video_outbuf_size = encoded_frame_size;
+        enc->video_outbuf = malloc(enc->video_outbuf_size);
+    }
+
+    return 0;
+}
+
 static void close_video(internal_ffmpeg_encoder_t * enc)
 {
     AVStream * st = enc->video_st;
@@ -232,15 +328,53 @@ static void close_video(internal_ffmpeg_encoder_t * enc)
     av_free(enc->video_outbuf);
 }
 
+/* initialise audio stream for PCM encoding */
+static int init_audio_pcm(internal_ffmpeg_encoder_t * enc)
+{
+    AVCodecContext * codec_context = enc->audio_st->codec;
+
+    /* 16-bit signed big-endian */
+    codec_context->codec_id = CODEC_ID_PCM_S16BE;
+    codec_context->codec_type = CODEC_TYPE_AUDIO;
+
+    /* find the audio encoder */
+    AVCodec * codec = avcodec_find_encoder(codec_context->codec_id);
+    if (!codec)
+    {
+        fprintf(stderr, "audio codec id=%d not found\n",
+            codec_context->codec_id);
+        return -1;
+    }
+
+    /* coding parameters */
+    codec_context->sample_rate = 48000;
+    codec_context->channels = 2;
+
+    /* open it */
+    if (avcodec_open(codec_context, codec) < 0)
+    {
+        fprintf(stderr, "could not open audio codec\n");
+        return -1;
+    }
+
+    /* input and output buffers */
+    enc->audio_enc_samples_per_frame = 1920;
+    enc->audio_inbuf_size = codec_context->channels * enc->audio_enc_samples_per_frame * sizeof(int16_t);
+    enc->audio_inbuf = malloc(enc->audio_inbuf_size);
+
+    enc->audio_outbuf_size =  enc->audio_inbuf_size;
+    enc->audio_outbuf = malloc(enc->audio_outbuf_size);
+
+    return 0;
+}
+
 /* initialise audio stream for DVD encoding */
 static int init_audio_dvd(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->audio_st->codec;
 
-    /* We use the default codec for DVD format (mp2) */
-    const int codec_id = enc->oc->oformat->audio_codec;
-
-    codec_context->codec_id = codec_id;
+    /* mp2 is the default audio codec for DVD format */
+    codec_context->codec_id = CODEC_ID_MP2;
     codec_context->codec_type = CODEC_TYPE_AUDIO;
 
     /* find the audio encoder */
@@ -265,6 +399,8 @@ static int init_audio_dvd(internal_ffmpeg_encoder_t * enc)
     }
 
     /* input and output buffers */
+    enc->audio_enc_samples_per_frame = MPA_FRAME_SIZE;
+
     enc->audio_inbuf_size = 20000;
     enc->audio_inbuf = malloc(enc->audio_inbuf_size);
 
@@ -308,6 +444,8 @@ static int init_audio_mov(internal_ffmpeg_encoder_t * enc)
     }
 
     /* input and output buffers */
+    enc->audio_enc_samples_per_frame = MPA_FRAME_SIZE;
+
     enc->audio_inbuf_size = 20000;
     enc->audio_inbuf = malloc(enc->audio_inbuf_size);
 
@@ -377,7 +515,14 @@ static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
         AVPacket pkt;
         av_init_packet(&pkt);
             
-        pkt.pts = av_rescale_q(c->coded_frame->pts, c->time_base, st->time_base);
+        if (c->coded_frame->pts != AV_NOPTS_VALUE)
+        {
+            pkt.pts = av_rescale_q(c->coded_frame->pts, c->time_base, st->time_base);
+        }
+        else
+        {
+            pkt.pts = av_rescale_q(enc->video_pts++, c->time_base, st->time_base);
+        }
         if (c->coded_frame->key_frame)
         {
             pkt.flags |= PKT_FLAG_KEY;
@@ -435,22 +580,22 @@ static int write_audio_frame(internal_ffmpeg_encoder_t *enc, int16_t *p_audio)
 
 
 
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res)
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int64_t start_tc)
 {
     internal_ffmpeg_encoder_t * enc;
     AVOutputFormat * fmt;
     const char * fmt_name = 0;
-    const char * extn = 0;
 
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DVD:
         fmt_name = "dvd";
-        extn = "mpg";
         break;
-    case FF_ENCODER_RESOLUTION_MOV:
+    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
         fmt_name = "mov";
-        extn = "mov";
+        break;
+    case FF_ENCODER_RESOLUTION_DV25_MOV:
+        fmt_name = "mov";
         break;
     default:
         break;
@@ -492,7 +637,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     enc->oc->oformat = fmt;
 
     /* Set output filename */
-    snprintf (enc->oc->filename, sizeof(enc->oc->filename), "%s.%s", filename, extn);
+    snprintf (enc->oc->filename, sizeof(enc->oc->filename), "%s", filename);
 
     /* Set parameters */
     switch (res)
@@ -500,6 +645,8 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     case FF_ENCODER_RESOLUTION_DVD:
         enc->oc->packet_size = 2048;
         enc->oc->mux_rate = 10080000;
+        enc->oc->preload = (int) (0.5 * AV_TIME_BASE); /* 500 ms */
+        enc->oc->max_delay = (int) (0.7 * AV_TIME_BASE); /* 700 ms */
         break;
     default:
         break;
@@ -530,9 +677,13 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         init_video_dvd(enc);
         init_audio_dvd(enc);
         break;
-    case FF_ENCODER_RESOLUTION_MOV:
-        init_video_mov(enc);
+    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+        init_video_mpeg4(enc);
         init_audio_mov(enc);
+        break;
+    case FF_ENCODER_RESOLUTION_DV25_MOV:
+        init_video_dv25(enc, start_tc);
+        init_audio_pcm(enc);
         break;
     default:
         break;
@@ -587,21 +738,21 @@ extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t * in_enc, uint8_t * p_v
     if (p_audio)
     {
         /*
-        Audio comes in in video frames (1920 samples) but is encoded
+        Audio comes in in video frames (1920 samples) but may be encoded
         as MPEG frames (1152 samples) so we need to buffer.
         NB. audio_inbuf_offset is in terms of 16-bit samples, hence the
         rather confusing pointer arithmetic.
         */
         memcpy (enc->audio_inbuf + enc->audio_inbuf_offset, p_audio, 1920*2*2);
         enc->audio_inbuf_offset += (1920*2);
-        while (enc->audio_inbuf_offset >= (MPA_FRAME_SIZE*4))
+        while (enc->audio_inbuf_offset >= (enc->audio_enc_samples_per_frame * 2))
         {
             if (write_audio_frame (enc, enc->audio_inbuf) == -1)
             {
                 return -1;
             }
-            enc->audio_inbuf_offset -= (MPA_FRAME_SIZE*2);
-            memmove (enc->audio_inbuf, enc->audio_inbuf+(MPA_FRAME_SIZE*2), enc->audio_inbuf_offset*2);
+            enc->audio_inbuf_offset -= (enc->audio_enc_samples_per_frame * 2);
+            memmove (enc->audio_inbuf, enc->audio_inbuf+(enc->audio_enc_samples_per_frame * 2), enc->audio_inbuf_offset*2);
         }
     }
     return 0;
@@ -632,8 +783,13 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc)
     if (!(enc->oc->oformat->flags & AVFMT_NOFILE))
     {
         /* close the output file */
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
         url_fclose(&enc->oc->pb);
+#else
+        url_fclose(enc->oc->pb);
+#endif
     }
     cleanup (enc);
     return 0;
 }
+

@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.2 2008/02/06 16:59:06 john_f Exp $
+ * $Id: Database.h,v 1.3 2008/09/03 14:27:23 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -175,7 +175,9 @@ public:
     // where material package has user comment name/value
     void loadMaterial(std::string ucName, std::string ucValue, MaterialPackageSet* topPackages, PackageSet* packages);
     
-    
+    // enumerations
+    void loadResolutionNames(std::map<int, std::string> & resolution_names);
+    void loadFileFormatNames(std::map<int, std::string> & file_format_names);
     
 protected:
     Database(std::string dsn, std::string username, std::string password,

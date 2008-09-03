@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.2 2008/02/06 16:59:09 john_f Exp $
+ * $Id: test.cpp,v 1.3 2008/09/03 14:27:24 john_f Exp $
  *
  * Tests the database library
  *
@@ -705,10 +705,10 @@ static SourcePackage* create_source_package(UMID uid, Timestamp now,
     sourceClip->length = 898;
     sourceClip->position = 0;
     
-    sourcePackage->addUserComment("testname1", "testvalue1");
-    sourcePackage->addUserComment("testname1", "testvalue2");
-    sourcePackage->addUserComment("testname2", "testvalue1");
-    sourcePackage->addUserComment("testname3", "testvalue3");
+    sourcePackage->addUserComment("testname1", "testvalue1", 0, 1);
+    sourcePackage->addUserComment("testname1", "testvalue2", STATIC_COMMENT_POSITION, 0);
+    sourcePackage->addUserComment("testname2", "testvalue1", 100, 2);
+    sourcePackage->addUserComment("testname3", "testvalue3", 200, 3);
     
     database->savePackage(sourcePackage.get());
     return sourcePackage.release();
@@ -741,7 +741,7 @@ static MaterialPackage* create_material_package(UMID uid, Timestamp now)
     sourceClip->length = 898;
     sourceClip->position = 0;
     
-    materialPackage->addUserComment("testname", "testvalue");
+    materialPackage->addUserComment("testname", "testvalue", 5, 1);
     
     database->savePackage(materialPackage.get());
     return materialPackage.release();
@@ -799,16 +799,28 @@ static void test_package()
         // get the tagged values
         vector<UserComment> userComments = sourcePackageInDB->getUserComments("testname1");
         CHECK(userComments.size() == 2);
-        CHECK(((*userComments.begin()).value.compare("testvalue1") == 0 && 
-            (*(++userComments.begin())).value.compare("testvalue2") == 0) ||
+        CHECK(((*userComments.begin()).value.compare("testvalue1") == 0 &&
+                (*(++userComments.begin())).value.compare("testvalue2") == 0) ||
             ((*userComments.begin()).value.compare("testvalue2") == 0 && 
-            (*(++userComments.begin())).value.compare("testvalue1") == 0));
+                (*(++userComments.begin())).value.compare("testvalue1") == 0));
+        CHECK(((*userComments.begin()).position == 0 &&
+                (*(++userComments.begin())).position == -1) ||
+            ((*userComments.begin()).position == -1 &&
+                (*(++userComments.begin())).position == 0));
+        CHECK(((*userComments.begin()).colour == 1 &&
+                (*(++userComments.begin())).colour == 0) ||
+            ((*userComments.begin()).colour == 0 &&
+                (*(++userComments.begin())).colour == 1));
         userComments = sourcePackageInDB->getUserComments("testname2");
         CHECK(userComments.size() == 1);
         CHECK((*userComments.begin()).value.compare("testvalue1") == 0);
+        CHECK((*userComments.begin()).position == 100);
+        CHECK((*userComments.begin()).colour == 2);
         userComments = sourcePackageInDB->getUserComments("testname3");
         CHECK(userComments.size() == 1);
         CHECK((*userComments.begin()).value.compare("testvalue3") == 0);
+        CHECK((*userComments.begin()).position == 200);
+        CHECK((*userComments.begin()).colour == 3);
 
         
         // load material associated with tagged value

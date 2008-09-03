@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.3 2008/02/06 16:59:06 john_f Exp $
+ * $Id: DatabaseEnums.h,v 1.4 2008/09/03 14:27:23 john_f Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -31,6 +31,7 @@
 
 #define UNSPECIFIED_FILE_FORMAT_TYPE        1
 #define MXF_FILE_FORMAT_TYPE                2
+#define MOV_FILE_FORMAT_TYPE                3
 
 #define FILE_ESSENCE_DESC_TYPE              1
 #define TAPE_ESSENCE_DESC_TYPE              2
@@ -53,10 +54,11 @@
 #define DNX185p_MATERIAL_RESOLUTION         15
 #define DNX120i_MATERIAL_RESOLUTION         16
 #define DNX185i_MATERIAL_RESOLUTION         17
+#define DMIH264_MATERIAL_RESOLUTION         18
 
 
 #define DVD_MATERIAL_RESOLUTION             20
-#define MOV_MATERIAL_RESOLUTION             21
+#define MPEG4_MATERIAL_RESOLUTION           21
 
 #define TAPE_SOURCE_CONFIG_TYPE             1 
 #define LIVE_SOURCE_CONFIG_TYPE             2 
@@ -81,6 +83,47 @@
 #define TRANSCODE_STATUS_NOTFORTRANSCODE    5
 #define TRANSCODE_STATUS_NOTSUPPORTED       6
 
+#define USER_COMMENT_WHITE_COLOUR           1
+#define USER_COMMENT_RED_COLOUR             2
+#define USER_COMMENT_YELLOW_COLOUR          3
+#define USER_COMMENT_GREEN_COLOUR           4
+#define USER_COMMENT_CYAN_COLOUR            5
+#define USER_COMMENT_BLUE_COLOUR            6
+#define USER_COMMENT_MAGENTA_COLOUR         7
+#define USER_COMMENT_BLACK_COLOUR           8
+
+#include <string>
+#include <map>
+
+/**
+Singleton class to provide names corresponding to the various codes.
+*/
+class DatabaseEnums
+{
+public:
+// methods
+    static DatabaseEnums * Instance()
+    {
+        if (mInstance == 0)  // is it the first call?
+        {  
+            mInstance = new DatabaseEnums; // create sole instance
+        }
+        return mInstance;// address of sole instance
+    }
+    std::string ResolutionName(int resolution);
+    std::string FileFormatName(int file_format);
+protected:
+    // Protect constructors to force use of Instance()
+    DatabaseEnums();
+    DatabaseEnums(const DatabaseEnums &);
+    DatabaseEnums & operator= (const DatabaseEnums &);
+private:
+    // static instance pointer
+    static DatabaseEnums * mInstance;
+    // local copies of name tables
+    std::map<int, std::string> mResolutionNames;
+    std::map<int, std::string> mFileFormatNames;
+};
 
 #endif
 
