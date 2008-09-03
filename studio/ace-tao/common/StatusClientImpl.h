@@ -1,5 +1,5 @@
 /*
- * $Id: StatusClientImpl.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: StatusClientImpl.h,v 1.2 2008/09/03 13:43:34 john_f Exp $
  *
  * StatusClient servant.
  *
@@ -26,13 +26,16 @@
 #define StatusClient_h
 
 #include "StatusClientS.h"
+#include "StatusObserver.h"
+
+#include <queue>
 
 class  StatusClientImpl
   : public virtual POA_ProdAuto::StatusClient
 {
 public:
   // Constructor 
-  StatusClientImpl (void);
+  StatusClientImpl (StatusObserver * obs);
   
   // Destructor 
   virtual ~StatusClientImpl (void);
@@ -62,6 +65,9 @@ public:
     );
 
   void Destroy();
+
+private:
+    StatusObserver * mpObserver;
 };
 
 

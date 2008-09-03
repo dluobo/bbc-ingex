@@ -1,5 +1,5 @@
 /*
- * $Id: DataSourceImpl.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: DataSourceImpl.cpp,v 1.2 2008/09/03 13:43:33 john_f Exp $
  *
  * Implementation of DataSource for use in servant.
  *
@@ -23,6 +23,7 @@
  */
 
 #include "DataSourceImpl.h"
+#include "CorbaUtil.h"
 #include "StatusClientC.h"
 
 // Implementation skeleton constructor
@@ -43,6 +44,9 @@ DataSourceImpl::~DataSourceImpl (void)
   )
 {
   // Add your implementation here
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("DataSourceImpl::AddStatusClient - %C\n"),
+        CorbaUtil::Instance()->ObjectToText(client).c_str()));
+
     return mStatusDist.AddClient(client);
 }
 

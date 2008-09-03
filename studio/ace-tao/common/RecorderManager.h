@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderManager.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: RecorderManager.h,v 1.2 2008/09/03 13:43:34 john_f Exp $
  *
  * Wrapper for ProdAuto::Recorder.
  *
@@ -26,21 +26,51 @@
 #define RecorderManager_h
 
 #include "RecorderC.h"
+#include "StatusClientImpl.h"
 
 #include <string>
+#include <vector>
 
-class RecorderManager
+class TrackInfo
 {
 public:
+    TrackInfo();
+    ProdAuto::TrackType type;
+    bool rec;
+};
+
+class RecorderManager
+  : public virtual StatusObserver
+{
+public:
+// Constructor & Destructor
+    RecorderManager();
+    ~RecorderManager();
+
+// Status observer
+    void Observe(const std::string & name, const std::string & value);
+
+// Recorder management
     void Recorder(CORBA::Object_ptr obj);
     void Init();
-    void AddStatusClient(ProdAuto::StatusClient_ptr client);
-    void RemoveStatusClient(ProdAuto::StatusClient_ptr client);
+    void Update();
+    void AddStatusClient();
+    void RemoveStatusClient();
     void Start(const std::string & project = "");
     void Stop();
+    const std::vector<TrackInfo> & TrackInfos() { return mTrackInfos; }
+    bool GetStatusMessage(std::string & message);
 private:
     ProdAuto::Recorder_var mRecorder;
     unsigned int mTrackCount;
+    std::vector<TrackInfo> mTrackInfos;
+
+// StatusClient servant
+    StatusClientImpl * mStatusClient;
+    ProdAuto::StatusClient_var mClientRef;
+
+    std::queue<std::string> mStatusMessages;
+    ACE_Thread_Mutex mMessagesMutex;
 };
 
 #endif //#ifndef RecorderManager_h

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.3 2008/04/18 16:03:29 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.4 2008/09/03 13:43:34 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -33,23 +33,23 @@ const prodauto::Rational    IMAGE_ASPECT    = { 4, 3 };
 const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
 const char * const          COPY_COMMAND    = "";
 
-const int           ENCODE1_RESOLUTION  = DV50_MATERIAL_RESOLUTION;
-const int           ENCODE1_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
-const bool          ENCODE1_BITC        = false;
-const char * const  ENCODE1_DIR         = "/video";
-const char * const  ENCODE1_DEST        = "/store";
+const int           ENCODE1_RESOLUTION      = MJPEG21_MATERIAL_RESOLUTION;
+const int           ENCODE1_FILE_FORMAT     = UNSPECIFIED_FILE_FORMAT_TYPE;
+const bool          ENCODE1_BITC            = false;
+const char * const  ENCODE1_DIR             = "/video";
+const char * const  ENCODE1_DEST            = "/store";
 
-const int           ENCODE2_RESOLUTION  = 0;
-const int           ENCODE2_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
-const bool          ENCODE2_BITC        = false;
-const char * const  ENCODE2_DIR         = "/video";
-const char * const  ENCODE2_DEST        = "/store";
+const int           ENCODE2_RESOLUTION      = 0;
+const int           ENCODE2_FILE_FORMAT     = UNSPECIFIED_FILE_FORMAT_TYPE;
+const bool          ENCODE2_BITC            = false;
+const char * const  ENCODE2_DIR             = "/video";
+const char * const  ENCODE2_DEST            = "/store";
 
-const int           QUAD_RESOLUTION  = 0;
-const int           QUAD_WRAPPING    = UNSPECIFIED_FILE_FORMAT_TYPE;
-const bool          QUAD_BITC        = true;
-const char * const  QUAD_DIR         = "/video";
-const char * const  QUAD_DEST        = "";
+const int           QUAD_RESOLUTION     = 0;
+const int           QUAD_FILE_FORMAT    = UNSPECIFIED_FILE_FORMAT_TYPE;
+const bool          QUAD_BITC           = true;
+const char * const  QUAD_DIR            = "/video";
+const char * const  QUAD_DEST           = "";
 
 const bool BROWSE_AUDIO = false;
 
@@ -105,19 +105,19 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     }
 
     int encode1_resolution;
-    int encode1_wrapping;
+    int encode1_file_format;
     bool encode1_bitc;
     std::string encode1_dir;
     std::string encode1_dest;
 
     int encode2_resolution;
-    int encode2_wrapping;
+    int encode2_file_format;
     bool encode2_bitc;
     std::string encode2_dir;
     std::string encode2_dest;
 
     int quad_resolution;
-    int quad_wrapping;
+    int quad_file_format;
     bool quad_bitc;
     std::string quad_dir;
     std::string quad_dest;
@@ -129,19 +129,19 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         copy_command = rc->getStringParam("COPY_COMMAND", COPY_COMMAND);
 
         encode1_resolution = rc->getIntParam("ENCODE1_RESOLUTION", ENCODE1_RESOLUTION);
-        encode1_wrapping = rc->getIntParam("ENCODE1_WRAPPING", ENCODE1_WRAPPING);
+        encode1_file_format = rc->getIntParam("ENCODE1_WRAPPING", ENCODE1_FILE_FORMAT);
         encode1_bitc = rc->getBoolParam("ENCODE1_BITC", ENCODE1_BITC);
         encode1_dir = rc->getStringParam("ENCODE1_DIR", ENCODE1_DIR);
         encode1_dest = rc->getStringParam("ENCODE1_DEST", ENCODE1_DEST);
 
         encode2_resolution = rc->getIntParam("ENCODE2_RESOLUTION", ENCODE2_RESOLUTION);
-        encode2_wrapping = rc->getIntParam("ENCODE2_WRAPPING", ENCODE2_WRAPPING);
+        encode2_file_format = rc->getIntParam("ENCODE2_WRAPPING", ENCODE2_FILE_FORMAT);
         encode2_bitc = rc->getBoolParam("ENCODE2_BITC", ENCODE2_BITC);
         encode2_dir = rc->getStringParam("ENCODE2_DIR", ENCODE2_DIR);
         encode2_dest = rc->getStringParam("ENCODE2_DEST", ENCODE2_DEST);
 
         quad_resolution = rc->getIntParam("QUAD_RESOLUTION", QUAD_RESOLUTION);
-        quad_wrapping = rc->getIntParam("QUAD_WRAPPING", QUAD_WRAPPING);
+        quad_file_format = rc->getIntParam("QUAD_WRAPPING", QUAD_FILE_FORMAT);
         quad_bitc = rc->getBoolParam("QUAD_BITC", QUAD_BITC);
         quad_dir = rc->getStringParam("QUAD_DIR", QUAD_DIR);
         quad_dest = rc->getStringParam("QUAD_DEST", QUAD_DEST);
@@ -153,19 +153,19 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         copy_command = COPY_COMMAND;
 
         encode1_resolution = ENCODE1_RESOLUTION;
-        encode1_wrapping = ENCODE1_WRAPPING;
+        encode1_file_format = ENCODE1_FILE_FORMAT;
         encode1_bitc = ENCODE1_BITC;
         encode1_dir = ENCODE1_DIR;
         encode1_dest = ENCODE1_DEST;
 
         encode2_resolution = ENCODE2_RESOLUTION;
-        encode2_wrapping = ENCODE2_WRAPPING;
+        encode2_file_format = ENCODE2_FILE_FORMAT;
         encode2_bitc = ENCODE2_BITC;
         encode2_dir = ENCODE2_DIR;
         encode2_dest = ENCODE2_DEST;
 
         quad_resolution = QUAD_RESOLUTION;
-        quad_wrapping = QUAD_WRAPPING;
+        quad_file_format = QUAD_FILE_FORMAT;
         quad_bitc = ENCODE2_BITC;
         quad_dir = QUAD_DIR;
         quad_dest = QUAD_DEST;
@@ -176,7 +176,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     {
         EncodeParams ep;
         ep.resolution = encode1_resolution;
-        ep.wrapping = (encode1_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.file_format = encode1_file_format;
         ep.source = Input::NORMAL;
         ep.bitc = encode1_bitc;
         ep.dir = encode1_dir;
@@ -187,7 +187,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     {
         EncodeParams ep;
         ep.resolution = encode2_resolution;
-        ep.wrapping = (encode2_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.file_format = encode2_file_format;
         ep.source = Input::NORMAL;
         ep.bitc = encode2_bitc;
         ep.dir = encode2_dir;
@@ -198,25 +198,88 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     {
         EncodeParams ep;
         ep.resolution = quad_resolution;
-        ep.wrapping = (quad_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.file_format = quad_file_format;
         ep.source = Input::QUAD;
         ep.bitc = quad_bitc;
         ep.dir = quad_dir;
         ep.dest = quad_dest;
         encodings.push_back(ep);
     }
-    if (true && quad_resolution) // bodge for browse tracks
+#if 0
+    if (quad_resolution) // bodge for browse tracks
     {
         EncodeParams ep;
         ep.resolution = quad_resolution;
-        ep.wrapping = (quad_wrapping == MXF_FILE_FORMAT_TYPE ? Wrapping::MXF : Wrapping::NONE);
+        ep.file_format = quad_file_format;
         ep.source = Input::NORMAL;
         ep.bitc = quad_bitc;
         ep.dir = quad_dir;
         ep.dest = quad_dest;
         encodings.push_back(ep);
     }
+#endif
 
     return true;
 }
+
+/*
+The actual names in the database can now be obtained via
+the DatabaseEnums class.
+
+const char * RecorderSettings::ResolutionName(int resolution)
+{
+    switch (resolution)
+    {
+    case UNC_MATERIAL_RESOLUTION:
+        return "Uncompressed";
+    case DV25_MATERIAL_RESOLUTION:
+        return "DV25";
+    case DV50_MATERIAL_RESOLUTION:
+        return "DV50";
+    case MJPEG21_MATERIAL_RESOLUTION:
+        return "MJPEG 2:1";
+    case MJPEG31_MATERIAL_RESOLUTION:
+        return "MJPEG 3:1";
+    case MJPEG101_MATERIAL_RESOLUTION:
+        return "MJPEG 10:1";
+    case MJPEG151S_MATERIAL_RESOLUTION:
+        return "MJPEG 15:1s";
+    case MJPEG201_MATERIAL_RESOLUTION:
+        return "MJPEG 20:1";
+    case MJPEG101M_MATERIAL_RESOLUTION:
+        return "MJPEG 10:1m";
+    // IMX formats
+    case IMX30_MATERIAL_RESOLUTION:
+        return "IMX30";
+    case IMX40_MATERIAL_RESOLUTION:
+        return "IMX40";
+    case IMX50_MATERIAL_RESOLUTION:
+        return "IMX50";
+    // DNxHD formats
+    case DNX36p_MATERIAL_RESOLUTION:
+        return "DNX36p";
+    case DNX120p_MATERIAL_RESOLUTION:
+        return "DNX120p";
+    case DNX185p_MATERIAL_RESOLUTION:
+        return "DNX185p";
+    case DNX120i_MATERIAL_RESOLUTION:
+        return "DNX120i";
+    case DNX185i_MATERIAL_RESOLUTION:
+        return "DNX185i";
+    // H264
+    case DMIH264_MATERIAL_RESOLUTION:
+        return "H264-DMI";
+    // Browse formats
+    case DVD_MATERIAL_RESOLUTION:
+        return "DVD";
+    case MPEG4_MATERIAL_RESOLUTION:
+        return "MPEG4";
+    default:
+        return "Unknown";
+    }
+
+    return "Unknown";
+}
+*/
+
 

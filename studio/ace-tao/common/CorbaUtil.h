@@ -1,5 +1,5 @@
 /*
- * $Id: CorbaUtil.h,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: CorbaUtil.h,v 1.2 2008/09/03 13:43:33 john_f Exp $
  *
  * CORBA utilities
  *
@@ -76,6 +76,7 @@ public:
         mOrb->destroy();
     }
     char * ObjectToString(CORBA::Object_ptr obj);
+    std::string ObjectToText(CORBA::Object_ptr obj);
     CORBA::Object_ptr StringToObject(const char * s);
 
     TAO_ORB_Core * OrbCore() { return mOrb->orb_core(); }

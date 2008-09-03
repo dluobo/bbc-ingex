@@ -1,5 +1,5 @@
 /*
- * $Id: StatusDistributor.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: StatusDistributor.cpp,v 1.2 2008/09/03 13:43:34 john_f Exp $
  *
  * Send data to a StatusClient.
  *
@@ -121,10 +121,14 @@ void StatusDistributor::RemoveClient(ProdAuto::StatusClient_ptr client)
     }
 }
 
-void StatusDistributor::SendStatus(const ProdAuto::StatusItem & status)
+void StatusDistributor::SendStatus(const char * name, const char * value)
 {
-    ACE_DEBUG((LM_DEBUG,"StatusDistributor::SendStatus (%C = %C)\n",
-	status.name.in(), status.value.in()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("StatusDistributor::SendStatus (%C, %C)\n"), name, value));
+
+    ProdAuto::StatusItem status;
+    status.name = CORBA::string_dup(name);
+    status.value = CORBA::string_dup(value);
+
 
     // Package status data into a StatusPackage object.
     StatusPackage * package;
@@ -133,11 +137,9 @@ void StatusDistributor::SendStatus(const ProdAuto::StatusItem & status)
     MessageBlock * message;
     ACE_NEW_NORETURN(message, MessageBlock(package));
 
-
-    ACE_DEBUG((LM_DEBUG, "Queueing status message\n"));
-
 #if 1
     // Queue message
+    ACE_DEBUG((LM_DEBUG, "Queueing status message\n"));
     queueMessage(message, &mQueueTimeout);
 #else
     // or don't queue it

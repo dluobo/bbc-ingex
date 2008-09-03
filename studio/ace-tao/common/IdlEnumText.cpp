@@ -1,5 +1,5 @@
 /*
- * $Id: IdlEnumText.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: IdlEnumText.cpp,v 1.2 2008/09/03 13:43:33 john_f Exp $
  *
  * Extended ACE_Data_Block to carry arbitrary data.
  *
@@ -24,7 +24,7 @@
 
 #include "IdlEnumText.h"
 
-char * IdlEnumText::ConnectionState(ProdAuto::DataSource::ConnectionState s)
+const char * IdlEnumText::ConnectionState(ProdAuto::DataSource::ConnectionState s)
 {
     switch(s)
     {

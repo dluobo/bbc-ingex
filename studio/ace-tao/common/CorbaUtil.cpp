@@ -1,5 +1,5 @@
 /*
- * $Id: CorbaUtil.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: CorbaUtil.cpp,v 1.2 2008/09/03 13:43:33 john_f Exp $
  *
  * CORBA utilities
  *
@@ -128,13 +128,27 @@ bool CorbaUtil::InitNs()
     return ok_so_far;
 }
 
-
 /**
 NB. caller is responsible for deallocating the char *
 */
 char * CorbaUtil::ObjectToString(CORBA::Object_ptr obj)
 {
     return mOrb->object_to_string(obj);
+}
+
+std::string CorbaUtil::ObjectToText(CORBA::Object_ptr obj)
+{
+    std::ostringstream ss;
+
+    TAO_MProfile & mp = obj->_stubobj()->base_profiles();
+    TAO_Profile * profile;
+
+    for (CORBA::ULong i = 0; i < mp.profile_count(); i++)
+    {
+        profile = mp.get_profile(i);
+        ss << (i == 0 ? "" : ", ") << profile->to_string();
+    }
+    return ss.str();
 }
 
 CORBA::Object_ptr CorbaUtil::StringToObject(const char * s)

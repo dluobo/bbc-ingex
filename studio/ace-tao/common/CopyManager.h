@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.h,v 1.2 2008/04/18 16:03:28 john_f Exp $
+ * $Id: CopyManager.h,v 1.3 2008/09/03 13:43:33 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -27,8 +27,6 @@
 
 #include <ace/Process_Manager.h>
 #include <string>
-//#include <vector>
-//#include <utility>
 
 namespace CopyMode
 {
@@ -43,8 +41,8 @@ public:
     void RecorderName(const std::string & s);
     void ClearSrcDest();
     void AddSrcDest(const std::string & src, const std::string & dest);
-    void StartCopying();
-    void StopCopying();
+    void StartCopying(unsigned int index);
+    void StopCopying(unsigned int index);
 
 private:
     void StopProcess();

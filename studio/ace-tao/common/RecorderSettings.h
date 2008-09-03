@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.3 2008/04/18 16:03:29 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.4 2008/09/03 13:43:34 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -30,12 +30,13 @@
 
 #include "Database.h"
 
+// NB. Wrapping enum type not used, file_format integer used instead.
 namespace Wrapping
 {
-    enum EnumType { NONE, MXF };
+    enum EnumType { NONE, MXF, MOV };
 }
 
-// NB. Coding enum type not used at present
+// NB. Coding enum type not used, resolution integer used instead.
 namespace Coding
 {
     enum EnumType { UNCOMPRESSED, DV25, DV50, MJPEG21, MJPEG31, MJPEG101, MJPEG101M, MJPEG151S, MJPEG201, MPEG2 };
@@ -49,7 +50,7 @@ namespace Input
 struct EncodeParams
 {
     int resolution;
-    Wrapping::EnumType wrapping;
+    int file_format;
     Input::EnumType source;
     bool bitc;
     std::string dir;
@@ -69,6 +70,7 @@ public:
 
     // Methods
     bool Update(prodauto::Recorder * rec);
+    //const char *ResolutionName(int resolution);
 
     // Record Parameters
     prodauto::Rational image_aspect;

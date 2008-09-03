@@ -1,5 +1,5 @@
 /*
- * $Id: StatusClientImpl.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: StatusClientImpl.cpp,v 1.2 2008/09/03 13:43:34 john_f Exp $
  *
  * StatusClient servant.
  *
@@ -23,11 +23,14 @@
  */
 
 #include <iostream>
+#include <sstream>
 
 #include "StatusClientImpl.h"
 
+
 // Implementation skeleton constructor
-StatusClientImpl::StatusClientImpl (void)
+StatusClientImpl::StatusClientImpl (StatusObserver * obs)
+: mpObserver(obs)
 {
 }
 
@@ -43,9 +46,14 @@ void StatusClientImpl::ProcessStatus (
     ::CORBA::SystemException
   )
 {
-  // Add your implementation here
-    std::cout << "Message from recorder: "
-        << status.name.in() << " = " << status.value.in() << std::endl;
+    if (mpObserver)
+    {
+        mpObserver->Observe (status.name.in(), status.value.in());
+    }
+
+    std::cout << "Message from recorder: " << status.name.in() << " = " << status.value.in() << std::endl;
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Status Client received: %C = %C\n"),
+        status.name.in(), status.value.in()));
 }
 
 void StatusClientImpl::HandleStatusOust (

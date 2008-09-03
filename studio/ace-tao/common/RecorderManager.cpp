@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderManager.cpp,v 1.2 2008/04/18 16:03:29 john_f Exp $
+ * $Id: RecorderManager.cpp,v 1.3 2008/09/03 13:43:34 john_f Exp $
  *
  * Wrapper for ProdAuto::Recorder.
  *
@@ -27,7 +27,80 @@
 #include <sstream>
 
 const ProdAuto::Rational EDIT_RATE = { 25, 1 }; // We assume 25 frames per second
+const unsigned int MAX_STATUS_MESSAGES = 100;
 
+/** Constructor for the TrackInfo struct */
+TrackInfo::TrackInfo()
+: type(ProdAuto::AUDIO), rec(false)
+{
+}
+
+/** Receive status message */
+void RecorderManager::Observe(const std::string & name, const std::string & value)
+{
+    // Just in case this gets called by another thread, we use
+    // a guard for mStatusMessage
+    ACE_Guard<ACE_Thread_Mutex> guard(mMessagesMutex);
+    std::ostringstream ss;
+    ss << name << ": " << value;
+    mStatusMessages.push(ss.str());
+
+    while (mStatusMessages.size() > MAX_STATUS_MESSAGES)
+    {
+        mStatusMessages.pop();
+    }
+}
+
+bool RecorderManager::GetStatusMessage(std::string & message)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mMessagesMutex);
+    bool result = false;
+    if (! mStatusMessages.empty())
+    {
+        message = mStatusMessages.front();
+        mStatusMessages.pop();
+        result = true;
+    }
+    return result;
+}
+
+// Recorder management
+
+RecorderManager::RecorderManager()
+: mStatusClient(0)
+{
+    // Make an instance of the servant class on the heap.
+    mStatusClient = new StatusClientImpl(this);
+    if (mStatusClient == 0)
+    {
+        ACE_DEBUG(( LM_ERROR, "Failed to create status client.n" ));
+    }
+
+
+    // Create a CORBA object and register the servant as the implementation.
+    // NB. You must have done your ORB_init before this happens
+    try
+    {
+        mClientRef = mStatusClient->_this();
+    }
+    catch (const CORBA::Exception & e)
+    {
+        ACE_DEBUG(( LM_ERROR, "Exception creating workstation object %C\n", e._name() ));
+    }
+    catch (...)
+    {
+        ACE_DEBUG(( LM_ERROR, "Exception creating workstation CORBA object\n" ));
+    }
+}
+
+RecorderManager::~RecorderManager()
+{
+// StatusClient servant and CORBA object
+    // Deactivate the CORBA object and
+    // relinquish our reference to the servant.
+    // The POA will delete it at an appropriate time.
+    mStatusClient->Destroy();
+}
 
 void RecorderManager::Recorder(CORBA::Object_ptr obj)
 {
@@ -50,14 +123,27 @@ void RecorderManager::Recorder(CORBA::Object_ptr obj)
 
 void RecorderManager::Init()
 {
-    // Find out how many recording tracks there are
+    this->Update();
+}
+
+void RecorderManager::Update()
+{
+    // Get tracks and status
     if (!CORBA::is_nil(mRecorder))
     {
         try
         {
-            ProdAuto::TrackList_var track_list;
-            track_list = mRecorder->Tracks();
+            ProdAuto::TrackList_var track_list = mRecorder->Tracks();
+            ProdAuto::TrackStatusList_var track_status_list = mRecorder->TracksStatus();
             mTrackCount = track_list->length();
+            mTrackInfos.clear();
+            for (CORBA::ULong i = 0; i < track_list->length(); ++i)
+            {
+                TrackInfo track_info;
+                track_info.type = track_list->operator[](i).type;
+                track_info.rec = track_status_list->operator[](i).rec;
+                mTrackInfos.push_back(track_info);
+            }
         }
         catch (const CORBA::Exception & e)
         {
@@ -68,13 +154,13 @@ void RecorderManager::Init()
     }
 }
 
-void RecorderManager::AddStatusClient(ProdAuto::StatusClient_ptr client)
+void RecorderManager::AddStatusClient()
 {
     if (!CORBA::is_nil(mRecorder))
     {
         try
         {
-            mRecorder->AddStatusClient(client);
+            mRecorder->AddStatusClient(mClientRef.in());
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("StatusClient attached.\n")));
         }
         catch (const CORBA::Exception &)
@@ -84,13 +170,13 @@ void RecorderManager::AddStatusClient(ProdAuto::StatusClient_ptr client)
     }
 }
 
-void RecorderManager::RemoveStatusClient(ProdAuto::StatusClient_ptr client)
+void RecorderManager::RemoveStatusClient()
 {
     if (!CORBA::is_nil(mRecorder))
     {
         try
         {
-            mRecorder->RemoveStatusClient(client);
+            mRecorder->RemoveStatusClient(mClientRef.in());
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Successfully detached.\n")));
         }
         catch (const CORBA::Exception &e)
@@ -122,7 +208,7 @@ void RecorderManager::Start(const std::string & project)
             rec_enable[i] = 1;
         }
 
-        CORBA::ULong card_count = mTrackCount / 5;
+        CORBA::ULong card_count = mTrackCount / 5; // dodgy
         CORBA::StringSeq tapes;
         tapes.length(card_count);
         for (CORBA::ULong i = 0; i < card_count; ++i)
@@ -137,7 +223,7 @@ void RecorderManager::Start(const std::string & project)
 
         try
         {
-            mRecorder->Start(start_tc, pre_roll, rec_enable, false);
+            mRecorder->Start(start_tc, pre_roll, rec_enable, project.c_str(), false);
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Start command sent.\n")));
         }
         catch (const CORBA::Exception & e)
@@ -162,12 +248,12 @@ void RecorderManager::Stop()
         post_roll.samples = 5;
         post_roll.undefined = false;
 
-        //::ProdAuto::StringList_var files;
         CORBA::StringSeq_var files;
+        ::ProdAuto::LocatorSeq locators;
 
         try
         {
-            mRecorder->Stop(stop_tc, post_roll, "Test Project", "", files.out());
+            mRecorder->Stop(stop_tc, post_roll, "", locators, files.out());
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Stop command sent.\n")));
         }
         catch(const CORBA::Exception & e)

@@ -1,5 +1,5 @@
 /*
- * $Id: IdlEnumText.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: IdlEnumText.h,v 1.2 2008/09/03 13:43:34 john_f Exp $
  *
  * Extended ACE_Data_Block to carry arbitrary data.
  *
@@ -34,8 +34,8 @@ Typically used in output to debug logfiles.
 class IdlEnumText
 {
 public:
-    static char * ConnectionState(ProdAuto::DataSource::ConnectionState s);
- };
+    static const char * ConnectionState(ProdAuto::DataSource::ConnectionState s);
+};
 
 #endif // #ifndef IdlEnumText_h
 

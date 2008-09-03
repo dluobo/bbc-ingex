@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.2 2008/04/18 16:03:27 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.3 2008/09/03 13:43:33 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -22,10 +22,10 @@
  * 02110-1301, USA.
  */
 
-#include <ace/Log_Msg.h>
-
 #include "CopyManager.h"
 
+#include <ace/Log_Msg.h>
+#include <sstream>
 
 CopyManager::CopyManager(CopyMode::EnumType mode)
 : mMode(mode), mEnabled(false), mPid(0)
@@ -82,7 +82,7 @@ void CopyManager::AddSrcDest(const std::string & src, const std::string & dest)
     }
 }
 
-void CopyManager::StartCopying()
+void CopyManager::StartCopying(unsigned int index)
 {
     // Stop any existing copy process
     StopProcess();
@@ -103,7 +103,9 @@ void CopyManager::StartCopying()
         if (mEnabled && mPm)
         {
             // command plus src/dest args
-            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR((mCommand + " " + mRecorderName + mArgs).c_str()));
+            std::ostringstream ss;
+            ss << mCommand << " " << mRecorderName << " " << index << mArgs;
+            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR(ss.str().c_str()));
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
             mPid = mPm->spawn(mOptions);
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));
@@ -112,7 +114,7 @@ void CopyManager::StartCopying()
     }
 }
 
-void CopyManager::StopCopying()
+void CopyManager::StopCopying(unsigned int index)
 {
     StopProcess();
 
@@ -125,7 +127,9 @@ void CopyManager::StopCopying()
         if (mEnabled && mPm)
         {
             // command only
-            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR((mCommand + " " + mRecorderName).c_str()));
+            std::ostringstream ss;
+            ss << mCommand << " " << mRecorderName << " " << index;
+            mOptions.command_line (ACE_TEXT_CHAR_TO_TCHAR(ss.str().c_str()));
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Spawning command \"%s\"\n"), mOptions.command_line_buf() ));
             mPid = mPm->spawn(mOptions);
             ACE_DEBUG(( LM_DEBUG, ACE_TEXT("Started process %d\n"), mPid ));

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.3 2008/05/06 16:26:25 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.4 2008/09/03 13:43:34 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -30,6 +30,7 @@
 #include <string>
 
 #include <Database.h>
+#include <DatabaseEnums.h>
 #include <DBException.h>
 
 #include "RecorderSettings.h"
@@ -59,52 +60,27 @@ bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw
     mMaxInputs = max_inputs;
     mMaxTracksPerInput = max_tracks_per_input;
 
-    // Database
-    bool ok_so_far = true;
+    // Initialise database connection
+    bool db_init_ok = false;
     try
     {
         prodauto::Database::initialise("prodautodb", db_user, db_pw, 4, 12);
+        db_init_ok = true;
     }
     catch (...)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
-        ok_so_far = false;
     }
 
-    prodauto::Database * db = 0;
-    try
-    {
-        db = prodauto::Database::getInstance();
-    }
-    catch (const prodauto::DBException & dbe)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        ok_so_far = false;
-    }
+    // Read enumeration names from database.
+    // Do it now to avoid any delay when first used.
+    DatabaseEnums::Instance();
 
-    prodauto::Recorder * rec = 0;
-    if (db)
-    {
-        try
-        {
-            rec = db->loadRecorder(name);
-        }
-        catch(const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-        }
-    }
-    mRecorder.reset(rec);
-
-    // Recorder track sources
-    UpdateSources();
-
-    // Set source package names, which at this point will be based on
-    // source name and date.  Later they may be updated with tape names.
-    SetSourcePackages();
+    // Update tracks and settings from database
+    UpdateFromDatabase();
 
 
-    return ok_so_far;
+    return db_init_ok;
 }
 
 // Implementation skeleton destructor
@@ -162,10 +138,13 @@ char * RecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    // Update from database
-    UpdateSources();
+    // (The IngexGUI controller invokes the Tracks operation
+    // when it connects to a recorder.)
 
-    // Make a copy to return
+    // Update from database
+    UpdateFromDatabase();
+
+    // Make a copy of tracks to return
     ProdAuto::TrackList_var tracks = mTracks;
     return tracks._retn();
 }
@@ -333,6 +312,66 @@ char * RecorderImpl::CurrentConfig (
     return (found ? 1 : 0);
 }
 
+::CORBA::StringSeq * RecorderImpl::ProjectNames (
+    void
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    CORBA::StringSeq_var names = new CORBA::StringSeq;
+
+    std::vector<prodauto::ProjectName> project_names;
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+        if (db)
+        {
+            project_names = db->loadProjectNames();
+        }
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::ProjectNames()\n")));
+    CORBA::ULong i = 0;
+    for (std::vector<prodauto::ProjectName>::const_iterator it = project_names.begin();
+        it != project_names.end(); ++it)
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("  %C\n"), it->name.c_str()));
+        names->length(i + 1);
+        names->operator[](i) = CORBA::string_dup(it->name.c_str());
+        ++i;
+    }
+
+    return names._retn();
+}
+
+void RecorderImpl::AddProjectNames (
+    const ::CORBA::StringSeq & project_names
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    prodauto::Database * db = 0;
+    try
+    {
+        db = prodauto::Database::getInstance();
+        for (CORBA::ULong i = 0; i < project_names.length(); ++i)
+        {
+            db->loadOrCreateProjectName((const char *)project_names[i]);
+        }
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+}
+
 void RecorderImpl::SetTapeNames (
     const ::CORBA::StringSeq & source_names,
     const ::CORBA::StringSeq & tape_names
@@ -437,22 +476,49 @@ void RecorderImpl::UpdateConfig (
     ::CORBA::SystemException
   )
 {
-    // Settings
-    // No need to update as IngexRecorder does this for each new recording
-
-    // Sources
-    UpdateSources();
+    UpdateFromDatabase();
 }
 
 /**
-Update source information from database
+Update tracks and settings from database.
 */
-void RecorderImpl::UpdateSources()
+void RecorderImpl::UpdateFromDatabase()
 {
-    prodauto::RecorderConfig * rc = 0;
-    if (mRecorder.get() && mRecorder->hasConfig())
+    prodauto::Database * db = 0;
+    try
     {
-        rc = mRecorder->getConfig();
+        db = prodauto::Database::getInstance();
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+
+    prodauto::Recorder * rec = 0;
+    if (db)
+    {
+        try
+        {
+            rec = db->loadRecorder(mName);
+        }
+        catch(const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
+
+    // Store the Recorder object
+    mRecorder.reset(rec);
+
+    // Clear the set of SourceConfigs
+    // and the track map
+    mSourceConfigs.clear();
+    mTrackMap.clear();
+
+    prodauto::RecorderConfig * rc = 0;
+    if (rec && rec->hasConfig())
+    {
+        rc = rec->getConfig();
     }
 
     // Now we have RecorderConfig, we can set the source track names
@@ -488,6 +554,23 @@ void RecorderImpl::UpdateSources()
                 if (sc)
                 {
                     stc = sc->getTrackConfig(ritc->sourceTrackID);
+                }
+            
+                // Update our set of SourceConfig.  Actually using
+                // a map with database ID as the key, simply because
+                // having a pointer as a key is not good practice.
+                if (sc)
+                {
+                    long id = sc->getDatabaseID();
+                    mSourceConfigs[id] = sc;
+                }
+
+                // Update map from source to hardware tracks
+                if (stc)
+                {
+                    long id = stc->getDatabaseID();
+                    HardwareTrack trk = {i, j};
+                    mTrackMap[id] = trk;
                 }
 
                 mTracks->length(track_i + 1);
@@ -550,6 +633,9 @@ void RecorderImpl::UpdateSources()
             ts.timecode.edit_rate = EDIT_RATE;
         }
     }
+
+    // Set source package names (using tape names if available)
+    SetSourcePackages();
 }
 
 

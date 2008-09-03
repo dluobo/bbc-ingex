@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.3 2008/05/06 16:26:30 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.4 2008/09/03 13:43:34 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -33,6 +33,12 @@
 #include "DataSourceImpl.h"
 
 const ProdAuto::Rational EDIT_RATE = { 25, 1 };
+
+struct HardwareTrack
+{
+    unsigned int channel;
+    unsigned int track;
+};
 
 class  RecorderImpl
   : public DataSourceImpl, public virtual POA_ProdAuto::Recorder
@@ -120,6 +126,22 @@ public:
     );
   
   virtual
+  ::CORBA::StringSeq * ProjectNames (
+      void
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  void AddProjectNames (
+      const ::CORBA::StringSeq & project_names
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
   void SetTapeNames (
       const ::CORBA::StringSeq & source_names,
       const ::CORBA::StringSeq & tape_names
@@ -135,8 +157,11 @@ public:
     throw (
       ::CORBA::SystemException
     );
+
+  prodauto::Recorder * Recorder() { return mRecorder.get(); }
   
 protected:
+// data
     ProdAuto::MxfDuration mMaxPreRoll;
     ProdAuto::MxfDuration mMaxPostRoll;
     unsigned int mMaxInputs;
@@ -147,11 +172,14 @@ protected:
     std::string mName;
     std::string mFormat;
     std::auto_ptr<prodauto::Recorder> mRecorder;
+    std::map<long, prodauto::SourceConfig *> mSourceConfigs;
+    std::map<long, HardwareTrack> mTrackMap;
     std::map<std::string, std::string> mTapeMap;
+// methods
+    void UpdateFromDatabase();
 
 private:
 // methods
-    void UpdateSources();
     void SetSourcePackages();
 };
 

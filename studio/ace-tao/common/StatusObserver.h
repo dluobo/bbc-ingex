@@ -1,9 +1,9 @@
 /*
- * $Id: StatusDistributor.h,v 1.2 2008/09/03 13:43:35 john_f Exp $
+ * $Id: StatusObserver.h,v 1.1 2008/09/03 13:43:35 john_f Exp $
  *
- * Send data to an observer.
+ * Interface to which StatusClient can pass on received messages.
  *
- * Copyright (C) 2006  British Broadcasting Corporation.
+ * Copyright (C) 2008  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,21 +22,14 @@
  * 02110-1301, USA.
  */
 
-#ifndef StatusDistibutor_h
-#define StatusDistibutor_h
+#ifndef StatusObserver_h
+#define StatusObserver_h
 
-#include "StatusClientC.h"
-#include "ForwardTable.h"
-
-class StatusDistributor : public ForwardTable
+class StatusObserver
 {
 public:
-    StatusDistributor();
-    ProdAuto::DataSource::ConnectionState AddClient(ProdAuto::StatusClient_ptr client);
-    void RemoveClient(ProdAuto::StatusClient_ptr client);
-    void SendStatus(const char * name, const char * value);
-private:
-    ACE_Time_Value mQueueTimeout;
+    virtual void Observe (const std::string & name, const std::string & value) = 0;
 };
 
-#endif //#ifndef StatusDistibutor_h
+#endif //#ifndef StatusObserver_h
+
