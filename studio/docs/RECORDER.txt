@@ -72,7 +72,7 @@ Set environment variable "workspace" to the directory where you checked out
 the ingex module.
 
 ingex> cd $workspace/ingex/common
-ingex> make libcommon.a
+ingex> make libcommon.a YUVlib
 
 ingex> cd $workspace/ingex/studio/capture
 

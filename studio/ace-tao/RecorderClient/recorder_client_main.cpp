@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_client_main.cpp,v 1.1 2007/09/11 14:08:31 stuart_hc Exp $
+ * $Id: recorder_client_main.cpp,v 1.2 2008/09/03 15:56:45 john_f Exp $
  *
  * Simple test client for Recorder.
  *
@@ -38,7 +38,7 @@ const bool CLIENT = true;
 const ProdAuto::Rational EDIT_RATE = { 25, 1 }; // We are working at 25 frames per second
 
 // Globals
-RecorderManager rec_manager;
+RecorderManager * rec_manager;
 bool done = false;
 
 // A handler for stdin
@@ -73,12 +73,12 @@ int Event_Handler::handle_input(ACE_HANDLE h)
     else if ("s" == command || "start" == command)
     {
         std::cout << "Starting" << std::endl;
-        rec_manager.Start("MyProject");
+        rec_manager->Start("MyProject");
     }
     else if ("t" == command | "stop" == command)
     {
         std::cout << "Stopping" << std::endl;
-        rec_manager.Stop();
+        rec_manager->Stop();
     }
 
     return 0;
@@ -137,6 +137,9 @@ int main(int argc, char * argv[])
     const int timeoutsecs = 5;
     CorbaUtil::Instance()->SetTimeout(timeoutsecs);
 
+// Activate POA manager
+    CorbaUtil::Instance()->ActivatePoaMgr();
+
 // Get the naming service object reference(s) using initial references
 // which were passed to Orb from command line arguments.
     CorbaUtil::Instance()->InitNs();
@@ -158,29 +161,17 @@ int main(int argc, char * argv[])
     CORBA::Object_var obj = CorbaUtil::Instance()->ResolveObject(name);
 
 // Setup RecorderManager
-    rec_manager.Recorder(obj.in());
-    rec_manager.Init();
-
-
-// Now set up the StatusClient servant
-    StatusClientImpl * p_servant;
-    ProdAuto::StatusClient_var client_ref;
+    // Note that you must have done ORB init before constructing RecorderManager
+    rec_manager = new RecorderManager;
+    rec_manager->Recorder(obj.in());
+    rec_manager->Update();
     if (CLIENT)
     {
-    // Create the servant object
-        p_servant = new StatusClientImpl();
-
-    // Activate POA manager
-        CorbaUtil::Instance()->ActivatePoaMgr();
-
-    // Incarnate servant object
-        client_ref = p_servant->_this();
-
-    // Attach client to recorder
-        rec_manager.AddStatusClient(client_ref.in());
+        rec_manager->AddStatusClient();
     }
 
 // Now wait on events
+    const ACE_Time_Value orb_run_period(0, 500000);  // seconds, microseconds
     if (interactive)
     {
 
@@ -195,33 +186,32 @@ int main(int argc, char * argv[])
 
         while (!done)
         {
-            ACE_Time_Value corba_timeout(0, 100000);  // seconds, microseconds
-
             // Check for incoming CORBA requests or other events
-            CorbaUtil::Instance()->OrbRun(corba_timeout);
+            CorbaUtil::Instance()->OrbRun(orb_run_period);
         }
     }
     else if (start)
     {
-        rec_manager.Start("MyProject");
+        rec_manager->Start("MyProject");
     }
     else if (stop)
     {
-        rec_manager.Stop();
+        rec_manager->Stop();
     }
 
     if (CLIENT)
     {
         // Check for incoming CORBA requests
-        ACE_Time_Value corba_timeout(0, 500000);  // seconds, microseconds
-        CorbaUtil::Instance()->OrbRun(corba_timeout);
-
-        // Detach client from recorder
-        rec_manager.RemoveStatusClient(client_ref.in());
-
-        // Destroy client servant object
-        p_servant->Destroy();
+        CorbaUtil::Instance()->OrbRun(orb_run_period);
     }
+
+    if (CLIENT)
+    {
+        rec_manager->RemoveStatusClient();
+    }
+
+    // This will clean up status client etc.
+    delete rec_manager;
 
     return 0;
 }
