@@ -32,11 +32,11 @@ class DragButtonList : public wxScrolledWindow
 {
 	public:
 		DragButtonList(wxWindow *);
-		void SetSources(TakeInfo *, std::vector<std::string> *, std::vector<std::string> *);
-		void EnableAndSelectSources(std::vector<bool> *, const unsigned int);
+		void SetTracks(TakeInfo *, std::vector<std::string> *, std::vector<std::string> *);
+		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
 		void Clear();
-		bool EarlierSource(bool);
-		bool LaterSource(bool);
+		bool EarlierTrack(bool);
+		bool LaterTrack(bool);
 //		std::vector<std::string> * GetFiles();
 	private:
 		wxBoxSizer * mSizer;

@@ -82,8 +82,8 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_MENU( MENU_Record, IngexguiFrame::OnRecord )
 	EVT_MENU( MENU_MarkCue, IngexguiFrame::OnCue )
 	EVT_MENU( MENU_Stop, IngexguiFrame::OnStop )
-	EVT_MENU( MENU_PrevSource, IngexguiFrame::OnShortcut )
-	EVT_MENU( MENU_NextSource, IngexguiFrame::OnShortcut )
+	EVT_MENU( MENU_PrevTrack, IngexguiFrame::OnShortcut )
+	EVT_MENU( MENU_NextTrack, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_3, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_4, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_Up, IngexguiFrame::OnShortcut )
@@ -134,7 +134,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_COMMAND( wxID_ANY, wxEVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
 	EVT_COMMAND( wxID_ANY, wxEVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
 	EVT_COMMAND( wxID_ANY, wxEVT_TEST_DLG_MESSAGE, IngexguiFrame::OnTestDlgEvent )
-	EVT_RADIOBUTTON( wxID_ANY, IngexguiFrame::OnPlaybackSourceSelect )
+	EVT_RADIOBUTTON( wxID_ANY, IngexguiFrame::OnPlaybackTrackSelect )
 
 //	EVT_NOTEBOOK_PAGE_CHANGED(wxID_ANY, IngexguiFrame::OnNotebookPageChange)
 //	EVT_SPINCTRL( -1, IngexguiFrame::OnSpinCtrl )
@@ -263,8 +263,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	menuShortcuts->Append(MENU_Record, wxT("Record\tF1"));
 	menuShortcuts->Append(MENU_MarkCue, wxT("Mark Cue\tF2")); //NB this must correspond to the "insert blank cue" key in CuePointsDlg
 	menuShortcuts->Append(MENU_Stop, wxT("Stop\tF5"));
-	menuShortcuts->Append(MENU_PrevSource, wxT("Select previous playback source\tF7"));
-	menuShortcuts->Append(MENU_NextSource, wxT("Select next playback source\tF8"));
+	menuShortcuts->Append(MENU_PrevTrack, wxT("Select previous playback track\tF7"));
+	menuShortcuts->Append(MENU_NextTrack, wxT("Select next playback track\tF8"));
 	menuShortcuts->Append(MENU_Up, wxT("Move up cue point list\tUP"));
 	menuShortcuts->Append(MENU_Down, wxT("Move down cue point list\tDOWN"));
 	menuShortcuts->Append(MENU_PageUp, wxT("Move to previous take\tPGUP"));
@@ -362,7 +362,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	//transport controls
 	wxBoxSizer * sizer2cH = new wxBoxSizer(wxHORIZONTAL);
 	sizer1V->Add(sizer2cH);
-	mRecordButton = new RecordButton(this, BUTTON_Record);
+	mRecordButton = new RecordButton(this, BUTTON_Record, wxT("Record (999 sources)")); //to set a minimum size
+	mRecordButton->SetMinSize(mRecordButton->GetSize());
 	sizer2cH->Add(mRecordButton, 0, wxALL, CONTROL_BORDER);
 	mStopButton = new wxButton(this, BUTTON_Stop, wxT("Stop"));
 	sizer2cH->Add(mStopButton, 0, wxALL, CONTROL_BORDER);
@@ -406,7 +407,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	//notebook playback page
 	wxPanel * playbackPage = new wxPanel(mNotebook); //need this as can't add a sizer directly to a notebook
-	playbackPage->SetNextHandler(this); //allow source select radio button events to propagate here
+	playbackPage->SetNextHandler(this); //allow track select radio button events to propagate here
 	mNotebook->AddPage(playbackPage, wxT("Playback"));
 	wxBoxSizer * playbackPageSizer = new wxBoxSizer(wxVERTICAL);
 	playbackPage->SetSizer(playbackPageSizer);
@@ -414,10 +415,10 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	playbackPageSizer->Add(playProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
 	mPlayProjectNameCtrl = new wxStaticText(playbackPage, -1, wxT(""));
 	playProjectNameBox->Add(mPlayProjectNameCtrl, 1, wxEXPAND);
-	wxStaticBoxSizer * playbackSourcesBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Sources"));
-	playbackPageSizer->Add(playbackSourcesBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
-	mPlaybackSourceSelector = new DragButtonList(playbackPage);
-	playbackSourcesBox->Add(mPlaybackSourceSelector, 1, wxEXPAND);
+	wxStaticBoxSizer * playbackTracksBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Tracks"));
+	playbackPageSizer->Add(playbackTracksBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
+	mPlaybackTrackSelector = new DragButtonList(playbackPage);
+	playbackTracksBox->Add(mPlaybackTrackSelector, 1, wxEXPAND);
 
 	//event panel
 	wxPanel * eventPanel = new wxPanel(splitterWindow);
@@ -642,13 +643,13 @@ void IngexguiFrame::OnQuit( wxCommandEvent& WXUNUSED( event ) )
 void IngexguiFrame::OnShortcut( wxCommandEvent& event )
 {
 	switch (event.GetId()) {
-		case MENU_PrevSource :
-			//previous source
-			mPlaybackSourceSelector->EarlierSource(true);
+		case MENU_PrevTrack :
+			//previous track
+			mPlaybackTrackSelector->EarlierTrack(true);
 			break;
-		case MENU_NextSource :
-			//next source
-			mPlaybackSourceSelector->LaterSource(true);
+		case MENU_NextTrack :
+			//next track
+			mPlaybackTrackSelector->LaterTrack(true);
 			break;
 		case MENU_Up :
 			//up one event
@@ -785,9 +786,9 @@ void IngexguiFrame::OnNextTake( wxCommandEvent& WXUNUSED(event))
 /// Responds to the an event from the player.
 /// @param event The command event.
 /// The following event IDs are recognised, with corresponding data values (all enumerations being in the prodauto namespace):
-///	NEW_FILESET: Sets enable state of source select buttons and selects one.
-///		Event client data: vector of enable states (sources present)
-///		Event int: the selected source.
+///	NEW_FILESET: Sets enable state of track select buttons and selects one.
+///		Event client data: vector of enable states (tracks present)
+///		Event int: the selected tracks.
 ///	STATE_CHANGE: Reflect the player's status.
 ///		Event int: PLAY, PLAY_BACKWARDS, PAUSE, STOP, CLOSE.
 ///	CUE_POINT: Select indicated point in the event list and pause player if at end/start of file depending on playback direction
@@ -802,7 +803,7 @@ void IngexguiFrame::OnNextTake( wxCommandEvent& WXUNUSED(event))
 void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 	switch ((prodauto::PlayerEventType) event.GetId()) {
 		case prodauto::NEW_FILESET :
-			mPlaybackSourceSelector->EnableAndSelectSources((std::vector<bool> *) event.GetClientData(), event.GetInt());
+			mPlaybackTrackSelector->EnableAndSelectTracks((std::vector<bool> *) event.GetClientData(), event.GetInt());
 			break;
 		case prodauto::STATE_CHANGE :
 			switch (event.GetInt()) {
@@ -935,12 +936,12 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 					menuEvent.SetId(MENU_Stop);
 					break;
 				case 65476: //F7
-					//Prev Source
-					menuEvent.SetId(MENU_PrevSource);
+					//Prev Track
+					menuEvent.SetId(MENU_PrevTrack);
 					break;
 				case 65477: //F8
-					//Next Source
-					menuEvent.SetId(MENU_NextSource);
+					//Next Track
+					menuEvent.SetId(MENU_NextTrack);
 					break;
 				case 65362 : //Up
 					//Prev Event
@@ -1001,15 +1002,15 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 	}
 }
 
-/// Responds to a source select radio button being pressed (the event being passed on from the source select buttons object).
-/// Informs the player of the new source, and updates the enable states of the previous/next source shortcuts
+/// Responds to a track select radio button being pressed (the event being passed on from the track select buttons object).
+/// Informs the player of the new track, and updates the enable states of the previous/next track shortcuts
 /// @param event The command event.
-void IngexguiFrame::OnPlaybackSourceSelect(wxCommandEvent & event)
+void IngexguiFrame::OnPlaybackTrackSelect(wxCommandEvent & event)
 {
 //wxMessageBox(wxString::Format(wxT("src %d"), event.GetId()));
-	mPlayer->SelectSource(event.GetId());
-	GetMenuBar()->FindItem(MENU_PrevSource)->Enable(mPlaybackSourceSelector->EarlierSource(false));
-	GetMenuBar()->FindItem(MENU_NextSource)->Enable(mPlaybackSourceSelector->LaterSource(false));
+	mPlayer->SelectTrack(event.GetId());
+	GetMenuBar()->FindItem(MENU_PrevTrack)->Enable(mPlaybackTrackSelector->EarlierTrack(false));
+	GetMenuBar()->FindItem(MENU_NextTrack)->Enable(mPlaybackTrackSelector->LaterTrack(false));
 }
 
 /// Responds to the stop button being pressed.
@@ -1248,20 +1249,20 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 			//record enable list required
 			CORBA::BooleanSeq enableList;
 			if (mTree->GetRecordEnables(event.GetString(), enableList)) { //something's enabled for recording, and not already recording
-				Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and source(s) enabled to record"));
+				Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
 				mRecorderGroup->Record(event.GetString(), enableList);
 				mTree->SetRecorderStateUnknown(event.GetString(), wxT("Awaiting response..."));
 			}
 /*				ProdAuto::MxfTimecode now;
 				if (RecorderGroupCtrl::REQUEST_RECORD == (RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) { //initial record attempt
-					Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and source(s) enabled to record"));
+					Log(wxT("REQUEST_RECORD for \"") + event.GetString() + wxT("\" and track(s) enabled to record"));
 					//use timecode already supplied to recordergroup, so that all recorders start at the same point
 					now.undefined = true; //use timecode
 					mTree->SetRecorderStateUnknown(event.GetString(), wxT("Awaiting response..."));
 				}
 				else { //later record attempt - record now
 					mTimepos->GetTimecode(&now);
-					Log(wxT("RECORD_RETRY for \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(now) + wxT(" and source(s) enabled to record"));
+					Log(wxT("RECORD_RETRY for \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(now) + wxT(" and track(s) enabled to record"));
 				}
 				mRecorderGroup->Record(event.GetString(), enableList, tapeIds, now); */
 			}
@@ -1435,7 +1436,7 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
 			}
 			else if (!mTree->HasAllSignals()) {
 				mAlertCtrl->SetBitmap(concerned);
-				mAlertCtrl->SetToolTip(wxT("Signals missing on enabled sources"));
+				mAlertCtrl->SetToolTip(wxT("Signals missing on enabled tracks"));
 			}
 			else if (mTree->IsUnknown()) {
 				mAlertCtrl->SetBitmap(blank);
@@ -1449,6 +1450,7 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
 			if (mTree->AllRecording()) {
 				AddEvent(START); //just in case the only recorder is a router recorder, so a start event won't already have been issued
 			}
+			mRecordButton->SetLabel(wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxT("") : wxT("s")));
 		}
 		else {
 			ResetToDisconnected();
@@ -1803,13 +1805,13 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool force)
 		if (currentTakeInfo->GetFiles()->GetCount()) { //the take is complete and there are at least some files available
 			if (currentTakeInfo != mCurrentTakeInfo) { //a new take
 				mCurrentTakeInfo = currentTakeInfo;
-				//update playback sources notebook page
+				//update playback tracks notebook page
 				mPlayProjectNameCtrl->SetLabel(currentTakeInfo->GetProjectName());
 				std::vector<std::string> fileNames;
-				std::vector<std::string> sourceNames;
-				mPlaybackSourceSelector->SetSources(currentTakeInfo, &fileNames, &sourceNames);
+				std::vector<std::string> trackNames;
+				mPlaybackTrackSelector->SetTracks(currentTakeInfo, &fileNames, &trackNames);
 				//load files and jump to current position
-				mPlayer->Load(&fileNames, &sourceNames, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
+				mPlayer->Load(&fileNames, &trackNames, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
 				mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
 			}
 			else if ((unsigned long) mEventList->GetFirstSelected() != mCurrentSelectedEvent || force) { //only the selected event has changed
@@ -1874,14 +1876,14 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool force)
 		GetMenuBar()->FindItem(MENU_Down)->Enable(false);
 		mDeleteCueButton->Disable();
 		mPlayProjectNameCtrl->SetLabel(wxT(""));
-		mPlaybackSourceSelector->Clear();
+		mPlaybackTrackSelector->Clear();
 		mCurrentTakeInfo = 0; //no takes
 		mCurrentSelectedEvent = 0;
 	}
 	//player shortcuts
 	UpdateTextShortcutStates();
-	GetMenuBar()->FindItem(MENU_PrevSource)->Enable(mPlaybackSourceSelector->EarlierSource(false));
-	GetMenuBar()->FindItem(MENU_NextSource)->Enable(mPlaybackSourceSelector->LaterSource(false));
+	GetMenuBar()->FindItem(MENU_PrevTrack)->Enable(mPlaybackTrackSelector->EarlierTrack(false));
+	GetMenuBar()->FindItem(MENU_NextTrack)->Enable(mPlaybackTrackSelector->LaterTrack(false));
 	//cue button
 	switch (mStatus) {
 //		case UNKNOWN:
@@ -1948,7 +1950,7 @@ bool IngexguiFrame::AtStartEvent()
 	return (mCurrentTakeInfo && (unsigned long) mEventList->GetFirstSelected() == mCurrentTakeInfo->GetStartIndex());
 }
 
-/// Clears the list of events, the source buttons and anything being displayed by the player
+/// Clears the list of events, the track buttons and anything being displayed by the player
 void IngexguiFrame::ClearLog()
 {
 	ResetPlayer();
@@ -1958,10 +1960,10 @@ void IngexguiFrame::ClearLog()
 	GetMenuBar()->FindItem(MENU_ClearLog)->Enable(false);
 }
 
-/// Clears the source buttons and anything being displayed by the player
+/// Clears the track buttons and anything being displayed by the player
 void IngexguiFrame::ResetPlayer()
 {
-	mPlaybackSourceSelector->Clear();
+	mPlaybackTrackSelector->Clear();
 	mPlayer->Reset();
 }
 
@@ -2061,6 +2063,7 @@ void IngexguiFrame::ResetToDisconnected()
 	mAlertCtrl->SetToolTip(wxT(""));
 	GetMenuBar()->FindItem(MENU_SetRolls)->Enable(false);
 	mTimepos->DisableTimecode();
+	mRecordButton->SetLabel(wxT("Record"));
 }
 
 /// Deal with log messages: send to log stream

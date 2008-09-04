@@ -30,19 +30,19 @@ DragButtonList::DragButtonList(wxWindow * parent)
 	SetSizer(mSizer);
 }
 
-/// Replaces current state with a new column of video source radio buttons, one for each source with a video file, and with a quad split button at the top.
+/// Replaces current state with a new column of video track radio buttons, one for each track with a video file, and with a quad split button at the top.
 /// Returns information about the current state.
-/// Single source buttons are labelled with the source name and have a tool tip showing the associated filename.
+/// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
-/// @param takeInfo The file names, the source names and the source types.
-/// @param fileNames Returns the file name associated with each video source which has a file.
-/// @param sourceNames Returns corresponding names of sources.
-void DragButtonList::SetSources(TakeInfo * takeInfo, std::vector<std::string> * fileNames, std::vector<std::string> * sourceNames)
+/// @param takeInfo The file names, the track names and the track types.
+/// @param fileNames Returns the file name associated with each video track which has a file.
+/// @param trackNames Returns corresponding names of tracks.
+void DragButtonList::SetTracks(TakeInfo * takeInfo, std::vector<std::string> * fileNames, std::vector<std::string> * trackNames)
 {
 	mSizer->Clear(true); //delete all buttons
 	fileNames->clear();
-	sourceNames->clear();
-	wxRadioButton * quadSplit = new wxRadioButton(this, 0, wxT("Quad Split")); //the quad split is always the first video source (id = 0)
+	trackNames->clear();
+	wxRadioButton * quadSplit = new wxRadioButton(this, 0, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
 	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
 	mSizer->Add(quadSplit, -1, wxEXPAND);
 	quadSplit->Enable(false); //enable later if any files successfully loaded
@@ -56,7 +56,7 @@ void DragButtonList::SetSources(TakeInfo * takeInfo, std::vector<std::string> * 
 					rb->Enable(false); //we don't know whether the player can open this file yet
 					rb->SetToolTip(wxString((*takeInfo->GetFiles())[i][j], *wxConvCurrent));
 					mSizer->Add(rb, -1, wxEXPAND);
-					sourceNames->push_back((*takeInfo->GetTracks())[i][j].src.package_name.in());
+					trackNames->push_back((*takeInfo->GetTracks())[i][j].src.package_name.in());
 				}
 				else if (ProdAuto::AUDIO == (*takeInfo->GetTracks())[i][j].type && strlen((*takeInfo->GetFiles())[i][j])) {
 					audioFileNames.push_back((*takeInfo->GetFiles())[i][j].in());
@@ -71,11 +71,11 @@ void DragButtonList::SetSources(TakeInfo * takeInfo, std::vector<std::string> * 
 	}
 }
 
-/// Enables/disables and selects the source select buttons.
-/// COMMENTED OUT: Hides the quad split button if there is only one source enabled.
+/// Enables/disables and selects the track select buttons.
+/// COMMENTED OUT: Hides the quad split button if there is only one track enabled.
 /// @param enables Enable state of each button.
 /// @param selected The button to select.
-void DragButtonList::EnableAndSelectSources(std::vector<bool> * enables, const unsigned int selected)
+void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const unsigned int selected)
 {
 	bool someOK = false;
 	for (size_t i = 0; i < enables->size(); i++) {
@@ -90,7 +90,7 @@ void DragButtonList::EnableAndSelectSources(std::vector<bool> * enables, const u
 	}
 	if (mSizer->GetItem((size_t) 0)) { //sanity check
 //		if (enables->size() < 2) {
-			//no point in having a quad split if only one source to show
+			//no point in having a quad split if only one track to show
 //			mSizer->GetItem((size_t) 0)->GetWindow()->Hide();
 //		}
 //		else {
@@ -106,10 +106,10 @@ void DragButtonList::Clear()
 	mSizer->Clear(true); //delete all buttons
 }
 
-/// Determines whether there are selectable sources before the current one, or selects the next earlier source.
+/// Determines whether there are selectable tracks before the current one, or selects the next earlier track.
 /// @param select True to select (if possible).
-/// @return If select is false, true if there are earlier selectable sources than that currently selected.  If select is true, true if a new source was selected.
-bool DragButtonList::EarlierSource(bool select)
+/// @return If select is false, true if there are earlier selectable tracks than that currently selected.  If select is true, true if a new track was selected.
+bool DragButtonList::EarlierTrack(bool select)
 {
 
 	int previous = -1; //no previous button found
@@ -118,7 +118,7 @@ bool DragButtonList::EarlierSource(bool select)
 		wxRadioButton * radioButton = (wxRadioButton *) mSizer->GetItem(i)->GetWindow();
 		if (radioButton->GetValue()) { //selected
 			if (previous > -1) { //there is a previous button to select
-				if (select) { //we want to select a source
+				if (select) { //we want to select a track
 					//select it
 					radioButton = (wxRadioButton *) mSizer->GetItem(previous)->GetWindow();
 					radioButton->SetValue(true);
@@ -139,21 +139,21 @@ bool DragButtonList::EarlierSource(bool select)
 	return more;
 }
 
-/// Determines whether there are selectable sources after the current one, or selects the next source.
+/// Determines whether there are selectable tracks after the current one, or selects the next track.
 /// @param select True to select (if possible).
-/// @return If select is false, true if there are later selectable sources than that currently selected.  If select is true, true if a new source was selected.
-bool DragButtonList::LaterSource(bool select)
+/// @return If select is false, true if there are later selectable tracks than that currently selected.  If select is true, true if a new track was selected.
+bool DragButtonList::LaterTrack(bool select)
 {
-	bool selected_found = false; //not found the selected source yet
+	bool selected_found = false; //not found the selected track yet
 	bool more = false;
 	for (size_t i = 0; i < mSizer->GetChildren().GetCount(); i++) {
 		wxRadioButton * radioButton = (wxRadioButton *) mSizer->GetItem(i)->GetWindow();
 		if (radioButton->GetValue()) { //selected
 			selected_found = true;
 		}
-		else if (selected_found && radioButton->IsEnabled()) { //the next selectable source after the selected source
+		else if (selected_found && radioButton->IsEnabled()) { //the next selectable track after the selected track
 			more = true;
-			if (select) { //we want to select a source
+			if (select) { //we want to select a track
 				//select it
 				radioButton->SetValue(true);
 				//this doesn't generate an event, so do so manually

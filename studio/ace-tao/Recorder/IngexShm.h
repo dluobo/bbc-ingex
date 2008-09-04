@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexShm.h,v 1.6 2008/09/04 15:38:44 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -85,6 +85,9 @@ public:
     enum TcEnum { LTC, VITC };
 
     void TcMode(TcEnum mode) { mTcMode = mode; }
+
+    int FrameRateNumerator() { if (mpControl) return mpControl->frame_rate_numer; else return 0; }
+    int FrameRateDenominator() { if (mpControl) return mpControl->frame_rate_denom; else return 0; }
 
     // In funtions below, you could check (channel < mChannels) first.
 

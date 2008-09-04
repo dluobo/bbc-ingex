@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -56,6 +56,12 @@ IngexRecorder::IngexRecorder(RecorderImpl * impl, unsigned int index)
   mRecordingOK(true), mIndex(index), mDroppedFrames(false)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
+
+    if (mpImpl)
+    {
+        mFps = mpImpl->Fps();
+        mDf = mpImpl->Df();
+    }
 }
 
 /**
@@ -207,7 +213,7 @@ void IngexRecorder::Setup(
 #endif
 
     // Create and store filenames based on source, target timecode and date.
-    ::Timecode tc(start_timecode);
+    ::Timecode tc(start_timecode, mFps, mDf);
     std::string date = DateTime::DateNoSeparators();
     const char * tcode = tc.TextNoSeparators();
 
@@ -266,7 +272,7 @@ bool IngexRecorder::CheckStartTimecode(
                 tc[channel_i].valid = true;
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
-                    channel_i, Timecode(tc[channel_i].framecount).Text()));
+                    channel_i, Timecode(tc[channel_i].framecount, mFps, mDf).Text()));
             }
         }
 
@@ -327,7 +333,7 @@ bool IngexRecorder::CheckStartTimecode(
     }
 
     // Search for desired timecode across all target sources
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc).Text()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc, mFps, mDf).Text()));
     for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
     {
         if (! channel_enables[channel_i])
@@ -365,7 +371,7 @@ bool IngexRecorder::CheckStartTimecode(
                 found_target = true;
 
                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
-                    channel_i, lastframe, lastframe - i, Timecode(tc).Text()));
+                    channel_i, lastframe, lastframe - i, Timecode(tc, mFps, mDf).Text()));
             }
             else if (i == 0 && target_tc > tc && target_tc - tc < 5)
             {
@@ -375,8 +381,8 @@ bool IngexRecorder::CheckStartTimecode(
 
                 ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for channel[%d]: target=%C, most_recent=%C\n"),
                     channel_i,
-                    Timecode(target_tc).Text(),
-                    Timecode(first_tc_seen).Text()
+                    Timecode(target_tc, mFps, mDf).Text(),
+                    Timecode(first_tc_seen, mFps, mDf).Text()
                     ));
             }
         }
@@ -385,9 +391,9 @@ bool IngexRecorder::CheckStartTimecode(
         {
             ACE_DEBUG((LM_ERROR, "channel[%d] Target tc %C not found, buffer %C - %C\n",
                 channel_i,
-                Timecode(target_tc).Text(),
-                Timecode(last_tc_seen).Text(),
-                Timecode(first_tc_seen).Text()
+                Timecode(target_tc, mFps, mDf).Text(),
+                Timecode(last_tc_seen, mFps, mDf).Text(),
+                Timecode(first_tc_seen, mFps, mDf).Text()
             ));
 
             if (IngexShm::Instance()->SignalPresent(channel_i))
@@ -481,7 +487,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
                 const std::vector<Locator> & locs)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
-        Timecode(stop_timecode).Text(), post_roll));
+        Timecode(stop_timecode, mFps, mDf).Text(), post_roll));
 
     mUserComments.clear();
     mUserComments.push_back(
@@ -596,7 +602,7 @@ bool IngexRecorder::WriteMetadataFile(const char * meta_name)
         fprintf(fp_meta, "%d%s", record_opt[i].enabled, i == MAX_RECORD - 1 ? "\n" : ",");
     }
     fprintf(fp_meta, "start_tc=%d\n", mStartTimecode);
-    fprintf(fp_meta, "start_tc_str=%s\n", Timecode(mStartTimecode).Text());
+    fprintf(fp_meta, "start_tc_str=%s\n", Timecode(mStartTimecode, mFps, mDf).Text());
     fprintf(fp_meta, "capture_length=%d\n", record_opt[0].FramesWritten());
 #if 0
     fprintf(fp_meta, "a_start_tc=");

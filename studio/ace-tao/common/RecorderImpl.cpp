@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.4 2008/09/03 13:43:34 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.5 2008/09/04 15:33:19 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -39,7 +39,8 @@
 
 // Implementation skeleton constructor
 RecorderImpl::RecorderImpl (void)
-: mMaxInputs(0), mMaxTracksPerInput(0), mVideoTrackCount(0), mFormat("Ingex recorder")
+: mMaxInputs(0), mMaxTracksPerInput(0), mVideoTrackCount(0), mFormat("Ingex recorder"),
+  mDf(false)
 {
     mTracks = new ProdAuto::TrackList;
     mTracksStatus = new ProdAuto::TrackStatusList;
@@ -128,7 +129,7 @@ char * RecorderImpl::RecordingFormat (
   )
 {
   // Add your implementation here
-    return EDIT_RATE;
+    return mEditRate;
 }
 
 ::ProdAuto::TrackList * RecorderImpl::Tracks (
@@ -630,7 +631,7 @@ void RecorderImpl::UpdateFromDatabase()
             ts.rec = 0;
             ts.signal_present = 0;
             ts.timecode.undefined = true;
-            ts.timecode.edit_rate = EDIT_RATE;
+            ts.timecode.edit_rate = mEditRate;
         }
     }
 

@@ -120,8 +120,8 @@ class IngexguiFrame : public wxFrame
 		MENU_Record,
 		MENU_MarkCue,
 		MENU_Stop,
-		MENU_PrevSource,
-		MENU_NextSource,
+		MENU_PrevTrack,
+		MENU_NextTrack,
 		MENU_3,
 		MENU_4,
 		MENU_Up,
@@ -156,7 +156,7 @@ class IngexguiFrame : public wxFrame
 		BUTTON_TapeId,
 		BUTTON_ClearDescription,
 		CHOICE_RecorderSelector,
-		CHECKLIST_Sources,
+		CHECKLIST_Tracks,
 		BUTTON_PrevTake,
 		BUTTON_NextTake,
 		BUTTON_DeleteCue,
@@ -213,7 +213,7 @@ class IngexguiFrame : public wxFrame
 		void OnRecorderGroupEvent(wxCommandEvent&);
 		void OnTestDlgEvent(wxCommandEvent&);
 		void OnTreeEvent(wxCommandEvent&);
-		void OnPlaybackSourceSelect(wxCommandEvent&);
+		void OnPlaybackTrackSelect(wxCommandEvent&);
 		void OnShortcut(wxCommandEvent&);
 		void OnDisablePlayer(wxCommandEvent&);
 		void OnClearDescription(wxCommandEvent&);
@@ -255,7 +255,7 @@ class IngexguiFrame : public wxFrame
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
 		wxButton * mDeleteCueButton;
-		DragButtonList * mPlaybackSourceSelector;
+		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;
 		CuePointsDlg * mCuePointsDlg;
 		wxStaticBoxSizer * mTimecodeBox;

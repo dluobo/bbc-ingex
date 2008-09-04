@@ -27,7 +27,7 @@ END_EVENT_TABLE()
 
 /// @param parent The parent window.
 /// @param id The button's window ID.
-RecordButton::RecordButton(wxWindow * parent, wxWindowID id) : wxButton(parent, id)
+RecordButton::RecordButton(wxWindow * parent, wxWindowID id, const wxString & label) : wxButton(parent, id, label)
 {
 	SetNextHandler(parent);
 	mInitialColour = GetBackgroundColour(); //on some machines disabling doesn't grey out the button

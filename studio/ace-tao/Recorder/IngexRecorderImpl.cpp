@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -82,6 +82,19 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared Memory init failed!\n")));
     }
 
+    // Get frame rate
+    mEditRate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    mEditRate.denominator = IngexShm::Instance()->FrameRateDenominator();
+    mFps = mEditRate.numerator / mEditRate.denominator;
+    if (mEditRate.numerator % mEditRate.denominator)
+    {
+        mDf = true;
+        mFps += 1;
+    }
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Frame rate %d/%d, %d%C\n"),
+        mEditRate.numerator, mEditRate.denominator, mFps,
+        (mDf ? " DF" : "")));
+
     // Base class initialisation
     // Each channel has 1 video and 4 or 8 audio tracks
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
@@ -94,7 +107,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
 
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
-    mMaxPreRoll.edit_rate = EDIT_RATE;
+    mMaxPreRoll.edit_rate = mEditRate;
     if (IngexShm::Instance()->RingLength() > (SEARCH_GUARD + 1))
     {
         mMaxPreRoll.samples = IngexShm::Instance()->RingLength() - (SEARCH_GUARD + 1);
@@ -107,7 +120,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
 
     // Setup post-roll
     mMaxPostRoll.undefined = true; // no limit to post-roll
-    mMaxPostRoll.edit_rate = EDIT_RATE;
+    mMaxPostRoll.edit_rate = mEditRate;
     mMaxPostRoll.samples = 0;
 
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -235,7 +248,7 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples);
+    Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples, mFps, mDf);
     framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
     ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
         start_tc.Text(), pre, DateTime::Timecode().c_str()));
@@ -332,7 +345,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Set return value for actual start timecode
     start_timecode.undefined = false;
-    start_timecode.edit_rate = EDIT_RATE;
+    start_timecode.edit_rate = mEditRate;
     start_timecode.samples = start;
 
     // Setup IngexRecorder
@@ -385,7 +398,7 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
-    Timecode stop_tc(mxf_stop_timecode.undefined ? 0 : mxf_stop_timecode.samples);
+    Timecode stop_tc(mxf_stop_timecode.undefined ? 0 : mxf_stop_timecode.samples, mFps, mDf);
     framecount_t post = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
     ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Stop(), tc %C, post-roll %d, time %C\n"),
         stop_tc.Text(), post, DateTime::Timecode().c_str()));
@@ -422,7 +435,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
         // Return the expected "out time"
         mxf_stop_timecode.undefined = false;
-        mxf_stop_timecode.edit_rate = EDIT_RATE;
+        mxf_stop_timecode.edit_rate = mEditRate;
         mxf_stop_timecode.samples = stop_timecode;
 
         // Return the filenames

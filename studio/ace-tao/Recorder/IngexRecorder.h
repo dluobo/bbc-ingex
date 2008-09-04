@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.6 2008/09/04 15:38:44 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -166,6 +166,8 @@ private:
 private:
     std::string mName;
     framecount_t mStartTimecode;
+    int mFps;
+    bool mDf;
 
     // These are used to write metadata file on completion of recording
     char mVideoPath[FILENAME_MAX];

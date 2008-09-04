@@ -100,7 +100,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		bool IsOK();
 		void Enable(bool);
 		void Load(std::vector<std::string> *, std::vector<std::string> * = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
-		void SelectSource(const int);
+		void SelectTrack(const int);
 		void SetOSD(const OSDtype);
 		void SetOutputType(const PlayerOutputType);
 		void Play();
@@ -128,10 +128,10 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		bool mOK;
 		PlayerMode mMode;
 		int mStartIndex;
-		std::string mDesiredSourceName;
+		std::string mDesiredTrackName;
 		unsigned int mNFilesExisting;
 		std::vector<std::string> mFileNames;
-		std::vector<std::string> mSourceNames;
+		std::vector<std::string> mTrackNames;
 		std::vector<bool> mOpened;
 		std::vector<int64_t> mCuePoints;
 		long mLastFrameDisplayed;

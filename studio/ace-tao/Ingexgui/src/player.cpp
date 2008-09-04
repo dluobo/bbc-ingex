@@ -65,7 +65,7 @@ LocalIngexPlayer(outputType),
 	mListener = new Listener(this); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
 	SetNextHandler(handler);
-	mDesiredSourceName = ""; //display the quad split by default
+	mDesiredTrackName = ""; //display the quad split by default
 }
 
 Player::~Player()
@@ -116,11 +116,11 @@ void Player::Enable(bool state)
 /// If player is enabled, tries to load the given filenames or re-load previously given filenames.  Starts polling if it can't open them all.
 /// If player is disabled, stores the given filenames for later.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
-/// @param sourceNames Corresponding list of source names, for display as the player window title.
+/// @param trackNames Corresponding list of track names, for display as the player window title.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
-void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * sourceNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Load" << std::endl;
 	std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
@@ -139,7 +139,7 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 			}
 		}
 		//load the player (this will merely store the parameters if the player is not enabled
-		if (!Start(fileNames, sourceNames, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
+		if (!Start(fileNames, trackNames, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
 			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
 			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
 		}
@@ -151,23 +151,23 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 /// If player is disabled, stores the given filenames for later.
 /// This method is the same as Load() except that it does not manipulate the polling timer.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
-/// @param sourceNames Corresponding list of source names, for display as the player window title.
+/// @param trackNames Corresponding list of track names, for display as the player window title.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
 /// @return True if all files were opened.
-bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * sourceNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Start" << std::endl;
 	if (fileNames) {
 		//a new set of files; assume all parameters are supplied
 		mFileNames.clear();
-		mSourceNames.clear();
+		mTrackNames.clear();
 		for (size_t i = 0; i < fileNames->size(); i++) {
 			mFileNames.push_back((*fileNames)[i]);
 		}
-		for (size_t i = 0; i < sourceNames->size(); i++) {
-			mSourceNames.push_back((*sourceNames)[i]);
+		for (size_t i = 0; i < trackNames->size(); i++) {
+			mTrackNames.push_back((*trackNames)[i]);
 		}
 		mCuePoints.clear();
 		mListener->ClearCuePoints();
@@ -185,7 +185,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 	if (mEnabled) {
 		mOpened.clear();
 		mOK = start(mFileNames, mOpened);
-		int sourceToSelect = 0; //display quad split by default
+		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
 			//(re)loading stored cue points
 			for (size_t i = 0; i < mCuePoints.size(); i++) {
@@ -208,62 +208,62 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 				JumpToCue(mLastRequestedCuePoint);
 			}
 
-			// work out which source to select
+			// work out which track to select
 			unsigned int nFilesOpen = 0;
-			int aWorkingSource = 0; //initialisation prevents compiler warning
+			int aWorkingTrack = 0; //initialisation prevents compiler warning
 			for (size_t i = 0; i < mOpened.size(); i++) {
 				if (mOpened[i]) {
 					nFilesOpen++;
-					aWorkingSource = i + 1; // +1 because source 0 is quad split
+					aWorkingTrack = i + 1; // +1 because track 0 is quad split
 				}
 			}
-			if (mDesiredSourceName.size()) { //want something other than quad split
+			if (mDesiredTrackName.size()) { //want something other than quad split
 				size_t i;
-				for (i = 0; i < mSourceNames.size(); i++) {
-					if (mSourceNames[i] == mDesiredSourceName && mOpened[i]) { //located the desired source and it's available
-						sourceToSelect = i + 1; // + 1 to offset for quad split
+				for (i = 0; i < mTrackNames.size(); i++) {
+					if (mTrackNames[i] == mDesiredTrackName && mOpened[i]) { //located the desired track and it's available
+						trackToSelect = i + 1; // + 1 to offset for quad split
 						break;
 					}
 				}
-				if (mSourceNames.size() == i && 1 == nFilesOpen) { //can't use the desired source and only one file open
-					//display the only source, full screen
-					sourceToSelect = aWorkingSource;
+				if (mTrackNames.size() == i && 1 == nFilesOpen) { //can't use the desired track and only one file open
+					//display the only track, full screen
+					trackToSelect = aWorkingTrack;
 				}
 			}
-			SelectSource(sourceToSelect);
+			SelectTrack(trackToSelect);
 			allFilesOpen = mOpened.size() == nFilesOpen;
 		}
 		else {
 			setX11WindowName("Ingex Player - no files");
 		}
-		//tell the source selection list the situation
+		//tell the track selection list the situation
 		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, NEW_FILESET);
 		guiEvent.SetClientData(&mOpened);
-		guiEvent.SetInt(sourceToSelect);
+		guiEvent.SetInt(trackToSelect);
 		AddPendingEvent(guiEvent);
 	}
 	return allFilesOpen;
 }
 
-/// Displays the file corresponding to the given source (which is assumed to have been loaded) and titles the window appropriately.
-/// @param id The source ID - 0 for quad split.
-void Player::SelectSource(const int id)
+/// Displays the file corresponding to the given track (which is assumed to have been loaded) and titles the window appropriately.
+/// @param id The track ID - 0 for quad split.
+void Player::SelectTrack(const int id)
 {
-//std::cerr << "Player Select Source" << std::endl;
+//std::cerr << "Player Select Track" << std::endl;
 	if (mOK) {
 		std::string title;
 		switchVideo(id);
-		if (id) { //individual source
-			mDesiredSourceName = mSourceNames[id - 1]; // -1 to offset for quad split
-			title = mSourceNames[id - 1];
+		if (id) { //individual track
+			mDesiredTrackName = mTrackNames[id - 1]; // -1 to offset for quad split
+			title = mTrackNames[id - 1];
 		}
 		else { //quad split
-			mDesiredSourceName = "";
-			unsigned int nSources = 0;
-			for (size_t i = 0; i < mSourceNames.size(); i++) { //only go through video files
+			mDesiredTrackName = "";
+			unsigned int nTracks = 0;
+			for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
 				if (mOpened[i]) {
-					title += mSourceNames[i] + "; ";
-					if (4 == ++nSources) {
+					title += mTrackNames[i] + "; ";
+					if (4 == ++nTracks) {
 						//Quad Split displays the first four successfully opened files
 						break;
 					}

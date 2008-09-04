@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: DateTime.cpp,v 1.2 2008/09/04 15:33:18 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -75,9 +75,7 @@ std::string DateTime::DateTimeNoSeparators()
 }
 
 /*
-Returns a pointer to a null-terminated string in format HH:MM:SS:FF
-The caller has responsibility for deallocating the memory
-by invoking delete [] on the returned pointer.
+Returns a string in format HH:MM:SS.sss
 */
 std::string DateTime::Timecode()
 {
@@ -88,11 +86,11 @@ std::string DateTime::Timecode()
     tm * ptm = ACE_OS::localtime_r(&t_secs, &my_tm);
 
     char s [13];
-    ACE_OS::sprintf(s,"%02d:%02d:%02d:%02d",
+    ACE_OS::sprintf(s,"%02d:%02d:%02d.%03d",
 		ptm->tm_hour,
 		ptm->tm_min,
 		ptm->tm_sec,
-		t_us / 40000 );
+		t_us / 1000 );
 
     return std::string(s);
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.4 2008/09/03 13:43:34 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.5 2008/09/04 15:33:19 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -32,7 +32,6 @@
 #include "RecorderS.h"
 #include "DataSourceImpl.h"
 
-const ProdAuto::Rational EDIT_RATE = { 25, 1 };
 
 struct HardwareTrack
 {
@@ -159,6 +158,9 @@ public:
     );
 
   prodauto::Recorder * Recorder() { return mRecorder.get(); }
+
+    int Fps() { return mFps; }
+    bool Df() { return mDf; }
   
 protected:
 // data
@@ -171,6 +173,9 @@ protected:
     ProdAuto::TrackStatusList_var mTracksStatus;
     std::string mName;
     std::string mFormat;
+    ProdAuto::Rational mEditRate;
+    int mFps;
+    bool mDf;
     std::auto_ptr<prodauto::Recorder> mRecorder;
     std::map<long, prodauto::SourceConfig *> mSourceConfigs;
     std::map<long, HardwareTrack> mTrackMap;

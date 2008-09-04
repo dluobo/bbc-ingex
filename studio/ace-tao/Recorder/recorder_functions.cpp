@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.5 2008/09/03 14:09:06 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -43,6 +43,7 @@
 #include "DBException.h"
 #include "DatabaseEnums.h"
 #include "Utilities.h"
+#include "DataTypes.h"
 
 // prodautodb recordmxf
 #include "MXFWriter.h"
@@ -58,7 +59,8 @@
 static ACE_Thread_Mutex avcodec_mutex;
 
 const bool THREADED_MJPEG = true;
-#define USE_SOURCE 0 // Eventually will move to encoding a source, rather than a hardware input
+#define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
+#define PACKAGE_DATA 0 // Write to database for non-MXF files
 
 // Macro to log an error using both the ACE_DEBUG() macro and the
 // shared memory placeholder for error messages
@@ -106,8 +108,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     IngexShm::Instance()->InfoReset(channel_i, p_opt->index, quad_video);
     IngexShm::Instance()->InfoSetEnabled(channel_i, p_opt->index, quad_video, true);
 
-    // Convenience variable
+    // Convenience variables
     const int ring_length = IngexShm::Instance()->RingLength();
+    const int fps = p_impl->Fps();
+    const bool df = p_impl->Df();
 
     // Recording starts from start_frame.
     //int start_frame = p_rec->mStartFrame[channel_i];
@@ -132,7 +136,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     const int HEIGHT = IngexShm::Instance()->Height();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
     const int SIZE_422 = WIDTH * HEIGHT * 2;
-    const int audio_samples_per_frame = 1920;
+    // Audio samples per frame not constant in NTSC so the
+    // calculation below doesn't quite work.
+    const int audio_samples_per_frame = 48000 * IngexShm::Instance()->FrameRateDenominator()
+                                              / IngexShm::Instance()->FrameRateNumerator();
 
     // Track enables
     unsigned int track_offset = channel_i * p_rec->mTracksPerChannel;
@@ -195,20 +202,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     if (quad_video)
     {
         // centre
-        tc_xoffset = 260;
-        tc_yoffset = 276;
+        tc_xoffset = WIDTH / 2 - 100;
+        tc_yoffset = HEIGHT / 2 - 12;
     }
     else
     {
         // top centre
-        tc_xoffset = 260;
+        tc_xoffset = WIDTH / 2 - 100;
         tc_yoffset = 30;
     }
 
 
     ACE_DEBUG((LM_INFO,
         ACE_TEXT("start_record_thread(%C, start_tc=%C res=%d bitc=%C)\n"),
-        src_name.c_str(), Timecode(start_tc).Text(), resolution, (bitc ? "on" : "off")));
+        src_name.c_str(), Timecode(start_tc, fps, df).Text(), resolution, (bitc ? "on" : "off")));
 
     // Set up packages and tracks
     prodauto::Recorder * rec = p_rec->Recorder();
@@ -228,132 +235,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_DEBUG((LM_ERROR, ACE_TEXT("MXF metadata unavailable.\n")));
         mxf = false;
     }
-#if 0
-    // I'll start all this with the SourcePackage I'm recording and will
-    // assume only one being recorded in this thread.  (Not necessarily
-    // the case at the moment but it will be eventually.)
-    prodauto::RecorderInputTrackConfig * ritc = 0;
-    if (ric)
-    {
-        ritc = ric->getTrackConfig(1); // index starts from 1
-    }
-    prodauto::SourceConfig * sc = 0;
-    if (ritc)
-    {
-        sc = ritc->sourceConfig;
-    }
-    prodauto::SourcePackage * rsp = 0;
-    if (sc)
-    {
-        rsp = sc->getSourcePackage();
-    }
-    // So, rsp is the SourcePackage to be recorded.
-
-    // Now make a material package for this recording.
-
-    prodauto::ProjectName project_name;
-    std::vector<prodauto::UserComment> user_comments;
-    p_rec->GetMetadata(project_name, user_comments); // user comments empty at the moment
-
-    prodauto::Timestamp now = prodauto::generateTimestampNow();
-
-    // Go through tracks
-    std::vector<prodauto::Track *>::const_iterator track_it = rsp->tracks.begin();
-
-    // Need to check if track enabled here
-        
-
-    // Create file packages
-    std::vector<prodauto::SourcePackage *> file_packages;
-    unsigned int n_files = (one_file_per_track ? rsp->tracks.size() : 1);
-    for (unsigned int i = 0; i < n_files; ++i)
-    {
-        // Create FileEssenceDescriptor
-        prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
-        fd->fileLocation = "filename"; // need filename
-        if (mxf)
-        {
-            fd->fileFormat = MXF_FILE_FORMAT_TYPE;
-        }
-        else
-        {
-            fd->fileFormat = UNSPECIFIED_FILE_FORMAT_TYPE;
-        }
-        fd->videoResolutionID = resolution;
-        fd->imageAspectRatio = image_aspect;
-        fd->audioQuantizationBits = mxf_audio_bits;
-
-        // Create file SourcePackage
-        prodauto::SourcePackage * fp = new prodauto::SourcePackage();
-        fp->uid = prodauto::generateUMID();
-        fp->name = p_opt->file_ident;
-        fp->creationDate = now;
-        fp->projectName = project_name;
-        fp->sourceConfigName = src_name;
-        fp->descriptor = fd;
-
-        // Add to vector of file packages
-        file_packages.push_back(fp);
-
-        // Create file package tracks
-        unsigned int n_tracks_per_file = (one_file_per_track ? 1 : rsp->tracks.size());
-        for (unsigned int i = 0; i < n_tracks_per_file; ++i)
-        {
-            prodauto::Track * src_trk = *track_it;
-            prodauto::Track * trk = new prodauto::Track();
-            fp->tracks.push_back(trk);
-            trk->id = src_trk->id; // using same id as src track makes things easier later on
-            trk->dataDef = src_trk->dataDef;
-            trk->name = src_trk->name;
-            trk->number = src_trk->number;
-
-            // Add track SourceClip refering to source/track being recorded
-            trk->sourceClip = new prodauto::SourceClip();
-            trk->sourceClip->sourcePackageUID = rsp->uid;
-            trk->sourceClip->sourceTrackID = src_trk->id;
-            trk->sourceClip->position = start_tc;
-
-            ++track_it;
-        }
-    }
-
-    // Create MaterialPackage
-    prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
-    mp->uid = prodauto::generateUMID();
-    mp->name = p_opt->file_ident;
-    mp->creationDate = now;
-    mp->projectName = project_name;
-
-    // Create material package tracks
-    for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
-    {
-        prodauto::Track * src_trk = rsp->tracks[i];
-
-        prodauto::Track * trk = new prodauto::Track();
-        mp->tracks.push_back(trk);
-
-        trk->id = src_trk->id;
-        trk->dataDef = src_trk->dataDef;
-        trk->number = src_trk->number;
-        trk->name = src_trk->name;
-
-        // Add track SourceClip refering to file package.
-        trk->sourceClip = new prodauto::SourceClip();
-        if (one_file_per_track)
-        {
-            trk->sourceClip->sourcePackageUID = file_packages[i]->uid;
-        }
-        else
-        {
-            trk->sourceClip->sourcePackageUID = file_packages[0]->uid;
-        }
-        trk->sourceClip->sourceTrackID = src_trk->id; // file package track id is same as source track id
-        trk->sourceClip->position = 0;
-        trk->sourceClip->length = 0; // will need to be filled in with p_opt->FramesWritten();
-    }
-
-
-#endif
 
     // Set some flags based on encoding type
 
@@ -514,6 +395,161 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // video resolution name
     std::string resolution_name = DatabaseEnums::Instance()->ResolutionName(resolution);
+
+    // Get project name
+    prodauto::ProjectName project_name;
+    std::vector<prodauto::UserComment> user_comments;
+    p_rec->GetMetadata(project_name, user_comments); // user comments empty at the moment
+
+#if PACKAGE_DATA
+    // I'll start all this with the SourcePackage I'm recording and will
+    // assume only one being recorded in this thread.  (Not necessarily
+    // the case at the moment but it will be eventually.)
+    prodauto::RecorderInputTrackConfig * ritc = 0;
+    if (ric)
+    {
+        ritc = ric->getTrackConfig(1); // index starts from 1
+    }
+    prodauto::SourceConfig * sc = 0;
+    if (ritc)
+    {
+        sc = ritc->sourceConfig;
+    }
+    prodauto::SourcePackage * rsp = 0;
+    if (sc)
+    {
+        rsp = sc->getSourcePackage();
+    }
+    // So, rsp is the SourcePackage to be recorded.
+    ACE_DEBUG((LM_INFO, ACE_TEXT("SourcePackage: %C\n"), rsp->name.c_str()));
+
+    // Now make a material package for this recording.
+
+    prodauto::Timestamp now = prodauto::generateTimestampNow();
+
+    // Go through tracks
+    std::vector<prodauto::Track *>::const_iterator rsp_trk_it = rsp->tracks.begin();
+
+
+    // Create file packages
+    std::vector<prodauto::SourcePackage *> file_packages;
+    unsigned int n_files = (one_file_per_track ? rsp->tracks.size() : 1);
+    for (unsigned int i = 0; i < n_files; ++i)
+    {
+        // Create FileEssenceDescriptor
+        prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
+        fd->fileLocation = filename.str();
+        fd->fileFormat = file_format;
+        fd->videoResolutionID = resolution;
+        fd->imageAspectRatio = image_aspect;
+        fd->audioQuantizationBits = mxf_audio_bits;
+
+        // Create file SourcePackage
+        std::ostringstream name;
+        name << p_opt->file_ident << "_" << i;
+        prodauto::SourcePackage * fp = new prodauto::SourcePackage();
+        fp->uid = prodauto::generateUMID();
+        fp->name = name.str();
+        fp->creationDate = now;
+        fp->projectName = project_name;
+        fp->sourceConfigName = sc->name;
+        fp->descriptor = fd;
+
+        ACE_DEBUG((LM_INFO, ACE_TEXT("File package %C\n"), fp->name.c_str()));
+
+
+        unsigned int n_tracks_per_file = (one_file_per_track ? 1 : rsp->tracks.size());
+        // tmp: limit tracks per file to 3 i.e. VA1A2
+        if (n_tracks_per_file > 3)
+        {
+            n_tracks_per_file = 3;
+        }
+
+        // Create file package tracks
+        for (unsigned int i = 0; i < n_tracks_per_file; ++i)
+        {
+            prodauto::Track * rsp_trk = *rsp_trk_it;
+
+            // Check here if track enabled
+
+            prodauto::Track * trk = new prodauto::Track();
+            fp->tracks.push_back(trk);
+            trk->id = rsp_trk->id; // using same id as src track makes things easier later on
+            trk->dataDef = rsp_trk->dataDef;
+            trk->editRate = rsp_trk->editRate;
+            trk->name = rsp_trk->name;
+            trk->number = rsp_trk->number;
+
+            // Add track SourceClip refering to source/track being recorded
+            trk->sourceClip = new prodauto::SourceClip();
+            trk->sourceClip->sourcePackageUID = rsp->uid;
+            trk->sourceClip->sourceTrackID = rsp_trk->id;
+            if (rsp_trk->dataDef == PICTURE_DATA_DEFINITION)
+            {
+                trk->sourceClip->position = start_tc;
+            }
+            else
+            {
+                double audio_pos = start_tc;
+                audio_pos /= prodauto::g_palEditRate.numerator;
+                audio_pos *= prodauto::g_palEditRate.denominator;
+                audio_pos *= rsp_trk->editRate.numerator;
+                audio_pos /= rsp_trk->editRate.denominator;
+                trk->sourceClip->position = (uint64_t) (audio_pos + 0.5);
+            }
+
+            ACE_DEBUG((LM_INFO, ACE_TEXT("Adding source track %d from %C\n"),
+                rsp_trk->id, rsp->name.c_str()));
+
+            ++rsp_trk_it;
+        }
+
+        // Add file package to vector, only if it has enabled tracks
+        if (fp->tracks.size())
+        {
+            file_packages.push_back(fp);
+        }
+    }
+
+    // Create MaterialPackage
+    prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
+    mp->uid = prodauto::generateUMID();
+    mp->name = p_opt->file_ident;
+    mp->creationDate = now;
+    mp->projectName = project_name;
+
+    ACE_DEBUG((LM_INFO, ACE_TEXT("Material package %C\n"), mp->name.c_str()));
+
+    // Create material package tracks
+    for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
+    {
+        prodauto::Track * src_trk = rsp->tracks[i];
+
+        prodauto::Track * trk = new prodauto::Track();
+        mp->tracks.push_back(trk);
+
+        trk->id = src_trk->id;
+        trk->dataDef = src_trk->dataDef;
+        trk->editRate = src_trk->editRate;
+        trk->number = src_trk->number;
+        trk->name = src_trk->name;
+
+        // Add track SourceClip refering to file package.
+        trk->sourceClip = new prodauto::SourceClip();
+        unsigned int fi = (one_file_per_track ? i : 0);
+        prodauto::SourcePackage * fp = file_packages[fi];
+        trk->sourceClip->sourcePackageUID = fp->uid;
+        trk->sourceClip->sourceTrackID = src_trk->id; // file package track id is same as source track id
+
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Adding source track %d from %C\n"),
+            src_trk->id, fp->name.c_str()));
+
+        trk->sourceClip->position = 0;
+        trk->sourceClip->length = 0; // will need to be filled in with p_opt->FramesWritten();
+    }
+
+
+#endif
 
     // Work out whether the primary video buffer (4:2:2 only) or the secondary
     // video (4:2:2 or 4:2:0) is to be used as the video input for encoding.
@@ -717,10 +753,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     std::auto_ptr<prodauto::MXFWriter> writer;
     if (mxf)
     {
-        prodauto::ProjectName project_name;
-        std::vector<prodauto::UserComment> user_comments;
-        //p_rec->GetMetadata(project_name, user_comments);
-
         std::ostringstream destination_path;
         std::ostringstream creating_path;
         std::ostringstream failures_path;
@@ -969,7 +1001,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     p_opt->index,
                     tc_i - last_tc - 1,
                     frame,
-                    Timecode(tc_i).Text()));
+                    Timecode(tc_i, fps, df).Text()));
             }
 
             // Make quad split
@@ -1296,7 +1328,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             framecount_t total = written + dropped;
             if (target > 0 && total >= target)
             {
-                Timecode out_tc(last_tc + 1);
+                Timecode out_tc(last_tc + 1, fps, df);
                 ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d) out frame %C\n"),
                     src_name.c_str(), p_opt->index, target, total, written, dropped, out_tc.Text()));
                 finished_record = true;
@@ -1384,14 +1416,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, false);
 
+    // Get user comments (only available after stop)
+    p_rec->GetMetadata(project_name, user_comments);
+
 
     // Complete MXF writing and save packages to database
     if (mxf)
     {
-        prodauto::ProjectName project_name;
-        std::vector<prodauto::UserComment> user_comments;
-        p_rec->GetMetadata(project_name, user_comments);
-
         try
         {
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C record thread %d completing MXF save\n"), src_name.c_str(), p_opt->index));
@@ -1410,89 +1441,36 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
     }
 
-#if 1
     // Store non-MXF recordings in database
+#if PACKAGE_DATA
     if (ENCODER_FFMPEG_AV == encoder)
     {
-        prodauto::ProjectName project_name;
-        std::vector<prodauto::UserComment> user_comments;
-        p_rec->GetMetadata(project_name, user_comments);
-
-        prodauto::Timestamp now = prodauto::generateTimestampNow();
-
-        // Create FileEssenceDescriptor
-        prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
-        fd->fileLocation = filename.str();
-        fd->fileFormat = UNSPECIFIED_FILE_FORMAT_TYPE;
-        fd->videoResolutionID = resolution;
-
-        // Create file SourcePackage
-        prodauto::SourcePackage * fp = new prodauto::SourcePackage();
-        fp->uid = prodauto::generateUMID();
-        fp->name = p_opt->file_ident;
-        fp->creationDate = now;
-        fp->projectName = project_name;
-        fp->sourceConfigName = src_name;
-        fp->descriptor = fd;
-
-        // Create file package tracks
+        // Update material package tracks with duration
+        for (std::vector<prodauto::Track *>::iterator
+            it = mp->tracks.begin(); it != mp->tracks.end(); ++it)
         {
-            // Just one for now
-            prodauto::Track * trk = new prodauto::Track();
-            fp->tracks.push_back(trk);
-            trk->id = 1;
-            trk->dataDef = PICTURE_DATA_DEFINITION;
-            trk->name = "V";
+            prodauto::Track * mt = *it;
 
-            // Get tape source package for the track
-            prodauto::RecorderInputTrackConfig * ritc = 0;
-            if (ric)
+            if (mt->dataDef == PICTURE_DATA_DEFINITION)
             {
-                ritc = ric->getTrackConfig(1);
+                mt->sourceClip->length = p_opt->FramesWritten();
             }
-            prodauto::SourceConfig * sc = 0;
-            if (ritc)
+            else
             {
-                sc = ritc->sourceConfig;
-            }
-            prodauto::SourcePackage * sp = 0;
-            if (sc)
-            {
-                sp = sc->getSourcePackage();
-            }
-            // and track SourceClip refering to tape package
-            if (sp)
-            {
-                trk->sourceClip = new prodauto::SourceClip();
-                trk->sourceClip->sourcePackageUID = sp->uid;
-                trk->sourceClip->sourceTrackID = 1;
-                trk->sourceClip->position = start_tc;
+                double audio_len = p_opt->FramesWritten();
+                audio_len /= prodauto::g_palEditRate.numerator;
+                audio_len *= prodauto::g_palEditRate.denominator;
+                audio_len *= mt->editRate.numerator;
+                audio_len /= mt->editRate.denominator;
+                mt->sourceClip->position = (uint64_t) (audio_len + 0.5);
             }
         }
 
-        // Create MaterialPackage
-        prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
-        mp->uid = prodauto::generateUMID();
-        mp->name = p_opt->file_ident;
-        mp->creationDate = now;
-        mp->projectName = project_name;
-
-        // Create material package tracks
+        // Add user comments to material package
+        for (std::vector<prodauto::UserComment>::const_iterator
+            it = user_comments.begin(); it != user_comments.end(); ++it)
         {
-            // just one for now
-            prodauto::Track * trk = new prodauto::Track();
-            mp->tracks.push_back(trk);
-            trk->id = 1;
-            trk->dataDef = PICTURE_DATA_DEFINITION;
-            trk->name = "V";
-            trk->number = 1;
-
-            // and track SourceClip refering to file package
-            trk->sourceClip = new prodauto::SourceClip();
-            trk->sourceClip->sourcePackageUID = fp->uid;
-            trk->sourceClip->sourceTrackID = 1;
-            trk->sourceClip->position = 0;
-            trk->sourceClip->length = p_opt->FramesWritten();
+            mp->addUserComment(it->name, it->value, it->position, it->colour);
         }
 
         // Now save packages in database
@@ -1502,11 +1480,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             db = prodauto::Database::getInstance();
             std::auto_ptr<prodauto::Transaction> transaction(db->getTransaction());
         
-            // Save the file source package first because material package has
-            // foreign key referencing it.
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving file package\n")));
-            db->savePackage(fp, transaction.get());
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving material package\n")));
+            // Save the file source packages first because material package has
+            // foreign keys referencing them.
+            for (std::vector<prodauto::SourcePackage *>::const_iterator
+                it = file_packages.begin(); it != file_packages.end(); ++it)
+            {
+                prodauto::SourcePackage * fp = *it;
+                ACE_DEBUG((LM_INFO, ACE_TEXT("Saving file package %C\n"), fp->name.c_str()));
+                db->savePackage(fp, transaction.get());
+            }
+            // Now save material package
+            ACE_DEBUG((LM_INFO, ACE_TEXT("Saving material package %C\n"), mp->name.c_str()));
             db->savePackage(mp, transaction.get());
 
             transaction->commitTransaction();
@@ -1515,13 +1499,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
         }
-
-        delete mp;
-        delete fp;
-        // ed gets deleted by file SourcePackage destructor
     }
+
+    // Clean up packages
+    for (std::vector<prodauto::SourcePackage *>::const_iterator
+        it = file_packages.begin(); it != file_packages.end(); ++it)
+    {
+        delete *it;
+    }
+    delete mp;
 #endif
 
+    // All done
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C record thread %d exiting\n"), src_name.c_str(), p_opt->index));
     return 0;
 }

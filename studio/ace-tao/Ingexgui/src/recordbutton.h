@@ -27,7 +27,7 @@
 class RecordButton : public wxButton
 {
 public:
-	RecordButton(wxWindow *, wxWindowID);
+	RecordButton(wxWindow *, wxWindowID, const wxString & = wxT(""));
 	virtual bool Enable(bool = true);
 	virtual void Disable();
 	void Record();

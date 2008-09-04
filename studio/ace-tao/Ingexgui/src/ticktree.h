@@ -62,6 +62,7 @@ class TickTreeCtrl : public wxTreeCtrl
 		bool HasProblem();
 		bool HasAllSignals();
 		bool RecordingSuccessfully();
+		unsigned int EnabledTracks();
 		void SetRecorderStateUnknown(const wxString &, const wxString &);
 		void SetRecorderStateProblem(const wxString &, const wxString &);
 		void SetRecorderStateOK(const wxString &);
@@ -80,7 +81,7 @@ class TickTreeCtrl : public wxTreeCtrl
 	private:
 		wxTreeItemId FindRecorder(const wxString &);
 		void OnLMouseDown(wxMouseEvent &);
-		int SelectRecursively(wxTreeItemId, bool = true, bool = false, bool = false);
+		int SelectRecursively(wxTreeItemId, unsigned int &, bool = true, bool = false, bool = false);
 		void SetRecorderState(const wxString &, bool, const wxString &);
 		void ReportState(wxTreeItemId, bool = true);
 		void ScanPackageNames(wxArrayString *, std::vector<bool> *, wxXmlNode * = 0);
@@ -97,7 +98,7 @@ class TickTreeCtrl : public wxTreeCtrl
     		DECLARE_EVENT_TABLE()
 };
 
-/// Information about each node in the tree.  mUnderlyingState indicates the state of the node ignoring unknown and problem conditions.  mLocked indicates that the node state shouldn't be changed.  Other members are used as follows:
+/// Information about each node in the tree.  mUnderlyingState indicates the state of the node ignoring unknown and problem conditions.  mLocked indicates that the node state shouldn't be changed.  mEnabledTracks indicates the number of offspring track nodes that are enabled for recording (not used for track nodes).  Other members are used as follows:
 /// root node:
 ///	int: -
 ///	bool: enabled track(s) that aren't router recorders all have tape ID(s)
@@ -118,8 +119,8 @@ class TickTreeCtrl : public wxTreeCtrl
 class ItemData : public wxTreeItemData
 {
 	public:
-		ItemData(TickTreeCtrl::state state, int intValue = 0, bool boolValue = false) : mInt(intValue), mBool(boolValue), mLocked(false), mUnderlyingState(state) {}
-		ItemData(TickTreeCtrl::state state, const wxString & stringValue, int intValue = 0, bool boolValue = false) : mString(stringValue), mInt(intValue),  mBool(boolValue), mLocked(false), mUnderlyingState(state) {}
+		ItemData(TickTreeCtrl::state state, int intValue = 0, bool boolValue = false) : mInt(intValue), mBool(boolValue), mLocked(false), mEnabledTracks(0), mUnderlyingState(state) {}
+		ItemData(TickTreeCtrl::state state, const wxString & stringValue, int intValue = 0, bool boolValue = false) : mString(stringValue), mInt(intValue),  mBool(boolValue), mLocked(false), mEnabledTracks(0), mUnderlyingState(state) {}
 		const int GetInt() { return mInt; }
 		void SetBool(bool state) { mBool = state; }
 		bool GetBool() { return mBool; }
@@ -129,11 +130,14 @@ class ItemData : public wxTreeItemData
 		void Lock() { mLocked = true; };
 		void Unlock() { mLocked = false; };
 		bool IsLocked() { return mLocked; };
+		void SetEnabledTracks(unsigned int number) { mEnabledTracks = number; };
+		unsigned int GetEnabledTracks() { return mEnabledTracks; };
 	private:
 		const wxString mString;
 		const int mInt;
 		bool mBool;
 		bool mLocked;
+		unsigned int mEnabledTracks;
 		TickTreeCtrl::state mUnderlyingState;
 };
 
