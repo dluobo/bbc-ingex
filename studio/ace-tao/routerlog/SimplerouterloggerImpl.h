@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.3 2008/04/18 16:56:38 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.4 2008/09/04 15:43:53 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -85,9 +85,6 @@ public:
       ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
       const ::CORBA::BooleanSeq & rec_enable,
-      const char * project,
-      const char * description,
-      const ::CORBA::StringSeq & tapes,
       ::CORBA::Boolean test_only
     )
     throw (
@@ -98,6 +95,9 @@ public:
   ::ProdAuto::Recorder::ReturnCode Stop (
       ::ProdAuto::MxfTimecode & stop_timecode,
       const ::ProdAuto::MxfDuration & post_roll,
+      const char * project,
+      const char * description,
+      const ::ProdAuto::LocatorSeq & locators,
       ::CORBA::StringSeq_out files
     )
     throw (

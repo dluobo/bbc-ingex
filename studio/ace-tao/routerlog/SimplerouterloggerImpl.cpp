@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.3 2008/04/18 16:56:38 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.4 2008/09/04 15:43:53 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -86,14 +86,18 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
 {
     bool result = true;
 
+    // Assume 25 fps
+    mEditRate.numerator   = 25;
+    mEditRate.denominator = 1;
+
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
-    mMaxPreRoll.edit_rate = EDIT_RATE;
+    mMaxPreRoll.edit_rate = mEditRate;
     mMaxPreRoll.samples = 0;
 
     // Setup post-roll
     mMaxPostRoll.undefined = true; // no limit to post-roll
-    mMaxPostRoll.edit_rate = EDIT_RATE;
+    mMaxPostRoll.edit_rate = mEditRate;
     mMaxPostRoll.samples = 0;
 
     // Setup format reply
@@ -112,7 +116,7 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     mTracksStatus->length(1);
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.signal_present = true;
-    ts.timecode.edit_rate = EDIT_RATE;
+    ts.timecode.edit_rate = mEditRate;
     ts.timecode.undefined = 0;
     ts.timecode.samples = 0;
 
@@ -232,9 +236,6 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::CORBA::BooleanSeq & rec_enable,
-    const char * project,
-    const char * description,
-    const ::CORBA::StringSeq & tapes,
     ::CORBA::Boolean test_only
   )
   throw (
@@ -268,6 +269,9 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
 ::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
+    const char * project,
+    const char * description,
+    const ::ProdAuto::LocatorSeq & locators,
     ::CORBA::StringSeq_out files
   )
   throw (
