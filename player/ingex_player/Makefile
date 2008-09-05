@@ -27,7 +27,7 @@ endif
 ifndef DISABLE_HTTP_ACCESS
 	SHTTPD_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/shttpd.h && echo $$f && break; done)
 	ifeq "$(SHTTPD_PATH)" ""
-$(warning: no shttpd library found - http access not available)
+$(warning no shttpd library found - http access not available)
 	endif
 endif	
 	
@@ -36,14 +36,14 @@ endif
 ifndef DISABLE_SHARED_MEM_SOURCE
 	TEST_SHM_PATH := $(shell for f in ../../studio/capture/nexus_control.h; do test -e $$f && echo $$f && break; done)
 	ifeq "$(TEST_SHM_PATH)" ""
-$(warning: shared memory source disabled)
+$(warning shared memory source disabled)
 	endif
 endif
 
 ifndef DISABLE_UDP_SOURCE
 	TEST_UDP_PATH := $(shell for f in ../../common/multicast_video.h; do test -e $$f && echo $$f && break; done)
 	ifeq "$(TEST_UDP_PATH)" ""
-$(warning: udp source disabled)
+$(warning udp source disabled)
 	endif
 endif
 
@@ -51,14 +51,14 @@ PORTAUDIO_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do t
 ifneq "$(PORTAUDIO_INCLUDE_PATH)" ""
 HAVE_PORTAUDIO = 1
 else
-$(warning: no PortAudio library found - No PC audio playback available)
+$(warning no PortAudio library found - No PC audio playback available)
 endif
 
 SDL_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/SDL/SDL.h && echo $$f && break; done)
 ifneq "$(SDL_INCLUDE_PATH)" ""
 HAVE_SDL = 1
 else
-$(warning: no SDL library found - SDL sink not available)
+$(warning no SDL library found - SDL sink not available)
 endif
 
 
@@ -193,19 +193,19 @@ all: libingexplayer.a player qc_player
 
 
 $(LIBMXF_DIR)/lib/libMXF.a:
-		cd $(LIBMXF_DIR)/lib && $(MAKE) libMXF.a
+	cd $(LIBMXF_DIR)/lib && $(MAKE) libMXF.a
 
 $(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a:
-		cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libd3mxfinfo.a
+	cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libd3mxfinfo.a
 
 $(LIBMXF_READER_DIR)/libMXFReader.a:
-		cd $(LIBMXF_READER_DIR) && $(MAKE) libMXFReader.a
+	cd $(LIBMXF_READER_DIR) && $(MAKE) libMXFReader.a
 
 $(COMMON_DIR)/libcommon.a:
-		cd $(COMMON_DIR) && $(MAKE) libcommon.a
+	cd $(COMMON_DIR) && $(MAKE) libcommon.a
 
 $(COMMON_DIR)/YUVlib/libYUVlib.a:
-		cd $(COMMON_DIR)/YUVlib && $(MAKE) all
+	cd $(COMMON_DIR)/YUVlib && $(MAKE) all
 
 		
 		

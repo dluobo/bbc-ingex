@@ -6,10 +6,11 @@ $(error Please set the AAFSDKINSTALL environment variable to the location of you
 endif	
 
 DATABASELIB_DIR = ../../database/src
+COMMONLIB_DIR = ../../../common
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(AAFSDKINSTALL)/include
+INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 LD = $(CC) -ldl -rdynamic
@@ -23,13 +24,12 @@ DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 all: create_aaf
 
 
-.PHONY: libprodautodb.a
-libprodautodb.a:
-	@cd $(DATABASELIB_DIR) && $(MAKE) $@
+$(DATABASELIB_DIR)/libprodautodb.a:
+	@cd $(DATABASELIB_DIR) && $(MAKE) libprodautodb.a
 
 	
-create_aaf: libprodautodb.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -laaflib -laafiid -lodbc++ -luuid -lpthread -o $@
+create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -laaflib -laafiid -lodbc++ -luuid -lpthread -lxerces-c -o $@
 
 	
 

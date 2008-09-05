@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.7 2008/09/05 16:47:19 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -60,7 +60,7 @@ static ACE_Thread_Mutex avcodec_mutex;
 
 const bool THREADED_MJPEG = true;
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
-#define PACKAGE_DATA 0 // Write to database for non-MXF files
+#define PACKAGE_DATA 1 // Write to database for non-MXF files
 
 // Macro to log an error using both the ACE_DEBUG() macro and the
 // shared memory placeholder for error messages

@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.cpp,v 1.3 2008/02/19 11:12:11 philipn Exp $
+ * $Id: CreateAAF.cpp,v 1.4 2008/09/05 16:48:32 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -56,6 +56,14 @@ using namespace prodauto;
 }
 
     
+typedef struct
+{
+    aafUInt16 red;
+    aafUInt16 green;
+    aafUInt16 blue;
+} RGBColor;
+
+
 // simple helper class to initialize and cleanup AAF library.
 struct CAAFInitialize
 {
@@ -78,17 +86,49 @@ CAAFInitialize aafInit;
     
 
 const aafUID_t NIL_UID = {0, 0, 0, { 0, 0, 0, 0, 0, 0, 0, 0}};
-    
+
+//
+// AAF Extensions required to interoperate with Avid editors
+//
+
+// Type defs
+static const aafUID_t kAAFTypeID_RGBColor = 
+    {0xe96e6d43, 0xc383, 0x11d3, {0xa0, 0x69, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kAAFTypeID_AvidStrongReference = 
+    {0xf9a74d0a, 0x7b30, 0x11d3, {0xa0, 0x44, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kTaggedValueStrongReferenceTypeID =
+    {0xda60bb00, 0xba41, 0x11d4, {0xa8, 0x12, 0x8e, 0x54, 0x1b, 0x97, 0x2e, 0xa3}};
+
+// Class defs
+static const aafUID_t kAAFClassID_Avid_MC_Mob_Reference =
+    {0x6619f8e0, 0xfe77, 0x11d3, {0xa0, 0x84, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+
+// Property defs
 static const aafUID_t kAAFPropID_DIDResolutionID = 
-    {0xce2aca4d, 0x51ab, 0x11d3, {0xa0, 0x24, 0x0, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+    {0xce2aca4d, 0x51ab, 0x11d3, {0xa0, 0x24, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
 static const aafUID_t kAAFPropID_DIDFrameSampleSize = 
-    {0xce2aca50, 0x51ab, 0x11d3, { 0xa0, 0x24, 0x0, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+    {0xce2aca50, 0x51ab, 0x11d3, {0xa0, 0x24, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
 static const aafUID_t kAAFPropID_DIDImageSize = 
-    {0xce2aca4f, 0x51ab, 0x11d3, {0xa0, 0x24, 0x0, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+    {0xce2aca4f, 0x51ab, 0x11d3, {0xa0, 0x24, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
 
+static const aafUID_t kAAFPropID_CommentMarkerColor = 
+    {0xe96e6d44, 0xc383, 0x11d3, {0xa0, 0x69, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+
+// AppCode and MobAttributeList are used by Avid to represent MultiCam groups
 static const aafUID_t kAAFPropID_MobAppCode = 
-    {0x96c46992, 0x4f62, 0x11d3, {0xa0, 0x22, 0x0, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
-
+    {0x96c46992, 0x4f62, 0x11d3, {0xa0, 0x22, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kAAFPropID_MobAttributeList = 
+    {0x60958183, 0x47b1, 0x11d4, {0xa0, 0x1c, 0x00, 0x04, 0xac, 0x96, 0x9f, 0x50}};
+static const aafUID_t kAAFPropID_PortableObject = 
+    {0xb6bb5f4e, 0x7b37, 0x11d3, {0xa0, 0x44, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kAAFPropID_PortableObjectClassID = 
+    {0x08835f4f, 0x7b28, 0x11d3, {0xa0, 0x44, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kAAFPropID_Mob_Reference_MobID = 
+    {0x81110e9f, 0xfe7c, 0x11d3, {0xa0, 0x84, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+static const aafUID_t kAAFPropID_Mob_Reference_Position = 
+    {0x81110ea0, 0xfe7c, 0x11d3, {0xa0, 0x84, 0x00, 0x60, 0x94, 0xeb, 0x75, 0xcb}};
+    
+// Compression defs
 static const aafUID_t kAAFCompressionDef_Avid_MJPEG_21 =
     {0x0e040201, 0x0201, 0x0108, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_Avid_MJPEG_31 =
@@ -101,6 +141,20 @@ static const aafUID_t kAAFCompressionDef_Avid_MJPEG_151s =
     {0x0e040201, 0x0201, 0x0202, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_Avid_MJPEG_201 =
     {0x0e040201, 0x0201, 0x0102, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
+
+
+static const RGBColor g_rgbColors[] =
+{
+    {65534, 65535, 65535}, // white
+    {41471, 12134, 6564 }, // red
+    {58981, 58981, 6553 }, // yellow
+    {13107, 52428, 13107}, // green
+    {13107, 52428, 52428}, // cyan
+    {13107, 13107, 52428}, // blue
+    {52428, 13107, 52428}, // magenta
+    {0    , 0    , 0    }  // black
+};
+
 
 
 static aafMobID_t convertUMID(prodauto::UMID& umid)
@@ -182,19 +236,19 @@ private:
     wchar_t* _value;
 };
 
-static WStringReturn convertName(string name)
+static WStringReturn convertString(string value)
 {
-    wchar_t* wName = new wchar_t[name.size() + 1];
+    wchar_t* wValue = new wchar_t[value.size() + 1];
 
-    mbstowcs(wName, name.c_str(), name.size());
-    wName[name.size()] = L'\0';
+    mbstowcs(wValue, value.c_str(), value.size());
+    wValue[value.size()] = L'\0';
     
-    return wName;
+    return wValue;
 }
 
 static WStringReturn createExtendedClipName(string name, int64_t startPosition)
 {
-    WStringReturn wName(convertName(name));
+    WStringReturn wName(convertString(name));
 
     size_t size = wcslen(wName) + 33;
     wchar_t* result = new wchar_t[size];
@@ -225,6 +279,8 @@ AAFFile::AAFFile(string filename)
 {
     IAAFSmartPointer<IAAFTypeDef> pTypeDef;
     IAAFSmartPointer<IAAFPropertyDef> pPropertyDef;
+    IAAFSmartPointer<IAAFTypeDefRecord> pRecordDef;
+    IAAFSmartPointer<IAAFTypeDef> pMemberTypeDef;
 
     
     remove(filename.c_str());
@@ -265,10 +321,13 @@ AAFFile::AAFFile(string filename)
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFCDCIDescriptor, &pCDCDCIDescriptor));
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFDigitalImageDescriptor, &pCDDigitalImageDescriptor));
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFPCMDescriptor, &pCDPCMDescriptor));
+        AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFCommentMarker, &pCDCommentMarker));
+        AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFDescriptiveMarker, &pCDDescriptiveMarker));
     
         // Lookup Picture and Sound DataDefinitions
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_LegacyPicture, &pPictureDef));
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_LegacySound, &pSoundDef));
+        AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_DescriptiveMetadata, &pDescriptiveMetadataDef));
     
         // register extension properties
         AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_Int32, &pTypeDef));
@@ -294,6 +353,95 @@ AAFFile::AAFFile(string filename)
                 L"AppCode", pTypeDef, &pPropertyDef));
         }
         
+        if (pCDCommentMarker->LookupPropertyDef(kAAFPropID_CommentMarkerColor, &pPropertyDef) != AAFRESULT_SUCCESS)
+        {
+            if (pDictionary->LookupTypeDef(kAAFTypeID_RGBColor, &pTypeDef) != AAFRESULT_SUCCESS)
+            {
+                AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_UInt16, &pMemberTypeDef));
+                
+                IAAFTypeDef* memberTypes[3];
+                memberTypes[0] = pMemberTypeDef;
+                memberTypes[1] = pMemberTypeDef;
+                memberTypes[2] = pMemberTypeDef;
+                
+                aafString_t memberNames[3];
+                aafCharacter member1Name[] = L"red";
+                aafCharacter member2Name[] = L"green";
+                aafCharacter member3Name[] = L"blue";
+                memberNames[0] = member1Name;
+                memberNames[1] = member2Name;
+                memberNames[2] = member3Name;
+                
+                AAF_CHECK(pDictionary->CreateMetaInstance(AUID_AAFTypeDefRecord, IID_IAAFTypeDefRecord, (IUnknown**)&pRecordDef));
+                AAF_CHECK(pRecordDef->Initialize(kAAFTypeID_RGBColor, memberTypes, memberNames, 3, L"RGBColor"));
+                
+                // register members so that a value can be created from a struct
+                aafUInt32 offsets[3];
+                offsets[0] = offsetof(RGBColor, red);
+                offsets[1] = offsetof(RGBColor, green);
+                offsets[2] = offsetof(RGBColor, blue);
+                
+                AAF_CHECK(pRecordDef->RegisterMembers(offsets, 3, sizeof(RGBColor)));
+
+                AAF_CHECK(pRecordDef->QueryInterface(IID_IAAFTypeDef, (void**)&pTypeDef));
+                AAF_CHECK(pDictionary->RegisterTypeDef(pTypeDef));
+            }
+            
+            AAF_CHECK(pCDCommentMarker->RegisterOptionalPropertyDef(kAAFPropID_CommentMarkerColor,
+                L"CommentMarkerColor", pTypeDef, &pPropertyDef));
+        }
+
+        if (pCDMob->LookupPropertyDef(kAAFPropID_MobAttributeList, &pPropertyDef) != AAFRESULT_SUCCESS)
+        {
+            // Register StrongReference type for containing a TaggedValue
+            IAAFSmartPointer<IAAFClassDef> spCDTaggedValue;
+            AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFTaggedValue, &spCDTaggedValue));
+
+            IAAFSmartPointer<IAAFTypeDefStrongObjRef> spTaggedValueStrongReference;
+            AAF_CHECK(pDictionary->CreateMetaInstance(AUID_AAFTypeDefStrongObjRef, IID_IAAFTypeDefStrongObjRef, (IUnknown **)&spTaggedValueStrongReference));
+            AAF_CHECK(spTaggedValueStrongReference->Initialize(kTaggedValueStrongReferenceTypeID, spCDTaggedValue, L"TaggedValueStrongReference"));
+
+            IAAFSmartPointer<IAAFTypeDef> spTD_fa;
+            AAF_CHECK(spTaggedValueStrongReference->QueryInterface(IID_IAAFTypeDef, (void**)&spTD_fa));
+            AAF_CHECK(pDictionary->RegisterTypeDef(spTD_fa));
+
+            // Register MobAttributeList property of type TaggedValueStrongReferenceVector on class Mob
+            AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_TaggedValueStrongReferenceVector, &pTypeDef));
+            AAF_CHECK(pCDMob->RegisterOptionalPropertyDef(kAAFPropID_MobAttributeList, L"MobAttributeList", pTypeDef, &pPropertyDef));
+
+            // Register the AvidStrongReference type
+            IAAFSmartPointer<IAAFClassDef> cdIntObj;
+            IAAFSmartPointer<IAAFTypeDefStrongObjRef> pStrongObjRefDef;
+            AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFInterchangeObject, &cdIntObj));
+            AAF_CHECK(pDictionary->CreateMetaInstance(AUID_AAFTypeDefStrongObjRef, IID_IAAFTypeDefStrongObjRef, (IUnknown**)&pStrongObjRefDef));
+            AAF_CHECK(pStrongObjRefDef->Initialize(kAAFTypeID_AvidStrongReference, cdIntObj, L"AvidStrongReference"));
+            AAF_CHECK(pStrongObjRefDef->QueryInterface(IID_IAAFTypeDef, (void**)&pTypeDef));
+            AAF_CHECK(pDictionary->RegisterTypeDef(pTypeDef));
+
+            // Register PortableObject property of type AvidStrongReference on class TaggedValue
+            AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_AvidStrongReference, &pTypeDef));
+            AAF_CHECK(spCDTaggedValue->RegisterOptionalPropertyDef(kAAFPropID_PortableObject, L"PortableObject", pTypeDef, &pPropertyDef));
+
+            // Register PortableObjectClassID property of type UInt32 on class TaggedValue
+            AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_UInt32, &pTypeDef));
+            AAF_CHECK(spCDTaggedValue->RegisterOptionalPropertyDef(kAAFPropID_PortableObjectClassID, L"PortableObjectClassID", pTypeDef, &pPropertyDef));
+
+            // Add Avid_MC_Mob_Reference class
+            IAAFClassDef *pcd = NULL;
+            AAF_CHECK(pDictionary->CreateMetaInstance(AUID_AAFClassDef, IID_IAAFClassDef, (IUnknown**)&pcd));
+            AAF_CHECK(pcd->Initialize(kAAFClassID_Avid_MC_Mob_Reference, cdIntObj, L"Avid MC Mob Reference", kAAFTrue));
+
+            // Add Mob_Reference_MobID property of type MobIDType
+            AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_MobIDType, &pTypeDef));
+            AAF_CHECK(pcd->RegisterNewPropertyDef(kAAFPropID_Mob_Reference_MobID, L"Mob Reference MobID", pTypeDef, kAAFFalse, kAAFFalse, &pPropertyDef));
+
+            // Add Mob_Reference_Position property of type Int64
+            AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_Int64, &pTypeDef));
+            AAF_CHECK(pcd->RegisterNewPropertyDef(kAAFPropID_Mob_Reference_Position, L"Mob Reference Position", pTypeDef, kAAFFalse, kAAFFalse, &pPropertyDef));
+
+            AAF_CHECK(pDictionary->RegisterClassDef(pcd));
+        }
+
     }
     catch (...)
     {    
@@ -459,7 +607,7 @@ void AAFFile::setAppCode(IAAFMob* pMob, aafInt32 value)
     
     AAF_CHECK(pMob->QueryInterface(IID_IAAFObject, (void**)&pObject));
     
-    // Get ResolutionID property and type definition
+    // Get AppCode property and type definition
     AAF_CHECK(pCDMob->LookupPropertyDef(kAAFPropID_MobAppCode, &pPropertyDef));
     AAF_CHECK(pPropertyDef->GetTypeDef(&pTypeDef));
     AAF_CHECK(pTypeDef->QueryInterface(IID_IAAFTypeDefInt, (void**)&pTypeDefInt));
@@ -487,6 +635,123 @@ void AAFFile::setAppCode(IAAFMob* pMob, aafInt32 value)
     
     // Set property value.
     AAF_CHECK(pObject->SetPropertyValue(pPropertyDef, pPropertyValue));
+}
+
+static HRESULT createMobAttrListTaggedValue(IAAFDictionary* const pDict, IAAFMob * const pReferencedMob, IAAFPropertyValue **ppPropertyValue)
+{
+    // Create tagged value 
+    IAAFSmartPointer<IAAFClassDef>    spClassDef;
+    IAAFSmartPointer<IAAFTaggedValue>  spTaggedValue;
+    IAAFSmartPointer<IAAFTypeDef> spStringDef;
+    AAF_CHECK(pDict->LookupClassDef(AUID_AAFTaggedValue, &spClassDef));
+    AAF_CHECK(spClassDef->CreateInstance(IID_IAAFTaggedValue, (IUnknown**)&spTaggedValue));
+    AAF_CHECK(pDict->LookupTypeDef(kAAFTypeID_String, &spStringDef));
+    aafCharacter tag[] = L"_MATCH";
+    aafCharacter value[] = L"__PortableObject";
+    AAF_CHECK(spTaggedValue->Initialize(tag, spStringDef, (wcslen(value) + 1) * sizeof(aafCharacter), (aafDataBuffer_t)value));
+
+    // Create the strong reference to tagged value
+    IAAFSmartPointer<IAAFTypeDef> spType;
+    IAAFSmartPointer<IAAFTypeDefObjectRef> spObjectReferenceType;
+    AAF_CHECK(pDict->LookupTypeDef(kTaggedValueStrongReferenceTypeID, &spType));
+    AAF_CHECK(spType->QueryInterface(IID_IAAFTypeDefObjectRef, (void **)&spObjectReferenceType));
+    AAF_CHECK(spObjectReferenceType->CreateValue(spTaggedValue, ppPropertyValue));
+
+    // Set value of PortableObjectClassID property on TaggedValue
+    IAAFSmartPointer<IAAFPropertyDef> spPropDef_POCID;
+    IAAFSmartPointer<IAAFTypeDef> pTypeDefPOCID;
+    IAAFSmartPointer<IAAFObject> pObject;
+    IAAFSmartPointer<IAAFTypeDefInt> pTypeDefInt;
+    AAF_CHECK(spClassDef->LookupPropertyDef(kAAFPropID_PortableObjectClassID, &spPropDef_POCID));
+    AAF_CHECK(spPropDef_POCID->GetTypeDef(&pTypeDefPOCID));
+    AAF_CHECK(pTypeDefPOCID->QueryInterface(IID_IAAFTypeDefInt, (void**)&pTypeDefInt));
+    aafUInt32    POCID_value = 0x4d434d52;        // 'M','C','M','R'
+    IAAFSmartPointer<IAAFPropertyValue> pPropertyValue;
+    AAF_CHECK(pTypeDefInt->CreateValue(reinterpret_cast<aafMemPtr_t>(&POCID_value), sizeof(POCID_value), &pPropertyValue));
+    AAF_CHECK(spTaggedValue->QueryInterface(IID_IAAFObject, (void**)&pObject));
+    AAF_CHECK(pObject->SetPropertyValue(spPropDef_POCID, pPropertyValue));
+
+    // Create an instance of class Avid_MC_Mob_Reference,
+    // and set properties Mob_Reference_Position and Mob_Reference_MobID
+    IAAFSmartPointer<IAAFClassDef>      spClassDefAvidMCMR;
+    IAAFSmartPointer<IAAFObject>        spObject;
+    IAAFSmartPointer<IAAFPropertyDef>   spPropDef;
+    IAAFSmartPointer<IAAFTypeDef>       spTypeDef;
+    IAAFSmartPointer<IAAFTypeDefInt>    spTypeDefInt;
+    AAF_CHECK(pDict->LookupClassDef(kAAFClassID_Avid_MC_Mob_Reference, &spClassDefAvidMCMR));
+
+    // Set Mob_Reference_Position property to value 0
+    AAF_CHECK(spClassDefAvidMCMR->LookupPropertyDef(kAAFPropID_Mob_Reference_Position, &spPropDef));
+    AAF_CHECK(spPropDef->GetTypeDef(&spTypeDef));
+    AAF_CHECK(spTypeDef->QueryInterface(IID_IAAFTypeDefInt, (void **)&spTypeDefInt));
+    aafInt64    pos = 0;
+    AAF_CHECK(spTypeDefInt->CreateValue(reinterpret_cast<aafMemPtr_t>(&pos), sizeof(pos), &pPropertyValue));
+    AAF_CHECK(spClassDefAvidMCMR->CreateInstance(IID_IAAFObject, (IUnknown**)&spObject));
+    AAF_CHECK(spObject->SetPropertyValue(spPropDef, pPropertyValue));
+
+    // Set Mob_Reference_MobID property to the MobID of the passed in Mob
+    IAAFSmartPointer<IAAFTypeDefRecord> spTypeDefRecord;
+    AAF_CHECK(spClassDefAvidMCMR->LookupPropertyDef(kAAFPropID_Mob_Reference_MobID, &spPropDef));
+    AAF_CHECK(spPropDef->GetTypeDef(&spTypeDef));
+    AAF_CHECK(spTypeDef->QueryInterface(IID_IAAFTypeDefRecord, (void **)&spTypeDefRecord));
+    aafMobIDType_t    uid;
+    AAF_CHECK(pReferencedMob->GetMobID(&uid));
+    AAF_CHECK(spTypeDefRecord->CreateValueFromStruct((aafMemPtr_t) &uid, sizeof(uid), &pPropertyValue));
+    AAF_CHECK(spClassDefAvidMCMR->CreateInstance(IID_IAAFObject, (IUnknown**)&spObject));
+    AAF_CHECK(spObject->SetPropertyValue(spPropDef, pPropertyValue));
+
+    // Set value of PortableObject property on TaggedValue
+    IAAFSmartPointer<IAAFPropertyDef> spPropDef_PO;
+    IAAFSmartPointer<IAAFTypeDef> pTypeDefPO;
+    AAF_CHECK(spClassDef->LookupPropertyDef(kAAFPropID_PortableObject, &spPropDef_PO));
+    AAF_CHECK(spPropDef_PO->GetTypeDef(&pTypeDefPO));
+    AAF_CHECK(spType->QueryInterface(IID_IAAFTypeDefObjectRef, (void **)&spObjectReferenceType));
+    AAF_CHECK(spObjectReferenceType->CreateValue(spObject, &pPropertyValue));
+    AAF_CHECK(pObject->SetPropertyValue(spPropDef_PO, pPropertyValue));
+
+    return S_OK;
+}
+
+
+void AAFFile::setMobAttributeList(IAAFMob* pMob, IAAFMob* const pRefMob)
+{
+    // Get the property def for AAFMob::MobAttributeList (from Mob ClassDef)
+    IAAFSmartPointer<IAAFClassDef> spClassDefMob;
+    IAAFSmartPointer<IAAFPropertyDef> spPropDef_MobAttr;
+    AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFMob, &spClassDefMob));
+    AAF_CHECK(spClassDefMob->LookupPropertyDef(kAAFPropID_MobAttributeList, &spPropDef_MobAttr));
+
+    //Now, create a property value .......
+
+    //first, get the type def
+    //Lookup the VA type
+    IAAFSmartPointer<IAAFTypeDef> pTypeDef;
+    AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_TaggedValueStrongReferenceVector, &pTypeDef));
+
+    //Get the VA typedef
+    IAAFSmartPointer<IAAFTypeDefVariableArray>  spVA;
+    AAF_CHECK(pTypeDef->QueryInterface(IID_IAAFTypeDefVariableArray, (void**)&spVA));
+
+
+    // Setup the array: create an array of strong references to tagged values
+    IAAFSmartPointer<IAAFPropertyValue> spElementPropertyValueArray[1];
+    IAAFPropertyValue *pElementPropertyValueArray[1]; // copies of pointers "owned by" the smartptr array.
+    IAAFSmartPointer<IAAFPropertyValue> spElementPropertyValue;
+    IAAFSmartPointer<IAAFPropertyValue> spArrayPropertyValue;
+
+    aafUInt32 i = 0;
+    AAF_CHECK(createMobAttrListTaggedValue(pDictionary, pRefMob, &spElementPropertyValue));
+    spElementPropertyValueArray[i] = spElementPropertyValue;
+    pElementPropertyValueArray[i] = spElementPropertyValueArray[i];
+
+    // Create an empty array and then fill it by appending elements...
+    AAF_CHECK(spVA->CreateEmptyValue(&spArrayPropertyValue));
+    AAF_CHECK(spVA->AppendElement(spArrayPropertyValue, pElementPropertyValueArray[i]));
+
+    // Set the value VA to the Object
+    IAAFSmartPointer<IAAFObject> spObj;
+    AAF_CHECK(pMob->QueryInterface(IID_IAAFObject, (void**)&spObj));
+    AAF_CHECK(spObj->SetPropertyValue(spPropDef_MobAttr, spArrayPropertyValue));
 }
 
 void AAFFile::setDIDInt32Property(IAAFClassDef* pCDDigitalImageDescriptor, 
@@ -525,6 +790,56 @@ void AAFFile::setDIDInt32Property(IAAFClassDef* pCDDigitalImageDescriptor,
         // Property value exists, modify it.
         AAF_CHECK(pTypeDefInt->SetInteger(pPropertyValue, 
             reinterpret_cast<aafMemPtr_t>(&value), sizeof(value)));
+    }
+    
+    // Set property value.
+    AAF_CHECK(pObject->SetPropertyValue(pPropertyDef, pPropertyValue));
+}
+
+void AAFFile::setRGBColor(IAAFCommentMarker* pCommentMarker, int colour)
+{
+    IAAFSmartPointer<IAAFObject> pObject;
+    IAAFSmartPointer<IAAFPropertyDef> pPropertyDef;
+    IAAFSmartPointer<IAAFTypeDef> pTypeDef;
+    IAAFSmartPointer<IAAFTypeDefRecord> pTypeDefRecord;
+    IAAFSmartPointer<IAAFPropertyValue> pPropertyValue;
+    RGBColor rgbColor;
+
+    if (colour < 1 || colour > 8)
+    {
+        rgbColor = g_rgbColors[USER_COMMENT_RED_COLOUR - 1];
+    }
+    else
+    {
+        rgbColor = g_rgbColors[colour - 1];
+    }
+    
+    AAF_CHECK(pCommentMarker->QueryInterface(IID_IAAFObject, (void**)&pObject));
+    
+    // Get property and type definition
+    AAF_CHECK(pCDCommentMarker->LookupPropertyDef(kAAFPropID_CommentMarkerColor, &pPropertyDef));
+    AAF_CHECK(pPropertyDef->GetTypeDef(&pTypeDef));
+    AAF_CHECK(pTypeDef->QueryInterface(IID_IAAFTypeDefRecord, (void**)&pTypeDefRecord));
+    
+    // Try to get prop value. If it doesn't exist, create it.
+    HRESULT hr = pObject->GetPropertyValue(pPropertyDef, &pPropertyValue);
+    if (hr != AAFRESULT_SUCCESS)
+    {
+        if (hr == AAFRESULT_PROP_NOT_PRESENT)
+        {
+            AAF_CHECK(pTypeDefRecord->CreateValueFromStruct(reinterpret_cast<aafMemPtr_t>(&rgbColor), sizeof(rgbColor), &pPropertyValue));
+        }
+        else
+        {
+            // this will throw an exception
+            AAF_CHECK(hr);
+        }
+    }
+    else
+    {
+        // Property value exists, modify it.
+        AAF_CHECK(pTypeDefRecord->SetStruct(pPropertyValue, 
+            reinterpret_cast<aafMemPtr_t>(&rgbColor), sizeof(rgbColor)));
     }
     
     // Set property value.
@@ -663,6 +978,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     aafLength_t length; 
     aafSlotID_t collectionSlotID = 1;
     aafSlotID_t mcSlotID = 1;
+    aafSlotID_t mcPictureSlotID = 0;
     bool includeSequence = !sequence.empty();
     aafSlotID_t seqSlotID = 1;
     int seqPictureSlotCount = 0;
@@ -685,6 +1001,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     AAF_CHECK(pClipCompositionMob->QueryInterface(IID_IAAFMob2, (void **)&pMob2));
     AAF_CHECK(pMob2->SetUsageCode(kAAFUsage_LowerLevel));
     setAppCode(pMCMob, 4);
+    setMobAttributeList(pCollectionMob, pMCMob);
     AAF_CHECK(pMCMob->SetName(createExtendedClipName(mcClipDef->name, startPosition)));
     AAF_CHECK(pHeader->AddMob(pMCMob));
     
@@ -989,6 +1306,12 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                     AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
                                     AAF_CHECK(pMobSlot->SetPhysicalNum(trackDef->number));
                                 }
+                                
+                                if (mcPictureSlotID < 1 && isPicture)
+                                {
+                                    mcPictureSlotID = mcSlotID;
+                                }
+                                
                                 mcSlotID++;
 
                             }
@@ -1332,18 +1655,194 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
         }
     }
 
+
+    // add user comments to the multi-camera composition mob
+    vector<UserComment> userComments = mergeUserComments(materialPackages);
+    mapUserComments(pMCMob, userComments, mcPictureSlotID >= 1 ? mcPictureSlotID : mcSlotID);
+    
+    // add the same user comments to the sequence composition mob
+    if (includeSequence)
+    {
+        mapUserComments(pSeqMob, userComments, mcPictureSlotID >= 1 ? mcPictureSlotID : mcSlotID);
+    }
 }
 
-void AAFFile::mapUserComments(Package* package, IAAFMob* mob)
+void AAFFile::mergeLocatorUserComment(vector<UserComment>& userComments, const UserComment& newComment)
 {
-    vector<UserComment> userComments = package->getUserComments();
-    vector<UserComment>::iterator iter;
-    for (iter = userComments.begin(); iter != userComments.end(); iter++)
+    if (newComment.position < 0)
     {
-        UserComment& userComment = *iter;
-        
-        AAF_CHECK(mob->AppendComment(convertName(userComment.name), convertName(userComment.value))); 
+        // not a locator user comment
+        return;
     }
+    
+    vector<UserComment>::iterator commentIter;        
+    for (commentIter = userComments.begin(); commentIter != userComments.end(); commentIter++)
+    {
+        UserComment& userComment = *commentIter;
+        
+        if (newComment.position < userComment.position)
+        {
+            userComments.insert(commentIter, newComment);
+            return;
+        }
+        if (newComment.position == userComment.position)
+        {
+            // first comment at a position is taken, all others are ignored
+            return;
+        }
+    }
+    
+    // position of new comment is beyond the current list of comments
+    userComments.push_back(newComment);        
+}
+
+vector<UserComment> AAFFile::mergeUserComments(MaterialPackageSet& materialPackages)
+{
+    vector<UserComment> mergedComments;
+    
+    // merge locator comments
+    MaterialPackageSet::const_iterator packageIter;
+    for (packageIter = materialPackages.begin(); packageIter != materialPackages.end(); packageIter++)
+    {
+        MaterialPackage* materialPackage = *packageIter;
+        
+        vector<UserComment> userComments = materialPackage->getUserComments();
+        
+        vector<UserComment>::const_iterator commentIter;
+        for (commentIter = userComments.begin(); commentIter != userComments.end(); commentIter++)
+        {
+            const UserComment& userComment = *commentIter;
+            
+            if (userComment.position >= 0)
+            {
+                mergeLocatorUserComment(mergedComments, userComment);
+            }
+        }
+    }
+
+    // copy static comments from the first package
+    packageIter = materialPackages.begin(); 
+    if (packageIter != materialPackages.end())
+    {
+        MaterialPackage* materialPackage = *packageIter;
+        
+        vector<UserComment> userComments = materialPackage->getUserComments();
+        
+        vector<UserComment>::const_iterator commentIter;
+        for (commentIter = userComments.begin(); commentIter != userComments.end(); commentIter++)
+        {
+            const UserComment& userComment = *commentIter;
+            
+            if (userComment.position < 0)
+            {
+                mergedComments.push_back(userComment);
+            }
+        }
+    }
+    
+    return mergedComments;
+}
+
+aafUInt32 AAFFile::getUserCommentsDescribedSlotId(Package* package)
+{
+    // get the video slot described by the comments 
+    // note: we assume there is a video track and otherwise the first audio is selected as the
+    // target for the comment markers
+
+    aafUInt32 describedSlotId = 0;
+    vector<Track*>::const_iterator trackIter;
+    for (trackIter = package->tracks.begin(); trackIter != package->tracks.end(); trackIter++)
+    {
+        Track* track = *trackIter;
+        
+        if (track->dataDef == PICTURE_DATA_DEFINITION)
+        {
+            describedSlotId = track->id;
+            break;
+        }
+        else if (describedSlotId == 0 && track->dataDef == SOUND_DATA_DEFINITION)
+        {
+            describedSlotId = track->id;
+        }
+    }
+    
+    return describedSlotId;
+}
+
+void AAFFile::mapUserComments(IAAFMob* mob, vector<UserComment> userComments, aafUInt32 describedSlotId)
+{
+    IAAFSmartPointer<IAAFMob2> pMob2;
+    IAAFSmartPointer<IAAFEventMobSlot> pEventMobSlot;
+    IAAFSmartPointer<IAAFMobSlot> pMobSlot;
+    IAAFSmartPointer<IAAFSequence> pSequence;
+    IAAFSmartPointer<IAAFDescriptiveMarker> pDescriptiveMarker;
+    IAAFSmartPointer<IAAFCommentMarker> pCommentMarker;
+    IAAFSmartPointer<IAAFEvent> pEvent;
+    IAAFSmartPointer<IAAFSegment> pSegment;
+    IAAFSmartPointer<IAAFComponent> pComponent;
+    aafRational_t editRate = {25, 1};
+    
+    // map static user comments (and check for positioned comments)
+    bool havePositionedComments = false;
+    vector<UserComment>::const_iterator commentIter;
+    for (commentIter = userComments.begin(); commentIter != userComments.end(); commentIter++)
+    {
+        const UserComment& userComment = *commentIter;
+        
+        if (userComment.position >= 0)
+        {
+            havePositionedComments = true;
+            continue;
+        }
+        
+        AAF_CHECK(mob->AppendComment(convertString(userComment.name), convertString(userComment.value))); 
+    }
+    
+    // map positioned comments
+    if (havePositionedComments)
+    {
+        AAF_CHECK(pCDSequence->CreateInstance(IID_IAAFSequence, (IUnknown **)&pSequence));
+        AAF_CHECK(pSequence->Initialize(pDescriptiveMetadataDef));
+        
+        for (commentIter = userComments.begin(); commentIter != userComments.end(); commentIter++)
+        {
+            const UserComment& userComment = *commentIter;
+            
+            if (userComment.position < 0)
+            {
+                continue;
+            }
+
+            // add comment marker to sequence
+            
+            AAF_CHECK(pCDDescriptiveMarker->CreateInstance(IID_IAAFDescriptiveMarker, (IUnknown **)&pDescriptiveMarker));
+            AAF_CHECK(pDescriptiveMarker->QueryInterface(IID_IAAFCommentMarker, (void **)&pCommentMarker));
+            AAF_CHECK(pDescriptiveMarker->QueryInterface(IID_IAAFEvent, (void **)&pEvent));
+            AAF_CHECK(pDescriptiveMarker->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+            
+            AAF_CHECK(pComponent->SetDataDef(pDescriptiveMetadataDef));
+            
+            AAF_CHECK(pEvent->SetPosition(userComment.position));
+            AAF_CHECK(pEvent->SetComment(convertString(userComment.value)));
+
+            aafUInt32 slots[1];
+            slots[0] = describedSlotId;
+            AAF_CHECK(pDescriptiveMarker->SetDescribedSlotIDs(1, slots));
+            
+            setRGBColor(pCommentMarker, userComment.colour);
+
+            
+            AAF_CHECK(pSequence->AppendComponent(pComponent));
+        }
+
+        // add sequence of comments to a event slot 
+        AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+        AAF_CHECK(mob->QueryInterface(IID_IAAFMob2, (void **)&pMob2));
+        AAF_CHECK(pMob2->AppendNewEventSlot(editRate, pSegment, 1000, L"", 0, &pEventMobSlot));
+        AAF_CHECK(pEventMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+        AAF_CHECK(pMobSlot->SetPhysicalNum(1));
+    }
+    
 }
 
 void AAFFile::mapMasterMob(MaterialPackage* materialPackage)
@@ -1367,12 +1866,13 @@ void AAFFile::mapMasterMob(MaterialPackage* materialPackage)
     AAF_CHECK(pCDMasterMob->CreateInstance(IID_IAAFMasterMob, (IUnknown **)&pMasterMob));
     AAF_CHECK(pMasterMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(materialPackage->uid)));
-    AAF_CHECK(pMob->SetName(convertName(materialPackage->name)));
+    AAF_CHECK(pMob->SetName(convertString(materialPackage->name)));
     AAF_CHECK(pMob->SetCreateTime(convertTimestamp(materialPackage->creationDate)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
-    mapUserComments(materialPackage, pMob);
+    aafUInt32 describedSlotId = getUserCommentsDescribedSlotId(materialPackage);
+    mapUserComments(pMob, materialPackage->getUserComments(), describedSlotId);
     
     // create mob slots
     vector<Track*>::const_iterator iter;
@@ -1400,7 +1900,7 @@ void AAFFile::mapMasterMob(MaterialPackage* materialPackage)
         
         // create mob slot        
         AAF_CHECK(pMob->AppendNewTimelineSlot(convertRational(track->editRate), pSegment, track->id,
-            convertName(track->name), 0, &pTimelineMobSlot));
+            convertString(track->name), 0, &pTimelineMobSlot));
         if (track->number != 0)
         {
             AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
@@ -1444,12 +1944,13 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
     AAF_CHECK(pCDSourceMob->CreateInstance(IID_IAAFSourceMob, (IUnknown **)&pFileSourceMob));
     AAF_CHECK(pFileSourceMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(sourcePackage->uid)));
-    AAF_CHECK(pMob->SetName(convertName(sourcePackage->name)));
+    AAF_CHECK(pMob->SetName(convertString(sourcePackage->name)));
     AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
-    mapUserComments(sourcePackage, pMob);
+    aafUInt32 describedSlotId = getUserCommentsDescribedSlotId(sourcePackage);
+    mapUserComments(pMob, sourcePackage->getUserComments(), describedSlotId);
     
     // create mob slots
     vector<Track*>::const_iterator iter;
@@ -1477,7 +1978,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
         
         // create mob slot. Note: (physical) track number is ignored for file source mobs        
         AAF_CHECK(pMob->AppendNewTimelineSlot(convertRational(track->editRate), pSegment, track->id,
-            convertName(track->name), 0, &pTimelineMobSlot));
+            convertString(track->name), 0, &pTimelineMobSlot));
     
         // create the file descriptor
         if (track->dataDef == PICTURE_DATA_DEFINITION)
@@ -1732,12 +2233,13 @@ void AAFFile::mapTapeSourceMob(SourcePackage* sourcePackage)
     AAF_CHECK(pCDSourceMob->CreateInstance(IID_IAAFSourceMob, (IUnknown **)&pTapeSourceMob));
     AAF_CHECK(pTapeSourceMob->QueryInterface(IID_IAAFMob, (void **)&pMob));
     AAF_CHECK(pMob->SetMobID(convertUMID(sourcePackage->uid)));
-    AAF_CHECK(pMob->SetName(convertName(sourcePackage->name)));
+    AAF_CHECK(pMob->SetName(convertString(sourcePackage->name)));
     AAF_CHECK(pMob->SetCreateTime(convertTimestamp(sourcePackage->creationDate)));
     AAF_CHECK(pHeader->AddMob(pMob));
 
     // user comments
-    mapUserComments(sourcePackage, pMob);
+    aafUInt32 describedSlotId = getUserCommentsDescribedSlotId(sourcePackage);
+    mapUserComments(pMob, sourcePackage->getUserComments(), describedSlotId);
     
     // append tape descriptor        
     AAF_CHECK(pCDTapeDescriptor->CreateInstance(IID_IAAFTapeDescriptor, (IUnknown **)&pTapeDesc));
@@ -1765,7 +2267,7 @@ void AAFFile::mapTapeSourceMob(SourcePackage* sourcePackage)
         AAF_CHECK(pTapeSourceMob->AddNilReference(track->id, track->sourceClip->length, 
             pDataDef, convertRational(track->editRate)));
         AAF_CHECK(pMob->LookupSlot(track->id, &pMobSlot));
-        AAF_CHECK(pMobSlot->SetName(convertName(track->name)));
+        AAF_CHECK(pMobSlot->SetName(convertString(track->name)));
         if (track->number != 0)
         {
             AAF_CHECK(pMobSlot->SetPhysicalNum(track->number));

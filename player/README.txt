@@ -12,7 +12,7 @@ etc. etc.
 
 Build requirements:
 
-libMXF, libMXFReader, libD3MXFInfo, FFMPEG, DVS SDK, FreeType
+libMXF, libMXFReader, libD3MXFInfo, FFMPEG, DVS SDK, FreeType, SDL
 
 
 
@@ -72,6 +72,10 @@ For audio replay, install via YaST if not already present:
   portaudio
   portaudio-devel
 
+
+6) SDL (Simple DirectMedia Layer Library)
+
+Install SDL-devel vis YaST
 
 
 Building the CPP library:

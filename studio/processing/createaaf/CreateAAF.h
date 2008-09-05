@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.h,v 1.2 2008/02/06 16:59:12 john_f Exp $
+ * $Id: CreateAAF.h,v 1.3 2008/09/05 16:48:32 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -60,8 +60,10 @@ public:
     
 private:
     void setAppCode(IAAFMob* pMob, aafInt32 value);
+    void setMobAttributeList(IAAFMob* pMob, IAAFMob* const pRefMob);
     void setDIDInt32Property(IAAFClassDef* pCDDigitalImageDescriptor, 
         IAAFDigitalImageDescriptor2* pDigitalImageDescriptor2, aafUID_t propertyId, aafInt32 value);
+    void setRGBColor(IAAFCommentMarker* pCommentMarker, int colour);
     bool haveMob(aafMobID_t mobID);        
     void getReferencedPackages(Package* topPackage, PackageSet& packages, PackageSet& referencedPackages);
     bool getSource(Track* track, PackageSet& packages, SourcePackage** fileSourcePackage, 
@@ -70,7 +72,10 @@ private:
     void createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
         std::vector<CutInfo> sequence);
     
-    void mapUserComments(Package* package, IAAFMob* mob);
+    void mergeLocatorUserComment(std::vector<UserComment>& userComments, const UserComment& newComment);
+    std::vector<UserComment> mergeUserComments(MaterialPackageSet& materialPackages);
+    aafUInt32 getUserCommentsDescribedSlotId(Package* package);
+    void mapUserComments(IAAFMob* mob, std::vector<UserComment> userComments, aafUInt32 describedSlotId);
     void mapMasterMob(MaterialPackage* materialPackage);
     void mapFileSourceMob(SourcePackage* sourcePackage);
     void mapTapeSourceMob(SourcePackage* sourcePackage);
@@ -95,8 +100,11 @@ private:
     IAAFSmartPointer<IAAFClassDef> pCDCDCIDescriptor;
     IAAFSmartPointer<IAAFClassDef> pCDDigitalImageDescriptor;
     IAAFSmartPointer<IAAFClassDef> pCDPCMDescriptor;
+    IAAFSmartPointer<IAAFClassDef> pCDCommentMarker;
+    IAAFSmartPointer<IAAFClassDef> pCDDescriptiveMarker;
     IAAFSmartPointer<IAAFDataDef> pPictureDef;
     IAAFSmartPointer<IAAFDataDef> pSoundDef;
+    IAAFSmartPointer<IAAFDataDef> pDescriptiveMetadataDef;
 };
 
 
