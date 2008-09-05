@@ -1,0 +1,73 @@
+# Copyright (C) 2008  British Broadcasting Corporation
+# Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+
+Introduction
+------------
+
+This is a basic introduction to WebIngex, primarily for people wishing to modify it. For installation instructions, see README.txt.
+
+Structure
+---------
+WebIngex is designed to be (fairly) extensible. It's basic structure is something like this:
+
+				WebIngex
+					|
+					|------ Injax(----RSH)
+					|
+		--------[modules]------------
+		|	  |			|			|
+	Status	Setup	Material	Logging
+		|
+		|
+	[monitors]-----------------------
+	   |		|			|		|
+	System	Recorders	Capture	   Copy
+
+
+What does that all mean? Well, as far as the user is concerned, there is just one interface - WebIngex. However, it's actually a bunch of "modules", which the user sees as tabs. So Status, Material, Logging and Setup are all self-contained modules. They can be accessed using the tabs at the top right of the interface, and their files are in /srv/www/cgi-bin/ingex-modules/. 
+
+Status is a slightly special case because it has more cross-interaction with the main interface due to it needing continual updates and so on. However, in the other cases, a module is simply a directory full of files, and each one is loaded dynamically when the user loads the home page. Adding or removing a new module is as simple as adding or removing a directory under /srv/www/cgi-bin/ingex-modules/
+
+There's also a special hidden module called "home" which provides the welcome, config and help pages. Its files are in ingex-config/home and it doesn't have a tab.
+
+Additionally, Injax is marked separately on the diagram above. Injax is a set of AJAX-type functions which were written for WebIngex but have been packaged separately as they are quite generic and could be used elsewhere. Injax in turn uses the RSH library. See Injax's own README for details.
+
+Finally, the Status module has its own sub-structure of "monitors". Any module could implement its own sub-structure in this way. For details of Status' structure, see ingex-modules/Status.ingexmodule/README.txt
+
+AJAX Page-loading
+-----------------
+In order to support constant and regular status monitoring updates, it was decided that a new page load should never be required in WebIngex if at all possible. This means some very important things for the code. All content loading is done via AJAX-type techniques, i.e. using xmlHttp request objects. Because of the code built into Injax, you do not need to know how this works, but you do need to adjust your code appropriately. For example:
+
+* For most basic purposes, you just build your pages to return standard HTML, but without <head> and <body> tags etc. So you will likely just return something like:
+	<h1>My Page</h1>
+	<p>Hello, welcome to a page.</p>
+
+* Links need to be adjusted - doing a standard <a href="mypage.pl">link text</a> will cause a page re-load, which is bad. Instead, use one of the built in functions to do an AJAX-style page load. Usually, what you want to do is simply replace the contents of the main contentPane with the contents of your new page, while leaving the navigation etc alone. To do this, simply use: <a href="javascript:getContent('myPage')">link text</a>. You can see full details of the available functions in the comments in injax.js and ingex.js. Functions allowing you to submit GET data or display the returned HTML in a particular DOM element are available for example.
+
+* Sending forms is a touch trickier, but not much. Injax has a handy sendForm() function to do this. e.g. set your form's action property to: "javascript:sendForm('ingexForm','submitpage')" to submit a form with the ID 'ingexForm' (so remember to put id="ingexform" in your <form> tag) to a page called submitpage.pl. Incidentally, you don't need to include the .pl extension (in fact you mustn't) or the file's location - it is assumed to be in your module's directory.
+
+* WebIngex makes use of the browser's history (making the back button useful even though new pages aren't actually being loaded) by using the RSH library, wrapped inside Injax. It's a good idea to look in injax.js and read the comments to see how to use this. Users will expect to be able to go back/forward through your pages, and to bookmark pages. If you don't correctly use the history features, bookmarks will have unexpected results as the correct state of the application will not be re-loaded on loading the bookmark. If all you want to do is simple page loads using getContent(), these are logged to the history automatically so you don't need to worry.
+
+* Using standard body.onLoad functions won't work as expected because the body is not being re-loaded when an AJAX request is used to load new content. Therefore a facility has been provided to execute a given JavaScript function once a piece of content has been loaded. A loaderFunctions register of named functions is kept and you can register your own functions with it, and then when you make a call to getContent(), getElement() or similar, you can specify a loaderFunction (by name) to be executed on load. Again, see the comments in injax.js for details.
+
+Creating a Module
+-----------------
+The whole point of the module structure is to keep particular functionality grouped together. Thus, the Setup module for example, groups all database-stored settings in one place. It has many pages, each a Perl script. Modules may also have their own JavaScript and CSS, so rather than add these to WebIngex's main JavaScript and CSS files (which would be a pain when adding/removing modules), they are included in the module directory too. They are dynamically loaded when the interface is started. This also allows better security, as only the JavaScript for visible modules is loaded. Finally, a module must have an HTML file to define its menu (the list of links at the left of the page).
+
+To create a module, create a new directory in /srv/www/cgi-bin/ingex-modules called <module name>.ingexmodule e.g. Material.ingexmodule
+For details of the file structure and so on, be sure to look at ingex-modules/Template/README.txt

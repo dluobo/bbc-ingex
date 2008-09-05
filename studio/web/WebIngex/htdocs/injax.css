@@ -1,0 +1,162 @@
+/*
+ * Copyright (C) 2008  British Broadcasting Corporation
+ * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+/*
+ * Injax : A simple javascript library of AJAX functions and similar
+ *
+ * CSS STYLES
+ */
+
+
+/* The minimised Insole */
+.consoleMinimised {
+	background-color: #eef;
+	text-align: center;
+	font-size: 60%;
+	margin: 0px;
+	border-top: 1px solid #777;
+	border-right: 1px solid #777;
+	border-left: 1px solid #777;
+	padding: 5px;
+	position: fixed;
+	bottom: 0px;
+	left: 8px;
+	width: 160px;
+	z-index:10;
+}
+
+/* The expanded Insole */
+.consoleExpanded {
+	background-color: #eef;
+	text-align: right;
+	font-size: 60%;
+	margin: 0px;
+	border-top: 1px solid #777;
+	padding: 5px;
+	padding-right: 10px;
+	position: fixed;
+	bottom: 0px;
+	left: 0px;
+	right: 0px;
+	z-index:10;
+	height: 200px;
+}
+
+/* When Insole is expanded, this class will be added to your content pane.
+   Use it to set the bottom padding high enough that Insole won't obscure
+   your content. Generally, set it to Insole's height plus a bit */
+.clearance {
+	margin-bottom: 220px;
+}
+
+/* The main text output for Insole */
+.consoleOutput {
+	text-align: left;
+	font-size: 1.2em;
+	display: none;
+	padding: 5px;
+	margin: 0px;
+	overflow: auto;
+	height: 160px;
+}
+.consoleOutput p {
+	margin: 0px;
+	padding: 0px;
+	padding-bottom: 3px;
+	padding-top: 3px;
+	border-bottom: 1px solid #aaa;
+}
+
+/* The popout Insole */
+.consolePopout {
+	background-color: #eef;
+	text-align: left;
+	font-size: 0.9em;
+	padding: 5px;
+}
+
+.consolePopout p {
+	margin: 0px;
+	padding: 0px;
+	padding-bottom: 3px;
+	padding-top: 3px;
+	border-bottom: 1px solid #aaa;
+}
+
+/* When an alert is displayed, change the console background colour to... */
+.alert {
+	background-color: #f44;
+}
+
+/* When an alert is displayed, a "special" element appears with
+ the message in. This is its style... */
+.insoleSpecial {
+	background-color: #333;
+	color: #fff;
+	text-align: left;
+	font-size: 60%;
+	margin: 0px;
+	border-top: 1px solid #777;
+	border-right: 1px solid #777;
+	border-left: 1px solid #777;
+	padding: 5px;
+	position: fixed;
+	bottom: 0px;
+	left: 186px;
+	right: 8px;
+	z-index:10;
+	display: none;
+}
+
+/* When an alert is displayed, this text/background colour are used  in the special message element*/
+.special {
+	background-color: #333;
+	color: #fff;
+}
+
+/* Simple error */
+.error {
+	color: red;
+}
+
+/* Injax uses a small "loading..." message box to indicate to users that content is being loaded
+ Here is the style for it */
+#loadingBox{
+	position: fixed;
+	top: 0;
+	left: 50%;
+	right: 50%;
+	font-size: 75%;
+	line-height: 150%;
+	width: 150px;
+	margin-left: auto;
+	margin-right: auto;
+	border-left: 1px solid #777;
+	border-right: 1px solid #777;
+	border-bottom: 1px solid #777;
+	text-align: center;
+	background-color: #ffd;
+	color: #222;
+	display: none;
+	filter:alpha(opacity=80);
+	-moz-opacity:0.8;
+	-khtml-opacity: 0.8;
+	opacity: 0.8;
+}

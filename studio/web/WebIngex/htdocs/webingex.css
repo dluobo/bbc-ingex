@@ -1,0 +1,329 @@
+/*
+ * Copyright (C) 2008  British Broadcasting Corporation
+ * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+/* High level element types */ 
+
+html {
+	padding: 0px;
+	margin: 0px;
+	font-family: sans-serif;
+}
+
+body {
+	padding: 0px;
+	padding-left:8px;
+	padding-top: 8px;
+	margin: 0px;
+}
+
+a:link, a:visited, a:active, a:hover{
+	text-decoration: none;
+	color: #226;
+}
+
+img {
+	margin-right:5px;
+}
+
+table th {
+	text-align: left; 
+	font-weight: bold; 
+	vertical-align: baseline;
+	padding: 3px;
+}
+
+table td {
+	text-align: left; 
+	padding: 3px;
+}
+
+/* Some general element styles */
+
+.hidden {
+	display: none;
+}
+
+.simpleBlock {
+	background-color: #eee;
+	border: 1px solid black;
+	padding: 10px;
+	padding-top: 0px;
+}
+
+.simpleButton {
+	background-color: #ccc;
+	color: black;
+	border: 1px solid black;
+	padding: 2px 4px;
+}
+
+.small {
+	font-size: 0.6em;
+}
+
+.indent {
+	padding-left: 25px;
+}
+
+.noBorderTable {
+	border-collapse: collapse;
+}
+
+.noBorderTable tr {
+	border: none;
+}
+
+.borderTable {
+	border-collapse: collapse;
+}
+
+.borderTable tr {
+	border: 1px solid black;
+}
+
+.borderTable td {
+	border: 1px solid black;
+}
+
+.borderTable th {
+	border: 1px solid black;
+}
+
+.propHeading1 {
+	font-weight:bold;
+	color: green;
+}
+
+.propHeading2 {
+	color: green;
+}
+
+/* Specific Elements */
+
+#pageHeader {
+	border-bottom: 2px solid black;
+	height: 50px;
+	top: 0px;
+	left: 8px;
+	right: 8px;
+	margin: 0px;
+	padding: 0px;
+	padding-top: 5px;
+	background-color: #fff;
+}
+
+/* Apply only to browsers better than IE6 */
+body > #pageHeader {
+/*	position: absolute;*/
+	position: fixed;
+}
+
+.logo{
+	top:5px;
+	border: 0px;
+	position: absolute;
+}
+
+.oshIcon{
+	display: none;
+	top: 5px;
+	border: 0px;
+	position: absolute;
+	left: 179px;
+}
+
+.numInputs{
+	display: none;
+	top: 5px;
+	position: absolute;
+	left: 308px;
+	width: 81px;
+	height: 46px;
+	color: black;
+	background-image: url('img/number_inputs.gif');
+}
+
+.rec{
+	color: white;
+	background-image: url('img/number_recording.gif');
+}
+
+.numInputs p{
+	font-weight: bold;
+	font-size: 1.3em;
+	margin-bottom: 2px;
+	text-align: center;
+	margin-top: 18px;
+}
+
+#options{
+	display: none;
+	font-size: 75%;
+	position: absolute;
+	right: 12px;
+	top: 8px;
+}
+
+#tabs{
+	position: absolute;
+	height: 22px;
+	line-height:22px;
+	right: 0px;
+	top: 33px;
+}
+
+#tabs ul {
+	list-style-type: none;
+	margin: 0;
+	padding: 0;
+}
+
+#tabs ul li {
+	float: left;
+}
+
+#tabs ul li a{
+	text-decoration: none;
+	display:block;
+}
+
+.tab{
+	width: 108px;
+	height: 22px;
+	background-image: url('img/tab.gif');
+	text-align: center;
+	color: black;
+}
+
+.tab a:link, .tab a:visited, .tab a:active, .tab a:hover {
+	color: black;
+}
+
+.tabSelected{
+	width: 108px;
+	height: 22px;
+	background-image: url('img/tab_selected.gif');
+	text-align: center;
+}
+
+.tabSelected a:link, .tabSelected a:visited, .tabSelected a:active, .tabSelected a:hover {
+	color: white;
+}
+
+#menu {
+	position: absolute;
+/*	position: fixed;*/
+	padding: 10px;
+	width: 150px;
+	text-align: left;
+	border-right: 1px solid black;
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+	background-color: #eee;
+	top:57px;
+/*	left: 8px;*/
+	display: none;
+}
+
+#menu ul {
+	padding: 0px;
+	margin: 0px;
+	list-style-type: none;
+}
+
+#menu ul li{
+	padding: 2px;
+	margin: 0px;
+	margin-bottom: 3px;
+}
+
+#menu ul li a{
+	display: block;
+}
+
+#menu ul li a:hover{
+	background-color: #aaf;
+}
+
+#pageBody {
+	clear: both;
+}
+
+.contentPane {
+	margin-left: 13px;
+	margin-right: 8px;
+	padding-left: 5px;
+	padding-right: 10px;
+	padding-bottom: 10px;
+	text-align: left;
+	/* IE will not display the header in a fixed position (position:fixed doesn't work in IE 6 or less)
+	so it needs a small top margin on the content pane. Set that here. However other browsers need a
+	bigger margin - this gets set below by the child selector CSS */
+	margin-top: 32px;
+}
+
+/* Set the upper margin bigger in non-IE browsers (which support position:fixed) - IE will ignore this tag as it 
+doesn't understand child selectors */
+body > div .contentPane {
+	margin-top: 70px;
+}
+
+.loadingIcon {
+	border: 0px;
+}
+
+.center {
+	text-align: center;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.nodeTable {
+	width: 100%;
+	border-spacing: 8px
+}
+
+.nodeTable h4 {
+	margin-bottom: 5px;
+}
+
+.nodeTable td{
+	background-color: #ececfc;
+	border: 1px solid black;
+	padding: 8px;
+	margin: 0px;
+	vertical-align: top;
+	width: 50%;
+}
+.nodeTable p {
+	padding: 0px;
+	padding-left: 5px;
+	margin: 0px;
+}
+
+/* Headings */
+
+#contentPane h1 {
+	font-size: 140%;
+}
+
+#contentPane h2 {
+	font-size: 120%;
+}

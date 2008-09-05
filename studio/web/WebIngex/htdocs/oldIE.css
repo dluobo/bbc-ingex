@@ -1,0 +1,77 @@
+/*
+ * Copyright (C) 2008  British Broadcasting Corporation
+ * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+/* The minimised Insole */
+.consoleMinimised {
+	position: absolute;
+	top: 57px;
+	left: 8px;
+	margin: 0px;
+	border: 1px solid black;
+	border-top: none;
+	padding: 5px;
+	width: 160px;
+	height: 16px;
+}
+
+#insoleSpecial {
+	position: absolute;
+	top: 57px;
+	left: 186px;
+	margin: 0px;
+	margin-bottom: 10px;
+	border: 1px solid black;
+	border-top: none;
+	padding: 5px;
+	height: 16px;
+}
+
+#pageHeader {
+	height: 42px;
+}
+
+#tabs{
+	right: 8px;
+}
+
+.logo {
+	top: 5px;
+}
+
+.oshIcon{
+	top: 5px;
+	left: 187px;
+}
+
+.numInputs{
+	top: 5px;
+	left: 316px;
+}
+
+#loadingBox{
+	position: absolute;
+	font-size: 75%;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+#menu {
+	top: 84px;
+}
