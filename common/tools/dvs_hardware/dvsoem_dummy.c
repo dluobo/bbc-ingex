@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.1 2008/07/08 14:59:20 philipn Exp $
+ * $Id: dvsoem_dummy.c,v 1.2 2008/09/16 09:38:02 stuart_hc Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -28,9 +28,10 @@
 #include <sys/time.h>
 
 #include "../../video_burn_in_timecode.h"
+#include "../../video_test_signals.h"
 
-#include "dvs_clib.h"
-#include "dvs_fifo.h"
+#include "dummy_include/dvs_clib.h"
+#include "dummy_include/dvs_fifo.h"
 
 // The sv_handle structure looks like this
 // typedef struct {
@@ -44,13 +45,24 @@
 // } sv_handle;
 //
 
+// Represents whether LTC, VITC or both are being generated
+typedef enum {
+	DvsTcAll,
+	DvsTcLTC,
+	DvsTcVITC
+} DvsTcQuality;
+
 // The DvsCard structure stores hardware parameters
 // used to simulate an hardware SDI I/O card
 typedef struct {
 	int card;
 	int channel;
+	int width;
+	int height;
+	int frame_size;
 	int frame_count;
 	int dropped;
+	DvsTcQuality tc_quality;
 	struct timeval start_time;
 	sv_fifo_buffer fifo_buffer;
 	unsigned char *source_dmabuf;
@@ -58,10 +70,6 @@ typedef struct {
 	FILE *log_fp;
 #endif
 } DvsCard;
-
-static int source_frame_size = 0;
-static int source_width = 0;
-static int source_height = 0;
 
 static inline void write_bcd(unsigned char* target, int val)
 {
@@ -89,43 +97,6 @@ typedef struct {
 	double          position;
 	unsigned char   colour[4];
 } bar_colour_t;
-
-// Generate a video buffer containing uncompressed UYVY video representing
-// the familiar colour bars test signal (or YUY2 video if specified).
-static void create_colour_bars(unsigned char *video_buffer, int width, int height)
-{
-	int             i,j,b;
-	bar_colour_t    UYVY_table[] = {
-                {52/720.0,  {0x80,0xEB,0x80,0xEB}}, // white
-                {140/720.0, {0x10,0xD2,0x92,0xD2}}, // yellow
-                {228/720.0, {0xA5,0xA9,0x10,0xA9}}, // cyan
-                {316/720.0, {0x35,0x90,0x22,0x90}}, // green
-                {404/720.0, {0xCA,0x6A,0xDD,0x6A}}, // magenta
-                {492/720.0, {0x5A,0x51,0xF0,0x51}}, // red
-                {580/720.0, {0xf0,0x29,0x6d,0x29}}, // blue
-                {668/720.0, {0x80,0x10,0x80,0x10}}, // black
-                {720/720.0, {0x80,0xEB,0x80,0xEB}}  // white
-            };
-
-	for (j = 0; j < height; j++)
-	{
-        for (i = 0; i < width; i+=2)
-        {
-            for (b = 0; b < 9; b++)
-            {
-                if ((i / ((double)width)) < UYVY_table[b].position)
-                {
-                    // UYVY packing
-                    video_buffer[j*width*2 + i*2 + 0] = UYVY_table[b].colour[0];
-                    video_buffer[j*width*2 + i*2 + 1] = UYVY_table[b].colour[1];
-                    video_buffer[j*width*2 + i*2 + 2] = UYVY_table[b].colour[2];
-                    video_buffer[j*width*2 + i*2 + 3] = UYVY_table[b].colour[3];
-                    break;
-                }
-            }
-        }
-	}
-}
 
 static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
 {
@@ -162,17 +133,17 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 		gettimeofday(&dvs->start_time, NULL);
 
 	// For record, copy video + audio to dma.addr
-	memcpy(pbuffer->dma.addr, dvs->source_dmabuf, source_frame_size);
+	memcpy(pbuffer->dma.addr, dvs->source_dmabuf, dvs->frame_size);
 
 	// Update timecodes
 	dvs->frame_count++;
 	int dvs_tc = int_to_dvs_tc(dvs->frame_count);
-	pbuffer->timecode.vitc_tc = dvs_tc;
-	pbuffer->timecode.vitc_tc2 = dvs_tc;
-	pbuffer->timecode.ltc_tc = dvs_tc;
+	pbuffer->timecode.vitc_tc = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
+	pbuffer->timecode.vitc_tc2 = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
+	pbuffer->timecode.ltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
 
-	// Burn timecode in video
-	burn_mask_uyvy(dvs->frame_count, 40, 40, 720, 576, (unsigned char *)pbuffer->dma.addr);
+	// Burn timecode in video at x,y offset 40,40
+	burn_mask_uyvy(dvs->frame_count, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
 
 	// Update hardware values
 	pbuffer->control.tick = dvs->frame_count * 2;
@@ -222,6 +193,10 @@ int sv_fifo_reset(sv_handle * sv, sv_fifo * pfifo)
 int sv_query(sv_handle * sv, int cmd, int par, int *val)
 {
 	*val = SV_OK;
+	return SV_OK;
+}
+int sv_option_set(sv_handle * sv, int code, int val)
+{
 	return SV_OK;
 }
 int sv_option_get(sv_handle * sv, int code, int *val)
@@ -274,23 +249,49 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	dvs->start_time.tv_sec = 0;
 	dvs->start_time.tv_usec = 0;
 	dvs->dropped = 0;
+	dvs->tc_quality = DvsTcAll;
 	*psv = (sv_handle*)dvs;
 
-	// Initialise with PAL sample frame for recording
-	int width = 720;
-	int height = 576;
-	int video_size = width * height * 2;
+	// Default is PAL width & height
+	dvs->width = 720;
+	dvs->height = 576;
+
+	// Check DVSDUMMY_PARAM environment variable and change defaults if necessary.
+	// Examples of supported parameters are:
+	//
+	// video=1920x1080
+	// good_tc=A/L/V
+	const char *p_env = getenv("DVSDUMMY_PARAM");
+	if (p_env) {
+		const char *p_videoparam = strstr(p_env, "video=");
+		const char *p_good_tc = strstr(p_env, "good_tc=");
+		if (p_videoparam) {
+			int tmpw, tmph;
+			if (sscanf(p_env, "video=%dx%d", &tmpw, &tmph) == 2) {
+				dvs->width = tmpw;
+				dvs->height = tmph;
+			}
+		}
+		if (p_good_tc) {
+			const char *p_qual = p_good_tc + strlen("good_tc=");
+			if (*p_qual == 'L')
+				dvs->tc_quality = DvsTcLTC;
+			if (*p_qual == 'V')
+				dvs->tc_quality = DvsTcVITC;
+		}
+	}
+	int video_size = dvs->width * dvs->height * 2;
 
 	// DVS dma transfer buffer is:
 	// <video (UYVY)><audio ch 1+2 with fill to 0x4000><audio ch 3+4 with fill>
-	source_frame_size = video_size + 0x4000 + 0x4000;
-	dvs->source_dmabuf = malloc(source_frame_size);
+	dvs->frame_size = video_size + 0x4000 + 0x4000;
+	dvs->source_dmabuf = malloc(dvs->frame_size);
 	unsigned char *video = dvs->source_dmabuf;
 	unsigned char *audio12 = video + video_size;
 	unsigned char *audio34 = audio12 + 0x4000;
 
 	// setup colorbars
-	create_colour_bars(video, width, height);
+	uyvy_color_bars(dvs->width, dvs->height, video);
 
 	// TODO: create audio tone or click
 	int i;
@@ -308,9 +309,6 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	// Setup fifo_buffer which contains offsets to audio buffers
 	dvs->fifo_buffer.audio[0].addr[0] = (char*)video_size;
 	dvs->fifo_buffer.audio[0].addr[1] = (char*)(video_size + 0x4000);
-
-	source_width = width;
-	source_height = height;
 
 #ifdef DVSDUMMY_LOGGING
 	// logging for debugging
@@ -345,8 +343,9 @@ char * sv_geterrortext(int code)
 
 int sv_status(sv_handle * sv, sv_info * info)
 {
-	info->xsize = source_width;
-	info->ysize = source_height;
+	DvsCard *dvs = (DvsCard*)sv;
+	info->xsize = dvs->width;
+	info->ysize = dvs->height;
 	return SV_OK;
 }
 
@@ -365,7 +364,7 @@ void sv_errorprint(sv_handle * sv, int code)
 	return;
 }
 
-export int sv_timecode_feedback(sv_handle * sv, sv_timecode_info* input, sv_timecode_info* output)
+int sv_timecode_feedback(sv_handle * sv, sv_timecode_info* input, sv_timecode_info* output)
 {
 	return SV_OK;
 }
