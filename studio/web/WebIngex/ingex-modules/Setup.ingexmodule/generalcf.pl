@@ -28,7 +28,8 @@ use ingexconfig;
 use prodautodb;
 use db;
 use datautil;
-use htmlutil; use ingexhtmlutil;;
+use htmlutil; 
+use ingexhtmlutil;;
 
 
 
@@ -40,7 +41,7 @@ my $dbh = prodautodb::connect(
     or die();
 
 
-my $rcls = db::load_recording_locations($dbh) or 
+my $rcls = prodautodb::load_recording_locations($dbh) or 
     return_error_page("failed to load recorder locations: $prodautodb::errstr");
 
 

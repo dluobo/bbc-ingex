@@ -22,7 +22,8 @@ use strict;
 use Switch;
 use lib ".";
 use lib "..";
-use IngexStatus;
+use lib "../../ingex-config";
+use IngexJSON;
 
 my $friendlyName = "Capture";
 my $pollTime = 0;

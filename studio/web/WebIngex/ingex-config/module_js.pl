@@ -69,6 +69,10 @@ sub getJS
 	my $line;
 	my $fileFound = 1;
 	my $retval;
+	
+	my $x = "moduleJSLoaded = true;";
+	push(@javaScript, $x);
+	
 	open (FUNCTFILE, '<../ingex-modules/'.$module.'.ingexmodule/javascript.js') or $fileFound = 0;
 	if($fileFound == 1) {
 		while ($line = <FUNCTFILE>) {
@@ -84,7 +88,7 @@ sub getJS
 		if ($module =~ /(\w*)/) {
 	    	$retval = `../ingex-modules/$1.ingexmodule/javascript.pl`;
 		}
-		return $retval;
+		return "moduleJSLoaded = true;\n\n".$retval;
 	}
-	return 0;
+	return "moduleJSLoaded = true;";
 }

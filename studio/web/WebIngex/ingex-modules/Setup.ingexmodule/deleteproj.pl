@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 # Copyright (C) 2008  British Broadcasting Corporation
-# Author: Philip de Nier <philipn@users.sourceforge.net>
+# Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License

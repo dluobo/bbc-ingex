@@ -26,7 +26,7 @@ use lib ".";
 use lib "../../ingex-config";
 use ingexconfig;
 use ingexhtmlutil;
-use IngexStatus;
+use IngexJSON;
 use LWP::UserAgent;
 use HTTP::Request;
 

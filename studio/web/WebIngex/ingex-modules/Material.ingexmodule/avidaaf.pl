@@ -183,7 +183,7 @@ elsif (defined param("Send1") || defined param("Send2"))
             $prefix = join("/", $exportDir, $filenamePrefix);
         }
 
-        my $addTSSuffix = defined param("ftssuffix");
+        my $addTSSuffix = (param("ftssuffix") eq "on");
 
         my $includeDirectorsCut = defined param("directorscut");
         my $dcDb = get_directors_cut_db(param("dcsource"));
@@ -229,7 +229,7 @@ elsif (defined param("Send1") || defined param("Send2"))
                 "--dbpassword $ingexConfig{'db_password'}", # database password
                 ">$resultsFilename"
         );
-		system($cmd) == 0 or return_error_page("Failed to export Avid AAF file. Using create_aaf in location: $ingexConfig{'create_aaf_dir'} and command $cmd");
+		system($cmd) == 0 or return_error_page("Failed to export Edit file. Using create_aaf in location: $ingexConfig{'create_aaf_dir'} and command $cmd");
         
         # extract the results
         open(AAFRESULTS, "<", "$resultsFilename") 
@@ -289,7 +289,7 @@ elsif (defined param("Send1") || defined param("Send2"))
 
 
 my $page = get_page_content($vresIds, $errorMessage)
-    or return_error_page("failed to fill in content for Avid AAF export page");
+    or return_error_page("failed to fill in content for edit file export page");
        
 print header;
 print $page;
@@ -392,7 +392,7 @@ sub get_success_content
     
     my @pageContent;
     
-    push(@pageContent, h1("Successfully exported Avid AAF file"));
+    push(@pageContent, h1("Successfully exported file"));
 
     push(@pageContent, 
         p(
@@ -442,7 +442,7 @@ sub get_no_material_content
 {
     my @pageContent;
     
-    push(@pageContent, h1("No material to export to Avid AAF file"));
+    push(@pageContent, h1("No material to export to edit file"));
 
     return join("", @pageContent);
 }
@@ -533,7 +533,7 @@ sub get_page_content
 
 	push(@pageContent,
         p(
-            "Material Location:",
+            "Editing directory path:",
             textfield({
                 name => "fcploc", 
                 value => "",

@@ -22,7 +22,8 @@ use strict;
 use Switch;
 use lib ".";
 use lib "..";
-use IngexStatus;
+use lib "../../ingex-config";
+use IngexJSON;
 
 # Specify some basics about your monitor...
 my $friendlyName = "Template Monitor";

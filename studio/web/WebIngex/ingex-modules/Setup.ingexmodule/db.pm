@@ -40,10 +40,6 @@ BEGIN
 
     @ISA = qw(Exporter);
     @EXPORT = qw(
-        &load_recording_locations
-        &save_recording_location 
-        &update_recording_location 
-        &delete_recording_location
         &load_source_configs
         &load_source_config
         &save_source_config
@@ -109,156 +105,6 @@ our %dataDef = (
     "Picture"           => 1,
     "Sound"             => 2
 );
-
-####################################
-#
-# Recording Locations
-#
-####################################
-
-sub load_recording_locations
-{
-    my ($dbh) = @_;
-    
-    my $rls;
-    eval
-    {
-        my $sth = $dbh->prepare("
-            SELECT rlc_identifier AS id, 
-                rlc_name AS name
-            FROM RecordingLocation
-            ");
-        $sth->execute;
-        
-        $rls = $sth->fetchall_arrayref({});
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
-        return undef;
-    }
-    
-    return $rls;    
-}
-
-sub load_recording_location
-{
-    my ($dbh, $rlcId) = @_;
-    
-    my $localError = "unknown error";
-    my $rlc;
-    eval
-    {
-        my $sth = $dbh->prepare("
-            SELECT rlc_identifier AS id, 
-                rlc_name AS name
-            FROM RecordingLocation
-            WHERE
-                rlc_identifier = ?
-            ");
-        $sth->bind_param(1, $rlcId, SQL_INTEGER);
-        $sth->execute;
-        
-        unless ($rlc = $sth->fetchrow_hashref())
-        {
-            $localError = "Failed to load recording location with id $rlcId";
-            die;
-        }
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : $localError;
-        return undef;
-    }
-    
-    return $rlc;    
-}
-
-sub save_recording_location
-{
-    my ($dbh, $name) = @_;
-
-    my $nextId;
-    eval
-    {
-        $nextId = prodautodb::_load_next_id($dbh, "rlc_id_seq");
-        
-        my $sth = $dbh->prepare("
-            INSERT INTO RecordingLocation 
-                (rlc_identifier, rlc_name)
-            VALUES
-                (?, ?)
-            ");
-        $sth->bind_param(1, $nextId, SQL_INTEGER);
-        $sth->bind_param(2, $name, SQL_VARCHAR);
-        $sth->execute;
-        
-        $dbh->commit;
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = $@;#$dbh->errstr;
-        eval { $dbh->rollback; };
-        return undef;
-    }
-    
-    return $nextId;
-}
-
-sub update_recording_location
-{
-    my ($dbh, $rlc) = @_;
-
-    eval
-    {
-        my $sth = $dbh->prepare("
-            UPDATE RecordingLocation
-            SET
-                rlc_name = ?
-            WHERE
-                rlc_identifier = ?
-            ");
-        $sth->bind_param(1, $rlc->{'NAME'}, SQL_VARCHAR);
-        $sth->bind_param(2, $rlc->{'ID'}, SQL_INTEGER);
-        $sth->execute;
-        
-        $dbh->commit;
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = $dbh->errstr;
-        eval { $dbh->rollback; };
-        return 0;
-    }
-
-    return 1;    
-}
-
-sub delete_recording_location
-{
-    my ($dbh, $id) = @_;
-
-    eval
-    {
-        my $sth = $dbh->prepare("
-            DELETE FROM RecordingLocation
-            WHERE
-                rlc_identifier = ?
-            ");
-        $sth->bind_param(1, $id, SQL_INTEGER);
-        $sth->execute;
-        
-        $dbh->commit;
-    };
-    if ($@)
-    {
-        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
-        eval { $dbh->rollback; };
-        return 0;
-    }
-    
-    return 1;
-}
 
 ####################################
 #
@@ -2522,6 +2368,314 @@ sub delete_project
             DELETE FROM ProjectName
             WHERE
                 pjn_identifier = ?
+            ");
+        $sth->bind_param(1, $id, SQL_INTEGER);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        eval { $dbh->rollback; };
+        return 0;
+    }
+    
+    return 1;
+}
+
+####################################
+#
+# Series
+#
+####################################
+
+sub load_series
+{
+    my ($dbh) = @_;
+    
+    my $series;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT srs_identifier AS id, 
+                srs_name AS name
+            FROM Series
+            ");
+        $sth->execute;
+        
+        $series = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $series;    
+}
+
+sub load_one_series
+{
+    my ($dbh, $Id) = @_;
+    
+    my $localError = "unknown error";
+    my $series;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT srs_identifier AS id,
+                srs_name AS name
+            FROM Series
+            WHERE
+                srs_identifier = ?
+            ");
+        $sth->bind_param(1, $Id, SQL_INTEGER);
+        $sth->execute;
+        
+        unless ($series = $sth->fetchrow_hashref())
+        {
+            $localError = "Failed to load series with id $Id";
+            die;
+        }
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : $localError;
+        return undef;
+    }
+    
+    return $series;
+}
+
+sub save_series
+{
+    my ($dbh, $name) = @_;
+
+    my $nextId;
+    eval
+    {
+        $nextId = prodautodb::_load_next_id($dbh, "srs_id_seq");
+        
+        my $sth = $dbh->prepare("
+            INSERT INTO Series
+                (srs_identifier, srs_name)
+            VALUES
+                (?, ?)
+            ");
+        $sth->bind_param(1, $nextId, SQL_INTEGER);
+        $sth->bind_param(2, $name, SQL_VARCHAR);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = $@;#$dbh->errstr;
+        eval { $dbh->rollback; };
+        return undef;
+    }
+    
+    return $nextId;
+}
+
+sub update_series
+{
+    my ($dbh, $series) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            UPDATE Series
+            SET
+                srs_name = ?
+            WHERE
+                srs_identifier = ?
+            ");
+        $sth->bind_param(1, $series->{'NAME'}, SQL_VARCHAR);
+        $sth->bind_param(2, $series->{'ID'}, SQL_INTEGER);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = $dbh->errstr;
+        eval { $dbh->rollback; };
+        return 0;
+    }
+
+    return 1;    
+}
+
+sub delete_series
+{
+    my ($dbh, $id) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            DELETE FROM Series
+            WHERE
+                srs_identifier = ?
+            ");
+        $sth->bind_param(1, $id, SQL_INTEGER);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        eval { $dbh->rollback; };
+        return 0;
+    }
+    
+    return 1;
+}
+
+####################################
+#
+# Programmes
+#
+####################################
+
+sub load_programmes
+{
+    my ($dbh) = @_;
+    
+    my $prog;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT prg_identifier AS id, 
+                prg_name AS name,
+				srs_name AS series
+            FROM Programme
+			LEFT OUTER JOIN Series ON (prg_series_id = srs_identifier)
+            ");
+        $sth->execute;
+        
+        $prog = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $prog;    
+}
+
+sub load_programme
+{
+    my ($dbh, $Id) = @_;
+    
+    my $localError = "unknown error";
+    my $prog;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT prg_identifier AS id,
+               prg_name AS name,
+			   srs_name AS series,
+			   prg_series_id AS seriesId
+            FROM Programme
+			LEFT OUTER JOIN Series ON (prg_series_id = srs_identifier)
+            WHERE
+                prg_identifier = ?
+            ");
+        $sth->bind_param(1, $Id, SQL_INTEGER);
+        $sth->execute;
+        
+        unless ($prog = $sth->fetchrow_hashref())
+        {
+            $localError = "Failed to load programme with id $Id";
+            die;
+        }
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : $localError;
+        return undef;
+    }
+    
+    return $prog;
+}
+
+sub save_programme
+{
+    my ($dbh, $name, $series) = @_;
+
+    my $nextId;
+    eval
+    {
+        $nextId = prodautodb::_load_next_id($dbh, "prg_id_seq");
+        
+        my $sth = $dbh->prepare("
+            INSERT INTO Programme
+                (prg_identifier, prg_name, prg_series_id)
+            VALUES
+                (?, ?, ?)
+            ");
+        $sth->bind_param(1, $nextId, SQL_INTEGER);
+        $sth->bind_param(2, $name, SQL_VARCHAR);
+		$sth->bind_param(3, $series, SQL_INTEGER);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = $@;#$dbh->errstr;
+        eval { $dbh->rollback; };
+        return undef;
+    }
+    
+    return $nextId;
+}
+
+sub update_programme
+{
+    my ($dbh, $prog) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            UPDATE Programme
+            SET
+                prg_name = ?,
+				prg_series_id = ?
+            WHERE
+                prg_identifier = ?
+            ");
+        $sth->bind_param(1, $prog->{'NAME'}, SQL_VARCHAR);
+        $sth->bind_param(3, $prog->{'ID'}, SQL_INTEGER);
+		$sth->bind_param(2, $prog->{'SERIESID'}, SQL_INTEGER);
+        $sth->execute;
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = $dbh->errstr;
+        eval { $dbh->rollback; };
+        return 0;
+    }
+
+    return 1;    
+}
+
+sub delete_programme
+{
+    my ($dbh, $id) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            DELETE FROM Programme
+            WHERE
+                prg_identifier = ?
             ");
         $sth->bind_param(1, $id, SQL_INTEGER);
         $sth->execute;

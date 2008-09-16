@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 # Copyright (C) 2008  British Broadcasting Corporation
-# Author: Philip de Nier <philipn@users.sourceforge.net>
+# Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -44,49 +44,47 @@ my $errorMessage;
 
 if (defined param('Cancel'))
 {
-    redirect_to_page("generalcf.pl");
+    redirect_to_page("prog.pl");
 }
 elsif (defined param('Create'))
 {
-    if (param('type') eq 'recloc')
-    {
-        if (!($errorMessage = validate_recloc_params()))
+        if (!($errorMessage = validate_params()))
         {
             my $name = trim(param('name'));
+			my $series = trim(param('series'));
             
-            my $rlcId = prodautodb::save_recording_location($dbh, $name) or 
-                return_create_recloc_page("failed to save recording location '$name' to database: $prodautodb::errstr");
+            my $Id = db::save_programme($dbh, $name, $series) or 
+                return_error_page("failed to save programme '$name' to database: $prodautodb::errstr");
             
-            my $rlc = prodautodb::load_recording_location($dbh, $rlcId) or
-                return_error_page("failed to reload saved recording location from database: $prodautodb::errstr");
+            my $rlc = db::load_programme($dbh, $Id) or
+                return_error_page("failed to reload saved programme from database: $prodautodb::errstr");
     
-            redirect_to_page("generalcf.pl");
+            redirect_to_page("prog.pl");
         }
-    }
-    else
-    {
-        return_error_page("unknown general configuration type");
-    }
 }
 
-return_create_recloc_page($errorMessage);
+return_page_content($errorMessage);
 
 
 
 
-sub validate_recloc_params
+sub validate_params
 {
     return "Error: Empty name" if (!defined param('name') || param('name') =~ /^\s*$/);
+	return "Error: Missing series identifier" if (!defined param("series"));
 
     return undef;
 }
 
-sub return_create_recloc_page
+sub return_page_content
 {
     my ($errorMessage) = @_;
     
-    my $page = get_create_recloc_content($errorMessage) or
-        return_error_page("failed to fill in content for create recording location config page");
+	my $series = db::load_series($dbh) 
+	    or return_error_page("failed to load series list from database: $prodautodb::errstr");
+
+    my $page = get_content($series,$errorMessage) or
+        return_error_page("failed to fill in content for create programme page");
        
     print header;
     print $page;
@@ -94,25 +92,40 @@ sub return_create_recloc_page
     exit(0);
 }
 
-sub get_create_recloc_content
+sub get_content
 {
-    my ($message) = @_;
+    my ($series,$message) = @_;
     
     
     my @pageContent;
     
-    push(@pageContent, h1('Create new recording location'));
+    push(@pageContent, h1('Create new programme'));
 
     if (defined $message)
     {
         push(@pageContent, p({-class=>"error"}, $message));
     }
     
-    push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','creategcf')"}));
-
-    push(@pageContent, hidden('type', 'recloc'));
+    push(@pageContent, start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','createprog')"}));
 
     push(@pageContent, p('Name', textfield('name')));
+
+    my @values;
+    my %labels;
+	my $default;
+    foreach my $ser ( @{ $series } )
+    {
+        push(@values, $ser->{"ID"});
+        $labels{$ser->{"ID"}} = $ser->{"NAME"};
+        $default = $ser->{"ID"};
+    }
+    
+   push(@pageContent, p('Series', popup_menu(
+        -name=>'series',
+        -default=>$default,
+        -values=>\@values,
+        -labels=>\%labels
+    )));
 
     push(@pageContent, submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), span(' '), submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}));
 

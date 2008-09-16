@@ -23,73 +23,27 @@ use strict;
 use CGI::Pretty qw(:standard);
 
 use lib ".";
-use lib "../../ingex-config";
+use lib "..";
 use ingexconfig;
-use ingexhtmlutil;
 use prodautodb;
-use IngexJSON;
+use ingexhtmlutil;
 
-print header;
-
+my $message = 'Success! Database connection working.';
 my $dbh = prodautodb::connect(
         $ingexConfig{"db_host"},
         $ingexConfig{"db_name"},
         $ingexConfig{"db_user"},
         $ingexConfig{"db_password"}) 
-    or die();
+    or $message = 'ERROR: Database connection unavailable.';
 
-my $dirtoget='./monitors/';
-opendir(MONITORS, $dirtoget) or returnError();
-my @thefiles = readdir(MONITORS);
-closedir(MONITORS);
-
-my $f;
-my %monitors;
-my $nodes;
-my %data;
-
-foreach $f (@thefiles) {
-	if(substr($f, -16) eq '.ingexmonitor.pl'){
-		substr($f, -16)  = '';
-		$monitors{$f} = getMonitor($f);
-	}
-}
-
-$nodes = getNodes();
-
-$data{'monitors'} = \%monitors;
-$data{'nodes'} = $nodes;
-print hashToJSON(%data);
+print header;
+print "<h1>Database Test</h1><p>$message</p><p><a href='/ingex/test'>Click here</a> to return to the test page.</p>";
 
 exit(0);
 
-sub returnError
+END
 {
-	exit(0);
+    prodautodb::disconnect($dbh) if ($dbh);
 }
 
-sub getMonitor
-{
-	my $m = $_[0];	
-	my $retval = "json:";
-	$ENV{"PATH"} = "";
-	if ($m =~ /(\w*)/) {
-	    $retval .= `./monitors/$1.ingexmonitor.pl monitorInfo`;
-	}
-	return $retval;
-}
 
-sub getNodes
-{
-	my %nodes;
-	my %n;
-	my $nodesArray = load_nodes($dbh) 
-	    or return_error_page("failed to load nodes: $prodautodb::errstr");
-	
-	foreach my $node (@$nodesArray) {
-		%n = %$node;
-		$nodes{$n{'NAME'}} = {nodeType=>$n{'TYPE'},ip=>$n{'IP'},volumes=>$n{'VOLUMES'}};
-	}
-	
-	return \%nodes;
-}

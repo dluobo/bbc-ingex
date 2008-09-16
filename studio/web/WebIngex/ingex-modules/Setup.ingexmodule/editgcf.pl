@@ -64,12 +64,12 @@ if (defined param('Cancel'))
 elsif (defined param('Reset'))
 {
     Delete_all();
-    $rlc = db::load_recording_location($dbh, $rlcId) or
+    $rlc = prodautodb::load_recording_location($dbh, $rlcId) or
         return_error_page("failed to find recording location with id=$rlcId from database: $prodautodb::errstr");
 }
 elsif (defined param('Done'))
 {
-    $rlc = db::load_recording_location($dbh, $rlcId) or
+    $rlc = prodautodb::load_recording_location($dbh, $rlcId) or
         return_error_page("failed to load recording location with id=$rlcId from database: $prodautodb::errstr");
 
     if (!defined param('name') || param('name') =~ /^\s*$/)
@@ -88,7 +88,7 @@ elsif (defined param('Done'))
 }
 else
 {
-    $rlc = db::load_recording_location($dbh, $rlcId) or
+    $rlc = prodautodb::load_recording_location($dbh, $rlcId) or
         return_error_page("failed to load recording location with id=$rlcId from database: $prodautodb::errstr");
 }
 

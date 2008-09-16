@@ -40,7 +40,7 @@ my $dbh = prodautodb::connect(
     or die();
     
     
-my $vrs = load_video_resolutions($dbh) 
+my $vrs = load_video_resolutions($dbh)
     or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
 my $recs = load_recorders($dbh) 

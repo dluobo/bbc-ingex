@@ -63,14 +63,14 @@ my $rlc;
 
 if (defined param('Delete'))
 {
-    db::delete_recording_location($dbh, $rlcId) or
+    prodautodb::delete_recording_location($dbh, $rlcId) or
         return_error_page("failed to delete recorder config with id=$rlcId from database: $prodautodb::errstr");    
 
     redirect_to_page("generalcf.pl");
 }
 else
 {
-    $rlc = db::load_recording_location($dbh, $rlcId) or
+    $rlc = prodautodb::load_recording_location($dbh, $rlcId) or
         return_error_page("failed to find recording location with id=$rlcId from database: $prodautodb::errstr");
 }
 

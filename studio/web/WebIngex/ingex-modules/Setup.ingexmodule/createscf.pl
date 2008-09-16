@@ -47,7 +47,7 @@ if (defined param("Cancel"))
 }
 
 
-my $recLocs = db::load_recording_locations($dbh) 
+my $recLocs = prodautodb::load_recording_locations($dbh) 
     or return_error_page("failed to load recording locations: $prodautodb::errstr");
 
 my $errorMessage;

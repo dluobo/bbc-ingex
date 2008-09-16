@@ -22,11 +22,6 @@
 
 var monitors; // Global object for handling all monitors
 
-// In timecode display, show frame number?
-var showFrames = false;
-// How often to increment the timecodes? [A number of frames - e.g. 3 means update every 3 frames, i.e. every 120ms]
-var tcFreq = 3; // every 3 frames
-
 // Choose your logging level
 var logRequests = false;
 var logMemoryUsageChanges = false;
@@ -38,15 +33,6 @@ var falseAlert = false;
 
 
 // == Utility Functions == //
-
-// Toggle display of frames in timecode
-function toggleTC () {
-	if(showFrames) {
-		showFrames = false;
-	} else {
-		showFrames = true;
-	}
-}
 
 // Take an object, and sort the names of its properties, returning the sorted list as an array
 function sortByValue(theObject,sortKey) {
@@ -268,7 +254,7 @@ function ingexMonitors (drawMonitors,startMonitors,containerID) {
 			xmlHttp.abort();
 			this.discoverTimeout = false;
 			insole.alert("AJAX timeout occurred when querying trying to discover monitors.");
-			alert("Critical error: Could not load monitoring information - connection timed out. Try re-loading the page, and if this error recurrs, contact your system administrator.")
+			alert("Critical error: Could not load monitoring information - connection timed out contacting discoverMonitors.pl. Is your web server executing Perl correctly? Is the database connection available? Try re-loading the page, and if this error recurrs, contact your system administrator.")
 		};
 		
 		xmlHttp.open("GET","/cgi-bin/ingex-modules/Status.ingexmodule/discoverMonitors.pl?requestID="+requestID,false);
@@ -286,7 +272,7 @@ function ingexMonitors (drawMonitors,startMonitors,containerID) {
 			} catch (e) {
 				insole.alert("Could not load information about the monitors. Parse error in JSON data");
 				insole.log("Exception thrown:   Name: "+e.name+"   Message: "+e.message);
-				alert("Critical error: Could not load monitoring information - invalid data received. Try re-loading the page, and if this error recurrs, contact your system administrator.")
+				alert("Critical error: Could not load monitoring information - invalid data received from discoverMonitors.pl. Is your web server executing Perl correctly? Is the database connection available? Try re-loading the page, and if this error recurrs, contact your system administrator.")
 			}
 			// Set up the monitor details object
 			for(monitor in tmp.monitors) {

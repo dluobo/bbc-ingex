@@ -58,17 +58,3 @@
 .monitorStopRefresh a {
 	display: block;
 }
-
-.displayOptions {
-	font-size: 65%;
-	border-top: 1px dashed #ccc;
-	margin-top: 40px;
-	padding-top: 8px;
-	text-align: right;
-}
-
-.displayOptions h5 {
-	font-weight: bold;
-	color: #999;
-	display: inline;
-}

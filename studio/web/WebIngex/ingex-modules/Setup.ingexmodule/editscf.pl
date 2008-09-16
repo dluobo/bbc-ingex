@@ -53,7 +53,7 @@ if (defined param('Cancel'))
 my $scfId = param('id');
 my $errorMessage;
 
-my $recLocs = db::load_recording_locations($dbh) or 
+my $recLocs = prodautodb::load_recording_locations($dbh) or 
     return_error_page("failed to load recording locations: $prodautodb::errstr");
 
 my $scf = load_source_config($dbh, $scfId) or
