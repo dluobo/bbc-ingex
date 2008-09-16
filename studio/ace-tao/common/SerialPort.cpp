@@ -1,5 +1,5 @@
 /*
- * $Id: SerialPort.cpp,v 1.2 2008/09/16 11:40:42 stuart_hc Exp $
+ * $Id: SerialPort.cpp,v 1.3 2008/09/16 15:08:16 john_f Exp $
  *
  * Serial communication port.
  *
@@ -33,8 +33,11 @@ void SerialPort::BaudRate(int baud_rate)
 {
 	ACE_TTY_IO::Serial_Params myparams;
 	myparams.baudrate = baud_rate;
+#if ACE_MAJOR_VERSION >= 5 && ACE_MINOR_VERSION >= 6 && ACE_BETA_VERSION >= 6
+	myparams.paritymode = "none";
+#else
 	myparams.parityenb = false;
-	//myparams.paritymode = "none";
+#endif
 	myparams.databits = 8;
 	myparams.stopbits = 1;
 	myparams.readtimeoutmsec = 100;

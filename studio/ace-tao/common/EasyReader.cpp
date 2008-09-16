@@ -54,8 +54,11 @@ bool EasyReader::Init(const std::string & port)
     // Set baudrate etc.
 	ACE_TTY_IO::Serial_Params myparams;
 	myparams.baudrate = 19200;
+#if ACE_MAJOR_VERSION >= 5 && ACE_MINOR_VERSION >= 6 && ACE_BETA_VERSION >= 6
+	myparams.paritymode = "none";
+#else
 	myparams.parityenb = false;
-	//myparams.paritymode = "none";
+#endif
 	myparams.databits = 8;
 	myparams.stopbits = 1;
 	myparams.readtimeoutmsec = 100;
