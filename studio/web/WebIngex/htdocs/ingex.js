@@ -23,7 +23,15 @@
  * For use in conjunction with the more generic Injax library
  */ 
 
+// ----- OPTIONS -----
+// In timecode display, show frame number?
+var showFrames = false;
+// How often to increment the timecodes? [A number of frames - e.g. 3 means update every 3 frames, i.e. every 120ms]
+var tcFreq = 3; // every 3 frames
+// --------------------
+
 // Some state variables for the system
+var moduleJSLoaded = false;
 var currentTab = '';
 var singleTab = false;
 var viewingConfig = false;
@@ -274,7 +282,7 @@ function loadIngexMonitors (callback) {
 
 function checkJSLoaded (callback) {
 	if (isDefault(callback)) callback = false;
-	if(typeof ingexMonitors != "undefined") {
+	if(moduleJSLoaded) {
 		if(callback) callback();
 	} else {
 		javascriptLoadAttempts++;
@@ -290,7 +298,7 @@ function checkJSLoaded (callback) {
 
 var callLoaderAttempts = 0;
 function ingexCallLoader (loader) {
-	if(typeof ingexMonitors != "undefined") {
+	if(moduleJSLoaded) {
 		callLoaderAttempts = 0;
 		if(typeof loaderFunctions[loader] != "undefined") {
 			loaderFunctions[loader]();
@@ -527,5 +535,14 @@ function startMonitoring () {
 		if($('pauseOption')) $('pauseOption').innerHTML='<a href="javascript:pauseMonitoring()">Pause Monitoring</a> |</span>';
 	} else {
 		if($('pauseOption')) $('pauseOption').innerHTML='';
+	}
+}
+
+/// Toggle display of frames in timecode
+function toggleTC () {
+	if(showFrames) {
+		showFrames = false;
+	} else {
+		showFrames = true;
 	}
 }
