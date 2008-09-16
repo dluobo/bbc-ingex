@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.7 2008/09/16 11:40:43 stuart_hc Exp $
+ * $Id: dvs_sdi.c,v 1.8 2008/09/16 16:50:32 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -162,9 +162,10 @@ static void cleanup_exit(int res, sv_handle *sv)
 	int i;
 	for (i = 0; i < MAX_CHANNELS; i++) {
 		if (sdi_thread[i] != 0) {
-			printf("canceling thread %d (id %lu)\n", i, sdi_thread[i]);
+			logTF("cancelling thread %d (id %lu)\n", i, sdi_thread[i]);
 			pthread_cancel(sdi_thread[i]);
 			pthread_join(sdi_thread[i], NULL);
+			//logTF("thread %d joined ok\n", i);
 		}
 	}
 
@@ -443,7 +444,9 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         flags |= SV_FIFO_FLAG_FLUSH;
         logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
     }
+    //logTF("chan %d: calling sv_fifo_getbuffer()...\n", chan);
 	get_res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, flags);
+    //logTF("chan %d: sv_fifo_getbuffer() returned\n", chan);
 	if (get_res != SV_OK && get_res != SV_ERROR_INPUT_AUDIO_NOAIV
 			&& get_res != SV_ERROR_INPUT_AUDIO_NOAESEBU)
 	{
@@ -479,12 +482,14 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// read frame from DVS chan
 	// reception of a SIGUSR1 can sometimes cause this to fail
 	// If it fails we should restart fifo.
+    //logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
 	if (sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo) != SV_OK)
 	{
 		fprintf(stderr, "sv_fifo_putbuffer failed, restarting fifo\n");
 		SV_CHECK( sv_fifo_reset(sv, poutput) );
 		SV_CHECK( sv_fifo_start(sv, poutput) );
 	}
+    //logTF("chan %d: sv_fifo_putbuffer() returned ok\n", chan);
 
     // set flag so we can zero audio if not present
     int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
@@ -886,6 +891,8 @@ static void * sdi_monitor(void *arg)
 							0) );			// nFrames (0 means use maximum)
 
 	SV_CHECK( sv_fifo_start(sv, poutput) );
+
+    logTF("chan %ld: fifo init/start completed\n", chan);
 
 	int recover_from_video_loss = 0;
 	int last_res = -1;
@@ -1499,9 +1506,13 @@ int main (int argc, char ** argv)
 
 		if ((err = pthread_create(&sdi_thread[chan], NULL, sdi_monitor, (void *)chan)) != 0)
 		{
-			logTF("Failed to create sdi_monitor thread: %s\n", strerror(err));
+			logTF("chan %d: failed to create sdi_monitor thread: %s\n", chan, strerror(err));
 			return 1;
 		}
+        else
+        {
+            //logTF("chan %d: started capture thread ok\n", chan);
+        }
 	}
 
 	// Update the heartbeat 10 times a second
