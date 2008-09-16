@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: dvs_setup,v 1.1 2008/04/23 19:07:35 john_f Exp $
+# $Id: dvs_setup,v 1.2 2008/09/16 11:41:21 stuart_hc Exp $
 # Author: Stuart Cunningham
 #
 # /etc/init.d/dvs_setup
@@ -16,11 +16,14 @@
 . /etc/rc.status
 rc_reset
 
+DVS_DIR=/home/ingex/DVS/sdk3.2.1.0/linux-x86
+#DVS_DIR=/home/ingex/DVS/sdk3.2.8.0/linux-x86
+
 #DRIVER_DIR=/usr/lib/dvs
-DRIVER_DIR=/home/ingex/dvs/sdk3.2.1.0/linux-x86/driver
+DRIVER_DIR=$DVS_DIR/driver
 
 #BIN_DIR=/usr/bin
-BIN_DIR=/home/ingex/dvs/sdk3.2.1.0/linux-x86/bin
+BIN_DIR=$DVS_DIR/bin
 
 DVS_DEFAULT_MODE=PAL/YUV422/FRAME/AUDIO8CH
 #DVS_DEFAULT_MODE=SMPTE274/25I/YUV422/FRAME

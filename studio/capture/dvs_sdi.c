@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.6 2008/09/03 14:13:26 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.7 2008/09/16 11:40:43 stuart_hc Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
@@ -54,22 +55,23 @@
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
 
-#if defined(__x86_64__)
-#define PFi64 "ld"
-#define PFu64 "lu"
-#define PFoff "ld"
-#else
-#define PFi64 "lld"
-#define PFu64 "llu"
-#define PFoff "lld"
-#endif
+// Use macros from inttypes.h instead
+//#if defined(__x86_64__)
+//#define PFi64 "ld"
+//#define PFu64 "lu"
+//#define PFoff "ld"
+//#else
+//#define PFi64 "lld"
+//#define PFu64 "llu"
+//#define PFoff "lld"
+//#endif
 
 //#define MAX_CHANNELS 8  (defined in nexus_control.h)
 // each DVS card can have 2 channels, so 4 cards gives 8 channels
 
 // Globals
-pthread_t		sdi_thread[MAX_CHANNELS];
-sv_handle		*a_sv[MAX_CHANNELS];
+pthread_t		sdi_thread[MAX_CHANNELS] = {0};
+sv_handle		*a_sv[MAX_CHANNELS] = {0};
 int				num_sdi_threads = 0;
 NexusControl	*p_control = NULL;
 uint8_t			*ring[MAX_CHANNELS] = {0};
@@ -87,14 +89,9 @@ static int test_avsync = 0;
 static int benchmark = 0;
 static uint8_t *benchmark_video = NULL;
 static char *video_sample_file = NULL;
-pthread_mutex_t	m_log = PTHREAD_MUTEX_INITIALIZER;		// logging mutex to prevent intermixing logs
+static int aes_audio = 0;
 
-// Master Timecode support, where one timecode is distributed to other channels
-typedef enum {
-	MasterNone,			// no timecode distribution
-	MasterVITC,			// use VITC as master
-	MasterLTC			// use LTC as master
-} MasterTimecodeType;
+pthread_mutex_t	m_log = PTHREAD_MUTEX_INITIALIZER;		// logging mutex to prevent intermixing logs
 
 // Recover timecode type is the type of timecode to use to generate dummy frames
 typedef enum {
@@ -102,10 +99,11 @@ typedef enum {
 	RecoverLTC
 } RecoverTimecodeType;
 
+static NexusTimecode master_type = NexusTC_None;	// by default do not use master timecode
+static int master_channel = 0;						// channel with master timecode source (default channel 0)
+
+// The mutex m_master_tc guards all access to master_tc and master_tod variables
 pthread_mutex_t	m_master_tc = PTHREAD_MUTEX_INITIALIZER;
-static MasterTimecodeType master_type = MasterNone;	// do not use master timecode
-static int master_channel = 0;				// channel with master timecode source (default channel 0)
-// TODO: use mutex to guard access
 static int master_tc = 0;				// timecode as integer
 static int64_t master_tod = 0;			// gettimeofday value corresponding to master_tc
 
@@ -116,9 +114,15 @@ static uint8_t *no_video_frame = NULL;	// captioned black frame saying "NO VIDEO
 
 #define SV_CHECK(x) {int res = x; if (res != SV_OK) { fprintf(stderr, "sv call failed=%d  %s line %d\n", res, __FILE__, __LINE__); sv_errorprint(sv,res); cleanup_exit(1, sv); } }
 
-// Define missing macro for older SDKs (e.g. 2.7)
+// Define missing macros for older SDKs
 #ifndef SV_OPTION_MULTICHANNEL
-#define SV_OPTION_MULTICHANNEL              184
+#define SV_OPTION_MULTICHANNEL          184
+#endif
+#ifndef SV_OPTION_AUDIOAESROUTING
+#define SV_OPTION_AUDIOAESROUTING       198
+#endif
+#ifndef SV_AUDIOAESROUTING_4_4
+#define SV_AUDIOAESROUTING_4_4          2
 #endif
 
 // Returns time-of-day as microseconds
@@ -153,12 +157,23 @@ static void cleanup_shared_mem(void)
 static void cleanup_exit(int res, sv_handle *sv)
 {
 	printf("cleaning up\n");
-	// attempt to avoid lockup when stopping playback
-	if (sv != NULL)
-	{
-		// sv_fifo_wait does nothing for record, only useful for playback
-		//sv_fifo_wait(sv, poutput);
-		sv_close(sv);
+
+	// Cancel all threads (other than main thread)
+	int i;
+	for (i = 0; i < MAX_CHANNELS; i++) {
+		if (sdi_thread[i] != 0) {
+			printf("canceling thread %d (id %lu)\n", i, sdi_thread[i]);
+			pthread_cancel(sdi_thread[i]);
+			pthread_join(sdi_thread[i], NULL);
+		}
+	}
+
+	// Close all sv handles
+	for (i = 0; i < MAX_CHANNELS; i++) {
+		if (a_sv[i] != 0) {
+			printf("closing sv_handle index %d\n", i);
+			sv_close(a_sv[i]);
+		}
 	}
 
 	// delete shared memory
@@ -303,6 +318,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	p_control->frame_rate_denom = 1;
 	p_control->pri_video_format = video_format;
 	p_control->sec_video_format = video_secondary_format;
+	p_control->master_tc_type = master_type;
+	p_control->master_tc_channel = master_channel;
 
 	p_control->audio12_offset = audio_offset;
 	p_control->audio34_offset = audio_offset + audio_pair_size;
@@ -571,11 +588,11 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// If enabled, handle master timecode distribution
 	int derived_tc = 0;
 	int64_t diff_to_master = 0;
-	if (master_type != MasterNone) {
+	if (master_type != NexusTC_None) {
 		if (chan == master_channel) {
 			// Store timecode and time-of-day the frame was recorded in shared variable
 			PTHREAD_MUTEX_LOCK( &m_master_tc )
-			master_tc = (master_type == MasterLTC) ? ltc_as_int : vitc_as_int;
+			master_tc = (master_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
 			master_tod = tod_rec;
 			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
 		}
@@ -583,7 +600,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
 
 			// Save calculated timecode
-			if (master_type == MasterLTC)
+			if (master_type == NexusTC_LTC)
 				ltc_as_int = derived_tc;
 			else
 				vitc_as_int = derived_tc;
@@ -668,7 +685,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		if (info.dropped != pc->hwdrop)
 			logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, vitc_as_int, ltc_as_int, info.dropped);
 
-		logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PFi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
+		logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PRIi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
 			pbuffer->control.tick,
 			pbuffer->control.clock_high, pbuffer->control.clock_low,
 			diff_to_master,
@@ -787,7 +804,7 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
 
 			// update time-of-day the timecodes were read
 			PTHREAD_MUTEX_LOCK( &m_master_tc )
-			master_tc = (master_type == MasterLTC) ? ltc_as_int : vitc_as_int;
+			master_tc = (master_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
 			master_tod = tod_tc_read;
 			PTHREAD_MUTEX_UNLOCK( &m_master_tc )
 		}
@@ -934,6 +951,7 @@ static void usage_exit(void)
 	fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
 	fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB\n");
 	fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
+	fprintf(stderr, "    -aes                 use AES/EBU audio with 4,4 routing in multichannel mode\n");
 	fprintf(stderr, "    -avsync              perform avsync analysis - requires clapper-board input video\n");
 	fprintf(stderr, "    -b <video_sample>    benchmark using video_sample instead of captured UYVY video frames\n");
 	fprintf(stderr, "    -q                   quiet operation (fewer messages)\n");
@@ -999,13 +1017,13 @@ int main (int argc, char ** argv)
 				usage_exit();
 
 			if (strcmp(argv[n+1], "VITC") == 0) {
-				master_type = MasterVITC;
+				master_type = NexusTC_VITC;
 			}
 			else if (strcmp(argv[n+1], "LTC") == 0) {
-				master_type = MasterLTC;
+				master_type = NexusTC_LTC;
 			}
 			else if (strcmp(argv[n+1], "OFF") == 0 || strcmp(argv[n+1], "None") == 0) {
-				master_type = MasterNone;
+				master_type = NexusTC_None;
 			}
 			else {
 				usage_exit();
@@ -1124,6 +1142,10 @@ int main (int argc, char ** argv)
 		{
 			audio8ch = 1;
 		}
+		else if (strcmp(argv[n], "-aes") == 0)
+		{
+			aes_audio = 1;
+		}
 	}
 
 	switch (video_format) {
@@ -1154,11 +1176,16 @@ int main (int argc, char ** argv)
 				return 1;
 	}
 
-	if (master_type == MasterNone)
+	if (master_channel > max_channels-1) {
+		logTF("Master channel number (%d) greater than highest channel number (%d)\n", master_channel, max_channels-1);
+		return 1;
+	}
+
+	if (master_type == NexusTC_None)
 		logTF("Master timecode not used\n");
 	else
 		logTF("Master timecode type is %s using channel %d\n",
-				master_type == MasterVITC ? "VITC" : "LTC", master_channel);
+				master_type == NexusTC_VITC ? "VITC" : "LTC", master_channel);
 
 	logTF("Using %s to determine number of frames to recover when video re-aquired\n",
 			recover_timecode_type == RecoverVITC ? "VITC" : "LTC");
@@ -1235,12 +1262,11 @@ int main (int argc, char ** argv)
                                     0,
                                     0);
             }
-			if (res == SV_OK)
+            if (res == SV_OK)
             {
 				sv_status(a_sv[channel], &status_info);
 				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
-				channel++;
-				num_sdi_threads++;
+
                 if (width == 0)
                 {
                     // Set size from first channel
@@ -1253,15 +1279,25 @@ int main (int argc, char ** argv)
                     logTF("card %d: warning: different video size!\n", card);
                 }
 
+                // Set AES input
+                if (aes_audio &&
+                    (res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
+                {
+                    logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
+                }
+
 
                 // check for multichannel mode
                 int multichannel_mode = 0;
-                if ((res = sv_option_get(a_sv[channel-1], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
+                if ((res = sv_option_get(a_sv[channel], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
                     logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
                 }
 
-				// If card has a multichannel mode on, open second channel
-				if (multichannel_mode)
+				channel++;
+				num_sdi_threads++;
+
+                // If card has a multichannel mode on, open second channel
+                if (multichannel_mode)
                 {
                     if (channel < max_channels)
                     {
@@ -1276,6 +1312,20 @@ int main (int argc, char ** argv)
                         {
                             sv_status(a_sv[channel], &status_info);
                             logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+                            // Set AES audio routing
+                            if (aes_audio &&
+                                (res = sv_option_set(a_sv[channel-1], SV_OPTION_AUDIOAESROUTING, SV_AUDIOAESROUTING_4_4)) != SV_OK)
+                            {
+                                logTF("card %d: sv_option_set(SV_OPTION_AUDIOAESROUTING) failed: %s\n", card, sv_geterrortext(res));
+                            }
+
+                            // Set AES input
+                            if (aes_audio &&
+                                (res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
+                            {
+                                logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
+                            }
+
                             channel++;
                             num_sdi_threads++;
                         }
@@ -1336,6 +1386,14 @@ int main (int argc, char ** argv)
                     // Warn if other channels different from first
                     logTF("card %d: different video size!\n", card);
                 }
+
+                // Set AES input
+                if (aes_audio &&
+                    (res = sv_option_set(a_sv[card], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
+                {
+                    logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
+                }
+
 			}
 			else
 			{

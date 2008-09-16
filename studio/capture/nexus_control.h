@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.5 2008/09/03 14:13:26 john_f Exp $
+ * $Id: nexus_control.h,v 1.6 2008/09/16 11:40:44 stuart_hc Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -45,9 +45,9 @@ typedef enum {
 // Currently supported types of capture timecodes. For example, the master timecode is used
 // to assign timecode to all non-master channels to ensure consistent timecodes.
 typedef enum {
-	NexusTC_None,
-	NexusTC_LTC,
-	NexusTC_VITC
+	NexusTC_None,		// no timecode distribution
+	NexusTC_LTC,		// use LTC as master
+	NexusTC_VITC		// use VITC as master
 } NexusTimecode;
 
 // Each channel's ring buffer is described by the NexusBufCtl structure

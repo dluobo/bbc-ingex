@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.1 2008/09/03 14:13:30 john_f Exp $
+ * $Id: nexus_web.c,v 1.2 2008/09/16 11:40:44 stuart_hc Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -198,7 +198,7 @@ static void nexus_state(struct shttpd_arg* arg)
 	int tc_stuck[MAX_CHANNELS] = {0,0,0,0,0,0,0,0};			// initialise to good tc
 	gettimeofday(&now, NULL);
 	for (i = 0; i < pctl->channels; i++) {
-		int lasttc = nexus_lastframe_tc(pctl, ring, i, NexusTC_LTC);
+		int lasttc = nexus_lastframe_tc(pctl, ring, i, NexusTC_None);
 		if (p->tcinfo.lasttc[i] != lasttc) {
 			// timecodes differ (good) so update lasttc and continue
 			p->tcinfo.lasttc[i] = lasttc;
@@ -233,7 +233,7 @@ static void nexus_state(struct shttpd_arg* arg)
 	for (i = 0; i < pctl->channels; i++) {
 		NexusTC tc;
 		const NexusBufCtl *pc = &pctl->channel[i];
-		int ltc = nexus_lastframe_tc(pctl, ring, i, NexusTC_LTC);
+		int ltc = nexus_lastframe_tc(pctl, ring, i, NexusTC_None);
 		int sok = nexus_lastframe_signal_ok(pctl, ring, i);
 		const uint8_t *audio_dvs = nexus_lastframe_audio12(pctl, ring, i);
 		framesToTC(ltc, &tc);

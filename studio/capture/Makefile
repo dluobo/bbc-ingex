@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.6 2008/09/03 14:13:26 john_f Exp $
+# $Id: Makefile,v 1.7 2008/09/16 11:40:43 stuart_hc Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -31,11 +31,13 @@ FLAGS=$(CFLAGS) $(INCLUDES) $(OPT)
 # search is overridden by setting DVSSDK
 include ../../common/dvs_sdk_paths.mk
 
-ifndef HARDWARE_INCLUDE
-  $(warning DVSSDK required to build dvs_sdi)
+ifdef HARDWARE_INCLUDE
+  SDI_PROGS=dvs_sdi dvs_dummy testgen
+else
+  $(warning dvs_sdi will not be built)
+  SDI_PROGS=dvs_dummy testgen
 endif
 
-SDI_PROGS=dvs_sdi testgen
 PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nexus_multicast nexus_set_source 
 
 .PHONY: all
@@ -46,6 +48,9 @@ nexus_control.o: nexus_control.h nexus_control.c
 
 dvs_sdi: dvs_sdi.c nexus_control.h
 	g++ $(FLAGS) $(HARDWARE_INCLUDE) dvs_sdi.c $(HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
+
+dvs_dummy: dvs_sdi.c nexus_control.h ../
+	g++ $(FLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_dummy
 
 testgen: testgen.c nexus_control.h
 	g++ $(FLAGS) testgen.c $(LIBS) -lpthread -o testgen
@@ -77,4 +82,4 @@ nexus_xv: nexus_xv.c nexus_control.h nexus_control.o
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv nexus_control.o -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
 
 clean:
-	rm -f core $(PROGS)
+	rm -f core *.o dvs_sdi $(PROGS)

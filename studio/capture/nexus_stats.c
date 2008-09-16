@@ -56,7 +56,7 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
-	int				tc_loc = -4;			// 0 for VITC, -4 for LTC
+	NexusTimecode	tc_type = NexusTC_None;
 	int				recorder_stats = 0;
 
 	int n;
@@ -81,16 +81,11 @@ extern int main(int argc, char *argv[])
 		else if (strcmp(argv[n], "-t") == 0)
 		{
 			if (strcmp(argv[n+1], "vitc") == 0) {
-				tc_loc = 0;
+				tc_type = NexusTC_VITC;
 			}
 			n++;
 		}
 	}
-
-	if (tc_loc == -4)
-		printf("Displaying LTC\n");
-	else
-		printf("Displaying VITC\n");
 
 	// If shared memory not found, sleep and try again
 	if (verbose) {
@@ -144,6 +139,9 @@ extern int main(int argc, char *argv[])
 				pctl->sec_video_offset);
 	}
 
+	if (tc_type == NexusTC_VITC)
+		printf("Overriding master timecode type and displaying VITC\n");
+
 	int i;
 	for (i = 0; i < pctl->channels; i++)
 	{
@@ -193,7 +191,7 @@ extern int main(int argc, char *argv[])
 				continue;
 			}
 
-			tc[i] = nexus_lastframe_tc(pctl, ring, i, NexusTC_None);
+			tc[i] = nexus_lastframe_tc(pctl, ring, i, tc_type);
 			signal_ok[i] = nexus_lastframe_signal_ok(pctl, ring, i);
 
 			last_saved[i] = pc->lastframe;

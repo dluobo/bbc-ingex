@@ -1,0 +1,45 @@
+#! /bin/sh
+#
+# Author: Stuart Cunningham
+#
+# /etc/init.d/delayed_network_mounts
+#
+# description: init script for mounting unreliable network filesystems
+### BEGIN INIT INFO
+# Provides:          delayed_network_mounts
+# Required-Start:    $network $portmap
+# Required-Stop:
+# Default-Start:     3 5
+# Default-Stop:
+# Description:       attempts to mount unreliable network filesystems
+### END INIT INFO
+
+. /etc/rc.status
+
+rc_reset
+
+# See how we were called.
+case "$1" in
+    start)
+	mounts=`grep -v '#' /etc/fstab | egrep 'nfs.*noauto|cifs.*noauto' | sed -e 's/[ 	].*//' | xargs echo`
+	echo -n "Starting background mounts for $mounts"
+	for f in $mounts
+	do
+		/usr/local/bin/keep_trying_mount $f &
+	done
+	rc_status -v
+	;;
+    status)
+	mounts=`grep -v '#' /etc/fstab | egrep 'nfs.*noauto|cifs.*noauto' | sed -e 's/[ 	].*//' -e 's/.*://' | xargs echo`
+	echo "Intended network filesystems: $mounts"
+	echo "Currently mounted network filesystems:"
+	mount -l -t nfs
+	mount -l -t cifs
+	;;
+    stop)
+	;;
+    *)
+	echo "Usage: $0 start"
+	exit 1
+esac
+rc_exit

@@ -621,9 +621,6 @@
 				RelativePath="Take.h">
 			</File>
 			<File
-				RelativePath="..\Misc\Timestamp.h">
-			</File>
-			<File
 				RelativePath="XmlTools.h">
 			</File>
 		</Filter>

@@ -1,0 +1,21 @@
+#! /bin/sh
+#
+# called by delayed_network_mount with mount point as first arg
+
+mountpoint=$1
+
+while true
+do
+	# check if already mounted
+	if mount | grep "^$mountpoint"
+	then
+		exit 0
+	fi
+
+	# keep trying mount
+	if mount $mountpoint
+	then
+		exit 0
+	fi
+	sleep 30
+done

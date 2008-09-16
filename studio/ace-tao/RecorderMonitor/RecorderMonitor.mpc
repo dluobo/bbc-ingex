@@ -1,0 +1,11 @@
+
+project(RecorderMonitor): taoserver, naming, messaging, valuetype {
+  exename = RecorderMonitor
+  includes += ../common
+  includes += ../IDL/Generated
+  libs += common2 idl
+  libpaths += ../common
+  libpaths += ../IDL
+  after += common2Lib
+}
+

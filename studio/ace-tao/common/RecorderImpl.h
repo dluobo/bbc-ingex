@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.5 2008/09/04 15:33:19 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.6 2008/09/16 11:40:41 stuart_hc Exp $
  *
  * Base class for Recorder servant.
  *
@@ -186,6 +186,9 @@ protected:
 private:
 // methods
     void SetSourcePackages();
+
+// friend function
+    friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);
 };
 
 

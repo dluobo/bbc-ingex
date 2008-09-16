@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.cpp,v 1.4 2008/09/05 16:48:32 john_f Exp $
+ * $Id: CreateAAF.cpp,v 1.5 2008/09/16 11:41:19 stuart_hc Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -141,6 +141,8 @@ static const aafUID_t kAAFCompressionDef_Avid_MJPEG_151s =
     {0x0e040201, 0x0201, 0x0202, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_Avid_MJPEG_201 =
     {0x0e040201, 0x0201, 0x0102, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
+static const aafUID_t kAAFCompressionDef_IMX_50 =
+    {0x04010202, 0x0102, 0x0101, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 
 
 static const RGBColor g_rgbColors[] =
@@ -2036,6 +2038,24 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                     kAAFPropID_DIDImageSize, track->sourceClip->length * 288000);
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x8e);
+            }
+            else if (fileDescriptor->videoResolutionID == IMX50_MATERIAL_RESOLUTION)
+            {
+                AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_IMX_50));
+                AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(304, 720));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
+                aafInt32 videoLineMap[2] = {7, 320};
+                AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(0));
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDFrameSampleSize, 253952);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDImageSize, track->sourceClip->length * 253952);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDResolutionID, 0xa0);
             }
             else if (fileDescriptor->videoResolutionID == UNC_MATERIAL_RESOLUTION)
             {
