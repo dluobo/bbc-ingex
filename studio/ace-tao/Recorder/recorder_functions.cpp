@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.7 2008/09/05 16:47:19 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.8 2008/09/17 03:30:26 stuart_hc Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -421,7 +421,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         rsp = sc->getSourcePackage();
     }
     // So, rsp is the SourcePackage to be recorded.
-    ACE_DEBUG((LM_INFO, ACE_TEXT("SourcePackage: %C\n"), rsp->name.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourcePackage: %C\n"), rsp->name.c_str()));
 
     // Now make a material package for this recording.
 
@@ -430,10 +430,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Go through tracks
     std::vector<prodauto::Track *>::const_iterator rsp_trk_it = rsp->tracks.begin();
 
+    unsigned int n_tracks = rsp->tracks.size();
+    if (ENCODER_FFMPEG_AV == encoder && n_tracks > 3)
+    {
+        // tmp: limit to 3 tracks (VA1A2) because that is all we currently
+        // support in our mov files.
+        n_tracks = 3;
+    }
+
 
     // Create file packages
     std::vector<prodauto::SourcePackage *> file_packages;
-    unsigned int n_files = (one_file_per_track ? rsp->tracks.size() : 1);
+    unsigned int n_files = (one_file_per_track ? n_tracks : 1);
     for (unsigned int i = 0; i < n_files; ++i)
     {
         // Create FileEssenceDescriptor
@@ -455,17 +463,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         fp->sourceConfigName = sc->name;
         fp->descriptor = fd;
 
-        ACE_DEBUG((LM_INFO, ACE_TEXT("File package %C\n"), fp->name.c_str()));
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("File package %C\n"), fp->name.c_str()));
 
-
-        unsigned int n_tracks_per_file = (one_file_per_track ? 1 : rsp->tracks.size());
-        // tmp: limit tracks per file to 3 i.e. VA1A2
-        if (n_tracks_per_file > 3)
-        {
-            n_tracks_per_file = 3;
-        }
 
         // Create file package tracks
+        unsigned int n_tracks_per_file = (one_file_per_track ? 1 : n_tracks);
         for (unsigned int i = 0; i < n_tracks_per_file; ++i)
         {
             prodauto::Track * rsp_trk = *rsp_trk_it;
@@ -498,7 +500,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 trk->sourceClip->position = (uint64_t) (audio_pos + 0.5);
             }
 
-            ACE_DEBUG((LM_INFO, ACE_TEXT("Adding source track %d from %C\n"),
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Adding source track %d from %C\n"),
                 rsp_trk->id, rsp->name.c_str()));
 
             ++rsp_trk_it;
@@ -509,6 +511,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             file_packages.push_back(fp);
         }
+        else
+        {
+            delete fp;
+        }
     }
 
     // Create MaterialPackage
@@ -518,10 +524,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     mp->creationDate = now;
     mp->projectName = project_name;
 
-    ACE_DEBUG((LM_INFO, ACE_TEXT("Material package %C\n"), mp->name.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Material package %C\n"), mp->name.c_str()));
 
     // Create material package tracks
-    for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
+    for (unsigned int i = 0; i < n_tracks; ++i)
     {
         prodauto::Track * src_trk = rsp->tracks[i];
 
@@ -541,7 +547,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         trk->sourceClip->sourcePackageUID = fp->uid;
         trk->sourceClip->sourceTrackID = src_trk->id; // file package track id is same as source track id
 
-        ACE_DEBUG((LM_INFO, ACE_TEXT("Adding source track %d from %C\n"),
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Adding source track %d from %C\n"),
             src_trk->id, fp->name.c_str()));
 
         trk->sourceClip->position = 0;
@@ -635,7 +641,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         else
         {
-            writeWavHeader(fp_audio12, raw_audio_bits);
+            writeWavHeader(fp_audio12, raw_audio_bits, 2);
         }
     }
     if (raw && enable_audio34)
@@ -650,7 +656,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         else
         {
-            writeWavHeader(fp_audio34, raw_audio_bits);
+            writeWavHeader(fp_audio34, raw_audio_bits, 2);
         }
     }
     if (raw && enable_audio56)
@@ -665,7 +671,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         else
         {
-            writeWavHeader(fp_audio56, raw_audio_bits);
+            writeWavHeader(fp_audio56, raw_audio_bits, 2);
         }
     }
     if (raw && enable_audio78)
@@ -680,7 +686,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         else
         {
-            writeWavHeader(fp_audio78, raw_audio_bits);
+            writeWavHeader(fp_audio78, raw_audio_bits, 2);
         }
     }
 
@@ -698,7 +704,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
         else
         {
-            writeWavHeader(fp_audio_browse, browse_audio_bits);
+            writeWavHeader(fp_audio_browse, browse_audio_bits, 2);
         }
     }
     
@@ -1128,7 +1134,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Save browse audio
             if (browse_audio)
             {
-                write_audio(fp_audio_browse, (uint8_t *)mixed_audio, 1920*2, browse_audio_bits, false);
+                write_audio(fp_audio_browse, (uint8_t *)mixed_audio, 1920*2, 16, browse_audio_bits);
             }
 
             // encode to browse av formats
@@ -1184,19 +1190,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Write uncompressed audio
             if (raw && enable_audio12)
             {
-                write_audio(fp_audio12, (uint8_t *)p_audio12, 1920*2, raw_audio_bits, true);
+                write_audio(fp_audio12, (uint8_t *)p_audio12, 1920*2, 32, raw_audio_bits);
             }
             if (raw && enable_audio34)
             {
-                write_audio(fp_audio34, (uint8_t *)p_audio34, 1920*2, raw_audio_bits, true);
+                write_audio(fp_audio34, (uint8_t *)p_audio34, 1920*2, 32, raw_audio_bits);
             }
             if (raw && enable_audio56)
             {
-                write_audio(fp_audio56, (uint8_t *)p_audio56, 1920*2, raw_audio_bits, true);
+                write_audio(fp_audio56, (uint8_t *)p_audio56, 1920*2, 32, raw_audio_bits);
             }
             if (raw && enable_audio78)
             {
-                write_audio(fp_audio78, (uint8_t *)p_audio78, 1920*2, raw_audio_bits, true);
+                write_audio(fp_audio78, (uint8_t *)p_audio78, 1920*2, 32, raw_audio_bits);
             }
 
 
@@ -1443,7 +1449,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Store non-MXF recordings in database
 #if PACKAGE_DATA
-    if (ENCODER_FFMPEG_AV == encoder)
+    if (ENCODER_FFMPEG_AV == encoder && !quad_video)
     {
         // Update material package tracks with duration
         for (std::vector<prodauto::Track *>::iterator
