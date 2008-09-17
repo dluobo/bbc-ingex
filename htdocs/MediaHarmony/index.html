@@ -1,0 +1,83 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: index.html,v 1.1 2008/09/17 03:44:58 stuart_hc Exp $ $Name:  $ -->
+<head>
+	<style type="text/css">
+	body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+	a { text-decoration: none; color: blue; background-color: transparent; }
+	a:hover { text-decoration: underline; }
+	img { border: 0; }
+	</style>
+
+	<title>MediaHarmony - Media file interoperability for non-linear editors</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<H2>MediaHarmony - Media file interoperability for non-linear editors</H2>
+<p>
+<b>MediaHarmony</b> is a Samba VFS module which allows multiple editing clients to interoperate using low-cost commodity storage for media files.  The two main features are:
+<ul>
+<li><b>media_harmony</b> - per-client .pmr and .mdb database files so there are no conflicts between Avid editors
+<li><b>mxf_harmony</b> - on-the-fly unwrapping of MXF-wrapped DV essence so that a Final Cut Pro client can share the same DV media files as an Avid client
+</ul>
+
+<H2>Compiling MediaHarmony</H2>
+To build MediaHarmony you must have the Samba source code installed.  For SUSE Linux the easiest way is to install the src rpm using Yast so any missing dependencies are installed.  Alternatively you can:<br>
+&nbsp;&nbsp; <code>rpm -i samba-3.0.23d-6.src.rpm</code>
+
+<p>
+MediaHarmony depends on header files generated during compilation of Samba,
+so start building Samba from source.  You can optionally stop this process
+with control-c after proto.h is created to save time.<br>
+&nbsp;&nbsp; <code>rpmbuild -bc /usr/src/packages/SPECS/samba.spec</code>
+
+<p>
+Now that Samba's source is ready you can build MediaHarmony from the ingex <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/MediaHarmony/">source code</a>:<br>
+&nbsp;&nbsp; <code>cd ingex/MediaHarmony</code><br>
+&nbsp;&nbsp; <code>make SAMBA_DIR=/usr/src/packages/BUILD/samba-3.0.23d/</code>
+
+<p>
+The resulting *.so files need to be installed in Samba's vfs directory:<br>
+&nbsp;&nbsp; sudo cp *.so /usr/lib/samba/vfs/<br>
+A SUSE 10.2 rpm is available <a href="MediaHarmony-1-1.i586.rpm">here</a> but may not work on other SUSE versions since Samba's internal APIs change occasionally.
+
+<p>
+Edit /etc/samba/smb.conf as described in the next section, then restart Samba.
+
+<H2>Configuring Samba for MediaHarmony usage</H2>
+To enable multiple Avid clients to use a media directory without conflict add a section like the following to /etc/samba/smb.conf (adjust <b>path</b> as necessary).
+<pre>
+[avid]
+        comment = Multiple Avid client access to media files for Windows
+        path = /video
+        valid users = archive
+        vfs objects = media_harmony
+        veto files = /.*/
+        delete veto files = yes
+        writeable = yes
+        browseable = yes
+</pre>
+Add the avid_full_audit module to the vfs objects and the configuration options shown below to the section above to include a detailed log of the file I/O handled by the MediaHarmony module,
+<pre>
+        vfs objects = avid_full_audit media_harmony
+        avid_full_audit:prefix = windows|%u|%I
+        avid_full_audit:success = all
+        avid_full_audit:failure = all
+</pre>
+To enable MXF unwrapping of DV essence for Final Cut Pro clients add a section like the following to /etc/samba/smb.conf (adjust <b>path</b> as necessary).
+<pre>
+[fcp]
+         comment = Exposes essence data in MXF files as virtual files
+         path = /video
+         vfs objects = mxf_harmony
+         writeable = yes
+         browseable = yes
+</pre>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+	<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"/></a>
+
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: XDCAM_structure.html,v 1.1 2008/09/17 03:44:57 stuart_hc Exp $ $Name:  $ -->
+<head>
+        <style type="text/css">
+        body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+        a { text-decoration: none; color: blue; background-color: transparent; }
+        a:hover { text-decoration: underline; }
+        img { border: 0; }
+        </style>
+
+        <title>XDCAM Documentation</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<table width=500>
+<tr>
+<td>
+
+<H3>XDCAM files</H3>
+XDCAM MXF files are OP-1a, where each track of video and audio are interleaved and stored in a single MXF file.
+<p>
+When a new clip is recorded the OP-1a MXF is stored with a filename containing an incrementing clip number.  In addition, an XML file is written and a browse-quality MXF file.  An example of the names given to these files is shown below:
+<pre>
+C0012.MXF
+C0012S01.MXF
+C0012M01.XML
+</pre>
+The structure for IMX-50 (D10) MXF files is:
+<pre>
+  K = Header ( 0000000000000000 )
+                     1a - Single Item, Single Package
+                     D-10 - 50Mbps 625/50i (defined template)
+  K = KLVFill ( 000000000000007c )
+  K = Primer ( 0000000000000200 )
+  K = MXFPreface ( 0000000000000816 )
+  K = MXFIdentification ( 00000000000008bc )
+  K = MXFContentStorage ( 000000000000093c )
+  K = MXFEssenceContainerData ( 00000000000009ac )
+  K = MXFMaterialPackage ( 0000000000000a08 )
+  K = MXFTrack ( 0000000000000aa8 )
+  K = MXFSequence ( 0000000000000b0c )
+  K = MXFTimecodeComponent ( 0000000000000b70 )
+  K = MXFTrack ( 0000000000000bcf )
+  K = MXFSequence ( 0000000000000c33 )
+  K = MXFSourceClip ( 0000000000000c97 )
+  K = MXFTrack ( 0000000000000d17 )
+  K = MXFSequence ( 0000000000000d7b )
+  K = MXFSourceClip ( 0000000000000ddf )
+  K = MXFSourcePackage ( 0000000000000e5f )
+  K = MXFMultipleDescriptor ( 0000000000000f13 )
+  K = MXFCDCIEssenceDescriptor ( 0000000000000f87 )
+  K = MXFGenericSoundEssenceDescriptor ( 00000000000010e6 )
+  K = MXFTrack ( 000000000000115c )
+  K = MXFSequence ( 00000000000011c0 )
+  K = MXFTimecodeComponent ( 0000000000001224 )
+  K = MXFTrack ( 0000000000001283 )
+  K = MXFSequence ( 00000000000012e7 )
+  K = MXFSourceClip ( 000000000000134b )
+  K = MXFTrack ( 00000000000013cb )
+  K = MXFSequence ( 000000000000142f )
+  K = MXFSourceClip ( 0000000000001493 )
+  K = KLVFill ( 00000000000020d3 )
+  K = V10IndexTableSegment ( 0000000000002200 )
+  K = KLVFill ( 0000000000002293 )
+  K = SystemMetadata ( 0000000000002400 )
+  K = KLVFill ( 00000000000024a4 )
+  K = Essence Element ( 0000000000002600 )
+  K = KLVFill ( 000000000003f6a4 )
+  K = Essence Element ( 000000000003fe00 )
+  K = KLVFill ( 000000000004ee18 )
+  K = SystemMetadata ( 000000000004f000 )
+  K = KLVFill ( 000000000004f0a4 )
+  K = Essence Element ( 000000000004f200 )
+  K = KLVFill ( 000000000008c2a4 )
+  K = Essence Element ( 000000000008ca00 )
+  K = KLVFill ( 000000000009ba18 )
+  K = SystemMetadata ( 000000000009bc00 )
+  K = KLVFill ( 000000000009bca4 )
+  K = Essence Element ( 000000000009be00 )
+  K = KLVFill ( 00000000000d8ea4 )
+  K = Essence Element ( 00000000000d9600 )
+  K = KLVFill ( 00000000000e8618 )
+  .
+  .
+  .
+  K = SystemMetadata ( 0000000000eb3000 )
+  K = KLVFill ( 0000000000eb30a4 )
+  K = Essence Element ( 0000000000eb3200 )
+  K = KLVFill ( 0000000000ef02a4 )
+  K = Essence Element ( 0000000000ef0a00 )
+  K = KLVFill ( 0000000000effa18 )
+  K = Footer ( 0000000000effc00 )
+                     1a - Single Item, Single Package
+                     D-10 - 50Mbps 625/50i (defined template)
+  K = KLVFill ( 0000000000effc7c )
+</pre>
+
+</td>
+</tr>
+</table>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+        <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"/></a>
+        <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>

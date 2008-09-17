@@ -1,0 +1,107 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: TransferToP2.html,v 1.1 2008/09/17 03:44:57 stuart_hc Exp $ $Name:  $ -->
+<head>
+        <style type="text/css">
+        body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+        a { text-decoration: none; color: blue; background-color: transparent; }
+        a:hover { text-decoration: underline; }
+        img { border: 0; }
+        </style>
+
+        <title>TransferToP2</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<table width=500>
+<tr>
+<td>
+
+<H3>TransferToP2</H3>
+TransferToP2 is an application to allow edited sequences to be transferred from an editing system to a P2 card.  A typical scenario is the use of a P2 camera with a laptop.  After shooting, P2 cards are inserted into a laptop and edited, for example using Avid Xpress Pro.  The finished work is then mixed-down so that TransferToP2 can take the rendered tracks and copy them to the P2 card, wrapping them in the flavour of MXF required by the P2 camera.  The P2 card is then inserted into a P2 camera where it can be played out over SDI.
+<p>
+<H3>Download latest version</H3>
+<ul>
+<li><a href="TransferToP2-0.1.2.tar.gz">TransferToP2-0.1.2.tar.gz</a><br>Gives a warning when mixed-down source tracks are of different length.
+<li><a href="TransferToP2-0.1.1.tar.gz">TransferToP2-0.1.1.tar.gz</a><br>Fixes problem when AAF composition has Filler on video track.
+<li><a href="TransferToP2-0.1.0.tar.gz">TransferToP2-0.1.0.tar.gz</a><br>Supports "25i PAL" at DV50 (tested with 16bit PCM audio)
+</ul>
+
+<H3>Installation</H3>
+Unpack the tar.gz in C:\Program Files (or any other suitable location).
+<H4>Using with Avid's Send To feature</H4>
+Ideally the application is launched from Avid's "Send To..." menu, but
+it can be run standalone.  The only difference being the Send To method
+will preload the input AAF file, otherwise the user will have to browse
+to the AAF file.
+<p>
+<pre>
+Configure the Send To template:
+  1) Select a sequence
+  2) In bin window, right-mousebutton -> Send To -> Make New
+  3) Edit Filename: to be "transfer"
+  4) Click [ ] Auto Launch then Add Item from the dropdown menu
+     (a) Browse to the installation location of TransferToP2.exe
+     (b) Select TransferToP2.exe
+  5) Click [ ] Auto Load Exported Files(s)
+  6) Click Options next to Export Setting 1
+     (a) Export As: AAF
+     (b) Click on [ ] Include All Video Tracks
+         (i) Export Method: Link to Current Media
+     (c) Click on [ ] Include All Audio Tracks
+         (ii) Export Method: Link to Current Media
+     (d) Save As... "AAF link to"
+     (e) Save
+  7) Save As Template ... "TransferToP2.stt"
+  8) Click OK
+</pre>
+<H3>Using TransferToP2</H3>
+The editing system must first be setup to create new media files compatible with the P2 camera being used, such as DV50 in the following example.  For Avid, make sure the project's Media Creation and Audio Project options are set as follows:
+<ul>
+<li>Media Creation -&gt; Mixdown &amp; Transcode = DV50 MXF
+<li>Audio Project -&gt; Audio File Format = PCM (MXF)
+</ul>
+<H4>Mixing down a finished sequence to prepare for transfer</H4>
+Since TransferToP2 has no ability to render effects or transcode to DV formats, each track of the finished sequence must be mixed-down.  A sequence of steps to achieve this result is:
+<ol>
+<li>Duplicate the finished sequence and select the new sequence
+<li>Select the video track and then Clip-&gt;Video mixdown...
+<li>Select the A1 track and deselect all other tracks then Clip-&gt;Audio mixdown...
+<li>Perform the same action on tracks A2, A3 and A4
+<li>Delete the original video and audio tracks leaving only the 5 new mixed-down tracks.
+</ol>
+
+<H4>Transfer the sequence to a P2 card</h4>
+Select the mixed-down sequence, then right-mouse-button Send To.  Select the TransferToP2 option and Avid will launch the TransferToP2 application.  TransferToP2 will search for drives which are likely to be P2 cards according to the following conditions:
+<br>
+&nbsp;&nbsp;(a) contains a \CONTENTS directory
+<br>
+&nbsp;&nbsp;(b) is a blank (formatted) drive
+<br>
+The user must select the drive which represents the P2 card and then start the transfer.
+<p>
+It is recommended that the user install the <a href="https://sec.panasonic.biz/sav/sec-cgi-bin/p2viewer/dlp2v.cgi?mylang=EN">P2 Viewer</a> application.  This application can be used to review clips stored on a P2 card and to delete clips or format a P2 card.
+<p>
+After completing a transfer the new clip will appear on the P2 camera as shown below.  The thumbnail on the left is the new clip with an [E] symbol to indicate it was created by an editor, the other thumbnail is a normal (widescreen) clip as recorded by the camera.
+<p>
+<img src="P2_thumbnails.png" alt="thumbnails">
+<H3>Testing without a P2 card</H3>
+You can create a virtual P2 card by mapping an empty directory to a drive.  E.g.<br>
+<code>subst F: C:\Temp\P2Card</code><br>
+This new drive with then appear in the list of drives of TransferToP2.  In addition, the P2 Viewer application can be configured to work with virtual P2 cards by selecting <code>Tool -> Setting Virtual P2 Cards</code>
+</td>
+
+<td>
+<img src="TransferToP2_screenshot.png" alt="TransferToP2 screenshot">
+</td>
+</tr>
+</table>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+        <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"/></a>
+        <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>

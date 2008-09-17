@@ -1,0 +1,57 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: EVS_structure.html,v 1.1 2008/09/17 03:44:57 stuart_hc Exp $ $Name:  $ -->
+<head>
+        <style type="text/css">
+        body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+        a { text-decoration: none; color: blue; background-color: transparent; }
+        a:hover { text-decoration: underline; }
+        img { border: 0; }
+        </style>
+
+        <title>EVS "MXF" Documentation</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<table width=500>
+<tr>
+<td>
+
+<H3>EVS "MXF" structure</H3>
+Unfortunately the EVS MXF files do not follow the specification of MXF files in SMPTE 377M.  To begin with, the Operational Pattern has the following unknown value:<br>
+<code>06.0e.2b.34.02.05.01.01.0d.01.02.01.01.01.01.00</code><br>
+However, the absence of a SourcePackage makes the file non-compliant and restricts interoperability, which defeats the aim of the MXF standard.  At best, the EVS file can be described only as KLV compliant (SMPTE 336M).
+<p>
+When attempting interoperability in practice, the most difficult problem is the invalid EssenceContainer label:<br>
+<code>06.0e.2b.34.02.05.01.01.0d.01.03.01.18.01.02.01</code><br>
+This "dark" EssenceContainer contains JPEG and uncompressed audio in an undocumented interleaved fashion.  Fields of video are compressed as JPEG images and arranged in "clumps" of 18 fields, followed by uncompressed audio data, followed by the next clump of JPEGs and so on.
+<p>
+All EVS "MXF" files have the following KLV layout, with offsets being constant for the first 5 KLV triplets i.e. up to the Footer.
+<pre>
+  K = OpenIncompleteHeader ( 0000000000000000 )
+                     1 Invalid EssenceContainer listed
+  K = Primer ( 000000000000007d )
+  K = [ Dark - clip metadata which uses tags defined in Primer ]
+      06 0e 2b 34 04 01 01 01 0d 01 04 01 01 01 02 00
+  K = KLVFill ( 000000000000073a )
+  K = [ Dark - essence in the form of blobs of 18 JPEG images, one JPEG per field ]
+      06 0e 2b 34 02 05 01 01 0d 01 03 01 18 01 02 01
+  K = IncompleteFooter ( [varies] )
+                     1 Invalid EssenceContainer listed
+  K = Primer ( [varies] )
+  K = [ Dark - repeat of clip metadata plus 3 true-color RGB thumbnails ]
+      06 0e 2b 34 04 01 01 01 0d 01 04 01 01 01 02 00
+</pre>
+
+</td>
+</tr>
+</table>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+        <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"/></a>
+        <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>

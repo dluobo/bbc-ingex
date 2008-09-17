@@ -1,0 +1,249 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: P2_structure.html,v 1.1 2008/09/17 03:44:57 stuart_hc Exp $ $Name:  $ -->
+<head>
+        <style type="text/css">
+        body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+        a { text-decoration: none; color: blue; background-color: transparent; }
+        a:hover { text-decoration: underline; }
+        img { border: 0; }
+        </style>
+
+        <title>P2 Documentation</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<table width=500>
+<tr>
+<td>
+
+<H3>P2 filesystem layout</H3>
+P2 MXF files are OP-Atom, where each track of video and audio are stored in separate files.  This complicates the housekeeping of the files since steps must be taken to ensure related tracks are kept together when files are moved or copied.  The P2 uses a 6-character identifier in the filename of all related files.
+<p>
+The P2 card lays out all audio tracks under the <code>CONTENTS/AUDIO/</code> directory and all video tracks under <code>CONTENTS/VIDEO/</code>.  In addition, it creates an 80x60 BMP thumbnail in the <code>CONTENTS/ICON/</code> directory and writes an XML file containing structural metadata describing the clip.
+<p>
+An example layout for DV50 clips (with 4 tracks of audio) is:
+<pre>
+LASTCLIP.TXT
+CONTENTS/AUDIO/0009E700.MXF
+CONTENTS/AUDIO/0009E701.MXF
+CONTENTS/AUDIO/0009E702.MXF
+CONTENTS/AUDIO/0009E703.MXF
+CONTENTS/CLIP/0009E7.XML
+CONTENTS/ICON/0009E7.BMP
+CONTENTS/VIDEO/0009E7.MXF
+</pre>
+For DV25 clips (2 tracks of audio):
+<pre>
+LASTCLIP.TXT
+CONTENTS/AUDIO/0001F900.MXF
+CONTENTS/AUDIO/0001F901.MXF
+CONTENTS/CLIP/0001F9.XML
+CONTENTS/ICON/0001F9.BMP
+CONTENTS/VIDEO/0001F9.MXF
+</pre>
+
+The <code>LASTCLIP.TXT</code> file contains three lines of ASCII text.  The first line contains the prefix of the last clip written to the P2 card.  The meaning of the other two lines in unknown at this point.  E.g.
+<pre>
+009E7S
+1.0
+40
+</pre>
+
+<H3>P2 MXF structure</H3>
+
+<H4>P2 MXF constraints</H4>
+Initial attempts to transfer independently created MXF files to a P2 camera failed - the P2 camera would not playback the MXF files.
+Through experiment we found the P2 camera needed the following constraints to be met which may be due to hardware resourse limits in the P2 equipment we tested (model AG-HVX200E).  If the constraints were not met, the clip would appear correct in the thumbnail viewer, but would fail to playback.
+<ul>
+<li>The first sample of essence (video or audio) must be positioned at offset 0x8000
+<li>The KLV BER encoded lengths must themselves be of the following lengths
+  <ul>
+  <li>8 bytes for the clip-wrapped Essence Element
+  <li>4 bytes for all other KLV triplets
+  </ul>
+  The DV-DIF (SMPTE 383M) and AES3/BWAV (SMPTE 382M) generic container mapping documents requires the 8 byte BER long-form encoding for clip wrapped essence.  The 4 byte length is a P2 specific constraint.
+<li>The header must contain an IndexTableSegment.  OP-Atom only requires an IndexTableSegment in the footer.
+<li>When playing back, the timecode displayed is taken from the timecode embedded in the DV frame while the timecode represented by the TimecodeComponent in the MaterialPackage is ignored.  The P2 thumbnail viewer will display the start timecode stored in the XML file.
+<li>The maximum size of the P2 MXF file is 4GB even though P2 cards of higher capacity are available.  This is believed to be due to the limitations of the FAT32 filesystem used on the P2 cards.  When the 4GB limit is reached the clip must be spanned across multiple clips, in the same way clips must be spanned across multiple P2 cards when a card becomes full.
+</ul>
+
+<H4>Observed KLV layout of P2 MXF</H4>
+The MXF KLV structure depends on whether DV50 or DV25 was recorded.  For DV50, there are 6 tracks described in the MaterialPackage: 1 timecode, 4 audio and 1 video.  For DV25, there are 4 tracks: 1 timecode, 2 audio and 1 video.
+<p>
+The file offsets of all KLV triplets except the Footer and IndexTable are constant.  Additionally, the offsets are the same between DV50 and DV25 files, and is achieved by having more KLVFill in the DV25 file which has fewer tracks.
+<p>
+The following analysis is based on 625/50Hz MXF files only.  Output is taken from the <a href="http://aaf.cvs.sourceforge.net/aaf/AAF/DevUtils/MXFDump/">MXFDump</a> utility.
+<p>
+For DV50 the structure of an MXF file containing video is:
+<pre>
+  K = Header ( 0000000000000000 )
+                     DV - 50Mbps 625/50i (clip wrapped)
+  K = Primer ( 000000000000007c )
+  K = MXFPreface ( 0000000000000572 )
+  K = MXFIdentification ( 0000000000000618 )
+  K = MXFContentStorage ( 00000000000006b0 )
+  K = MXFEssenceContainerData ( 0000000000000720 )
+  K = MXFMaterialPackage ( 000000000000077c )
+  K = MXFTrack ( 0000000000000870 )
+  K = MXFSequence ( 00000000000008d4 )
+  K = MXFTimecodeComponent ( 0000000000000938 )
+  K = MXFTrack ( 0000000000000997 )
+  K = MXFSequence ( 00000000000009fb )
+  K = MXFSourceClip ( 0000000000000a5f )
+  K = MXFTrack ( 0000000000000adf )
+  K = MXFSequence ( 0000000000000b43 )
+  K = MXFSourceClip ( 0000000000000ba7 )
+  K = MXFTrack ( 0000000000000c27 )
+  K = MXFSequence ( 0000000000000c8b )
+  K = MXFSourceClip ( 0000000000000cef )
+  K = MXFTrack ( 0000000000000d6f )
+  K = MXFSequence ( 0000000000000dd3 )
+  K = MXFSourceClip ( 0000000000000e37 )
+  K = MXFTrack ( 0000000000000eb7 )
+  K = MXFSequence ( 0000000000000f1b )
+  K = MXFSourceClip ( 0000000000000f7f )
+  K = MXFSourcePackage ( 0000000000000fff )
+  K = MXFTrack ( 0000000000001093 )
+  K = MXFSequence ( 00000000000010f7 )
+  K = MXFSourceClip ( 000000000000115b )
+  K = MXFCDCIEssenceDescriptor ( 00000000000011db )
+  K = IndexTableSegment ( 0000000000001290 )
+  K = KLVFill ( 00000000000012f4 )
+  K = Body ( 0000000000007f6c )
+                     DV - 50Mbps 625/50i (clip wrapped)
+  K = Essence Element ( 0000000000007fe8 )
+  K = Footer ( [varies] )
+                     DV - 50Mbps 625/50i (clip wrapped)
+  K = IndexTableSegment ( [varies] )
+</pre>
+
+
+For DV25 the structure of an MXF file containing video is:
+
+<pre>
+  K = Header ( 0000000000000000 )
+                     DV - 25Mbps 625/50i (clip wrapped)
+  K = Primer ( 000000000000007c )
+  K = MXFPreface ( 0000000000000572 )
+  K = MXFIdentification ( 0000000000000618 )
+  K = MXFContentStorage ( 00000000000006b0 )
+  K = MXFEssenceContainerData ( 0000000000000720 )
+  K = MXFMaterialPackage ( 000000000000077c )
+  K = MXFTrack ( 0000000000000850 )
+  K = MXFSequence ( 00000000000008b4 )
+  K = MXFTimecodeComponent ( 0000000000000918 )
+  K = MXFTrack ( 0000000000000977 )
+  K = MXFSequence ( 00000000000009db )
+  K = MXFSourceClip ( 0000000000000a3f )
+  K = MXFTrack ( 0000000000000abf )
+  K = MXFSequence ( 0000000000000b23 )
+  K = MXFSourceClip ( 0000000000000b87 )
+  K = MXFTrack ( 0000000000000c07 )
+  K = MXFSequence ( 0000000000000c6b )
+  K = MXFSourceClip ( 0000000000000ccf )
+  K = MXFSourcePackage ( 0000000000000d4f )
+  K = MXFTrack ( 0000000000000de3 )
+  K = MXFSequence ( 0000000000000e47 )
+  K = MXFSourceClip ( 0000000000000eab )
+  K = MXFCDCIEssenceDescriptor ( 0000000000000f2b )
+  K = IndexTableSegment ( 0000000000000fe0 )
+  K = KLVFill ( 0000000000001044 )
+  K = Body ( 0000000000007f6c )
+                     DV - 25Mbps 625/50i (clip wrapped)
+  K = Essence Element ( 0000000000007fe8 )
+  K = Footer ( [varies] )
+                     DV - 25Mbps 625/50i (clip wrapped)
+  K = IndexTableSegment ( [varies] )
+</pre>
+For DV50 audio MXF files the structure is:
+<pre>
+ K = Header ( 0000000000000000 )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = Primer ( 000000000000007c )
+ K = MXFPreface ( 0000000000000572 )
+ K = MXFIdentification ( 0000000000000618 )
+ K = MXFContentStorage ( 00000000000006b0 )
+ K = MXFEssenceContainerData ( 0000000000000720 )
+ K = MXFMaterialPackage ( 000000000000077c )
+ K = MXFTrack ( 0000000000000870 )
+ K = MXFSequence ( 00000000000008d4 )
+ K = MXFTimecodeComponent ( 0000000000000938 )
+ K = MXFTrack ( 0000000000000997 )
+ K = MXFSequence ( 00000000000009fb )
+ K = MXFSourceClip ( 0000000000000a5f )
+ K = MXFTrack ( 0000000000000adf )
+ K = MXFSequence ( 0000000000000b43 )
+ K = MXFSourceClip ( 0000000000000ba7 )
+ K = MXFTrack ( 0000000000000c27 )
+ K = MXFSequence ( 0000000000000c8b )
+ K = MXFSourceClip ( 0000000000000cef )
+ K = MXFTrack ( 0000000000000d6f )
+ K = MXFSequence ( 0000000000000dd3 )
+ K = MXFSourceClip ( 0000000000000e37 )
+ K = MXFTrack ( 0000000000000eb7 )
+ K = MXFSequence ( 0000000000000f1b )
+ K = MXFSourceClip ( 0000000000000f7f )
+ K = MXFSourcePackage ( 0000000000000fff )
+ K = MXFTrack ( 0000000000001093 )
+ K = MXFSequence ( 00000000000010f7 )
+ K = MXFSourceClip ( 000000000000115b )
+ K = MXFAES3AudioEssenceDescriptor ( 00000000000011db )
+ K = IndexTableSegment ( 0000000000001272 )
+ K = KLVFill ( 00000000000012d6 )
+ K = Body ( 0000000000007f6c )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = Essence Element ( 0000000000007fe8 )
+ K = Footer ( [varies] )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = IndexTableSegment ( [varies] )
+</pre>
+For DV25 audio MXF files the structure is:
+<pre>
+ K = Header ( 0000000000000000 )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = Primer ( 000000000000007c )
+ K = MXFPreface ( 0000000000000572 )
+ K = MXFIdentification ( 0000000000000618 )
+ K = MXFContentStorage ( 00000000000006b0 )
+ K = MXFEssenceContainerData ( 0000000000000720 )
+ K = MXFMaterialPackage ( 000000000000077c )
+ K = MXFTrack ( 0000000000000850 )
+ K = MXFSequence ( 00000000000008b4 )
+ K = MXFTimecodeComponent ( 0000000000000918 )
+ K = MXFTrack ( 0000000000000977 )
+ K = MXFSequence ( 00000000000009db )
+ K = MXFSourceClip ( 0000000000000a3f )
+ K = MXFTrack ( 0000000000000abf )
+ K = MXFSequence ( 0000000000000b23 )
+ K = MXFSourceClip ( 0000000000000b87 )
+ K = MXFTrack ( 0000000000000c07 )
+ K = MXFSequence ( 0000000000000c6b )
+ K = MXFSourceClip ( 0000000000000ccf )
+ K = MXFSourcePackage ( 0000000000000d4f )
+ K = MXFTrack ( 0000000000000de3 )
+ K = MXFSequence ( 0000000000000e47 )
+ K = MXFSourceClip ( 0000000000000eab )
+ K = MXFAES3AudioEssenceDescriptor ( 0000000000000f2b )
+ K = IndexTableSegment ( 0000000000000fc2 )
+ K = KLVFill ( 0000000000001026 )
+ K = Body ( 0000000000007f6c )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = Essence Element ( 0000000000007fe8 )
+ K = Footer ( [varies] )
+                    AES3/BWF - AES3 (clip wrapped)
+ K = IndexTableSegment ( [varies] )
+</pre>
+
+</td>
+</tr>
+</table>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+        <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"/></a>
+        <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>

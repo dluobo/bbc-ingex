@@ -1,0 +1,110 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: index.html,v 1.1 2008/09/17 03:44:58 stuart_hc Exp $ $Name:  $ -->
+<head>
+	<style type="text/css">
+	body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+	a { text-decoration: none; color: blue; background-color: transparent; }
+	a:hover { text-decoration: underline; }
+	img { border: 0; }
+	</style>
+
+	<title>Ingex Archive</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<h2>Ingex Archive</h2>
+<p>
+A description of the BBC D3 preservation system can be found in the BBC Research white paper
+<a href="http://www.bbc.co.uk/rd/pubs/whp/whp155.shtml">File-based Production: Making It Work In Practice</a> (pages 8 to 11).
+<h3>Archive File Format</h3>
+<p>
+The design of the file format to contain the BBC's entire D3 video archive had to fulfil the
+requirement of long term preservation. Once a programme is transferred from D3 video tape
+to a file, the expected lifetime of the file is several decades or longer. Although the file storage
+medium is likely to change, the file itself would not change as it is moved from a legacy file
+medium to the next file medium.
+<p>
+To help ensure video files would be readable in the distant future, open standards were
+chosen at all levels of the design. MXF OP-1A was chosen as the file container to store the
+video, audio and timecode data which would reproduce as closely as possible the information
+on the D3 video tape. Holding the entire archive of MXF files permanently on hard disks was
+too expensive so the open standard LTO-3 data tape was chosen as the initial file storage
+medium.
+<p>
+The OP-1A MXF file contained a sequence of content packages, one for each frame,
+containing video, audio and timecode, in the following formats:
+<ul>
+<li>A video item of SMPTE 384M uncompressed 4:2:2 video at 8 bits per sample in UYVY
+format
+<li>An audio item with 4 tracks of SMPTE 382M uncompressed PCM audio at 48kHz and
+20 bits per sample
+<li>A system item containing an array of SMPTE 12M timecodes representing the VITC
+and LTC timecodes read off the video tape
+</ul>
+<p>
+In addition to the essence, the OP-1A MXF file contained the following metadata in the MXF
+Header:
+<ul>
+<li>Data items from the BBC Infax archive database record for the TV programme,
+identified by SMPTE Universal Labels registered under the BBC node of SMPTE
+metadata dictionary
+<li>An array of D3 error records to facilitate future analysis, preservation and restoration
+<li>An array of Photosensitive Epilepsy (PSE) failures if any
+<li>The barcode of the LTO-3 data tape the MXF file is stored on
+</ul>
+<p>
+In designing the way MXF video files were to be stored on data tape, consideration was given
+to the way archived tapes were to be used. LTO-3 tapes can store 400GB of uncompressed
+data, corresponding to about 10 uncompressed archive programmes. They are stored on
+shelves in an archive vault initially, and intended to be retrieved by human operator rather than
+a robot. A standalone Quality Check (QC) station is used to check the contents of the LTO-3
+tapes after transfer, and to make copies of programmes as either video tape copies or file
+copies. The format of files on the data tape had the following attributes:
+<ul>
+<li>POSIX.1-2001 archive format (also known as pax Interchange format), a superset
+of the tar format which overcomes the 8 GiB limitation of tar format, to ensure future
+access to programmes
+<li>No spanning of tapes, only complete MXF files were stored on any single tape
+<li>No tape level compression, to mitigate data loss in the rare event of media errors
+<li>File marks between programmes, to aid identification and improve seeking
+<li>Tape block size of 256 KiB, to optimise LTO-3 data transfer speeds
+<li>An ASCII text index file at the beginning of tape listing each MXF file with its file size
+and a detailed text description of the tape and MXF structure. A hard disk cache was
+required to support the construction of the index file.
+</ul>
+
+<h3>Example D3 preservation MXF file</h3>
+	<ul>
+		<li><a href="http://www.bbc.co.uk/rd/projects/prod-standards/examples/LTA00000101.mxf">LTA00000101.mxf</a> (21MB).
+	</ul>
+
+<p>
+This example MXF file contains 1 second of material ingested from a D3 tape and is the first
+file stored on an LTO tape identified with the barcode <i>LTA000001</i>. A fake VTR error event 
+on the first frame and a PSE (Photosensitive epilepsy) failure event on the last frame illustrate 
+how they are included in the file.
+</p>
+
+
+<p>
+A flash movie file, 
+	<ul>
+		<li><a href="LTA00000101.mxf.html">LTA00000101.mxf.html</a>
+	</ul> 
+<p>
+shows the metadata structure contained within the MXF file.
+</p>
+
+
+<!-- sourceforge and wc3 validator links -->
+
+<p>
+<br>
+<br>
+	<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"></a>
+	<a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>

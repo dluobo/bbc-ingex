@@ -1,0 +1,130 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<!-- $Id: index.html,v 1.1 2008/09/17 03:44:57 stuart_hc Exp $ $Name:  $ -->
+<head>
+	<style type="text/css">
+	body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
+	a { text-decoration: none; color: blue; background-color: transparent; }
+	a:hover { text-decoration: underline; }
+	img { border: 0; }
+	</style>
+
+	<title>Ingex - Tapeless video &amp; audio capture, transcoding and network file serving</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+<body>
+
+<!-- logo -->
+<div>
+<a href="index.html"><img src="ingex_logo.png" alt="Ingex Logo"></a>
+</div>
+
+<!-- table for links in left column, body in right column -->
+<table>
+<tr>
+
+<td valign="top">
+	<!-- table of links -->
+	<table width=170>
+		<tr>
+			<td><a href="index.html"><img src="arrow.png" alt="arrow">Home</a></td>
+		</tr>
+		<tr>
+			<td><a href="http://sourceforge.net/projects/ingex/"><img src="arrow.png" alt="arrow">Project Page</a></td>
+		</tr>
+	<!-->
+		<tr>
+			<td><a href="http://sourceforge.net/project/showfiles.php?group_id=157898"><img src="arrow.png" alt="arrow">Download</a></td>
+		</tr>
+	<-->
+		<tr>
+			<td><img src="arrow.png" alt="arrow">Software
+				<span><br>
+					<a href="studio/"><img src="arrow_small.png" alt="arrow">Ingex Studio</a><br>
+					<a href="archive/"><img src="arrow_small.png" alt="arrow">Ingex Archive</a><br>
+					<a href="MediaHarmony/"><img src="arrow_small.png" alt="arrow">MediaHarmony</a><br>
+					<a href="libMXF/"><img src="arrow_small.png" alt="arrow">libMXF</a><br>
+				</span>
+			</td>
+		</tr>
+		<tr>
+			<td><img src="arrow.png" alt="arrow">Tools
+				<span><br>
+					<a href="TransferToP2.html"><img src="arrow_small.png" alt="arrow">TransferToP2</a><br>
+				</span>
+			</td>
+		</tr>
+		<tr>
+			<td><img src="arrow.png" alt="arrow">Documentation
+				<span><br>
+					<a href="P2_structure.html"><img src="arrow_small.png" alt="arrow">P2 MXF files</a><br>
+					<a href="XDCAM_structure.html"><img src="arrow_small.png" alt="arrow">XDCAM MXF files</a><br>
+					<a href="EVS_structure.html"><img src="arrow_small.png" alt="arrow">EVS "MXF" files</a><br>
+				</span>
+			</td>
+		</tr>
+		<tr>
+			<td><a href="contact.html"><img src="arrow.png" alt="arrow">Contact us</a></td>
+		</tr>
+	</table>
+</td>
+
+<td valign="top">
+	<!-- Overview text -->
+	<table>
+	<tr>
+	<td>
+	<p>
+	<b>Ingex</b> is a suite of software applications designed to enable low-cost flexible tapeless television production.  The functionality of the software includes <a href="http://en.wikipedia.org/wiki/Serial_Digital_Interface">SDI</a> video and audio capture, real-time transcoding and wrapping in <a href="http://en.wikipedia.org/wiki/MXF">MXF</a>, archiving to <a href="http://en.wikipedia.org/wiki/Linear_Tape-Open">LTO-3</a> data tape and network file serving of media files.  The software was originally developed by <a href="http://www.bbc.co.uk/rd/index.shtml">BBC Research and Development</a> in 2005 for series three of the <a href="http://www.bbc.co.uk/cbbc/bamzooki">BAMZOOKi</a> BBC children's program and is now released under the terms of the <a href="http://www.gnu.org/copyleft/gpl.html">GPL</a> software licence.
+	<p>
+	<b>Ingex</b> has since been used by the EastEnders and Dragons' Den television productions as well as a music video production for BBC Radio One.
+	<p>
+	Three white papers describing Ingex and its use for various BBC television productions are available.  The <a href="http://www.bbc.co.uk/rd/pubs/whp/whp133.shtml">first paper</a> looks in particular at the use of MXF and AAF files in the system, while the <a href="http://www.bbc.co.uk/rd/pubs/whp/whp141.shtml">second paper</a> looks at the practical benefits achieved by the tapeless capture and logging system.  The third and most recent <a href="http://www.bbc.co.uk/rd/pubs/whp/whp155.shtml">paper</a> (Sep 2007) covers the use of Ingex for EastEnders, Dragons' Den and the BBC Archive.  An 8 minute <a href="http://www.bbc.co.uk/rd/pubs/whp/whp-pdf-files/whp133-videofile/BBC_RD_Production_Automation_2006.avi">video</a> (63MB) has been produced demonstrating the use of Ingex for BAMZOOKi in October 2005.
+	<p>
+	The software consists of the following components:
+	<ul>
+	<li><a href="studio/"><b>Ingex Studio</b></a> - a multi-camera television studio ingest and transcoding system.<br>
+		Currently supported SD codecs are:
+	  <ul>
+	  <li>Avid-compatible JPEG codec resolutions known as 2:1, 3:1, 10:1, 20:1, 15:1s, 10:1m, 4:1m
+	  <li>DVCPRO50 (50Mbps) and DV (25Mbps)
+	  <li>IMX 50/40/30 (50/40/30Mbps)
+	  <li>Uncompressed SD video at 8 bits-per-sample and 10 bits-per-sample
+	  </ul>
+	  Supported HD codecs are:
+	  <ul>
+	  <li>DNxHD (VC-3) at 120Mbps and 185Mbps
+	  <li>DVCPRO HD
+	  <li>Uncompressed HD video at 8 bits-per-sample
+	  </ul>
+	<li><b>Ingex Player</b> - software player for playback of MXF OP-Atom and MXF OP-1a files.  Supports playout to computer monitor or over SDI I/O card.  Features include quad-split, audio monitor, timecode display and jog-shuttle control.
+	<li><a href="archive"><b>Ingex Archive</b></a> - ingest system designed for video tape archive preservation.  Video tape is played back from a VTR, ingested over SDI, and stored as an MXF OP-1a file, including all audio channels, VITC and LTC timecodes and archive database metadata.  Features include VTR-control, D-3 tape error recording, PSE analysis and MPEG-2 browse generation.
+	<li><a href="MediaHarmony"><b>MediaHarmony</b></a> - a Samba VFS module which allows multiple Avid editing workstations to use low-cost commodity storage without conflicts around the .pmr and .mdb database files.  This is particularly useful for workgroups of editors using Avid XpressDV.
+	<li><a href="libMXF"><b>libMXF</b></a> - a low-level C library for reading and writing MXF files.  Particular attention has been made to creating MXF files compatible with Avid software and P2 cameras.  Several useful command line tools are included.
+	</ul>
+	Current work in progress includes tools to:
+	<ul>
+	<li><a href="TransferToP2.html">TransferToP2</a> - Re-wrap Avid MXF (OP-Atom) files into <a href="http://en.wikipedia.org/wiki/P2_%28storage_media%29">P2</a> compatible MXF files
+	<li>Re-wrap EVS JPEG coded "MXF" files into Avid-compatible MXF
+	<li>Re-wrap P2 MXF (OP-Atom) files into Avid-compatible MXF for older versions of Avid software which do not support P2 MXF files
+	</ul>
+	<!-->
+	The source code for the <b>Ingex</b> software is available for <a href="http://sourceforge.net/project/showfiles.php?group_id=157898">download</a> or can be browsed online directly from the <a href="http://svn.sourceforge.net/viewcvs.cgi/ingex/">Subversion repository</a>.
+	<-->
+	The source code for the <b>Ingex</b> software can be <a href="http://sourceforge.net/cvs/?group_id=157898">accessed via anonymous CVS</a> or can be browsed online directly from the <a href="http://ingex.cvs.sourceforge.net/ingex/">CVS repository</a>.
+	<p>
+	If you have a query or wish to contribute to <b>Ingex</b> please <a href="contact.html">get in touch</a>.
+	</td>
+	</tr>
+	</table>
+</td>
+</tr>
+</table>
+
+<!-- sourceforge and wc3 validator links -->
+<p>
+	<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=157898&amp;type=1" alt="SourceForge.net Logo"></a>
+	<a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-html401" alt="Valid HTML 4.01!" height="31" width="88"></a>
+
+</body>
+</html>
