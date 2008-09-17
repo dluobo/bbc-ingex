@@ -1,0 +1,91 @@
+/*
+ * Copyright (C) 2008  British Broadcasting Corporation
+ * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+body {
+	font-family: sans-serif;
+}
+
+.date {
+	margin-bottom: 6px;
+}
+
+h1{
+	margin-bottom: 8px;
+}
+
+h2 {
+	margin-top: 0px;
+	margin-left: 28px;
+}
+
+#progInfoDiv {
+	float: right;
+	margin-top: 12px;
+	margin-right: 12px;
+}
+
+table {
+	border: 1px solid black;
+	text-align: center;
+	margin: 10px;
+	margin-left: auto;
+	margin-right: auto;
+	border-collapse: collapse;
+}
+
+.header {
+	font-weight: bold;
+	background-color: #eee;
+}
+
+td {
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+	padding: 6px;
+	vertical-align: top;
+}
+
+th {
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+	padding: 6px;
+}
+
+.itemHeaderLine {
+	background-color: #f3f3ff;
+}
+
+.itemHeaderLine td {
+	border-left: none;
+}
+
+.itemName {
+	width: 400px;
+	border-bottom: 1px solid #999;
+	font-style: italic;
+	font-size: 70%;
+	text-align: left;
+	margin-bottom: 6px;
+}
+
+.comment {
+	text-align: left;
+	width: 500px;
+}
