@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.2 2008/09/16 11:40:44 stuart_hc Exp $
+ * $Id: nexus_web.c,v 1.3 2008/09/18 09:26:43 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -45,6 +45,7 @@
 
 
 int verbose = 1;
+int show_audio34 = 0;
 
 typedef struct {
 	uint8_t			*ring[MAX_CHANNELS];
@@ -125,6 +126,7 @@ static void usage_exit(void)
 {
 	fprintf(stderr, "Usage: nexus_web [options]\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "    --a34            display 4 audio channels instead of 2 by default\n");
 	fprintf(stderr, "    -v               increase verbosity\n");
 	fprintf(stderr, "\n");
 	exit(1);
@@ -140,6 +142,25 @@ typedef struct {
 	NexusConnection	connection;
 	TimecodeInfo	tcinfo;
 } NexusWebInfo;
+
+static void get_audio_peak_power(const NexusControl *pctl, uint8_t **ring, int input, double audio_peak_power[])
+{
+	int pair;
+	for (pair = 0; pair < 2; pair++) {
+		const uint8_t *audio_dvs;
+		if (pair == 0)
+			audio_dvs = nexus_lastframe_audio12(pctl, ring, input);
+		else if (pair == 1)
+			audio_dvs = nexus_lastframe_audio34(pctl, ring, input);
+
+		int audio_chan;
+		for (audio_chan = 0; audio_chan < 2; audio_chan++) {
+			uint8_t audio_16bitmono[1920*2];
+			dvsaudio32_to_16bitmono(audio_chan, audio_dvs, audio_16bitmono);
+			audio_peak_power[pair*2 + audio_chan] = calc_audio_peak_power(audio_16bitmono, 1920, 2, -96.0);
+		}
+	}
+}
 
 static void nexus_state(struct shttpd_arg* arg)
 {
@@ -235,23 +256,22 @@ static void nexus_state(struct shttpd_arg* arg)
 		const NexusBufCtl *pc = &pctl->channel[i];
 		int ltc = nexus_lastframe_tc(pctl, ring, i, NexusTC_None);
 		int sok = nexus_lastframe_signal_ok(pctl, ring, i);
-		const uint8_t *audio_dvs = nexus_lastframe_audio12(pctl, ring, i);
 		framesToTC(ltc, &tc);
 
-		int audio_chan;
-		double audio_peak_power[2];
-        for (audio_chan = 0; audio_chan < 2; audio_chan++) {
-            uint8_t audio_16bitmono[1920*2];
-            dvsaudio32_to_16bitmono(audio_chan, audio_dvs, audio_16bitmono);
-            audio_peak_power[audio_chan] = calc_audio_peak_power(audio_16bitmono, 1920, 2, -96.0);
-        }
+		// Setup array of 4 channels of audio peak power data
+		double audio_peak_power[4];
+		get_audio_peak_power(pctl, ring, i, audio_peak_power);
+
 		shttpd_printf(arg, "\n\t\t%d:{",i); // start channel
 		shttpd_printf(arg, "\n\t\t\t\"source_name\": \"%s\",", pc->source_name);
 		shttpd_printf(arg, "\n\t\t\t\"lastframe\": %d,", pc->lastframe);
 		shttpd_printf(arg, "\n\t\t\t\"signal_ok\": %d,", sok);
-		shttpd_printf(arg, "\n\t\t\t\"temperature\": %.1f,", pc->hwtemperature);
 		shttpd_printf(arg, "\n\t\t\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d },", tc.h, tc.m, tc.s, tc.f, tc_stuck[i]);
-		shttpd_printf(arg, "\n\t\t\t\"audio_power\": [ %3.0f, %3.0f]", audio_peak_power[0], audio_peak_power[1]);
+		shttpd_printf(arg, "\n\t\t\t\"audio_power\": [ %3.0f, %3.0f", audio_peak_power[0], audio_peak_power[1]);
+		if (show_audio34) {
+			shttpd_printf(arg, ", %3.0f, %3.0f", audio_peak_power[2], audio_peak_power[3]);
+		}
+		shttpd_printf(arg, "]");
 		shttpd_printf(arg, "\n\t\t}%s", (i == pctl->channels - 1) ? "" : ","); // end channel
 	}
 	shttpd_printf(arg, "\n\t},"); // end ring
@@ -354,6 +374,74 @@ static void nexus_state(struct shttpd_arg* arg)
 	}
 }
 
+static void timecode(struct shttpd_arg* arg)
+{
+	NexusWebInfo		*p = (NexusWebInfo*)arg->user_data;
+
+	shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
+
+	// Use text/plain instead of application/json for ease of debugging in a browser
+	shttpd_printf(arg, "Content-type: text/plain\r\n\r\n");
+
+	// If nexus_web was started before dvs_sdi, p will be NULL
+	if (p->connection.pctl == NULL) {
+		// Connect to NexusControl structure in shared mem
+		if (! nexus_connect_to_shared_mem(0, 1, &p->connection)) {
+			shttpd_printf(arg, "{\"requestError\":\"Shared memory unavailable. Is the capture process running?\",\"state\":\"error\"}\n");
+			arg->flags |= SHTTPD_END_OF_OUTPUT;
+			return;
+		}
+	}
+	
+	// Get health of dvs_sdi
+	int heartbeat_stopped = 0;
+	int capture_dead = 0;
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	int64_t diff = tv_diff_microsecs(&p->connection.pctl->owner_heartbeat, &now);
+	if (diff > 200 * 1000) {
+		heartbeat_stopped = 1;
+		if (kill(p->connection.pctl->owner_pid, 0) == -1) {
+			// If dvs_sdi is alive and running as root, kill() will fail with EPERM
+			if (errno != EPERM)
+				capture_dead = 1;
+		}
+	}
+
+	// convenience variables to keep code clearer
+	const NexusControl	*pctl = p->connection.pctl;
+	uint8_t				**ring = p->connection.ring;
+
+	// Test for "stuck" timecode
+	int tc_stuck = 0;// initialise to good tc
+	gettimeofday(&now, NULL);
+		int lasttc = nexus_lastframe_tc(pctl, ring, 0, NexusTC_LTC);
+		if (p->tcinfo.lasttc[0] != lasttc) {
+			// timecodes differ (good) so update lasttc and continue
+			p->tcinfo.lasttc[0] = lasttc;
+		} else if (tv_diff_microsecs(&p->tcinfo.timestamp, &now) > 3 * 40*1000) {
+			// Has timecode been the same for at least three frames?
+			tc_stuck = 1;		// tc bad
+		}
+	p->tcinfo.timestamp = now;
+
+	// Display output as JSON
+	shttpd_printf(arg, "{");
+
+	NexusTC tc;
+	int ltc = nexus_lastframe_tc(pctl, ring, 0, NexusTC_LTC);
+	framesToTC(ltc, &tc);
+	shttpd_printf(arg, "\n\t\"tc\": { \"h\": %d, \"m\": %d, \"s\": %d, \"f\": %d, \"stopped\": %d },", tc.h, tc.m, tc.s, tc.f, tc_stuck);
+	
+	shttpd_printf(arg,"\n}\n"); // end whole thing
+	arg->flags |= SHTTPD_END_OF_OUTPUT;
+
+	// If capture dead, try to reconnect for next status check
+	if (capture_dead) {
+		nexus_connect_to_shared_mem(0, 1, &p->connection);
+	}
+}
+
 static void availability(struct shttpd_arg* arg)
 {
 	// VERY SIMPLE function returns {"availability":true}
@@ -386,6 +474,10 @@ extern int main(int argc, char *argv[])
 		{
 			usage_exit();
 		}
+		else if (strcmp(argv[n], "--a34") == 0)
+		{
+			show_audio34 = 1;
+		}
 		else if (strcmp(argv[n], "-v") == 0)
 		{
 			verbose++;
@@ -403,6 +495,7 @@ extern int main(int argc, char *argv[])
 
 	// register handlers for various pages
 	shttpd_register_uri(ctx, "/availability", &availability, (void *) &info);
+	shttpd_register_uri(ctx, "/tc", &timecode, (void *) &info);
 	shttpd_register_uri(ctx, "/", &nexus_state, (void *) &info);
 
 	printf("Web server ready...\n");

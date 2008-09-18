@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.8 2008/09/17 03:30:26 stuart_hc Exp $
+ * $Id: recorder_functions.cpp,v 1.9 2008/09/18 09:26:42 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -168,11 +168,30 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Mask for MXF track enables
     uint32_t mxf_mask = 0;
-    if (enable_video)    mxf_mask |= 0x00000001;
-    if (enable_audio12)  mxf_mask |= 0x00000006;
-    if (enable_audio34)  mxf_mask |= 0x00000018;
-    if (enable_audio56)  mxf_mask |= 0x00000060;
-    if (enable_audio78)  mxf_mask |= 0x00000180;
+    if (enable_video)
+    {
+        mxf_mask |= 0x00000001;
+    }
+    // Per-track audio enables
+    bool enable_audio[9]; // not using index 0
+    for (unsigned int i = 1; i <= 8; ++i)
+    {
+        if (p_rec->mTracksPerChannel > i &&
+            p_rec->mTrackEnable[track_offset + i])
+        {
+            enable_audio[i] = true;
+            mxf_mask |= (1 << i);
+        }
+        else
+        {
+            enable_audio[i] = false;
+        }
+    }
+        
+    //if (enable_audio12)  mxf_mask |= 0x00000006;
+    //if (enable_audio34)  mxf_mask |= 0x00000018;
+    //if (enable_audio56)  mxf_mask |= 0x00000060;
+    //if (enable_audio78)  mxf_mask |= 0x00000180;
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -216,6 +235,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     ACE_DEBUG((LM_INFO,
         ACE_TEXT("start_record_thread(%C, start_tc=%C res=%d bitc=%C)\n"),
         src_name.c_str(), Timecode(start_tc, fps, df).Text(), resolution, (bitc ? "on" : "off")));
+
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("mxf_mask = 0x%04x\n"), mxf_mask));
 
     // Set up packages and tracks
     prodauto::Recorder * rec = p_rec->Recorder();
@@ -1243,11 +1264,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 try
                 {
-                    // write pcm audio data to input track 2
-                    writer->writeSample(2, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 2
+                    if (enable_audio[1])
+                    {
+                        writer->writeSample(2, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    }
 
-                    // write pcm audio data to input track 3
-                    writer->writeSample(3, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 3
+                    if (enable_audio[2])
+                    {
+                        writer->writeSample(3, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    }
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
@@ -1264,11 +1291,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 try
                 {
-                    // write pcm audio data to input track 4
-                    writer->writeSample(4, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 4
+                    if (enable_audio[3])
+                    {
+                        writer->writeSample(4, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    }
 
-                    // write pcm audio data to input track 5
-                    writer->writeSample(5, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 5
+                    if (enable_audio[4])
+                    {
+                        writer->writeSample(5, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    }
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
@@ -1285,11 +1318,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 try
                 {
-                    // write pcm audio data to input track 6
-                    writer->writeSample(6, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 6
+                    if (enable_audio[5])
+                    {
+                        writer->writeSample(6, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    }
 
-                    // write pcm audio data to input track 7
-                    writer->writeSample(7, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 7
+                    if (enable_audio[6])
+                    {
+                        writer->writeSample(7, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    }
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {
@@ -1306,11 +1345,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
                 try
                 {
-                    // write pcm audio data to input track 8
-                    writer->writeSample(8, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 8
+                    if (enable_audio[7])
+                    {
+                        writer->writeSample(8, audio_samples_per_frame, (uint8_t *)a0, audio_samples_per_frame * 2);
+                    }
 
-                    // write pcm audio data to input track 9
-                    writer->writeSample(9, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    // write pcm audio data to track 9
+                    if (enable_audio[8])
+                    {
+                        writer->writeSample(9, audio_samples_per_frame, (uint8_t *)a1, audio_samples_per_frame * 2);
+                    }
                 }
                 catch (const prodauto::MXFWriterException & e)
                 {

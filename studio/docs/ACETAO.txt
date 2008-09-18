@@ -1,0 +1,65 @@
+Installation of ACE/TAO/MPC using YaST
+======================================
+
+
+Setup access to online repository
+---------------------------------
+
+In YaST, Software, Software Management
+
+Add a repository:
+
+protocol             http
+server name          download.opensuse.org
+port                 80
+directory on server  /repositories/devel:/libraries:/ACE/openSUSE_10.3
+
+Complete URL is:
+http://download.opensuse.org/repositories/devel:/libraries:/ACE/openSUSE_10.3/ 
+
+Install packages
+----------------
+
+Then in YaST, Software, Software Management
+
+Install these packages:
+
+ace
+ace-devel
+ace-gperf
+mpc
+tao
+tao-devel
+tao-cosnaming
+
+The following dependencies should also be installed if YaST requests
+them, although they are not really needed:
+
+ace-xml
+ace-kokyu
+
+Configure the CORBA naming service
+----------------------------------
+
+Create the file
+  /etc/sysconfig/TAO-cosnaming
+
+containing:
+
+TAO_COSNAMING_ENDPOINT="-ORBEndPoint iiop://:8888 -ORBDottedDecimalAddresses 1"
+
+You may want to put an explicit IP address or hostname in that line.
+(Don't put -ORBDottedDecimalAddresses 1 if you want to use hostname rather then IP address.)
+
+
+Then in YaST, System, System Services (runlevel):
+
+Enable the service "tao-cosnaming"
+
+
+Check environment
+-----------------
+
+Log out, log back in and check you have environment variable ACE_ROOT
+Do not set ACE_ROOT, TAO_ROOT or LD_LIBRARY_PATH in your .bashrc
+

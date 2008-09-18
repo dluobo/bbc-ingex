@@ -54,7 +54,8 @@ Also add that line to your ~/.bashrc
 ACE/TAO
 -------
 
-See instructions in separate document acetao_linux.html
+See instructions for YaST in ACETAO.txt
+For manual build, see acetao_linux.html
 
 Database access
 ---------------

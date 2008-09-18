@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.1 2008/09/03 14:13:26 john_f Exp $
+ * $Id: nexus_control.c,v 1.2 2008/09/18 09:26:43 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -102,3 +102,10 @@ extern const uint8_t *nexus_lastframe_audio12(const NexusControl *pctl, uint8_t 
 								+ pctl->audio12_offset);
 }
 
+extern const uint8_t *nexus_lastframe_audio34(const NexusControl *pctl, uint8_t *ring[], int channel)
+{
+	const NexusBufCtl *pc = &pctl->channel[channel];
+
+	return (ring[channel] + pctl->elementsize * (pc->lastframe % pctl->ringlen)
+								+ pctl->audio34_offset);
+}

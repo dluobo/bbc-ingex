@@ -24,6 +24,7 @@ use lib ".";
 use ingexhtmlutil;
 
 use DBI qw(:sql_types);
+use DBD::Pg qw(:pg_types);
 
 ####################################
 #
@@ -672,7 +673,7 @@ sub save_take
             INSERT INTO Take
                 (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, '?', ?, ?, ?, '?', ?, (?,?))
             ");
         $sth->bind_param(1, $nextId, SQL_INTEGER);
         $sth->bind_param(2, $x->{"TAKENO"}, SQL_INTEGER);
@@ -681,21 +682,22 @@ sub save_take
 		$sth->bind_param(5, $x->{"START"}, SQL_BIGINT);
 		$sth->bind_param(6, $x->{"LENGTH"}, SQL_BIGINT);
 		$sth->bind_param(7, $x->{"RESULT"}, SQL_INTEGER);
-		$sth->bind_param(8, $x->{"COMMENT"}, SQL_TEXT);
+		$sth->bind_param(8, $x->{"COMMENT"}, PG_TEXT);
 		$sth->bind_param(9, $x->{"ITEM"}, SQL_INTEGER);
-		$sth->bind_param(10, $x->{"EDITRATE"}, SQL_RATIONAL);
+		$sth->bind_param(10, $x->{"EDITRATE"});
+		$sth->bind_param(10, $x->{"EDITRATEDENOM"});
         $sth->execute;
         
         $dbh->commit;
     };
     if ($@)
     {
-        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "INSERT INTO Take (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate) VALUES ($nextId, $x->{'TAKENO'}, $x->{'LOCATION'}, '$x->{'DATE'}', $x->{'START'}, $x->{'LENGTH'}, $x->{'RESULT'}, '$x->{'COMMENT'}', $x->{'ITEM'}, ($x->{'EDITRATE'}, $x->{'EDITRATEDENOM'}));";
         eval { $dbh->rollback; };
         return undef;
     }
     
-    return $nextNodeId;
+    return $nextId;
 }
 
 sub update_take
@@ -726,8 +728,8 @@ sub update_take
 		$sth->bind_param(4, $x->{"START"}, SQL_BIGINT);
 		$sth->bind_param(5, $x->{"LENGTH"}, SQL_BIGINT);
 		$sth->bind_param(6, $x->{"RESULT"}, SQL_INTEGER);
-		$sth->bind_param(7, $x->{"COMMENT"}, SQL_TEXT);
-		$sth->bind_param(8, $x->{"EDITRATE"}, SQL_RATIONAL);
+		$sth->bind_param(7, $x->{"COMMENT"}, PG_TEXT);
+		$sth->bind_param(8, $x->{"EDITRATE"}); #rational
 		$sth->bind_param(9, $x->{"ITEM"}, SQL_INTEGER);
 		$sth->bind_param(10, $x->{"ID"}, SQL_INTEGER);
         $sth->execute;
