@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.9 2008/10/08 10:16:06 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.10 2008/10/08 21:19:27 stuart_hc Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -882,7 +882,12 @@ static void * sdi_monitor(void *arg)
 		usleep(10000 + 5000 * chan);				
 	}
 
-    const int flagbase = SV_FIFO_FLAG_NO_LIVE; // No loop-through to avoid clash with player
+    const int flagbase = 0;
+#ifdef SV_FIFO_FLAG_NO_LIVE
+	// No loop-through to avoid clash with player
+	// (macro available in sdk3.2.14.0 and later versions)
+	flagbase |= SV_FIFO_FLAG_NO_LIVE;
+#endif
 
 	SV_CHECK( sv_fifo_init(	sv,
                             &poutput,
