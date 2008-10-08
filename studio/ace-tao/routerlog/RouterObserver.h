@@ -1,9 +1,9 @@
 /*
- * $Id: StatusDistributor.h,v 1.1 2007/09/11 14:08:34 stuart_hc Exp $
+ * $Id: RouterObserver.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
  *
- * Send data to an observer.
+ * Observer for router switching events.
  *
- * Copyright (C) 2006  British Broadcasting Corporation.
+ * Copyright (C) 2008  British Broadcasting Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -22,21 +22,17 @@
  * 02110-1301, USA.
  */
 
-#ifndef StatusDistibutor_h
-#define StatusDistibutor_h
+#ifndef RouterObserver_h
+#define RouterObserver_h
 
-#include "StatusClientC.h"
-#include "ForwardTable.h"
+#include <string>
 
-class StatusDistributor : public ForwardTable
+class RouterObserver
 {
 public:
-    StatusDistributor();
-    ProdAuto::DataSource::ConnectionState AddClient(ProdAuto::StatusClient_ptr client);
-    void RemoveClient(ProdAuto::StatusClient_ptr client);
-    void SendStatus(const ProdAuto::StatusItem & status);
-private:
-    ACE_Time_Value mQueueTimeout;
+    virtual void Observe(unsigned int src, unsigned int dest) = 0;
+
+    virtual ~RouterObserver() {}
 };
 
-#endif //#ifndef StatusDistibutor_h
+#endif //#ifndef RouterObserver_h

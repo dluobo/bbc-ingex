@@ -45,6 +45,10 @@ BEGIN
         &update_recording_location
         &delete_recording_location
 		&load_items
+		&load_item
+		&save_item
+		&update_item
+		&delete_item
 		&load_takes
 		&load_take
 		&save_take
@@ -557,7 +561,7 @@ sub load_items
     eval
     {
         my $sth = $dbh->prepare("
-            SELECT itm_identifier AS dbID,
+            SELECT itm_identifier AS id,
  				itm_order_index AS orderIndex,
                 itm_description AS itemName,
 				itm_script_section_ref AS sequence
@@ -583,6 +587,118 @@ sub load_items
     return \@items;
 }
 
+sub load_item
+{
+    my ($dbh,$itemID) = @_;
+	my $item;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT itm_identifier AS id,
+ 				itm_order_index AS orderIndex,
+                itm_description AS itemName,
+				itm_script_section_ref AS sequence,
+				itm_programme_id AS programme
+			FROM Item
+			WHERE itm_identifier = ?
+            ");
+		$sth->bind_param(1, $itemID);
+        $sth->execute;
+
+        $item = $sth->fetchrow_hashref()
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $item;
+}
+
+sub save_item
+{
+    my ($dbh, $x) = @_;
+
+    my $nextId;
+    eval
+    {
+        $nextId = _load_next_id($dbh, "itm_id_seq");
+
+        my $sth = $dbh->prepare("
+            INSERT INTO Item
+                (itm_identifier, itm_description, itm_script_section_ref, itm_order_index, itm_programme_id)
+            VALUES
+                (?, ?, ?, ?, ?)
+            ");
+        $sth->execute($nextId, $x->{'ITEMNAME'}, $x->{'SEQUENCE'}, $x->{'ORDERINDEX'}, $x->{'PROGRAMME'});
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "database error";
+        eval { $dbh->rollback; };
+        return undef;
+    }
+    
+    return $nextId;
+}
+
+sub update_item
+{
+    my ($dbh, $x) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            UPDATE Item
+				SET
+					itm_description = ?,
+					itm_script_section_ref = ?,
+					itm_order_index = ?,
+					itm_programme_id = ?
+            	WHERE
+					itm_identifier = ?
+            ");
+        $sth->execute($x->{'ITEMNAME'}, $x->{'SEQUENCE'}, $x->{'ORDERINDEX'}, $x->{'PROGRAMME'}, $x->{'ID'});
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "database error";
+        eval { $dbh->rollback; };
+        return 0;
+    }
+    
+    return $x->{'ID'};
+}
+
+sub delete_item
+{
+    my ($dbh, $x) = @_;
+
+    eval
+    {
+        my $sth = $dbh->prepare("
+            DELETE FROM Item
+				WHERE itm_identifier = ?
+            ");
+        $sth->execute($x);
+        
+        $dbh->commit;
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "database error";
+        eval { $dbh->rollback; };
+        return 0;
+    }
+    
+    return 1;
+}
+
 sub load_takes
 {
     my ($dbh, $itemId) = @_;
@@ -598,7 +714,8 @@ sub load_takes
 				tke_length AS length,
 				tke_start_position AS start,
 				tke_start_date AS date,
-				rlc_name AS location
+				rlc_name AS location,
+				tke_edit_rate AS editrate
 			FROM Take
 			LEFT OUTER JOIN RecordingLocation ON (tke_recording_location = rlc_identifier)
 			LEFT OUTER JOIN TakeResult ON (tke_result = tkr_identifier)
@@ -634,12 +751,14 @@ sub load_take
             SELECT tke_identifier AS id, 
                 tke_number AS takeNo,
 				tke_comment AS comment,
+				tke_result AS resultid,
 				tkr_name AS result,
 				tke_length AS length,
 				tke_start_position AS start,
 				tke_start_date AS date,
-				tke_edit_rate AS editRate,
+				tke_edit_rate AS editrate,
 				tke_item_id AS item,
+				tke_recording_location AS locationid,
 				rlc_name AS location
 			FROM Take
 			LEFT OUTER JOIN RecordingLocation ON (tke_recording_location = rlc_identifier)
@@ -673,20 +792,9 @@ sub save_take
             INSERT INTO Take
                 (tke_identifier, tke_number, tke_recording_location, tke_start_date, tke_start_position, tke_length, tke_result, tke_comment, tke_item_id, tke_edit_rate)
             VALUES
-                (?, ?, ?, '?', ?, ?, ?, '?', ?, (?,?))
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, (?,?))
             ");
-        $sth->bind_param(1, $nextId, SQL_INTEGER);
-        $sth->bind_param(2, $x->{"TAKENO"}, SQL_INTEGER);
-        $sth->bind_param(3, $x->{"LOCATION"}, SQL_INTEGER);
-		$sth->bind_param(4, $x->{"DATE"}, SQL_DATE);
-		$sth->bind_param(5, $x->{"START"}, SQL_BIGINT);
-		$sth->bind_param(6, $x->{"LENGTH"}, SQL_BIGINT);
-		$sth->bind_param(7, $x->{"RESULT"}, SQL_INTEGER);
-		$sth->bind_param(8, $x->{"COMMENT"}, PG_TEXT);
-		$sth->bind_param(9, $x->{"ITEM"}, SQL_INTEGER);
-		$sth->bind_param(10, $x->{"EDITRATE"});
-		$sth->bind_param(10, $x->{"EDITRATEDENOM"});
-        $sth->execute;
+        $sth->execute($nextId, $x->{"TAKENO"}, $x->{"LOCATION"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULT"}, $x->{"COMMENT"}, $x->{"ITEM"}, $x->{"EDITRATE"}, $x->{"EDITRATEDENOM"},);
         
         $dbh->commit;
     };
@@ -710,29 +818,19 @@ sub update_take
         my $sth = $dbh->prepare("
             UPDATE Take
 			SET
-				tke_number = ?
-				tke_recording_location = ?
-				tke_start_date = ?
-				tke_start_position = ?
-				tke_length = ?
-				tke_result = ?
-				tke_comment = ?
-				tke_edit_rate = ?
+				tke_number = ?,
+				tke_recording_location = ?,
+				tke_start_date = ?,
+				tke_start_position = ?,
+				tke_length = ?,
+				tke_result = ?,
+				tke_comment = ?,
+				tke_edit_rate = ?,
 				tke_item_id = ?
             WHERE
 				tke_identifier = ?
             ");
-        $sth->bind_param(1, $x->{"TAKENO"}, SQL_INTEGER);
-        $sth->bind_param(2, $x->{"LOCATION"}, SQL_INTEGER);
-		$sth->bind_param(3, $x->{"DATE"}, SQL_DATE);
-		$sth->bind_param(4, $x->{"START"}, SQL_BIGINT);
-		$sth->bind_param(5, $x->{"LENGTH"}, SQL_BIGINT);
-		$sth->bind_param(6, $x->{"RESULT"}, SQL_INTEGER);
-		$sth->bind_param(7, $x->{"COMMENT"}, PG_TEXT);
-		$sth->bind_param(8, $x->{"EDITRATE"}); #rational
-		$sth->bind_param(9, $x->{"ITEM"}, SQL_INTEGER);
-		$sth->bind_param(10, $x->{"ID"}, SQL_INTEGER);
-        $sth->execute;
+        $sth->execute($x->{"TAKENO"}, $x->{"LOCATIONID"}, $x->{"DATE"}, $x->{"START"}, $x->{"LENGTH"}, $x->{"RESULTID"}, $x->{"COMMENT"}, $x->{"EDITRATE"}, $x->{"ITEM"}, $x->{"ID"});
         
         $dbh->commit;
     };
@@ -743,7 +841,7 @@ sub update_take
         return undef;
     }
     
-    return 1;
+    return $x->{"ID"};
 }
 
 1;

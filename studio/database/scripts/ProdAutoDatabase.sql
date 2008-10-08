@@ -1,33 +1,8 @@
---
---
--- NOTES
---
--- 1. Database version should be >= 8.1. For version < 8.1 there is a problem with 
--- checking foreign key constraints and adding "DEFERRABLE INITIALLY DEFERRED" to the end 
--- of Foreign key constraints is not 100% reliable - see message below
---
--- Philip de Nier <philip ( dot ) denier ( at ) rd ( dot ) bbc ( dot ) co ( dot ) uk> writes:
--- > The solutions I could find in the mailing lists were either to upgrade to 
--- > version 8.1 which uses "SELECT ... FOR SHARE" (I'm currently using 8.0), 
--- > stop using foreign keys or add "DEFERRABLE INITIALLY DEFERRED" to the 
--- > constraints. For now I'd prefer to use the last option.
--- 
--- > Does using "DEFERRABLE INITIALLY DEFERRED" completely solve the problem of 
--- > transactions waiting for each other to release locks resulting from "SELECT 
--- > ... FOR UPDATE"?
--- 
--- It doesn't eliminate the problem, but it does narrow the window in which
--- the lock is held by quite a bit, by postponing the FK checks until just
--- before transaction commit.
--- 
--- > How are the deferred foreign key constraints checked - are they checked one 
--- > at a time?
--- 
--- Yeah.
--- 
---			regards, tom lane
+------------------------------------
+-- MISC
+------------------------------------
 
-
+CREATE LANGUAGE plpgsql;
 
 
 ------------------------------------
@@ -836,6 +811,30 @@ CREATE RULE new_material_package
     );
 
 
+-- load or create a project name
+
+CREATE OR REPLACE FUNCTION load_or_create_project_name(VARCHAR) RETURNS INTEGER AS $$
+DECLARE
+    name ALIAS FOR $1; 
+    id INTEGER;
+BEGIN
+    LOCK TABLE ProjectName IN EXCLUSIVE MODE;
+
+    SELECT pjn_identifier INTO id 
+        FROM ProjectName
+        WHERE pjn_name = name;
+    
+    IF NOT FOUND THEN
+        SELECT nextval('pjn_id_seq') INTO id;
+        INSERT INTO ProjectName (pjn_identifier, pjn_name)
+            VALUES (id, name);
+    END IF;
+    
+    RETURN id;
+END;
+$$ LANGUAGE plpgsql;
+
+    
 
 
 ------------------------------------

@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
+#include <cstdlib>
+#include <memory>
+#include <cstring>
 
 #include "LocalIngexPlayer.h"
 
@@ -96,6 +99,11 @@ public:
     {
         printf("Progress bar position set at %f\n", position);
         _player->seek((int64_t)(position * 1000), SEEK_SET, PERCENTAGE_PLAY_UNIT);
+    }
+
+    virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos)
+    {
+        printf("Mouse clicked (x,y)=(%d,%d), (w,h)=(%d,%d)\n", xPos, yPos, imageWidth, imageHeight);
     }
 
     

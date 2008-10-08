@@ -46,6 +46,7 @@ enum PlayerEventType {
 	KEYPRESS,
 	PROGRESS_BAR_DRAG,
 	SPEED_CHANGE,
+	QUADRANT_CLICK
 };
 
 enum PlayerMode {
@@ -82,6 +83,7 @@ class Listener : public IngexPlayerListener
 		virtual void keyPressed(int);
 		virtual void keyReleased(int);
 		virtual void progressBarPositionSet(float);
+		virtual void mouseClicked(int, int, int, int);
 	private:
 		Player * mPlayer; //never changed so doesn't need protecting by mutex
 		wxMutex mMutex;
@@ -122,6 +124,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		void OnStateChange(wxCommandEvent& event);
 		void OnSpeedChange(wxCommandEvent& event);
 		void OnProgressBarDrag(wxCommandEvent& event);
+		void OnQuadrantClick(wxCommandEvent& event);
 		Listener * mListener;
 		OSDtype mOSDtype;
 		bool mEnabled;

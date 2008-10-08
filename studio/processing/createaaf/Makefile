@@ -7,10 +7,11 @@ endif
 
 DATABASELIB_DIR = ../../database/src
 COMMONLIB_DIR = ../../../common
+STUDIOCOMMONLIB_DIR = ../../common
 
 CC = g++
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -Wno-non-virtual-dtor -Werror
-INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
+INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(COMMONLIB_DIR) -I$(STUDIOCOMMONLIB_DIR) -I$(AAFSDKINSTALL)/include
 
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 LD = $(CC) -ldl -rdynamic
@@ -27,9 +28,12 @@ all: create_aaf
 $(DATABASELIB_DIR)/libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) libprodautodb.a
 
-	
-create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -laaflib -laafiid -lodbc++ -luuid -lpthread -lxerces-c -o $@
+$(STUDIOCOMMONLIB_DIR)/libstudiocommon.a:
+	@cd $(STUDIOCOMMONLIB_DIR) && $(MAKE) libstudiocommon.a
+
+
+create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(STUDIOCOMMONLIB_DIR)/libstudiocommon.a $(OBJECTS)
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(COMMONLIB_DIR) -L$(STUDIOCOMMONLIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -lcommon -lstudiocommon -laaflib -laafiid -lodbc++ -luuid -lpthread -lxerces-c -o $@
 
 	
 

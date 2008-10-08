@@ -18,7 +18,8 @@
 
 #if !defined(HAVE_DVS)
 
-int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, int disableOSD, int fitVideo, DVSSink** sink)
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, 
+    int numBuffers, int disableOSD, int fitVideo, DVSSink** sink)
 {
     return 0;
 }
@@ -51,6 +52,8 @@ int dvs_card_is_available()
 #endif
 
 #define MAX_DVS_CARDS               4
+
+#define MAX_DVS_CHANNELS            2
 
 #define MAX_DVS_AUDIO_STREAMS       8
 
@@ -274,6 +277,132 @@ static int get_timecode_count(DVSSink* sink, TimecodeType type, TimecodeSubType 
     return theDefault;
 }
 
+
+static int open_dvs_card(int dvsCard, int dvsChannel, int log, sv_handle** svResult, int* selectedCard, int* selectedChannel)
+{
+    int result;
+    sv_handle* sv;
+    int card;
+    int channel;
+    char card_str[64] = {0};
+    int oldOpenString = 0;
+    
+    
+    if (dvsCard < 0)
+    {
+        /* card not specified - start check from card 0 */
+        card = 0;
+    }
+    else
+    {
+        /* card was specified */
+        card = dvsCard;
+    }
+    if (dvsChannel < 0)
+    {
+        /* channel was not specified - start check with the channel omitted from the card string */
+        channel = -1;
+    }
+    else
+    {
+        /* channel was specified */
+        channel = dvsChannel;
+    }
+    result = !SV_OK;
+    while (1)
+    {
+        if (channel >= 0)
+        {
+            if (!oldOpenString) /* don't bother trying again if format is not accepted */
+            {
+                /* try open the specified card and channel */
+                snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=%d", card, channel);
+                result = sv_openex(&sv,
+                                   card_str,
+                                   SV_OPENPROGRAM_APPLICATION,
+                                   SV_OPENTYPE_OUTPUT,
+                                   0,
+                                   0);
+                if (result != SV_OK)
+                {
+                    if (result == SV_ERROR_SVOPENSTRING)
+                    {
+                        oldOpenString = 1;
+                    }
+                    
+                    if (log)
+                    {
+                        ml_log_info("card %d, channel %d: %s\n", card, channel, sv_geterrortext(result));
+                        if (oldOpenString)
+                        {
+                            ml_log_info("DVS channel selection is not supported\n");
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            /* try open the specified card */
+            snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+            result = sv_openex(&sv,
+                               card_str,
+                               SV_OPENPROGRAM_APPLICATION,
+                               SV_OPENTYPE_OUTPUT,
+                               0,
+                               0);
+            if (result != SV_OK && log)
+            {
+                ml_log_info("card %d: %s\n", card, sv_geterrortext(result));
+            }
+        }
+        
+        if (result == SV_OK)
+        {
+            break;
+        }
+
+        /* try the next channel if the channel was not specified */ 
+        if (dvsChannel < 0)
+        {
+            channel++;
+            
+            if (channel >= MAX_DVS_CHANNELS)
+            {
+                channel = dvsChannel;
+            }
+        }
+
+        /* try the next card if the card was not specified and all channels have been tried */ 
+        if (dvsCard < 0)
+        {
+            if (channel == dvsChannel)
+            {
+                card++;
+                
+                if (card >= MAX_DVS_CARDS)
+                {
+                    break;
+                }
+            }
+        }
+        else if (channel == dvsChannel)
+        {
+            /* all channels on specified card have been tried */
+            break;
+        }
+    }
+    
+    if (result != SV_OK)
+    {
+        return 0;
+    }
+    
+    *svResult = sv;
+    *selectedCard = card;
+    *selectedChannel = channel;
+    return 1;
+}
 
 /* TODO: should SV_CHECK exit or just return 0? */
 static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
@@ -1267,38 +1396,29 @@ static void dvs_osd_screen_changed(void* data, OSDScreen screen)
 
 int dvs_card_is_available()
 {
-    int card;
     sv_handle* sv;
-    char card_str[20] = {0};
-    int res;
-    int foundCard = 0;
+    int selectedCard;
+    int selectedChannel;
     
-    for (card = 0; card < MAX_DVS_CARDS; card++)
+    if (!open_dvs_card(-1, -1, 0, &sv, &selectedCard, &selectedChannel))
     {
-        snprintf(card_str, sizeof(card_str) - 1, "PCI,card=%d", card);
-
-        res = sv_openex(&sv, 
-                        card_str,
-                        SV_OPENPROGRAM_APPLICATION,
-                        SV_OPENTYPE_OUTPUT,
-                        0,
-                        0);
-        if (res == SV_OK)
-        {
-            sv_close(sv);
-            foundCard = 1;
-            break;
-        }
+        return 0;
     }
     
-    return foundCard;
+    sv_close(sv);
+    return 1;
 }
 
-int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, int disableOSD, 
-    int fitVideo, DVSSink** sink)
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, 
+    int numBuffers, int disableOSD, int fitVideo, DVSSink** sink)
 {
     DVSSink* newSink;
     int i;
+    int selectedCard;
+    int selectedChannel;
+    sv_info status_info;
+    sv_fifo_info fifo_info;
+    
     
     if (numBuffers > 0 && numBuffers < MIN_NUM_DVS_FIFO_BUFFERS)
     {
@@ -1342,45 +1462,23 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
     CHK_OFAIL(init_mutex(&newSink->frameInfosMutex));
     
 
-    //////////////////////////////////////////////////////
-    // Attempt to open all sv cards
-    //
-    // card specified by string of form "PCI,card=n" where n = 0,1,2,3
-    //
-    int card;
-    for (card = 0; card < MAX_DVS_CARDS; card++)
-    {
-        sv_info             status_info;
-        char card_str[20] = {0};
 
-        snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
-
-        int res = sv_openex(&newSink->sv,
-                            card_str,
-                            SV_OPENPROGRAM_APPLICATION,
-                            SV_OPENTYPE_OUTPUT,
-                            0,
-                            0);
-        if (res != SV_OK)
-        {
-            // typical reasons include:
-            //  SV_ERROR_DEVICENOTFOUND
-            //  SV_ERROR_DEVICEINUSE
-            ml_log_warn("card %d: %s\n", card, sv_geterrortext(res));
-            continue;
-        }
-        sv_status( newSink->sv, &status_info);
-        ml_log_info("DVS card[%d] display raster is %dx%di, mode is 0x%x\n", card, status_info.xsize, status_info.ysize, status_info.config);
-        newSink->rasterWidth = status_info.xsize;
-        newSink->rasterHeight = status_info.ysize;
-        break;
-    }
-    if (card == MAX_DVS_CARDS)
+    /* open the DVS card */
+    
+    if (!open_dvs_card(dvsCard, dvsChannel, 1, &newSink->sv, &selectedCard, &selectedChannel))
     {
         ml_log_error("No DVS card is available\n");
         goto fail;
     }
 
+    /* get DVS settings */
+    
+    SV_CHK_OFAIL(sv_status(newSink->sv, &status_info));
+    ml_log_info("DVS card [card=%d,channel=%d] display raster is %dx%di, mode is 0x%x\n", selectedCard, selectedChannel, status_info.xsize, status_info.ysize, status_info.config);
+
+    newSink->rasterWidth = status_info.xsize;
+    newSink->rasterHeight = status_info.ysize;
+    
     newSink->videoDataSize = newSink->rasterWidth * newSink->rasterHeight * 2;
     newSink->audioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit */
 
@@ -1408,20 +1506,7 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
     }
     
 
-    sv_handle           *sv = newSink->sv;
-    sv_info             status_info;
-    sv_storageinfo      storage_info;
-    
-    SV_CHK_OFAIL( sv_status( sv, &status_info) );
-
-    SV_CHK_OFAIL( sv_storage_status(sv,
-                            0,
-                            NULL,
-                            &storage_info,
-                            sizeof(storage_info),
-                            0) );
-
-    SV_CHK_OFAIL( sv_fifo_init( sv,
+    SV_CHK_OFAIL( sv_fifo_init( newSink->sv,
                             &newSink->svfifo,       // FIFO handle
                             FALSE,          // bInput (FALSE for playback)
                             FALSE,          // bShared (TRUE for input/output share memory)
@@ -1430,8 +1515,7 @@ int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers
                             numBuffers) );           // nFrames (0 means use maximum)
 
 
-    sv_fifo_info fifo_info;
-    SV_CHK_OFAIL(sv_fifo_status(sv, newSink->svfifo, &fifo_info));
+    SV_CHK_OFAIL(sv_fifo_status(newSink->sv, newSink->svfifo, &fifo_info));
     newSink->numBuffers = fifo_info.nbuffers;
     newSink->numBuffersFilled = fifo_info.availbuffers;
 

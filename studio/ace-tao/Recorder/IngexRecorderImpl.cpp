@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.7 2008/10/08 10:16:06 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -76,30 +76,43 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
         name.c_str(), db_user.c_str(), db_pw.c_str()));
 
     // Shared memory initialisation
-    bool result = IngexShm::Instance()->Init();
-    if (result == false)
+    bool ok = true;
+    if (!IngexShm::Instance()->Init())
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared Memory init failed!\n")));
+        ok = false;
     }
 
     // Get frame rate
-    mEditRate.numerator = IngexShm::Instance()->FrameRateNumerator();
-    mEditRate.denominator = IngexShm::Instance()->FrameRateDenominator();
-    mFps = mEditRate.numerator / mEditRate.denominator;
-    if (mEditRate.numerator % mEditRate.denominator)
+    if (ok)
     {
-        mDf = true;
-        mFps += 1;
+        mEditRate.numerator = IngexShm::Instance()->FrameRateNumerator();
+        mEditRate.denominator = IngexShm::Instance()->FrameRateDenominator();
+        if (mEditRate.numerator == 0 || mEditRate.denominator == 0)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Problem with edit rate %d/%d!\n"),
+                mEditRate.numerator, mEditRate.denominator));
+            ok = false;
+        }
     }
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Frame rate %d/%d, %d%C\n"),
-        mEditRate.numerator, mEditRate.denominator, mFps,
-        (mDf ? " DF" : "")));
+    if (ok)
+    {
+        mFps = mEditRate.numerator / mEditRate.denominator;
+        if (mEditRate.numerator % mEditRate.denominator)
+        {
+            mDf = true;
+            mFps += 1;
+        }
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Frame rate %d/%d, %d%C\n"),
+            mEditRate.numerator, mEditRate.denominator, mFps,
+            (mDf ? " DF" : "")));
+    }
 
     // Base class initialisation
     // Each channel has 1 video and 4 or 8 audio tracks
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
     const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
-    RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
+    ok = ok && RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
 
 
     // Store video source names in shared memory
@@ -124,28 +137,31 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     mMaxPostRoll.samples = 0;
 
     RecorderSettings * settings = RecorderSettings::Instance();
-    settings->Update(mRecorder.get());
-
-    mCopyManager.RecorderName(name);
-
-    // Register this Recorder in the monitoring area of shared memory
-    // and initialise encoding enabled/disabled flags for all channels and encodings
-    IngexShm::Instance()->InfoSetup(mRecorder->name);
-    for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
+    if (ok)
     {
-        int enc_idx = 0;
-        for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin(); it != settings->encodings.end(); ++it, ++enc_idx)
-        {
-            bool quad_video = it->source == Input::QUAD;
-            IngexShm::Instance()->InfoSetEnabled(channel_i, enc_idx, quad_video, true);
-            IngexShm::Instance()->InfoSetDesc(channel_i, enc_idx, quad_video,
-                "%s%s %s",
-                DatabaseEnums::Instance()->ResolutionName(it->resolution).c_str(),
-                //(settings->ResolutionName(it->resolution)),
-                quad_video ? "(quad)" : "",
-                it->file_format == MXF_FILE_FORMAT_TYPE ? "MXF" : "OTHER"
-                );
+        settings->Update(mRecorder.get());
 
+        mCopyManager.RecorderName(name);
+
+        // Register this Recorder in the monitoring area of shared memory
+        // and initialise encoding enabled/disabled flags for all channels and encodings
+        IngexShm::Instance()->InfoSetup(mRecorder->name);
+        for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
+        {
+            int enc_idx = 0;
+            for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin(); it != settings->encodings.end(); ++it, ++enc_idx)
+            {
+                bool quad_video = it->source == Input::QUAD;
+                IngexShm::Instance()->InfoSetEnabled(channel_i, enc_idx, quad_video, true);
+                IngexShm::Instance()->InfoSetDesc(channel_i, enc_idx, quad_video,
+                    "%s%s %s",
+                    DatabaseEnums::Instance()->ResolutionName(it->resolution).c_str(),
+                    //(settings->ResolutionName(it->resolution)),
+                    quad_video ? "(quad)" : "",
+                    it->file_format == MXF_FILE_FORMAT_TYPE ? "MXF" : "OTHER"
+                    );
+
+            }
         }
     }
 
@@ -173,7 +189,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
         mHostname = buf;
     }
 
-    return result;
+    return ok;
 }
 
 // Implementation skeleton destructor
@@ -253,6 +269,8 @@ char * IngexRecorderImpl::RecordingFormat (
     ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
         start_tc.Text(), pre, DateTime::Timecode().c_str()));
 
+    bool ok = true;
+
     // Enforce start-stop-start sequence
     if (mRecording)
     {
@@ -274,7 +292,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // alternative (not updating here) would mean you rely
     // on controller disconnecting and reconnecting to
     // force an update.
-    UpdateFromDatabase();
+    ok = ok && UpdateFromDatabase();
 
     // Translate enables to per-track and per-channel.
     std::vector<bool> channel_enables;
@@ -337,7 +355,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Check for start timecode.
     // This may modify the channel_enable array.
-    bool ok = mpIngexRecorder->CheckStartTimecode(
+    ok = ok && mpIngexRecorder->CheckStartTimecode(
         channel_enables,
         start,
         pre_roll.undefined ? 0 : pre_roll.samples,

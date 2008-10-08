@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.cpp,v 1.1 2008/09/03 10:50:33 john_f Exp $
+ * $Id: XmlTools.cpp,v 1.1 2008/10/08 10:16:06 john_f Exp $
  *
  * Utility class for handling XML.
  *
@@ -57,15 +57,22 @@ void XmlTools::Terminate()
     XMLPlatformUtils::Terminate();
 }
 
-void XmlTools::DomToFile(DOMDocument * doc, const char * filename)
+void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_print)
 {
     try
     {
-        // get a serializer, an instance of DOMWriter
+        // Get a serializer, an instance of DOMWriter.
         XMLCh tempStr[100];
         XMLString::transcode("LS", tempStr, 99);
-        DOMImplementation *impl          = DOMImplementationRegistry::getDOMImplementation(tempStr);
-        DOMWriter         *theSerializer = ((DOMImplementationLS*)impl)->createDOMWriter();
+        DOMImplementation * impl          = DOMImplementationRegistry::getDOMImplementation(tempStr);
+        DOMWriter         * theSerializer = ((DOMImplementationLS*)impl)->createDOMWriter();
+
+        // Set pretty print feature if available
+        if (pretty_print &&
+            theSerializer->canSetFeature(XMLUni::fgDOMWRTFormatPrettyPrint, true))
+        {
+            theSerializer->setFeature(XMLUni::fgDOMWRTFormatPrettyPrint, true);
+        }
 
 #if 0
         // set user specified output encoding
@@ -98,9 +105,6 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename)
 
         if (theSerializer->canSetFeature(XMLUni::fgDOMWRTDiscardDefaultContent, gDiscardDefaultContent))
             theSerializer->setFeature(XMLUni::fgDOMWRTDiscardDefaultContent, gDiscardDefaultContent);
-
-        if (theSerializer->canSetFeature(XMLUni::fgDOMWRTFormatPrettyPrint, gFormatPrettyPrint))
-            theSerializer->setFeature(XMLUni::fgDOMWRTFormatPrettyPrint, gFormatPrettyPrint);
 
         if (theSerializer->canSetFeature(XMLUni::fgDOMWRTBOM, gWriteBOM))
             theSerializer->setFeature(XMLUni::fgDOMWRTBOM, gWriteBOM);

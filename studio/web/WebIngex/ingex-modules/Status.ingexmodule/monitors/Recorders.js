@@ -171,7 +171,7 @@ function Status_processRecordingInfo (field,instanceData,recorder,channel,visibl
 		var forceRedraw = false;
 		var last = field.instance.getHistory(1);
 		var current = field.instance.getHistory(0);
-		if(last&& last.monitorData[field.name][recorder][channel]) {
+		if(last && typeof last.monitorData[field.name][recorder] != "undefined" && last.monitorData[field.name][recorder][channel]) {
 			var numInLast = 0;
 			for (var r in last.monitorData[field.name][recorder][channel]) { numInLast++; }
 			var numInCurrent = 0;

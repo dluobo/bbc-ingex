@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.h,v 1.3 2008/09/05 16:48:32 john_f Exp $
+ * $Id: AAFFile.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -20,8 +20,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
  
-#ifndef __PRODAUTO_CREATEAAF_H__
-#define __PRODAUTO_CREATEAAF_H__
+#ifndef __PRODAUTO_AAFFILE_H__
+#define __PRODAUTO_AAFFILE_H__
 
 
 

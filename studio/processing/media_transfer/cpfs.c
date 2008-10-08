@@ -83,7 +83,7 @@ int main(int argc, char ** argv) {
 	while (bytes_read = read(src, &buffer, BUFSIZE)) {
 		/* write the buffer */
 		if (write(dest, buffer, bytes_read) != bytes_read) {
-			printf("Couldn't write to destination file '%s'.\n", argv[3]);
+			printf("Couldn't write to destination file '%s'.\n", argv[4]);
 			exit(1);
 		}
 /*		fsync(dest);*/

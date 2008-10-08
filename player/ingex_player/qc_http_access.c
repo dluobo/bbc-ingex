@@ -45,7 +45,6 @@ struct QCHTTPAccess
     struct shttpd_ctx* ctx;
 };
 
-
 static const char* g_qcReportFramed =
     "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
     "<html>\n"
@@ -55,7 +54,7 @@ static const char* g_qcReportFramed =
     "</head>\n"
     "<frameset rows=\"15%, 100%\" frameborder=\"0\">\n"
     "	<frame name=\"controlframe\" src=\"control.html?report=$$1&session=$$2&carrier=$$3\" scrolling=\"0\"/>\n"
-    "	<frame name=\"reportframe\" src=\"report.html?report=$$1\"/>\n"
+    "	<frame name=\"reportframe\" src=\"\/reports\/$$1\"/>\n"
     "	<noframe> \n"
     "		<p>\n"
     "			<a href=\"report.html?report=$$1\">QC Report</a> \n"
@@ -846,6 +845,7 @@ int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDi
     const char* reportDirectory, QCHTTPAccess** access)
 {
     QCHTTPAccess* newAccess;
+    char filename[FILENAME_MAX];
     
     CALLOC_ORET(newAccess, QCHTTPAccess, 1);
     
@@ -854,7 +854,10 @@ int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDi
     CALLOC_OFAIL(newAccess->reportDirectory, char, strlen(reportDirectory) + 1);
     strcpy(newAccess->reportDirectory, reportDirectory);
     
-    CHK_OFAIL((newAccess->ctx = shttpd_init(NULL, "document_root", "/dev/null", NULL)) != NULL);
+    strcpy(filename, newAccess->cacheDirectory);
+    strcat(filename, "/..");
+
+    CHK_OFAIL((newAccess->ctx = shttpd_init(NULL, "document_root", filename, NULL)) != NULL);
     shttpd_register_uri(newAccess->ctx, "/qcreport/framed.html", &http_qcreport_framed_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/qcreport/control.html", &http_qcreport_control_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/qcreport/report.html", &http_qcreport_report_page, newAccess);

@@ -1157,9 +1157,9 @@ fail:
     
 }
 
-void xsk_set_media_control(X11DisplaySink* sink, ConnectMapping mapping, MediaControl* control)
+void xsk_set_media_control(X11DisplaySink* sink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control)
 {
-    x11c_set_media_control(&sink->x11Common, mapping, control);
+    x11c_set_media_control(&sink->x11Common, mapping, videoSwitch, control);
 }
 
 void xsk_unset_media_control(X11DisplaySink* sink)
@@ -1205,6 +1205,16 @@ void xsk_register_progress_bar_listener(X11DisplaySink* sink, ProgressBarInputLi
 void xsk_unregister_progress_bar_listener(X11DisplaySink* sink, ProgressBarInputListener* listener)
 {
     x11c_unregister_progress_bar_listener(&sink->x11Common, listener);
+}
+
+void xsk_register_mouse_listener(X11DisplaySink* sink, MouseInputListener* listener)
+{
+    x11c_register_mouse_listener(&sink->x11Common, listener);
+}
+
+void xsk_unregister_mouse_listener(X11DisplaySink* sink, MouseInputListener* listener)
+{
+    x11c_unregister_mouse_listener(&sink->x11Common, listener);
 }
 
 

@@ -30,6 +30,7 @@ BEGIN_EVENT_TABLE( Player, wxEvtHandler )
 	EVT_COMMAND( STATE_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnStateChange )
 	EVT_COMMAND( SPEED_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnSpeedChange )
 	EVT_COMMAND( PROGRESS_BAR_DRAG, wxEVT_PLAYER_MESSAGE, Player::OnProgressBarDrag )
+	EVT_COMMAND( QUADRANT_CLICK, wxEVT_PLAYER_MESSAGE, Player::OnQuadrantClick )
 	EVT_TIMER( wxID_ANY, Player::OnFilePollTimer )
 END_EVENT_TABLE()
 
@@ -427,13 +428,13 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 	if (event.GetInt()) {
 		//a valid frame value (i,e, not the zero that's sent when the player is disabled)
 		if (!mLastFrameDisplayed && event.GetExtraLong()) {
-			//have just moved into a take: tell the player so it can update the previous take button
+			//have just moved into a take: tell the player so it can update the "previous take" button
 			wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, WITHIN_TAKE);
 			AddPendingEvent(guiFrameEvent);
 		}
 		mLastFrameDisplayed = event.GetExtraLong();
 	}
-	//tell the gui
+	//tell the gui so it can update the position display
 	event.Skip();
 }
 
@@ -451,7 +452,7 @@ void Player::OnStateChange(wxCommandEvent& event)
 			mSpeed = 0;
 		}
 	}
-	//tell the gui
+	//tell the gui so it can update state
 	event.Skip();
 }
 
@@ -476,7 +477,12 @@ void Player::OnProgressBarDrag(wxCommandEvent& event)
 	seek(event.GetInt(), SEEK_SET, PERCENTAGE_PLAY_UNIT);
 }
 
-
+/// Responds to a quadrant clicked signal from the listener.
+/// Passes to the GUI
+void Player::OnQuadrantClick(wxCommandEvent& event)
+{
+	event.Skip();
+}
 
 /// Responds to the file poll timer.
 /// Checks to see if any more files have appeared, and if so, restarts the player.
@@ -632,8 +638,9 @@ void Listener::endOfSourceEvent(const FrameInfo*)
 }
 
 /// Callback for the player reaching the start of the file (while playing backwards).
-/// Does nothing (situation detected in frameDisplayedEvent() instead)
+/// Does nothing (situation detected in frameDisplayedEvent() instead).
 /// NB Called in another thread context.
+/// @param ypos The vertical position of the click within the player window (relative to its default height)
 void Listener::startOfSourceEvent(const FrameInfo*)
 {
 }
@@ -681,7 +688,7 @@ void Listener::keyReleased(int)
 }
 
 /// Callback for the progress bar being dragged with the mouse.
-/// Seeks to the given position.
+/// Sends the position to the player.
 /// @param position The progress bar position, from 0 to 100.
 /// NB Called in another thread context.
 void Listener::progressBarPositionSet(float position)
@@ -689,4 +696,19 @@ void Listener::progressBarPositionSet(float position)
 	wxCommandEvent event(wxEVT_PLAYER_MESSAGE, PROGRESS_BAR_DRAG);
 	event.SetInt((int) (position * 1000.)); //this is the resulution the player seek command works to
 	mPlayer->AddPendingEvent(event);
+}
+
+/// Callback for the mouse being clicked.
+/// Decodes which quadrant has been clicked on (if any) and sends the value to the player.
+/// @param imageWidth The width of the entire image in the player window.
+/// @param imageHeight The height of the entire image in the player window.
+/// @param xpos The horizontal position of the click within the player window (relative to its default width).
+/// @param ypos The vertical position of the click within the player window (relative to its default height).
+void Listener::mouseClicked(int imageWidth, int imageHeight, int xpos, int ypos)
+{
+	if (xpos <= imageWidth && ypos <= imageHeight) { //clicked inside the image (rather than the window)
+		wxCommandEvent event(wxEVT_PLAYER_MESSAGE, QUADRANT_CLICK);
+		event.SetInt((xpos < imageWidth / 2 ? 1 : 2) + (ypos < imageHeight / 2 ? 0 : 2));
+		mPlayer->AddPendingEvent(event);
+	}
 }

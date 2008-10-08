@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.4 2008/09/04 15:43:53 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.5 2008/10/08 10:16:06 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -32,9 +32,9 @@
 #include "EasyReader.h"
 #include "DateTime.h"
 #include "Timecode.h"
-#include "SourceReader.h"
 #include "quartzRouter.h"
 #include "CutsDatabase.h"
+#include "routerloggerApp.h"
 
 #ifdef WIN32
 const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
@@ -48,43 +48,29 @@ Vt::Vt(int rd, const std::string & n)
 {
 }
 
-SimplerouterloggerImpl * SimplerouterloggerImpl::mInstance = 0;
+//SimplerouterloggerImpl * SimplerouterloggerImpl::mInstance = 0;
 
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpRouter(0), mpTcReader(0), mpSrcReader(0), mpCutsDatabase(0), mpFile(0), mMixDestination(0)
+: mpCutsDatabase(0), mpFile(0), mMixDestination(0)
 {
-    mInstance = this;
-
-    mpRouter = new Router;
-    mpSrcReader = new SourceReader;
-    mpCutsDatabase = new CutsDatabase();
 }
 
 // Implementation skeleton destructor
 SimplerouterloggerImpl::~SimplerouterloggerImpl (void)
 {
-    if (mpRouter)
-    {
-        mpRouter->Stop();
-        mpRouter->wait();
-        delete mpRouter;
-    }
-
-    delete mpTcReader;
-    delete mpSrcReader;
     delete mpCutsDatabase;
 }
 
 
 // Initialise the routerlogger
-bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
-    const std::string & tcport, bool tc_tcp,
-    const std::string & db_file,
-    unsigned int mix_dest, unsigned int vt1_dest, unsigned int vt2_dest, unsigned int vt3_dest, unsigned int vt4_dest)
+bool SimplerouterloggerImpl::Init(const std::vector<RouterDestination> & destinations, unsigned int mix_dest,
+                                  const std::string & db_file,
+                                  const std::string & name,
+                                  const std::string & db_user, const std::string & db_pw)
 {
-    bool result = true;
+    bool ok = true;
 
     // Assume 25 fps
     mEditRate.numerator   = 25;
@@ -99,10 +85,7 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     mMaxPostRoll.undefined = true; // no limit to post-roll
     mMaxPostRoll.edit_rate = mEditRate;
     mMaxPostRoll.samples = 0;
-
-    // Setup format reply
-    mFormat = "*ROUTER*";
-
+#if 0
     // Create tracks
     mTracks->length(1);
     ProdAuto::Track & track = mTracks->operator[](0);
@@ -119,97 +102,37 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     ts.timecode.edit_rate = mEditRate;
     ts.timecode.undefined = 0;
     ts.timecode.samples = 0;
+#endif
 
-    // Init database connection
-    mpSrcReader->Init("KW-Router", "prodautodb", "bamzooki", "bamzooki");
+    // Base class initialisation
+    // Each channel has 1 video and 4 or 8 audio tracks
+    const unsigned int max_inputs = 1;
+    const unsigned int max_tracks_per_input = 1;
+    ok = ok && RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
 
+    // Setup format reply
+    mFormat = "*ROUTER*";
+
+    // Init cuts database
+    mpCutsDatabase = new CutsDatabase();
     if (mpCutsDatabase)
     {
         mpCutsDatabase->Filename(db_file);
     }
 
-    // Init timecode reader, if present
-    delete mpTcReader;
-    if (tcport.empty())
-    {
-        // Use PC clock
-        mpTcReader = new ClockReader;
-    }
-    else
-    {
-        // Use external timecode reader
-        mpTcReader = new EasyReader;
-    }
-
-    EasyReader * er = dynamic_cast<EasyReader *>(mpTcReader);
-    if (er)
-    {
-        if (er->Init(tcport))
-        {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("EasyReader initialised on port \"%C\"\n"),
-                tcport.c_str()));
-        }
-        else
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("EasyReader initialisation failed on port \"%C\"\n"),
-                tcport.c_str()));
-            result = false;
-        }
-    }
-    else
-    {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode will be derived from PC clock\n")));
-    }
 
     // Set destination
     mMixDestination = mix_dest;
 
     // VT name and router info
-    // Eventually this will come from database but 
-    // hard-coded for now.
     mVts.clear();
-    mVts.push_back( Vt(vt1_dest, "VT1") );
-    mVts.push_back( Vt(vt2_dest, "VT2") );
-    mVts.push_back( Vt(vt3_dest, "VT3") );
-    mVts.push_back( Vt(vt4_dest, "VT4") );
-
-
-    // Init router
-    result &= mpRouter->Init(rport, router_tcp);
-
-#if 0
-    // Get info about current routing to write at start of file
-    // and/or in database
-    std::string tc = mpTcReader->Timecode();
-
-    unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
-
-    if (src_index > 0)
+    for (std::vector<RouterDestination>::const_iterator
+        it = destinations.begin(); it != destinations.end(); ++it)
     {
-        std::string srcstring;
-        uint32_t track_i;
-        mpSrcReader->GetSource(src_index, srcstring, track_i);
-
-        mLastSrc = srcstring;
-        mLastTc = tc;
-    }
-#endif
-
-    if (mpRouter->Connected())
-    {
-        // Start monitoring messages from router
-        mpRouter->SetObserver(this);
-        mpRouter->activate();
-
-        // Query routing to destinations we're interested in
-        mpRouter->QuerySrc(mMixDestination);
-        for (std::vector<Vt>::iterator it = mVts.begin(); it != mVts.end(); ++it)
-        {
-            mpRouter->QuerySrc(it->router_dest);
-        }
+        mVts.push_back( Vt(it->output_number, it->name) );
     }
 
-    return result;
+    return ok;
 }
 
 ::ProdAuto::TrackStatusList * SimplerouterloggerImpl::TracksStatus (
@@ -219,7 +142,7 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     ::CORBA::SystemException
   )
 {
-    std::string tc_string = mpTcReader->Timecode();
+    std::string tc_string = routerloggerApp::Instance()->Timecode();
     Timecode tc(tc_string.c_str());
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
@@ -236,6 +159,7 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
     const ::CORBA::BooleanSeq & rec_enable,
+    const char * project,
     ::CORBA::Boolean test_only
   )
   throw (
@@ -247,7 +171,7 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
     FileUtils::CreatePath(RECORD_DIR);
 
     std::string date = DateTime::DateNoSeparators();
-    Timecode tc = mpTcReader->Timecode().c_str();
+    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
     std::ostringstream ss;
     ss << RECORD_DIR << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
 
@@ -269,7 +193,6 @@ bool SimplerouterloggerImpl::Init(const std::string & rport, bool router_tcp,
 ::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
-    const char * project,
     const char * description,
     const ::ProdAuto::LocatorSeq & locators,
     ::CORBA::StringSeq_out files
@@ -310,7 +233,8 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
 {
     // Get info about current routing to write at start of file
     // and/or in database
-    std::string tc = mpTcReader->Timecode();
+    std::string tc = routerloggerApp::Instance()->Timecode();
+
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
 
@@ -335,8 +259,8 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
         ACE_DEBUG((LM_DEBUG, ACE_TEXT ("filename ok %C\n"), filename.c_str()));
 
         // Write info at head of file
-	    ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mMixDestination, deststring.c_str() );
-	    ACE_OS::fprintf (mpFile, "%s start   source name = %s\n", tc.c_str(), mLastSrc.c_str() );
+        ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mMixDestination, deststring.c_str() );
+        ACE_OS::fprintf (mpFile, "%s start   source name = %s\n", tc.c_str(), mLastSrc.c_str() );
     }
 
     // Open database file
@@ -352,11 +276,11 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
 
 void SimplerouterloggerImpl::StopSavingFile()
 {
-	// Put finish time at end of file and close
+    // Put finish time at end of file and close
     if (mpFile)
     {
-        std::string tc = mpTcReader->Timecode();
-	    ACE_OS::fprintf (mpFile, "%s end\n", tc.c_str() );
+        std::string tc = routerloggerApp::Instance()->Timecode();
+        ACE_OS::fprintf (mpFile, "%s end\n", tc.c_str() );
 
         if (ACE_OS::fclose (mpFile) == -1)
         {
@@ -371,16 +295,10 @@ void SimplerouterloggerImpl::StopSavingFile()
     }
 }
 
-void SimplerouterloggerImpl::Observe(std::string msg)
+void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
 {
     // Get timestamp
-    std::string tc = mpTcReader->Timecode();
-
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C\n"), tc.c_str(), msg.c_str()));
-    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C\n"), tc.c_str(), srcstring.c_str()));
-
-    unsigned int dest = ACE_OS::atoi(msg.substr(2, 3).c_str());
-    unsigned int src  = ACE_OS::atoi(msg.substr(6).c_str());
+    std::string tc = routerloggerApp::Instance()->Timecode();
 
     // Update our routing records for the recorders
     for (std::vector<Vt>::iterator it = mVts.begin(); it != mVts.end(); ++it)
@@ -390,7 +308,6 @@ void SimplerouterloggerImpl::Observe(std::string msg)
             it->router_src = src;
         }
     }
-
 
     // Process changes to mixer-out destination
     if (dest == mMixDestination)
@@ -416,7 +333,7 @@ void SimplerouterloggerImpl::Observe(std::string msg)
         //save if file is open
         if (mpFile != 0)
         {
-    	    ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
+            ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
         }
 
         // update database file

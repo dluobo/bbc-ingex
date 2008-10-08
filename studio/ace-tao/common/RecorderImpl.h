@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.6 2008/09/16 11:40:41 stuart_hc Exp $
+ * $Id: RecorderImpl.h,v 1.7 2008/10/08 10:16:06 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -178,14 +178,14 @@ protected:
     bool mDf;
     std::auto_ptr<prodauto::Recorder> mRecorder;
     std::map<long, prodauto::SourceConfig *> mSourceConfigs;
-    std::map<long, HardwareTrack> mTrackMap;
+    std::map<long, HardwareTrack> mTrackMap; // map from SourceTrackConfig id
     std::map<std::string, std::string> mTapeMap;
 // methods
-    void UpdateFromDatabase();
+    bool UpdateFromDatabase();
 
 private:
 // methods
-    void SetSourcePackages();
+    bool SetSourcePackages();
 
 // friend function
     friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);

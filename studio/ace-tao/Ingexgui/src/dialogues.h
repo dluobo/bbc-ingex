@@ -129,7 +129,11 @@ class SetTapeIdsDlg : public wxDialog
 		void OnHelp(wxCommandEvent &);
 		void OnClear(wxCommandEvent &);
 		bool ManipulateCells(const bool, const bool);
+#if USING_ULONGLONG
 		bool ManipulateCell(const int, const int, const bool, const bool, wxULongLong_t * = 0);
+#else
+		bool ManipulateCell(const int, const int, const bool, const bool, unsigned long * = 0);
+#endif
 		void FillCol(const bool, const bool);
 		void UpdateRow(const int);
 		void IncrementAsGroup(const bool commit);
@@ -186,6 +190,7 @@ class TestModeDlg : public wxDialog
 {
 	public:
 		TestModeDlg(wxWindow *);
+		int ShowModal();
 		~TestModeDlg();
 		enum
 		{

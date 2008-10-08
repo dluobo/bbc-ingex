@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.h,v 1.2 2008/04/18 16:56:38 john_f Exp $
+ * $Id: quartzRouter.h,v 1.3 2008/10/08 10:16:06 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -25,6 +25,8 @@
 #ifndef quartzRouter_h
 #define quartzRouter_h
 
+#include "enums.h"
+
 #include <ace/DEV_Addr.h>
 #include <ace/DEV_Connector.h>
 #include <ace/DEV_IO.h>
@@ -35,7 +37,7 @@
 
 const int qbufsize = 128;
 
-class Observer;
+class RouterObserver;
 class CommunicationPort;
 
 /**
@@ -48,13 +50,13 @@ public:
     Router();
     Router(std::string rp);
     ~Router();
-    bool Init(const std::string & port, bool router_tcp);
+    bool Init(const std::string & port, Transport::EnumType transport);
     void Stop();
     bool Connected() { return mConnected; }
 
     virtual int svc ();
 
-    void SetObserver(Observer * obs) { mpObserver = obs; }
+    void SetObserver(RouterObserver * obs) { mpObserver = obs; }
 
     void QuerySrc(unsigned int dest);
 
@@ -77,7 +79,7 @@ private:
     char * mWritePtr;
     char * mBufferEnd;
 
-    Observer * mpObserver;
+    RouterObserver * mpObserver;
     CommunicationPort * mpCommunicationPort;
     bool mConnected;
     bool mRun;

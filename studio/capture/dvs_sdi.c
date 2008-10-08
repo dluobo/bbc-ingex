@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.8 2008/09/16 16:50:32 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.9 2008/10/08 10:16:06 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -882,13 +882,15 @@ static void * sdi_monitor(void *arg)
 		usleep(10000 + 5000 * chan);				
 	}
 
+    const int flagbase = SV_FIFO_FLAG_NO_LIVE; // No loop-through to avoid clash with player
+
 	SV_CHECK( sv_fifo_init(	sv,
-							&poutput,		// FIFO handle
-							TRUE,			// bInput (FALSE for playback)
-							FALSE,			// bShared (TRUE for input/output share memory)
-							TRUE,			// bDMA
-							FALSE,			// reserved
-							0) );			// nFrames (0 means use maximum)
+                            &poutput,
+                            1,          // Input
+                            FALSE,      // bShared (TRUE for input/output share memory)
+                            1,          // DMA FIFO
+                            flagbase,   // Base SV_FIFO_FLAG_xxxx flags
+                            0) );       // nFrames (0 means use maximum)
 
 	SV_CHECK( sv_fifo_start(sv, poutput) );
 

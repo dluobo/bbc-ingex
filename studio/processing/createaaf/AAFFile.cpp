@@ -1,5 +1,5 @@
 /*
- * $Id: CreateAAF.cpp,v 1.5 2008/09/16 11:41:19 stuart_hc Exp $
+ * $Id: AAFFile.cpp,v 1.1 2008/10/08 10:16:06 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -34,7 +34,7 @@
 #include <AAFExtEnum.h>
 
 
-#include "CreateAAF.h"
+#include "AAFFile.h"
 #include "CreateAAFException.h"
 
 #include <DatabaseEnums.h>

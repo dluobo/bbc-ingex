@@ -47,9 +47,11 @@ static void usage(void)
 {
 	fprintf(stderr, "Usage:\n\tsend_video [options] address[:port]\n\n");
 	fprintf(stderr, "\tE.g. send_video 239.255.1.1:2000\n\n");
-	fprintf(stderr, "\t-b    benchmark\n");
+	fprintf(stderr, "\t-b    benchmark multicast transmission (no video input file required)\n");
 	fprintf(stderr, "\t-i    specify a different input video file [default out.yuv]\n");
+	fprintf(stderr, "\t-t    specify a pre-prepared MPEG-TS input file\n");
 	fprintf(stderr, "\t-a    specify a 48kHz stereo audio wav input file\n");
+	fprintf(stderr, "\t-r n  limit transmit rate to n kbps\n");
 	fprintf(stderr, "\t-h    input size is HD 1080i [default input is 720x576]\n");
 	fprintf(stderr, "\t-j    input is 4:2:2 YUV [default input is 4:2:0 YUV]\n");
 	fprintf(stderr, "\t-s x  scale down streamed video by e.g. 2 for 360x288, 3 for 240x192\n");
@@ -68,15 +70,17 @@ extern int main(int argc, char *argv[])
 	FILE				*input = NULL, *fp_audio = NULL;
 	int					c, fd, port,
 						use_limit = 0,
+						mpegts_input = 0,
 						verbose = 0, benchmark = 0;
 	uint64_t			limit = 0;
+	int					rate_kbps_limit = 0;
 	int					scale = 1;
 	int					debug = 0;
 	int					input_422yuv = 0;
 	int					in_width = 720, in_height = 576;
 
 	// letters followed by ':' means the option requires an argument
-	while ((c = getopt(argc, argv, ":dbvi:a:l:s:hj")) != -1)
+	while ((c = getopt(argc, argv, ":dbvi:t:a:r:l:s:hj")) != -1)
 	{
 		switch(c) {
 		case 'd':
@@ -91,8 +95,15 @@ extern int main(int argc, char *argv[])
 		case 'i':
 			input_file = optarg;
 			break;
+		case 't':
+			input_file = optarg;
+			mpegts_input = 1;
+			break;
 		case 'a':
 			audio_input_file = optarg;
+			break;
+		case 'r':
+			rate_kbps_limit = strtoll(optarg, NULL, 10);
 			break;
 		case 'l':
 			limit = strtoll(optarg, NULL, 10);
@@ -151,10 +162,22 @@ extern int main(int argc, char *argv[])
 		out_width /= scale;
 		out_height /= scale;
 	}
+	int video_buf_size = out_width * out_height * 3/2;
+	if (mpegts_input) {
+		buf_size = 188;
+		video_buf_size = 188;
+		if (scale != 1 || audio_input_file != NULL) {
+			printf("options incompatible with MPEG-TS transmission\n");
+			exit(1);
+		}
+	}
+
 	unsigned char *buf = malloc(buf_size);
 	unsigned char *audio = malloc(audio_buf_size);
 
-	printf("Scaling input video %dx%d to %dx%d\n", in_width, in_height, out_width, out_height);
+	if (!mpegts_input) {
+		printf("Scaling input video %dx%d to %dx%d\n", in_width, in_height, out_width, out_height);
+	}
 
 	// video input
 	if (benchmark) {
@@ -212,7 +235,7 @@ extern int main(int argc, char *argv[])
 	
 	uint64_t packets = 0;
 	uint64_t total_written = 0;
-	uint8_t *p_video = malloc(out_width * out_height * 3/2);
+	uint8_t *p_video = malloc(video_buf_size);
 
 	while (1)
 	{
@@ -265,16 +288,22 @@ extern int main(int argc, char *argv[])
 		}
 
 		if (debug) {
-			if (fwrite(p_video, out_width * out_height * 3/2, 1, output) != 1) {
+			if (fwrite(p_video, video_buf_size, 1, output) != 1) {
 				perror("fwrite");
 				exit(1);
 			}
 		}
 
-		ssize_t bytes_written = send_audio_video(fd, out_width, out_height, 2,
+		ssize_t bytes_written;
+		if (mpegts_input) {
+			bytes_written = send(fd, p_video, buf_size, 0);
+		}
+		else {
+			bytes_written = send_audio_video(fd, out_width, out_height, 2,
 									p_video, audio,
 									(int)packets,					// frame number
 									(int)packets, (int)packets, source_name);
+		}
 
 		packets++;
 		total_written += bytes_written;
@@ -292,8 +321,14 @@ extern int main(int argc, char *argv[])
 			fflush(stdout);
 		}
 
-		// limit sending rate to 25fps
-		double needed_time = packets / 25.0 * 1000000;		// times are all in microseconds
+		double needed_time;
+		if (rate_kbps_limit) {
+			needed_time = total_written * 8.0 / (rate_kbps_limit * 1000) * 1000000;
+		}
+		else {
+			// limit sending rate to 25fps
+			needed_time = packets / 25.0 * 1000000;		// times are all in microseconds
+		}
 		double sleep_time = needed_time - diff;
 		if (sleep_time > 0)
 			usleep(sleep_time);

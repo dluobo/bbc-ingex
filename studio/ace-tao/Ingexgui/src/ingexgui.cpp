@@ -472,6 +472,7 @@ mJumpToTimecodeButton->Hide(); //TEMP until this function is fully implemented!
 	SetMinSize(GetSize()); //prevents scrollbar of event list disappearing oddly
 
 	mCuePointsDlg = new CuePointsDlg(this, mSavedState); //this is done now so that a file doesn't have to be read each time a cue point is marked
+	mTestModeDlg = new TestModeDlg(this); //this is done now so that it can remember its parameters between invocations
 
 	ResetToDisconnected();
 	SetStatus(STOPPED);
@@ -537,7 +538,7 @@ void IngexguiFrame::SetProjectName()
 /// @param event The command event.
 void IngexguiFrame::OnTestMode( wxCommandEvent& WXUNUSED( event ) )
 {
-	TestModeDlg dlg(this);
+	mTestModeDlg->ShowModal();
 }
 
 /// Responds to a Set Rolls menu request by showing the appropriate dialogue and informing the recorder group if user makes changes.
@@ -917,6 +918,9 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 				}
 #endif
 			}
+			break;
+		case prodauto::QUADRANT_CLICK :
+			mPlaybackTrackSelector->SelectQuadrant(event.GetInt());
 			break;
 		case prodauto::KEYPRESS : {
 			wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED);

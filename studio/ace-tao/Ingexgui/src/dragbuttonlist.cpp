@@ -166,6 +166,28 @@ bool DragButtonList::LaterTrack(bool select)
 	return more;
 }
 
+/// If the quad split is displayed, switches source to that corresponding to the quadrant value given (if it is available).
+/// If an individual source is displayed, switches to the quad split (thus providing toggling behaviour).
+/// @param source The quadrant (1-4).
+void DragButtonList::SelectQuadrant(unsigned int source)
+{
+	if (((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->GetValue()) { //quad split is displayed: display the individual source
+		if (mSizer->GetItem(source) && ((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->IsEnabled()){ //a source exists in this quadrant, and its file is successfully loaded
+			//press the button (this deselects the others)
+			((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->SetValue(true);
+			//this doesn't generate an event, so do so manually
+			wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, source);
+			AddPendingEvent(event);
+		}
+	}
+	else { //source is displayed: display the quad split
+		((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->SetValue(true);
+		//this doesn't generate an event, so do so manually
+		wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, 0);
+		AddPendingEvent(event);
+	}
+}
+
 //drag drop experiment
 
 /*	wxArrayString names;
@@ -181,4 +203,16 @@ bool DragButtonList::LaterTrack(bool select)
 		bs->Add(rb);
 		wxStaticText * tb = new wxStaticText(playbackPage, -1, names[i]);
 		bs->Add(tb);
+
+void DragButtonList::SelectSource(unsigned int source) {
+	wxWindow * button = FindWindowById(source, this);
+	if (button) { //assumption that button will be NULL if not found!
+		//select the button
+		((wxRadioButtonbutton
+		//send an event as if the button had been pressed by the user
+	}
+}
+
+//drag drop experiment
+
 	} */

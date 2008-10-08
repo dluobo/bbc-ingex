@@ -67,6 +67,7 @@ public:
     virtual void keyPressed(int key) = 0;
     virtual void keyReleased(int key) = 0;
     virtual void progressBarPositionSet(float position) = 0;
+    virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos) = 0;
     
     
 protected:

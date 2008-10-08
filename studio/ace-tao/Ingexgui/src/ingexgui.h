@@ -48,6 +48,9 @@
 
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
 
+#define USING_ULONGLONG 0 //this allows larger numbers to be incrementable in tape ID cells but if the C runtime library does not support 64-bit numbers the increment buttons will not work at all
+
+
 static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, true};
 static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};
 
@@ -104,6 +107,7 @@ class RecordButton;
 class HelpDlg;
 class RecorderGroupCtrl;
 class CuePointsDlg;
+class TestModeDlg;
 
 /// The main displayed frame, at the heart of the application
 class IngexguiFrame : public wxFrame
@@ -258,6 +262,7 @@ class IngexguiFrame : public wxFrame
 		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;
 		CuePointsDlg * mCuePointsDlg;
+		TestModeDlg * mTestModeDlg;
 		wxStaticBoxSizer * mTimecodeBox;
 
 		Stat mStatus;

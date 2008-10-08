@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.6 2008/09/04 15:38:44 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.7 2008/10/08 10:16:06 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -219,7 +219,8 @@ void IngexRecorder::Setup(
 
     // We also include project name to help with copying to project-based
     // directories on a file-server.
-    // NB. need to remove unsuitable characters such as space or ampersand)
+    // But that bit commented out because of problems with unsuitable
+    // characters such as /
 
     // Set filename stems in RecordOptions.
     for (std::vector<ThreadParam>::iterator
@@ -228,7 +229,7 @@ void IngexRecorder::Setup(
         const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
         std::ostringstream ident;
         ident << date << "_" << tcode
-            << "_" << project
+            /* << "_" << project */
             << "_" << mpImpl->Name()
             << "_" << src_name
             << "_" << it->p_opt->index;

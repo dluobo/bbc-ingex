@@ -8,6 +8,8 @@
 #include "keyboard_input.h"
 #include "keyboard_input_connect.h"
 #include "progress_bar_input_connect.h"
+#include "mouse_input.h"
+#include "mouse_input_connect.h"
 
 
 typedef struct
@@ -58,6 +60,10 @@ typedef struct
     KeyboardConnect* keyboardConnect;    
     KeyboardInputListener* keyboardListener;
     KeyboardInputListener* separateKeyboardListener;
+    MouseInput mouseInput;
+    MouseConnect* mouseConnect;
+    MouseInputListener* mouseListener;
+    MouseInputListener* separateMouseListener;
     pthread_mutex_t eventMutex;
     
     pthread_t processEventThreadId;
@@ -84,13 +90,16 @@ void x11c_unregister_keyboard_listener(X11Common* x11Common, KeyboardInputListen
 void x11c_register_progress_bar_listener(X11Common* x11Common, ProgressBarInputListener* listener);
 void x11c_unregister_progress_bar_listener(X11Common* x11Common, ProgressBarInputListener* listener);
 
+void x11c_register_mouse_listener(X11Common* x11Common, MouseInputListener* listener);
+void x11c_unregister_mouse_listener(X11Common* x11Common, MouseInputListener* listener);
+
 
 int x11c_open_display(X11Common* x11Common);
 int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height);
 int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
     unsigned int imageWidth, unsigned int imageHeight);
 
-void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, MediaControl* control);
+void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);
 void x11c_unset_media_control(X11Common* x11Common);
 int x11c_process_events(X11Common* common, int sync);
 

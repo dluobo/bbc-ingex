@@ -1,0 +1,6 @@
+project(studiocommonLib) {
+  staticname = studiocommon
+  sharedname = 
+  includes += ../../common
+}
+

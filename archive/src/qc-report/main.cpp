@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2008/07/08 16:25:15 philipn Exp $
+ * $Id: main.cpp,v 1.2 2008/10/08 10:22:13 john_f Exp $
  *
  * Utility to generate a QC and PSE report from one or more QC sessions
  *
@@ -233,6 +233,16 @@ string strip_path(string filename)
 
 
 
+static void set_string_value(string& target, string name, string value)
+{
+    size_t pos = target.find(name);
+    if (pos == string::npos)
+    {
+        return;
+    }
+    
+    target.replace(pos, name.size(), value);
+}
 
 
 
@@ -274,13 +284,13 @@ int main(int argc, const char** argv)
     
     while (cmdlnIndex < argc)
     {
-        if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
+       if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
             strcmp(argv[cmdlnIndex], "--help") == 0)
         {
             usage(argv[0]);
             return 0;
         }
-        else if (strcmp(argv[cmdlnIndex], "--report") == 0)
+         else if (strcmp(argv[cmdlnIndex], "--report") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
             {
@@ -659,7 +669,40 @@ int main(int argc, const char** argv)
                         Logging::info("Created QC report '%s'\n", qcReportName.c_str());
                     }
                     
+                    // Remove previous png's
+                    system(("rm " + reportDirectoryName + "/" + "*" + ".png").c_str());
                     
+                    const int TimeStampSize = 15;
+                    string fileItemPng = mxfFile.getFilename();
+                    set_string_value(fileItemPng, ".mxf", "");
+                    string timeStampPng = last_path_component(sessionFile.getFilename()).c_str();
+                    set_string_value(timeStampPng, ".txt", "");
+                    string::size_type pos = timeStampPng.size();
+                    string timeStampPng2(timeStampPng, pos-TimeStampSize);
+                    
+                    const string barcodeTemplate = "barcode -e code128 -b \"$barString\" | convert -extract $Wx120+0+672 - $imgFile";
+                    string sysCmd = barcodeTemplate;
+                    set_string_value(sysCmd, "$barString", fileItemPng);
+                    set_string_value(sysCmd, "$W", "150");
+                    set_string_value(sysCmd, "$imgFile", (reportDirectoryName + "/" + fileItemPng + ".png") );
+                    Logging::info("barcode creation cmd : '%s'\n", sysCmd.c_str());
+                    int success = system(sysCmd.c_str());
+                    if (success != 0)
+                    {
+                    	Logging::info("barcode image creation failed\n");
+                    }
+
+                    sysCmd = barcodeTemplate;
+                    set_string_value(sysCmd, "$barString", timeStampPng2);
+                    set_string_value(sysCmd, "$W", "250");
+                    set_string_value(sysCmd, "$imgFile", (reportDirectoryName + "/" + timeStampPng2 + ".png") );
+                    Logging::info("barcode creation cmd : '%s'\n", sysCmd.c_str());
+                    success = system(sysCmd.c_str());
+                    if (success != 0)
+                    {
+                    	Logging::info("barcode image creation failed\n");
+                    }
+                   
                     // output QC report filename to stdout
                     if (printQCURL)
                     {

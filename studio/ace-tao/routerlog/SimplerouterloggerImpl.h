@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.4 2008/09/04 15:43:53 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.5 2008/10/08 10:16:06 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -32,14 +32,14 @@
 
 #include "RecorderImpl.h"
 #include "TimecodeReader.h"
-#include "Observer.h"
+#include "RouterObserver.h"
+#include "RouterDestination.h"
 
-class SourceReader;
-class Router;
 class CutsDatabase;
 
-struct Vt
+class Vt
 {
+public:
     Vt(int rd, const std::string & n);
     unsigned int router_dest;
     unsigned int router_src; // what is routed to that VT
@@ -47,11 +47,11 @@ struct Vt
 };
 
 class  SimplerouterloggerImpl
-  : public Observer, public RecorderImpl
+  : public RouterObserver, public RecorderImpl
 {
 public:
   // Singelton accessor
-	//static SimplerouterloggerImpl * Instance() { return mInstance; }
+    //static SimplerouterloggerImpl * Instance() { return mInstance; }
   // Constructor 
   SimplerouterloggerImpl (void);
   
@@ -60,10 +60,8 @@ public:
 
 
   // Initialisation
-  bool Init(const std::string & rport, bool router_tcp,
-      const std::string & tcport, bool tc_tcp,
-      const std::string & db_file,
-      unsigned int mix_dest, unsigned int vt1_dest, unsigned int vt2_dest, unsigned int vt3_dest, unsigned int vt4_dest);
+  bool Init(const std::vector<RouterDestination> & destinations, unsigned int mix_dest, const std::string & db_file,
+      const std::string & name, const std::string & db_user, const std::string & db_pw);
 
   void Destination(unsigned int dest) { mMixDestination = dest; }
 
@@ -76,15 +74,13 @@ public:
 
   void StopSavingFile();
 
-  void Name(const std::string & name) { mName = name; }
-
-  
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Start (
       ::ProdAuto::MxfTimecode & start_timecode,
       const ::ProdAuto::MxfDuration & pre_roll,
       const ::CORBA::BooleanSeq & rec_enable,
+      const char * project,
       ::CORBA::Boolean test_only
     )
     throw (
@@ -95,7 +91,6 @@ public:
   ::ProdAuto::Recorder::ReturnCode Stop (
       ::ProdAuto::MxfTimecode & stop_timecode,
       const ::ProdAuto::MxfDuration & post_roll,
-      const char * project,
       const char * description,
       const ::ProdAuto::LocatorSeq & locators,
       ::CORBA::StringSeq_out files
@@ -122,21 +117,17 @@ public:
 
 
     // From Observer base class
-    void Observe(std::string msg);
+    void Observe(unsigned int src, unsigned int dest);
 
 
 private:
 // static instance pointer
-	static SimplerouterloggerImpl * mInstance;
+    //static SimplerouterloggerImpl * mInstance;
 
     FILE * mpFile;
-	std::string mRouterPort;
-	std::string mTimecodePort;
-    std::string mName;
+    std::string mRouterPort;
+    std::string mTimecodePort;
 
-    Router * mpRouter;
-    TimecodeReader * mpTcReader;
-	SourceReader * mpSrcReader;
     CutsDatabase * mpCutsDatabase;
 
     unsigned int mMixDestination;

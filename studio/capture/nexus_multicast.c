@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.2 2008/09/03 14:13:29 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.3 2008/10/08 10:16:06 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -36,6 +36,7 @@
 
 #include "nexus_control.h"
 #include "multicast_video.h"
+#include "multicast_compressed.h"
 #include "video_conversion.h"
 #include "video_test_signals.h"
 
@@ -85,6 +86,8 @@ static void usage_exit(void)
     fprintf(stderr, "    -s WxH        size of scaled down image to transmit [default 240x192 (1/9 picture)]\n");
     fprintf(stderr, "                  (use 360x288 for 1/4-picture)\n");
     fprintf(stderr, "                  (use 180x144 for 1/16-picture)\n");
+    fprintf(stderr, "    -t            send compressed MPEG-TS stream suitable for VLC playback\n");
+    fprintf(stderr, "    -b bps        MPEG-2 video bitrate to use for compressed MPEG-TS\n");
     fprintf(stderr, "    -q            quiet operation (fewer messages)\n");
 	exit(1);
 }
@@ -95,6 +98,8 @@ extern int main(int argc, char *argv[])
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
 	int				channelnum = 0;
+	int				bitrate = 0;
+	int				mpegts = 0;
 	int				out_width = 240, out_height = 192;
 	char			*address = NULL;
 	int				fd;
@@ -126,6 +131,20 @@ extern int main(int argc, char *argv[])
 				return 1;
 			}
 			n++;
+		}
+		else if (strcmp(argv[n], "-b") == 0)
+		{
+			if (n+1 >= argc ||
+				sscanf(argv[n+1], "%d", &bitrate) != 1)
+			{
+				fprintf(stderr, "-b requires bitrate in bps\n");
+				return 1;
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-t") == 0)
+		{
+			mpegts = 1;
 		}
 		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
 		{
@@ -234,8 +253,25 @@ extern int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	// setup MPEG-TS encoder
+	mpegts_encoder_t *ts = NULL;
+	if (mpegts) {
+		char url[64];
+		// create string suitable for ffmpeg url_fopen() e.g. udp://239.255.1.1:2000
+		sprintf(url, "udp://%s:%d", remote, port);
+
+		if (bitrate == 0)
+			bitrate = 2700;
+
+		if ((ts = mpegts_encoder_init(url, bitrate, 1)) == NULL) {
+			return 1;
+		}
+	}
+
 	while (1)
 	{
+		uint8_t audio[1920*2*2];
+
 		if (last_saved == pc->lastframe) {
 			usleep(2 * 1000);		// 0.020 seconds = 50 times a sec
 			continue;
@@ -271,21 +307,23 @@ extern int main(int argc, char *argv[])
 
 			// reformat audio to two mono channels one after the other
 			// i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
-			uint8_t audio[1920*2*2];
 			dvsaudio32_to_16bitmono(0, audio_dvs_fmt, audio);
 			dvsaudio32_to_16bitmono(1, audio_dvs_fmt, audio + 1920*2);
+		}
 
-			// Send the frame.
-			send_audio_video(fd, out_width, out_height, 2, scaled_frame, audio,
-										pc->lastframe, tc, ltc, pc->source_name);
+		// Send the frame.
+		if (ts) {
+			mpegts_encoder_encode(ts,
+									signal_ok ? scaled_frame : blank_video,
+									(int16_t*)(signal_ok ? audio : blank_audio),
+									pc->lastframe);
 		}
 		else {
-			// send to blank video and audio
-			send_audio_video(fd, out_width, out_height, 2, blank_video, blank_audio,
-										pc->lastframe, tc, ltc, pc->source_name);
-
+			send_audio_video(fd, out_width, out_height, 2,
+									signal_ok ? scaled_frame : blank_video,
+									signal_ok ? audio : blank_audio,
+									pc->lastframe, tc, ltc, pc->source_name);
 		}
-
 
 		if (verbose) {
 			char tcstr[32], ltcstr[32];

@@ -148,6 +148,7 @@ private:
     X11WindowListener _x11WindowListener;
     KeyboardInputListener _x11KeyListener;
     ProgressBarInputListener _x11ProgressBarListener;
+    MouseInputListener _x11MouseListener;
     
     StreamInfo _videoStreamInfo;
 };

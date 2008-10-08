@@ -706,6 +706,7 @@ void SetTapeIdsDlg::OnClear(wxCommandEvent & WXUNUSED(event))
 /// @param event The grid event.
 void SetTapeIdsDlg::OnCellRangeSelected(wxGridRangeSelectEvent & WXUNUSED(event))
 {
+	mGrid->HideCellEditControl(); //so that when you initially enter a value in the cell you don't have to press enter or click in another cell before you clicking a column heading enables the fill buttons
 	mIncrementButton->Enable(ManipulateCells(true, false)); //just check
 	mClearButton->Enable(ManipulateCells(false, false)); //just check
 	FillCol(false, false); //just check
@@ -763,9 +764,15 @@ void SetTapeIdsDlg::FillCol(const bool copy, const bool inc) {
 	else if (canInc && inc) {
 		//fill up the empty cells with an incremented value
 		if (numerical) {
+#if USING_ULONGLONG
 			wxULongLong_t number;
 			mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).ToULongLong(&number);
 			wxString format = wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).Len()) + wxLongLongFmtSpec + wxT("u"); //handles leading zeros
+#else
+			unsigned long number;
+			mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).ToULong(&number);
+			wxString format = wxString::Format(wxT("%%0%du"), mGrid->GetCellValue(sourceRow, mGrid->GetSelectedCols()[0]).Len()); //handles leading zeros
+#endif
 			for (int row = sourceRow + 1; row < mGrid->GetNumberRows(); row++) {
 				if (mGrid->GetCellValue(row, mGrid->GetSelectedCols()[0]).IsEmpty()) { //destination cell is empty
 					mGrid->SetCellValue(row, mGrid->GetSelectedCols()[0], wxString::Format(format, ++number));
@@ -807,8 +814,13 @@ void SetTapeIdsDlg::IncrementAsGroup(const bool commit)
 {
 	//Check whether column can be incremented by group
 	int groupSize = 0;
+#if USING_ULONGLONG
 	wxULongLong_t number = 0; //Initialisation prevents compiler warning
 	wxULongLong_t newNumber;
+#else
+	unsigned long number = 0; //Initialisation prevents compiler warning
+	unsigned long newNumber;
+#endif
 	int sourceRow = 0; //Initialisation prevents compiler warning
 	int col; //for convenience
 	if (mGrid->GetSelectionBlockTopLeft().IsEmpty() //no blocks selected
@@ -834,7 +846,11 @@ void SetTapeIdsDlg::IncrementAsGroup(const bool commit)
 	if (groupSize > 1 && commit) { //can do something useful
 		for (int row = 0; row <= sourceRow; row++) {
 			if (!mGrid->GetCellValue(row, col).IsEmpty()) { //not empty, or we ignore it
+#if USING_ULONGLONG
 				mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxLongLongFmtSpec + wxT("u"), ++number));
+#else
+				mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%du"), mGrid->GetCellValue(row,col).Len()), ++number));
+#endif
 				UpdateRow(row);
 			}
 		}
@@ -880,16 +896,30 @@ bool SetTapeIdsDlg::ManipulateCells(const bool inc, const bool commit)
 /// @param commit Increment or clear if possible to do so.
 /// @param retunNumber Optional cell numerical value to return
 /// @return True if cell can be or has been changed.
+#if USING_ULONGLONG
 bool SetTapeIdsDlg::ManipulateCell(const int row, const int col, const bool inc, const bool commit, wxULongLong_t * returnNumber)
+#else
+bool SetTapeIdsDlg::ManipulateCell(const int row, const int col, const bool inc, const bool commit, unsigned long * returnNumber)
+#endif
 {
 	bool changeable = false;
+#if USING_ULONGLONG
 	wxULongLong_t number;
 	if (inc && wxNOT_FOUND == mGrid->GetCellValue(row, col).Find(wxT("-")) //not negative number
 	 && mGrid->GetCellValue(row, col).ToULongLong(&number)) { //expressable as a number
+#else
+	unsigned long number;
+	if (inc && wxNOT_FOUND == mGrid->GetCellValue(row, col).Find(wxT("-")) //not negative number
+	 && mGrid->GetCellValue(row, col).ToULong(&number)) { //expressable as a number
+#endif
 		changeable = true;
 		if (commit) {
 			//set cell to incremented number, including any leading zeros
+#if USING_ULONGLONG
 			mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%d"), mGrid->GetCellValue(row,col).Len()) + wxLongLongFmtSpec + wxT("u"), ++number));
+#else
+			mGrid->SetCellValue(row, col, wxString::Format(wxString::Format(wxT("%%0%du"), mGrid->GetCellValue(row,col).Len()), ++number));
+#endif
 			UpdateRow(row);
 		}
 		if (returnNumber) {
@@ -1107,7 +1137,6 @@ TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const 
 	mTimer = new wxTimer(this);
 	srand(wxDateTime::Now().GetMillisecond());
 	SetNextHandler(parent);
-	ShowModal();
 }
 
 /// Stops timer when dialogue deleted - otherwise there's a segfault when the timer completes...
@@ -1115,6 +1144,18 @@ TestModeDlg::~TestModeDlg()
 {
 	mTimer->Stop();
 }
+
+/// Stops testing when dialogue closed but leaves any recording happening
+int TestModeDlg::ShowModal()
+{
+	int rc = wxDialog::ShowModal();
+	mTimer->Stop();
+	mRunButton->SetValue(false);
+	mRecording = false;
+	return rc;
+}
+
+
 
 /// Responds to the minimum record time being changed.
 /// Adjusts the minimum value of the maximum record time to be the same as the minimum record time.

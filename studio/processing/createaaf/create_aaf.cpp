@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.4 2008/09/05 16:48:33 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.5 2008/10/08 10:16:07 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -31,7 +31,7 @@
 
 #include <sstream>
 
-#include "CreateAAF.h"
+#include "AAFFile.h"
 #include "CreateAAFException.h"
 #include "CutsDatabase.h"
 #include <Database.h>
@@ -448,7 +448,6 @@ int main(int argc, const char* argv[])
 
 
 
-    
     
     try
     {

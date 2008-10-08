@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.3 2008/09/18 09:26:43 john_f Exp $
+ * $Id: nexus_web.c,v 1.4 2008/10/08 10:16:06 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -263,6 +263,7 @@ static void nexus_state(struct shttpd_arg* arg)
 		get_audio_peak_power(pctl, ring, i, audio_peak_power);
 
 		shttpd_printf(arg, "\n\t\t%d:{",i); // start channel
+		shttpd_printf(arg, "\n\t\t\t\"temperature\": %.1f,", pc->hwtemperature);
 		shttpd_printf(arg, "\n\t\t\t\"source_name\": \"%s\",", pc->source_name);
 		shttpd_printf(arg, "\n\t\t\t\"lastframe\": %d,", pc->lastframe);
 		shttpd_printf(arg, "\n\t\t\t\"signal_ok\": %d,", sok);

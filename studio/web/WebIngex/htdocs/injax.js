@@ -96,7 +96,7 @@ function Insole() {
 		if(this.statusTimeout) clearTimeout(this.statusTimeout);
 		this.statusTimeout = setTimeout("window.status=''",8000);
 		var now = new Date();
-		// Format as t 2 digit numbers
+		// Format as 2 digit numbers
 		var h = now.getHours();
 		var m = now.getMinutes();
 		var s = now.getSeconds();

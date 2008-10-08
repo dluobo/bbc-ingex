@@ -1,5 +1,5 @@
 /*
- * $Id: QCReport.cpp,v 1.1 2008/07/08 16:25:16 philipn Exp $
+ * $Id: QCReport.cpp,v 1.2 2008/10/08 10:22:13 john_f Exp $
  *
  * Writes a QC report given a session file and D3 MXF file
  *
@@ -287,9 +287,17 @@ void QCReport::write(QCPSEResult pseResult)
     const InfaxData& ltoInfaxData = _mxfFile->getLTOInfaxData();
     Mark programmeClip = _sessionFile->getProgrammeClip();
     const std::vector<Mark>& userMarks = _sessionFile->getUserMarks();
+    const int TimeStampSize = 15;	// yyyymmdd_hhmmss
     
     string reportHeader = g_qcReportHeader;
-
+    string fileItemPng = _mxfFile->getFilename();
+    set_html_value(fileItemPng, ".mxf", ".png");
+    string timeStampPng = last_path_component(_sessionFile->getFilename()).c_str();
+    set_html_value(timeStampPng, ".txt", ".png");
+    string::size_type pos = timeStampPng.find(".png");
+    string timeStampPng2(timeStampPng, pos-TimeStampSize);
+    set_html_value(reportHeader, "$FileItemPng", "/reports/" + fileItemPng);
+    set_html_value(reportHeader, "$TimeStampPng", "/reports/" + timeStampPng2);
     
     set_html_value(reportHeader, "$Filename1", _mxfFile->getFilename());
     set_html_value(reportHeader, "$Filename2", _mxfFile->getFilename());

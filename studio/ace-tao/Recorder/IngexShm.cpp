@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.6 2008/10/08 10:16:06 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -145,8 +145,10 @@ void IngexShm::InfoSetup(std::string name)
 {
     // Called once on Recorder startup to register this Recorder in shared mem
     int pid = getpid();
-    for (int i=0; i < MAX_RECORDERS; i++) {
-        if (mpControl->record_info[i].pid == 0) {
+    for (int i = 0; i < MAX_RECORDERS; i++)
+    {
+        if (mpControl && mpControl->record_info[i].pid == 0)
+        {
             // This slot is free, so take it
             memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
             mpControl->record_info[i].pid = pid;
@@ -154,7 +156,8 @@ void IngexShm::InfoSetup(std::string name)
             return;
         }
         // Check if process is dead, if so take over slot
-        if (kill(mpControl->record_info[i].pid, 0) == -1 && errno != EPERM) {
+        if (mpControl && kill(mpControl->record_info[i].pid, 0) == -1 && errno != EPERM)
+        {
             memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
             mpControl->record_info[i].pid = pid;
             strncpy(mpControl->record_info[i].name, name.c_str(), sizeof(mpControl->record_info[i].name));

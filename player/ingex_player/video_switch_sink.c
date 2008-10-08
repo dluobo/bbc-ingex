@@ -1630,6 +1630,51 @@ static void qvs_toggle_show_source_name(void* data)
     msl_refresh_required(swtch->switchListener);
 }
 
+static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index)
+{
+    DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
+    int subImageWidth;
+    int subImageHeight;
+    
+    /* if showing video from a single source then return the current source index */
+    if (swtch->videoSwitchSplit == NO_SPLIT_VIDEO_SWITCH ||
+        (!swtch->showSplitSelect && swtch->currentStream != swtch->splitStream))
+    {
+        *index = swtch->currentStream->index;
+        return 1;
+    }
+
+    /* return the current stream index if the position is outside the image */
+    if (xPos >= imageWidth || yPos >= imageHeight)
+    {
+        *index = swtch->currentStream->index;
+        return 1;
+    }
+    
+    /* return the index of the source showing at xPos and yPos */
+    switch (swtch->videoSwitchSplit)
+    {
+        case QUAD_SPLIT_VIDEO_SWITCH:
+            subImageWidth = imageWidth / 2;
+            subImageHeight = imageHeight / 2;
+            
+            *index = 1 /* 0 is the split index */ + (yPos / subImageHeight) * 2 + (xPos / subImageWidth);
+            break;
+        case NONA_SPLIT_VIDEO_SWITCH:
+            subImageWidth = imageWidth / 3;
+            subImageHeight = imageHeight / 3;
+
+            *index = 1 /* 0 is the split index */ + (yPos / subImageHeight) * 3 + (xPos / subImageWidth);
+            break;
+        default:
+            /* shouldn't be here */
+            *index = swtch->currentStream->index;
+            break;
+    }
+
+    return 1;
+}
+
 
 int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySplitFilter, int splitSelect, int prescaledSplit,
     VideoSwitchDatabase* database, int masterTimecodeIndex, int masterTimecodeType, int masterTimecodeSubType,
@@ -1679,6 +1724,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->switchSink.switch_video = qvs_switch_video;
     newSwitch->switchSink.show_source_name = qvs_show_source_name;
     newSwitch->switchSink.toggle_show_source_name = qvs_toggle_show_source_name;
+    newSwitch->switchSink.get_video_index = qvs_get_video_index;
     
     newSwitch->targetSinkListener.data = newSwitch;
     newSwitch->targetSinkListener.frame_displayed = qvs_frame_displayed;
@@ -1770,4 +1816,12 @@ void vsw_toggle_show_source_name(VideoSwitchSink* swtch)
     }
 }
 
+int vsw_get_video_index(VideoSwitchSink* swtch, int width, int height, int xPos, int yPos, int* index)
+{
+    if (swtch && swtch->get_video_index)
+    {
+        return swtch->get_video_index(swtch->data, width, height, xPos, yPos, index);
+    }
+    return 0;
+}
 

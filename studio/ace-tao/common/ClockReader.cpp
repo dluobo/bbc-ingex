@@ -1,5 +1,5 @@
 /*
- * $Id: ClockReader.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: ClockReader.cpp,v 1.2 2008/10/08 10:16:06 john_f Exp $
  *
  * Timecode reader using time of day.
  *
@@ -27,6 +27,6 @@
 
 std::string ClockReader::Timecode()
 {
-    return DateTime::Timecode();
+    return DateTime::Timecode25();
 }
 

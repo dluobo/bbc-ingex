@@ -10,11 +10,11 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
     includes += $(LIBODBCPP)/include
   }
 
+  libs += odbc++
+  libs += prodautodb
   libs += common
   libs += common2
   libs += idl
-  libs += prodautodb
-  libs += odbc++
 
   libpaths += ../../../common
   libpaths += ../common
@@ -24,6 +24,8 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
     Debug::libpaths += $(LIBODBCPP)/win32/debug-dll
     Release::libpaths += $(LIBODBCPP)/win32/prod-dll
   }
+
+  after += common2Lib
 }
 
 

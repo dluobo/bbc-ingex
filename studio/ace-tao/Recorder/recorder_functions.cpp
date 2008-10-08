@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.9 2008/09/18 09:26:42 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.10 2008/10/08 10:16:06 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -58,7 +58,7 @@
 /// Mutex to ensure only one thread at a time can call avcodec open/close
 static ACE_Thread_Mutex avcodec_mutex;
 
-const bool THREADED_MJPEG = true;
+const bool THREADED_MJPEG = false;
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
 #define PACKAGE_DATA 1 // Write to database for non-MXF files
 
@@ -416,6 +416,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // video resolution name
     std::string resolution_name = DatabaseEnums::Instance()->ResolutionName(resolution);
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Resolution %d (%C)\n"), resolution, resolution_name.c_str()));
+
+    // file format name
+    std::string file_format_name = DatabaseEnums::Instance()->FileFormatName(file_format);
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("File format %d (%C)\n"), file_format, file_format_name.c_str()));
 
     // Get project name
     prodauto::ProjectName project_name;

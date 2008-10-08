@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.3 2008/09/03 14:27:23 john_f Exp $
+ * $Id: Database.cpp,v 1.4 2008/10/08 10:16:06 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -2666,25 +2666,9 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
 }
 
 
-#define SQL_GET_PROJECT_NAME \
+#define SQL_LOAD_OR_CREATE_PROJECT_NAME \
 " \
-    SELECT \
-        pjn_identifier, \
-        pjn_name \
-    FROM ProjectName \
-    WHERE \
-        pjn_name = ? \
-"
-
-#define SQL_INSERT_PROJECT_NAME \
-" \
-    INSERT INTO ProjectName \
-    ( \
-        pjn_identifier, \
-        pjn_name \
-    ) \
-    VALUES \
-    (?, ?) \
+    SELECT load_or_create_project_name(?) \
 "
 
 #define SQL_GET_ALL_PROJECT_NAMES \
@@ -2702,64 +2686,36 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
 
 
 
-ProjectName Database::loadOrCreateProjectName(string name, Transaction* transaction)
+ProjectName Database::loadOrCreateProjectName(string name)
 {
     if (name.empty())
     {
         PA_LOGTHROW(DBException, ("Project name is empty"));
     }
     
-    auto_ptr<Connection> mConnection;
-    Connection* connection = transaction;
-    if (connection == 0)
-    {
-        mConnection = auto_ptr<Connection>(getConnection());
-        connection = mConnection.get();
-    }
+    auto_ptr<Connection> mConnection(getConnection());
+    Connection* connection = mConnection.get();
     
     ProjectName projectName;
     projectName.name = name;
 
-    // try load the project name
-    START_QUERY_BLOCK
+    // load or create the project name
+    START_UPDATE_BLOCK
     {
-        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PROJECT_NAME));
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_LOAD_OR_CREATE_PROJECT_NAME));
         prepStatement->setString(1, name);
         
         odbc::ResultSet* result = prepStatement->executeQuery();
-        if (result->next())
+        if (!result->next())
         {
-            projectName.wasLoaded(result->getInt(1));
-            projectName.name = result->getString(2);
-            return projectName;
+            PA_LOGTHROW(DBException, ("Failed to load or create project name"));
         }
-    }
-    END_QUERY_BLOCK("Failed to load project name")
-    
-    
-    // insert a new project name
-    START_UPDATE_BLOCK
-    {
-        auto_ptr<odbc::PreparedStatement> prepStatement;
-        long nextDatabaseID = 0;
-        int paramIndex = 1;
-        
-        // insert
-        prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_INSERT_PROJECT_NAME));
-        nextDatabaseID = getNextDatabaseID(connection, "pjn_id_seq");
-        prepStatement->setInt(paramIndex++, nextDatabaseID);
-        connection->registerCommitListener(nextDatabaseID, &projectName);
-        
-        prepStatement->setString(paramIndex++, projectName.name);
 
-        if (prepStatement->executeUpdate() != 1)
-        {
-            PA_LOGTHROW(DBException, ("No inserts/updates when saving project name"));
-        }
-        
+        projectName.wasLoaded(result->getInt(1));
+
         connection->commit();
     }
-    END_UPDATE_BLOCK("Failed to save project name")
+    END_UPDATE_BLOCK("Failed to load or create project name")
     
     return projectName;
 }
@@ -2789,7 +2745,7 @@ vector<ProjectName> Database::loadProjectNames()
     return allProjectNames;
 }
 
-void Database::deleteProjectName(ProjectName* projectName, Transaction* transaction)
+void Database::deleteProjectName(ProjectName* projectName)
 {
     if (!projectName->isPersistent())
     {
@@ -2797,13 +2753,8 @@ void Database::deleteProjectName(ProjectName* projectName, Transaction* transact
         return;
     }
     
-    auto_ptr<Connection> mConnection;
-    Connection* connection = transaction;
-    if (connection == 0)
-    {
-        mConnection = auto_ptr<Connection>(getConnection());
-        connection = mConnection.get();
-    }
+    auto_ptr<Connection> mConnection(getConnection());
+    Connection* connection = mConnection.get();
     
     START_UPDATE_BLOCK
     {
@@ -3411,6 +3362,11 @@ void Database::savePackage(Package* package, Transaction* transaction)
     {
         PA_LOGTHROW(DBException, ("Can't save null Package"));
     }
+    if (!package->projectName.isPersistent() && !package->projectName.name.empty())
+    {
+        PA_LOGTHROW(DBException, ("Project name referenced by package is not persistent"));
+    }
+
     
     START_UPDATE_BLOCK
     {
@@ -3418,14 +3374,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
         long nextPackageDatabaseID = 0;
         long nextDescriptorDatabaseID = 0;
         int paramIndex = 1;
-        
-        // save the package project name if not already done so
-        
-        if (!package->projectName.isPersistent() && !package->projectName.name.empty())
-        {
-            package->projectName = loadOrCreateProjectName(package->projectName.name, connection);
-        }
-        
+
         
         // save the source package essence descriptor
             
@@ -4059,13 +4008,13 @@ void Database::loadResolutionNames(std::map<int, std::string> & resolution_names
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
         
-        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_PROJECT_NAMES);
+        odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_RESOLUTION_NAMES);
         while (result->next())
         {
             resolution_names[result->getInt(1)] = result->getString(2);
         }
     }
-    END_QUERY_BLOCK("Failed to load all project names")
+    END_QUERY_BLOCK("Failed to load all video resolution names")
 }
 
 #define SQL_GET_ALL_FILE_FORMAT_NAMES \
@@ -4091,7 +4040,7 @@ void Database::loadFileFormatNames(std::map<int, std::string> & file_format_name
             file_format_names[result->getInt(1)] = result->getString(2);
         }
     }
-    END_QUERY_BLOCK("Failed to load all project names")
+    END_QUERY_BLOCK("Failed to load all file format names")
 }
 
 

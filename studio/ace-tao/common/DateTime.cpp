@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.2 2008/09/04 15:33:18 john_f Exp $
+ * $Id: DateTime.cpp,v 1.3 2008/10/08 10:16:06 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -28,6 +28,7 @@
 #include <ace/OS_NS_sys_time.h>
 #include <ace/OS_NS_stdio.h>
 #include <ace/Time_Value.h>
+#include <ace/Log_Msg.h>
 
 
 /*
@@ -52,9 +53,7 @@ std::string DateTime::DateNoSeparators()
 }
 
 /*
-Returns a pointer to a null-terminated string in format YYYYMMDDHHMM.
-The caller has responsibility for deallocating the memory
-by invoking delete [] on the returned pointer.
+Returns a string in format YYYYMMDDHHMM.
 */
 std::string DateTime::DateTimeNoSeparators()
 {
@@ -92,6 +91,29 @@ std::string DateTime::Timecode()
 		ptm->tm_sec,
 		t_us / 1000 );
 
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("DateTime::Timecode() returning %C\n"), s));
+    return std::string(s);
+}
+
+/*
+Returns a string in format HH:MM:SS.ff (25 fps)
+*/
+std::string DateTime::Timecode25()
+{
+    ACE_Time_Value t = ACE_OS::gettimeofday();
+    time_t t_secs = t.sec();
+	suseconds_t t_us = t.usec();
+    tm my_tm;
+    tm * ptm = ACE_OS::localtime_r(&t_secs, &my_tm);
+
+    char s [13];
+    ACE_OS::sprintf(s,"%02d:%02d:%02d.%02d",
+		ptm->tm_hour,
+		ptm->tm_min,
+		ptm->tm_sec,
+		t_us / 40000 );
+
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("DateTime::Timecode25() returning %C\n"), s));
     return std::string(s);
 }
 

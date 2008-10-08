@@ -23,6 +23,7 @@ struct VideoSwitchSink
     int (*switch_video)(void* data, int index);
     void (*show_source_name)(void* data, int enable);
     void (*toggle_show_source_name)(void* data);
+    int (*get_video_index)(void* data, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
 };
 
 /* utility functions for calling VideoSwitchSink functions */
@@ -33,6 +34,7 @@ int vsw_switch_prev_video(VideoSwitchSink* swtch);
 int vsw_switch_video(VideoSwitchSink* swtch, int index);
 void vsw_show_source_name(VideoSwitchSink* swtch, int enable);
 void vsw_toggle_show_source_name(VideoSwitchSink* swtch);
+int vsw_get_video_index(VideoSwitchSink* swtch, int imageWidth, int imageHeight, int xPos, int yPos, int* index);
 
 
 /* video switch */

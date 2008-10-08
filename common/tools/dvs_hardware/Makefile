@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2008/07/08 14:59:20 philipn Exp $
+# $Id: Makefile,v 1.3 2008/10/08 10:17:39 john_f Exp $
 #
 # Makefile for building DVS hardware capture & playout tools
 #
@@ -67,4 +67,4 @@ check_inputs: check_inputs.c
 	g++ $(FLAGS) $(INCLUDE) check_inputs.c $(HARDWARE_LIB) -o check_inputs
 
 clean:
-	rm -f $(PROGS)
+	rm -f $(SDI_PROGS) *.o libdvsoem_dummy.a

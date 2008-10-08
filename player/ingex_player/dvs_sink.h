@@ -30,8 +30,8 @@ typedef struct DVSSink DVSSink;
 
 int dvs_card_is_available();
 
-int dvs_open(SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, int disableOSD, 
-    int fitVideo, DVSSink** sink);
+int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, 
+    int numBuffers, int disableOSD, int fitVideo, DVSSink** sink);
 
 MediaSink* dvs_get_media_sink(DVSSink* sink);
 

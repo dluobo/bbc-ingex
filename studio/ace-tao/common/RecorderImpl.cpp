@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.5 2008/09/04 15:33:19 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.6 2008/10/08 10:16:06 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -401,10 +401,11 @@ Private method to set source package names.
 If we have a tape name, we use it.
 Otherwise we use source name and date.
 */
-void RecorderImpl::SetSourcePackages()
+bool RecorderImpl::SetSourcePackages()
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::SetSourcePackages()\n")));
 
+    bool ok = true;
     try
     {
         prodauto::Recorder * rec = mRecorder.get();
@@ -462,7 +463,9 @@ void RecorderImpl::SetSourcePackages()
     catch (const prodauto::DBException & dbe)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        ok = false;
     }
+    return ok;
 }
 
 
@@ -483,8 +486,9 @@ void RecorderImpl::UpdateConfig (
 /**
 Update tracks and settings from database.
 */
-void RecorderImpl::UpdateFromDatabase()
+bool RecorderImpl::UpdateFromDatabase()
 {
+    bool ok = true;
     prodauto::Database * db = 0;
     try
     {
@@ -493,6 +497,7 @@ void RecorderImpl::UpdateFromDatabase()
     catch (const prodauto::DBException & dbe)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        ok = false;
     }
 
     prodauto::Recorder * rec = 0;
@@ -505,6 +510,7 @@ void RecorderImpl::UpdateFromDatabase()
         catch(const prodauto::DBException & dbe)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+            ok = false;
         }
     }
 
@@ -636,7 +642,9 @@ void RecorderImpl::UpdateFromDatabase()
     }
 
     // Set source package names (using tape names if available)
-    SetSourcePackages();
+    ok = ok && SetSourcePackages();
+
+    return ok;
 }
 
 

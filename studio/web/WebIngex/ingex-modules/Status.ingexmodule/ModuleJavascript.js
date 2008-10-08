@@ -22,6 +22,9 @@
 
 var monitors; // Global object for handling all monitors
 
+// frame rate
+if(typeof editrate == "undefined") var editrate = 25;
+
 // Choose your logging level
 var logRequests = false;
 var logMemoryUsageChanges = false;
@@ -664,9 +667,6 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 	// For use with timecodes... wait for new data before incrementing
 	this.waitForNewData = true;
 	
-	// Availability xmlHttp object
-	this.xmlHttp = false;
-	
 	// Verify that we can contact the monitor
 	this.checkAvailability = function (instance,display) {
 		var instanceExists = false;
@@ -706,16 +706,16 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 
 		var monToCall = this;
 
-		if(!this.xmlHttp) this.xmlHttp = getxmlHttp();
-		this.xmlHttp.onreadystatechange = function (){callAvailabilityStateChanged(monToCall,instance,display);};
+		if(!this.i[instance].availXmlHttp) this.i[instance].availXmlHttp = getxmlHttp();
+		this.i[instance].availXmlHttp.onreadystatechange = function (){callAvailabilityStateChanged(monToCall,instance,display);};
 
-		this.xmlHttp.open("GET",urlToGet,true);
-		this.xmlHttp.send(null);
+		this.i[instance].availXmlHttp.open("GET",urlToGet,true);
+		this.i[instance].availXmlHttp.send(null);
 		this.i[instance].availabilitytimeout = setTimeout(function(){callAvailabilityTimedout(monToCall,instance,display)},5000);
 	}
 	
 	this.availabilityTimedout = function(instance,display) {
-		this.xmlHttp.abort();
+		this.i[instance].availXmlHttp.abort();
 		$(display).innerHTML = "<span class='error'>Unavailable</span><br /><span class='small indent'>Request timed out.</span>";
 		this.i[instance].availabilitytimeout = false;
 		insole.error("AJAX timeout occurred when testing availability of "+this.name+" on "+instance);
@@ -723,7 +723,7 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 	}
 	
 	this.availabilityStateChanged = function(instance,display) {
-		if (this.xmlHttp.readyState==4)
+		if (this.i[instance].availXmlHttp.readyState==4)
 		{
 			var monitor;
 			if(this.queryType == "leech") {
@@ -735,9 +735,9 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 				clearTimeout(this.i[instance].availabilitytimeout);
 				this.i[instance].availabilitytimeout = false;
 			}
-			if (this.xmlHttp.status == 200) {
+			if (this.i[instance].availXmlHttp.status == 200) {
 				try {
-					var tmp = JSON.parse(this.xmlHttp.responseText);
+					var tmp = JSON.parse(this.i[instance].availXmlHttp.responseText);
 				} catch(e) {
 					clearTimeout(this.i[instance].availabilitytimeout);
 					this.i[instance].availabilitytimeout = false;
@@ -756,12 +756,12 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 				} else {
 					$(display).innerHTML = "<span class='error'>Unavailable</span><br /><span class='small indent'>Node gave invalid response.</span>";
 					insole.error("Parsable JSON but unexpected content when checking availability of "+this.friendlyName+" on "+instance);
-					insole.log("JSON was: "+this.xmlHttp.responseText);
+					insole.log("JSON was: "+this.i[instance].availXmlHttp.responseText);
 					monitors.osh.unavailable(this.name,instance);
 				}
 			} else {
 				$(display).innerHTML = "<span class='error'>Unavailable</span><br /><span class='small indent'>Error contacting web server.</span>";
-				insole.error("HTTP status: "+this.xmlHttp.status+" when checking availability of "+this.friendlyName+" on "+instance);
+				insole.error("HTTP status: "+this.i[instance].availXmlHttp.status+" when checking availability of "+this.friendlyName+" on "+instance);
 			}
 		}
 	}
@@ -986,6 +986,7 @@ function ingexInstance (myName,myIP,myVolumes,myParentMonitor) {
 	this.showingError = false;
 	this.f = new Object(); // associative array of all fields for this instance
 	this.xmlHttp = getxmlHttp();
+	this.availXmlHttp = getxmlHttp();
 	this.ajaxtimeout = false; // timeout for ajax requests to update instance data
 	this.availabilitytimeout = false; // timeout for ajax requests to check availability
 	this.timeoutWarning = 0; // gets incremented if a request has not returned the time a new one is started
@@ -1070,12 +1071,14 @@ function ingexInstance (myName,myIP,myVolumes,myParentMonitor) {
 	}
 	
 	this.ajaxTimedout = function() {
+		var stat = this.xmlHttp.readyState;
+		if (stat == 4) stat = "4 (completed).";
 		this.xmlHttp.abort();
 		this.ajaxtimeout = false;
-		insole.error("AJAX timeout occurred when querying "+this.monitor.name+" on "+this.name);
-		this.monitor.draw(null,'Request timed out when contacing monitor.',this.name);
+		insole.error("AJAX timeout occurred when querying "+this.monitor.name+" on "+this.name+". readyState: "+stat);
+		this.monitor.draw(null,'Request timed out when contacing monitor. reasyState: '+stat,this.name);
 		for(var leech in this.monitor.leeches){
-			this.monitor.myParent.m[leech].draw(null,'Request timed out when contacing monitor.',this.name);
+			this.monitor.myParent.m[leech].draw(null,'Request timed out when contacing monitor. readyState: '+stat,this.name);
 		}
 	};
 	
@@ -1205,8 +1208,8 @@ function ingexTimecode (myField,myChannel,myRecorder) {
 		if (this.field.monitor.visible && !this.stopped && !this.field.monitor.paused && !this.field.monitor.waitForNewData) {
 			// Do the actual incrementing
 			this.f += numToInc;
-			if (this.f > 25) {
-				this.f -= 25;
+			if (this.f > editrate) {
+				this.f -= editrate;
 				this.s++;
 				draw = true;
 				if (this.s > 59) {
@@ -1218,7 +1221,7 @@ function ingexTimecode (myField,myChannel,myRecorder) {
 					}
 				}
 			}
-			// Format as t 2 digit numbers
+			// Format as 2 digit numbers
 			var h; var m; var s; var f;
 			if (this.h < 10) { h = "0" + this.h; } else { h = this.h; }
 			if (this.m < 10) { m = "0" + this.m; } else { m = this.m; }

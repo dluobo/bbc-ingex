@@ -102,6 +102,33 @@ static void x11c_close_keyboard(void* data)
 }
 
 
+static void x11c_set_mouse_listener(void* data, MouseInputListener* listener)
+{
+    X11Common* x11Common = (X11Common*)data;
+
+    x11Common->mouseListener = listener;
+}
+
+static void x11c_unset_mouse_listener(void* data)
+{
+    X11Common* x11Common = (X11Common*)data;
+
+    x11Common->mouseListener = NULL;
+}
+
+static void x11c_close_mouse(void* data)
+{
+    X11Common* x11Common = (X11Common*)data;
+    
+    if (x11Common == NULL)
+    {
+        return;
+    }
+    
+    x11Common->mouseListener = NULL;
+}
+
+
 void x11wl_close_request(X11WindowListener* listener)
 {
     if (listener && listener->close_request)
@@ -127,6 +154,11 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* o
     x11Common->keyboardInput.set_listener = x11c_set_keyboard_listener;
     x11Common->keyboardInput.unset_listener = x11c_unset_keyboard_listener;
     x11Common->keyboardInput.close = x11c_close_keyboard;
+
+    x11Common->mouseInput.data = x11Common;
+    x11Common->mouseInput.set_listener = x11c_set_mouse_listener;
+    x11Common->mouseInput.unset_listener = x11c_unset_mouse_listener;
+    x11Common->mouseInput.close = x11c_close_mouse;
 
     if (pluginInfo)
     {
@@ -156,6 +188,7 @@ void x11c_clear(X11Common* x11Common)
     
     kic_free_keyboard_connect(&x11Common->keyboardConnect);
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
+    mic_free_mouse_connect(&x11Common->mouseConnect);
 
     if (x11Common->display != NULL)
     {
@@ -184,6 +217,7 @@ int x11c_reset(X11Common* x11Common)
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
     kic_free_keyboard_connect(&x11Common->keyboardConnect);
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
+    mic_free_mouse_connect(&x11Common->mouseConnect);
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
     
     return 1;
@@ -239,6 +273,24 @@ void x11c_unregister_progress_bar_listener(X11Common* x11Common, ProgressBarInpu
     }
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 }
+
+void x11c_register_mouse_listener(X11Common* x11Common, MouseInputListener* listener)
+{
+    PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
+    x11Common->separateMouseListener = listener;
+    PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
+}
+
+void x11c_unregister_mouse_listener(X11Common* x11Common, MouseInputListener* listener)
+{
+    PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
+    if (x11Common->separateMouseListener == listener)
+    {
+        x11Common->separateMouseListener = NULL;
+    }
+    PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
+}
+
 
 
 int x11c_open_display(X11Common* x11Common)
@@ -374,7 +426,7 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
     return 1;
 }
 
-void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, MediaControl* control)
+void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control)
 {
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
     
@@ -389,6 +441,10 @@ void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, MediaC
            &x11Common->progressBarConnect))
        {
            ml_log_warn("Failed to create X11 progress bar input connect\n"); 
+       }
+       if (!mic_create_mouse_connect(control, videoSwitch, &x11Common->mouseInput, &x11Common->mouseConnect))
+       {
+           ml_log_warn("Failed to create X11 mouse input connect\n"); 
        }
     }
     else
@@ -405,6 +461,7 @@ void x11c_unset_media_control(X11Common* x11Common)
     
     kic_free_keyboard_connect(&x11Common->keyboardConnect);
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
+    mic_free_mouse_connect(&x11Common->mouseConnect);
     
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 }
@@ -471,6 +528,11 @@ int x11c_process_events(X11Common* x11Common, int sync)
                         pil_position_set(x11Common->progressBarListener, progressBarPosition);
                         pil_position_set(x11Common->separateProgressBarListener, progressBarPosition);
                     }
+                    else
+                    {
+                        mil_click(x11Common->mouseListener, x11Common->imageWidth, x11Common->imageHeight, xPos, yPos);
+                        mil_click(x11Common->separateMouseListener, x11Common->imageWidth, x11Common->imageHeight, xPos, yPos);
+                    }
                 }
             }
             else if (event.type == MotionNotify)
@@ -483,6 +545,11 @@ int x11c_process_events(X11Common* x11Common, int sync)
                 {
                     pil_position_set(x11Common->progressBarListener, progressBarPosition);
                     pil_position_set(x11Common->separateProgressBarListener, progressBarPosition);
+                }
+                else
+                {
+                    mil_click(x11Common->mouseListener, x11Common->imageWidth, x11Common->imageHeight, xPos, yPos);
+                    mil_click(x11Common->separateMouseListener, x11Common->imageWidth, x11Common->imageHeight, xPos, yPos);
                 }
             }
             else if (event.type == ClientMessage)

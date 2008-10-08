@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.3 2008/09/03 14:13:30 john_f Exp $
+ * $Id: nexus_save.c,v 1.4 2008/10/08 10:16:06 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -275,10 +275,14 @@ extern int main(int argc, char *argv[])
 			return 1;
 		}
 		break;
-	case FF_ENCODER_RESOLUTION_DV25:
 	case FF_ENCODER_RESOLUTION_DMIH264:
 		if (pctl->sec_video_format != Format420PlanarYUV) {
 			fprintf(stderr, "specified encoder resolution requires secondary format of Format420PlanarYUV\n");
+			return 1;
+		}
+	case FF_ENCODER_RESOLUTION_DV25:
+		if (pctl->sec_video_format != Format420PlanarYUVShifted) {
+			fprintf(stderr, "specified encoder resolution requires secondary format of Format420PlanarYUVShifted\n");
 			return 1;
 		}
 		video_offset = pctl->sec_video_offset;

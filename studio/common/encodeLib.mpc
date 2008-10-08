@@ -1,6 +1,0 @@
-project(encodeLib) {
-  staticname = encode
-  sharedname = 
-  includes += ../../common
-}
-

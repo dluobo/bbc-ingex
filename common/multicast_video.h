@@ -16,8 +16,11 @@ extern "C"
 
 #define MULTICAST_SOURCE_NAME_SIZE 64
 
-#define PACKET_SIZE 1475				// chosen to neatly fit 240x192x3/2 + audio
-										// frame without going over common MTU of 1500
+// Payload size of 1472 chosen through experiment to get the maximum payload
+// without any IP fragmentation observed using network tracing.
+// Wireshark shows fragmentation as "IP  Fragmented IP Protocol (proto=UDP 0x11, off=0)".
+#define PACKET_SIZE 1472
+
 #define MULTICAST_DEFAULT_PORT 2000
 
 typedef struct {

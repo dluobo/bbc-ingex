@@ -92,7 +92,6 @@ ingex> cd $workspace/ingex/studio/mxfwriter
 ingex> make
 
 ingex> cd $workspace/ingex/studio/common
-ingex> $ACE_ROOT/bin/mwc.pl -type gnuace
 ingex> make
 
 ingex> cd $workspace/ingex/studio/ace-tao

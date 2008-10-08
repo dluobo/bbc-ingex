@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.7 2008/09/16 11:40:43 stuart_hc Exp $
+# $Id: Makefile,v 1.8 2008/10/08 10:16:06 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -21,11 +21,11 @@
 # 02110-1301, USA.
 #
 
-CFLAGS=-Wall -g -DDEBUG -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
+CFLAGS=-Wall -g -O3 -DDEBUG
 INCLUDES=-I../../common
 LIBS=-L../../common -lcommon
-OPT=-O3 -mmmx -msse2
-FLAGS=$(CFLAGS) $(INCLUDES) $(OPT)
+OPT=-mmmx -msse2
+FLAGS=$(CFLAGS) $(INCLUDES) $(OPT) -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 
 # dvs_sdk_paths.mk searches for sdk and sets HARDWARE_INCLUDE and HARDWARE_LIB
 # search is overridden by setting DVSSDK
@@ -37,6 +37,8 @@ else
   $(warning dvs_sdi will not be built)
   SDI_PROGS=dvs_dummy testgen
 endif
+
+FFMPEG_LIBS=-lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm -lpthread
 
 PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nexus_multicast nexus_set_source 
 
@@ -67,16 +69,11 @@ system_info_web: system_info_web.c
 nexus_set_source: nexus_set_source.c nexus_control.h
 	g++ $(FLAGS) nexus_set_source.c $(LIBS) -lpthread -o nexus_set_source
 
-ifeq ($(USE_FFMPEG), 1)
 nexus_save: nexus_save.c nexus_control.h nexus_control.o ../common/ffmpeg_encoder.o
-	g++ $(FLAGS) -DUSE_FFMPEG nexus_save.c -o nexus_save nexus_control.o ../common/ffmpeg_encoder.o -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm -lpthread
-else
-nexus_save: nexus_save.c nexus_control.h nexus_control.o
-	g++ $(FLAGS) nexus_save.c -o nexus_save nexus_control.o
-endif
+	g++ $(FLAGS) -DUSE_FFMPEG nexus_save.c -o nexus_save nexus_control.o ../common/ffmpeg_encoder.o $(FFMPEG_LIBS)
 
 nexus_multicast: nexus_multicast.c nexus_control.h nexus_control.o
-	g++ -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast nexus_control.o -L../../common -lcommon -L../../common/YUVlib -lYUVlib -lpthread
+	g++ -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast nexus_control.o -L../../common -lcommon -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
 
 nexus_xv: nexus_xv.c nexus_control.h nexus_control.o
 	g++ $(FLAGS) nexus_xv.c -o nexus_xv nexus_control.o -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv

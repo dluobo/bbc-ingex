@@ -552,7 +552,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
         case DVS_OUTPUT:
             if (player->mediaSink == NULL)
             {
-                if (!dvs_open(options->sdiVITCSource, options->extraSDIVITCSource, options->dvsBufferSize, 
+                if (!dvs_open(-1, -1, options->sdiVITCSource, options->extraSDIVITCSource, options->dvsBufferSize, 
                     options->disableSDIOSD, 0, &player->dvsSink))
                 {
                     ml_log_error("Failed to open DVS card sink\n");
@@ -571,7 +571,7 @@ static int create_sink(QCPlayer* player, Options* options, const char* x11Window
             
             if (player->mediaSink == NULL)
             {
-                if (!dusk_open(options->reviewDuration, options->sdiVITCSource, options->extraSDIVITCSource, 
+                if (!dusk_open(options->reviewDuration, -1, -1, options->sdiVITCSource, options->extraSDIVITCSource, 
                     options->dvsBufferSize, options->xOutputType == XV_DISPLAY_OUTPUT, options->disableSDIOSD, options->disableX11OSD, 
                     &options->pixelAspectRatio, &options->monitorAspectRatio, options->scale, 1, 0, 0, &player->dualSink))
                 {
@@ -701,18 +701,21 @@ static int play_balls(QCPlayer* player, Options* options)
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
 
     
-    /* reconnect the X11 display keyboard input */
+    /* reconnect the X11 display keyboard and mouse input */
     
     switch (options->outputType)
     {
         case XV_DISPLAY_OUTPUT:
-            xvsk_set_media_control(player->x11XVDisplaySink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            xvsk_set_media_control(player->x11XVDisplaySink, QC_MAPPING, msk_get_video_switch(player->mediaSink), 
+                ply_get_media_control(player->mediaPlayer));
             break;
         case X11_DISPLAY_OUTPUT:
-            xsk_set_media_control(player->x11DisplaySink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            xsk_set_media_control(player->x11DisplaySink, QC_MAPPING, msk_get_video_switch(player->mediaSink),
+                ply_get_media_control(player->mediaPlayer));
             break;
         case DUAL_OUTPUT:
-            dusk_set_media_control(player->dualSink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            dusk_set_media_control(player->dualSink, QC_MAPPING, msk_get_video_switch(player->mediaSink),
+                ply_get_media_control(player->mediaPlayer));
             break;
         default:
             /* no X11 display */
@@ -935,18 +938,21 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     
     
     
-    /* reconnect the X11 display keyboard input */
+    /* reconnect the X11 display keyboard and mouse input */
     
     switch (options->outputType)
     {
         case XV_DISPLAY_OUTPUT:
-            xvsk_set_media_control(player->x11XVDisplaySink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            xvsk_set_media_control(player->x11XVDisplaySink, QC_MAPPING, msk_get_video_switch(player->mediaSink),
+                ply_get_media_control(player->mediaPlayer));
             break;
         case X11_DISPLAY_OUTPUT:
-            xsk_set_media_control(player->x11DisplaySink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            xsk_set_media_control(player->x11DisplaySink, QC_MAPPING, msk_get_video_switch(player->mediaSink),
+                ply_get_media_control(player->mediaPlayer));
             break;
         case DUAL_OUTPUT:
-            dusk_set_media_control(player->dualSink, QC_MAPPING, ply_get_media_control(player->mediaPlayer));
+            dusk_set_media_control(player->dualSink, QC_MAPPING, msk_get_video_switch(player->mediaSink),
+                ply_get_media_control(player->mediaPlayer));
             break;
         default:
             /* no X11 display */

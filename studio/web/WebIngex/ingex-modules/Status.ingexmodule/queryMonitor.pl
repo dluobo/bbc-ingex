@@ -89,7 +89,7 @@ sub getMonitor
 			if($action ne "basicInfo") {
 				$url .= "/".$action;
 			}
-			my $objRequest = HTTP::Request->new(POST => $url);
+			my $objRequest = HTTP::Request->new(GET => $url);
 			$objRequest->content_type('application/x-www-form-urlencoded');
 			$objRequest->content('query=libwww-perl&mode=dist');
 			my $objResponse = $objUserAgent->request($objRequest);

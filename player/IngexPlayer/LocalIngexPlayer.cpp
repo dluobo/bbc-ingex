@@ -1,6 +1,8 @@
 #include <pthread.h>
 #include <cassert>
 #include <unistd.h>
+#include <cstring>
+#include <memory>
 
 #include "LocalIngexPlayer.h"
 #include "Macros.h"
@@ -354,6 +356,19 @@ static void x11_progress_bar_position_set(void* data, float position)
     }
 }
 
+static void x11_mouse_clicked(void* data, int imageWidth, int imageHeight, int xPos, int yPos)
+{
+    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
+    
+    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
+        
+    vector<IngexPlayerListener*>::const_iterator iter;
+    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    {
+        (*iter)->mouseClicked(imageWidth, imageHeight, xPos, yPos);
+    }
+}
+
 
 
 LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, bool videoSwitch, 
@@ -417,6 +432,10 @@ void LocalIngexPlayer::initialise()
     memset(&_x11ProgressBarListener, 0, sizeof(ProgressBarInputListener));
     _x11ProgressBarListener.data = this;
     _x11ProgressBarListener.position_set = x11_progress_bar_position_set;
+    
+    memset(&_x11MouseListener, 0, sizeof(MouseInputListener));
+    _x11MouseListener.data = this;
+    _x11MouseListener.click = x11_mouse_clicked;
     
     memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
     
@@ -834,6 +853,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
                     xsk_register_progress_bar_listener(x11Sink, &_x11ProgressBarListener);
+                    xsk_register_mouse_listener(x11Sink, &_x11MouseListener);
                     newPlayState->mediaSink = xsk_get_media_sink(x11Sink);
                     CHK_OTHROW_MSG(bms_create(&newPlayState->mediaSink, 2, 0, &bufSink),
                         ("Failed to create bufferred x11 xv display sink\n"));
@@ -848,6 +868,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
                     xvsk_register_progress_bar_listener(x11XVSink, &_x11ProgressBarListener);
+                    xvsk_register_mouse_listener(x11XVSink, &_x11MouseListener);
                     newPlayState->mediaSink = xvsk_get_media_sink(x11XVSink);
                     CHK_OTHROW_MSG(bms_create(&newPlayState->mediaSink, 2, 0, &bufSink),
                         ("Failed to create bufferred x11 xv display sink\n"));
@@ -856,25 +877,26 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                     break;
         
                 case DVS_OUTPUT:
-                    CHK_OTHROW_MSG(dvs_open(VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
+                    CHK_OTHROW_MSG(dvs_open(-1, -1, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
                         ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
                     
                 case DUAL_DVS_X11_OUTPUT:
-                    CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
+                    CHK_OTHROW_MSG(dusk_open(20, -1, -1, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
                         &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
+                    dusk_register_mouse_listener(dualSink, &_x11MouseListener);
                     newPlayState->mediaSink = dusk_get_media_sink(dualSink);
                     newPlayState->dualSink = dualSink;
                     break;
                     
                 case DUAL_DVS_X11_XV_OUTPUT:
-                    CHK_OTHROW_MSG(dusk_open(20, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
+                    CHK_OTHROW_MSG(dusk_open(20, -1, -1, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
                         &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));

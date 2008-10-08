@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.h,v 1.1 2008/09/03 10:50:33 john_f Exp $
+ * $Id: XmlTools.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
  *
  * Utility class for handling XML.
  *
@@ -37,7 +37,7 @@ class XmlTools
 public:
     static void Initialise();
     static void Terminate();
-    static void DomToFile(DOMDocument * doc, const char * filename);
+    static void DomToFile(DOMDocument * doc, const char * filename, bool pretty_print = true);
     static void FileToDom(const char * filename, DOMBuilder * & parser, DOMDocument * & doc);
 };
 

@@ -245,25 +245,21 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 			GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 		}
 		else if (mReconnecting || FAILURE == event.GetResult()) {
-			if (RECONNECT != event.GetCommand()) { //paren't doesn't want to know about reconnect attempts
+			if (RECONNECT != event.GetCommand() || FAILURE == event.GetResult()) { //parent doesn't want to know about reconnect attempts unless they fail (which will be due to recorder parameters changing)
 //std::cerr << "reconnect notification" << std::endl;
 				//let the parent know
 				GetNextHandler()->AddPendingEvent(event);
-				if (RECORD == event.GetCommand()) {
-					//record when reconnected
+				//buffer the command
+				if (RECORD == event.GetCommand() || STOP == event.GetCommand()) {
+					//record or stop when reconnected
+					mPendingCommand = event.GetCommand();
+					//the requested frame might not be available by the time we succeed so record/stop "now"
 					mMutex.Lock();
-					mStartTimecode.undefined = true; //the requested frame might not be available by the time we succeed
+					mStartTimecode.undefined = true; 
 					mMutex.Unlock();
-					//Let the timer handler know what to do
-					mPendingCommand = RECORD;
 				}
-				else if (STOP == event.GetCommand()) {
-					//stop when reconnected
-					mMutex.Lock();
-					mStopTimecode.undefined = true; //the requested frame might not be available by the time we succeed
-					mMutex.Unlock();
-					//Let the timer handler know what to do
-					mPendingCommand = STOP;
+				else if (ADD_PROJECT_NAMES == event.GetCommand()) {
+					mPendingCommand = ADD_PROJECT_NAMES;
 				}
 			}
 			//Set the timer to try again soon
@@ -410,46 +406,46 @@ wxThread::ExitCode Controller::Entry()
 							 || maxPreroll.edit_rate.numerator != mMaxPreroll.edit_rate.numerator
 							 || maxPreroll.edit_rate.denominator != mMaxPreroll.edit_rate.denominator
 							 || maxPreroll.samples != mMaxPreroll.samples) {
-								msg = wxT("Maximum preroll has changed.");
+								msg = wxT("the maximum preroll has changed");
 							}
 							else if ((maxPostroll.undefined && mMaxPostroll.samples != DEFAULT_MAX_POSTROLL) ||
 							 (!maxPostroll.undefined &&
 							  (maxPostroll.edit_rate.numerator != mMaxPostroll.edit_rate.numerator
 							  || maxPostroll.edit_rate.denominator != mMaxPostroll.edit_rate.denominator
 							  || maxPostroll.samples != mMaxPostroll.samples))) {
-								msg = wxT("Maximum postroll has changed.");
+								msg = wxT("the maximum postroll has changed");
 							}
 							else if (trackList->length() != mTrackList->length()) {
-								msg = wxT("Number of tracks has changed.");
+								msg = wxT("the number of tracks has changed");
 							}
 							else if (mRouterRecorder && !routerRecorder) {
-								msg = wxT("No longer a router recorder.");
+								msg = wxT("it is no longer a router recorder");
 							}
 							else if (!mRouterRecorder && routerRecorder) {
-								msg = wxT("Now presents itself as a router recorder.");
+								msg = wxT("it now presents itself as a router recorder");
 							}
 							else {
 								for (unsigned int i = 0; i < trackList->length(); i++) {
 									if (strcmp(trackList[i].name, mTrackList[i].name)) {
-										msg = wxT("name.");
+										msg = wxT("name");
 									}
 									else if (trackList[i].type != mTrackList[i].type) {
-										msg = wxT("type.");
+										msg = wxT("type");
 									}
 									else if (trackList[i].id != mTrackList[i].id) {
-										msg = wxT("ID.");
+										msg = wxT("ID");
 									}
 									else if (trackList[i].has_source != mTrackList[i].has_source) {
-										msg = wxT("\"has_source\" status.");
+										msg = wxT("\"has_source\" status");
 									}
 									else if (trackList[i].has_source && strcmp(trackList[i].src.package_name, mTrackList[i].src.package_name)) {
-										msg = wxT("package name.");
+										msg = wxT("package name");
 									}
 									else if (trackList[i].has_source && strcmp(trackList[i].src.track_name, mTrackList[i].src.track_name)) {
-										msg = wxT("track name.");
+										msg = wxT("track name");
 									}
 									if (msg.Length()) {
-										msg = wxT("Track \"") + wxString(mTrackList[i].name, *wxConvCurrent) + wxT("\" has changed ") + msg;
+										msg = wxT("track \"") + wxString(mTrackList[i].name, *wxConvCurrent) + wxT("\" has changed ") + msg;
 										break;
 									}
 								}

@@ -22,7 +22,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += common
   libs += common2
   libs += YUVlib
-  libs += encode
+  libs += studiocommon
   libs += MXF
   libs += writeavidmxf
   libs += mxfwriter

@@ -356,7 +356,7 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				case Controller::RECONNECT :
 					if (Controller::FAILURE == event.GetResult()) {
 						Deselect(FindString(event.GetName(), true)); //informs frame
-						wxMessageBox(wxT("Cannot reconnect automatically to ") + event.GetName() + wxT(" because ") + event.GetMessage() + wxT("Other aspects of this recorder may have changed also.  You must connect to it again manually and be aware that it has changed."), wxT("Cannot reconnect"), wxICON_ERROR);
+						wxMessageBox(wxT("Cannot reconnect automatically to ") + event.GetName() + wxT(" because ") + event.GetMessage() + wxT(".  Other aspects of this recorder may have changed also.  You must connect to it again manually and be aware that it has changed."), wxT("Cannot reconnect"), wxICON_ERROR);
 					}
 					break;
 				case Controller::RECORD : {

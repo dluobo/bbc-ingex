@@ -10,12 +10,20 @@
 			font-family: Verdana, Ariel, Helvetica, sans-serif;
 			font-size: 80%;
 		}
-		div#title {
-			width: 740px;
+		#barcodes {
+			width: 720px;
+		}
+		#barcode1 {
+			margin-left: 200px;
+		}
+		#barcode2 {
+			margin-left: 20px;
 		}
 		h1 { 
+			width: 720px;
 			text-align: center;
 			margin-top: 5px;
+			margin-bottom: 5px;
 		}
 		h2 {
 			margin-bottom: 5px;
@@ -143,9 +151,15 @@
 </head>
 <body>
 
-<div id="title">
-<h1>Quality Check Report<br/>$Filename2</h1>
+
+<div id="barcodes">
+<img id="barcode1" src="$FileItemPng">
+<img id="barcode2" src="$TimeStampPng">
 </div>
+
+<h1>Quality Check Report</h1>
+<h1>$Filename2</h1>
+
 
 <table id="t1" class="results">
 <tbody>

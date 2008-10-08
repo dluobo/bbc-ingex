@@ -803,6 +803,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --log-buf <name>         Log source and sink buffer state to file\n");
 #if defined(HAVE_DVS)    
     fprintf(stderr, "  --dvs                    SDI ouput using the DVS card\n");
+    fprintf(stderr, "  --dvs-card <num>         Select the DVS card. Default is to use the first available card\n");
+    fprintf(stderr, "  --dvs-channel <num>      Select the channel to use on the DVS card. Default is to use the first available channel\n");
     fprintf(stderr, "  --dvs-buf <size>         Size of the DVS buffer (default is 12; must be >= %d; 0 means maximim)\n", MIN_NUM_DVS_FIFO_BUFFERS);
     fprintf(stderr, "  --dual                   Dual sink with both DVS card output and X server display output\n");
     fprintf(stderr, "  --disable-sdi-osd        Disable the OSD on the SDI output\n");
@@ -1011,6 +1013,8 @@ int main(int argc, const char **argv)
     int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
     int numMarkSelections = 0;
     char sessionComments[MAX_SESSION_COMMENTS_SIZE];
+    int dvsCard = -1;
+    int dvsChannel = -1;
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -1080,6 +1084,38 @@ int main(int argc, const char **argv)
         {
             outputType = DVS_OUTPUT;
             cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--dvs-card") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsCard) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--dvs-channel") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &dvsChannel) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--dvs-buf") == 0)
         {
@@ -2343,7 +2379,8 @@ int main(int argc, const char **argv)
             break;
 
         case DVS_OUTPUT:
-            if (!dvs_open(sdiVITCSource, extraSDIVITCSource, dvsBufferSize, disableSDIOSD, fitVideo, &g_player.dvsSink))
+            if (!dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
+                disableSDIOSD, fitVideo, &g_player.dvsSink))
             {
                 ml_log_error("Failed to open DVS card sink\n");
                 goto fail;
@@ -2355,7 +2392,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
-            if (!dusk_open(reviewDuration, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
+            if (!dusk_open(reviewDuration, dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
                 scale, swScale, fitVideo, &pluginInfo, &g_player.dualSink))
             {
@@ -2548,19 +2585,22 @@ int main(int argc, const char **argv)
     }
 
     
-    /* connect the X11 display keyboard input */
+    /* connect the X11 display keyboard and mouse input */
     
     if (outputType == X11_XV_DISPLAY_OUTPUT)
     {
-        xvsk_set_media_control(g_player.x11XVDisplaySink, g_player.connectMapping, ply_get_media_control(g_player.mediaPlayer));
+        xvsk_set_media_control(g_player.x11XVDisplaySink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink), 
+            ply_get_media_control(g_player.mediaPlayer));
     }
     else if (outputType == X11_DISPLAY_OUTPUT)
     {
-        xsk_set_media_control(g_player.x11DisplaySink, g_player.connectMapping, ply_get_media_control(g_player.mediaPlayer));
+        xsk_set_media_control(g_player.x11DisplaySink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink),
+            ply_get_media_control(g_player.mediaPlayer));
     }
     else if (outputType == DUAL_OUTPUT)
     {
-        dusk_set_media_control(g_player.dualSink, g_player.connectMapping, ply_get_media_control(g_player.mediaPlayer));
+        dusk_set_media_control(g_player.dualSink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink),
+            ply_get_media_control(g_player.mediaPlayer));
     }
     
     
