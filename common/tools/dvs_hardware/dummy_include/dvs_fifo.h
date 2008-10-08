@@ -114,8 +114,7 @@ typedef struct {
   int padding[32-6];
 } sv_fifo_bufferinfo;
 
-#define SV_FIFO_FLAG_FLUSH      0x000010
-#define SV_FIFO_FLAG_NO_LIVE    0x800000
+#define SV_FIFO_FLAG_FLUSH 0x000010
 
 int sv_fifo_init(sv_handle * sv, sv_fifo ** ppfifo, int bInput, int bShared, int bDMA, int flagbase, int nframes);
 int sv_fifo_free(sv_handle * sv, sv_fifo * pfifo);
