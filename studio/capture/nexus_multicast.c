@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.3 2008/10/08 10:16:06 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.4 2008/10/09 06:48:34 stuart_hc Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -99,10 +99,11 @@ extern int main(int argc, char *argv[])
 	NexusControl	*pctl = NULL;
 	int				channelnum = 0;
 	int				bitrate = 0;
+	int				opt_size = 0;
 	int				mpegts = 0;
 	int				out_width = 240, out_height = 192;
 	char			*address = NULL;
-	int				fd;
+	int				fd = -1;
 
 	int n;
 	for (n = 1; n < argc; n++)
@@ -130,6 +131,7 @@ extern int main(int argc, char *argv[])
 				fprintf(stderr, "-s requires size in the form WxH\n");
 				return 1;
 			}
+			opt_size = 1;
 			n++;
 		}
 		else if (strcmp(argv[n], "-b") == 0)
@@ -157,6 +159,13 @@ extern int main(int argc, char *argv[])
 
 	if (address == NULL) {
 		usage_exit();
+	}
+
+	if (mpegts && opt_size == 0) {
+		// default MPEG-TS to fullsize picture
+		out_width = 720;
+		out_height = 576;
+		bitrate = 3500;
 	}
 
 	/* Parse address - udp://@224.1.0.50:1234 or 224.1.0.50:1234 forms */
@@ -248,30 +257,26 @@ extern int main(int argc, char *argv[])
 	uint8_t blank_audio[1920*2*2];
 	memset(blank_audio, 0, sizeof(blank_audio));
 
-	/*** network setup ***/
-	if ((fd = open_socket_for_streaming(remote, port)) == -1) {
-		exit(1);
-	}
-
-	// setup MPEG-TS encoder
 	mpegts_encoder_t *ts = NULL;
 	if (mpegts) {
 		char url[64];
 		// create string suitable for ffmpeg url_fopen() e.g. udp://239.255.1.1:2000
 		sprintf(url, "udp://%s:%d", remote, port);
 
-		if (bitrate == 0)
-			bitrate = 2700;
-
-		if ((ts = mpegts_encoder_init(url, bitrate, 1)) == NULL) {
+		// setup MPEG-TS encoder
+		if ((ts = mpegts_encoder_init(url, out_width, out_height, 2700, 4)) == NULL) {
 			return 1;
+		}
+	}
+	else {
+		// open socket for uncompressed multicast
+		if ((fd = open_socket_for_streaming(remote, port)) == -1) {
+			exit(1);
 		}
 	}
 
 	while (1)
 	{
-		uint8_t audio[1920*2*2];
-
 		if (last_saved == pc->lastframe) {
 			usleep(2 * 1000);		// 0.020 seconds = 50 times a sec
 			continue;
@@ -298,30 +303,44 @@ extern int main(int argc, char *argv[])
 		uint8_t *audio_dvs_fmt = ring[channelnum] + pctl->audio12_offset +
 								pctl->elementsize * (pc->lastframe % pctl->ringlen);
 
+		uint8_t audio[1920*2*2];
+		uint8_t *p_video, *p_audio;
+
 		if (signal_ok) {
-			// scale down video suitable for multicast
-			if (video_422yuv)
-				scale_video422_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
-			else
-				scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+			if (width != out_width || height != out_height) {
+				// scale down video suitable for multicast
+				if (video_422yuv)
+					scale_video422_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+				else
+					scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+				p_video = scaled_frame;
+			}
+			else {
+				p_video = video_frame;
+			}
 
 			// reformat audio to two mono channels one after the other
 			// i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
 			dvsaudio32_to_16bitmono(0, audio_dvs_fmt, audio);
 			dvsaudio32_to_16bitmono(1, audio_dvs_fmt, audio + 1920*2);
+			p_audio = audio;
+		}
+		else {
+			p_video = blank_video;
+			p_audio = blank_audio;
 		}
 
 		// Send the frame.
 		if (ts) {
 			mpegts_encoder_encode(ts,
-									signal_ok ? scaled_frame : blank_video,
-									(int16_t*)(signal_ok ? audio : blank_audio),
+									p_video,
+									(int16_t*)p_audio,
 									pc->lastframe);
 		}
 		else {
 			send_audio_video(fd, out_width, out_height, 2,
-									signal_ok ? scaled_frame : blank_video,
-									signal_ok ? audio : blank_audio,
+									p_video,
+									p_audio,
 									pc->lastframe, tc, ltc, pc->source_name);
 		}
 
