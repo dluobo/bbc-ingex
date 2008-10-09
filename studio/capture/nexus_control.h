@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.7 2008/09/18 09:26:43 john_f Exp $
+ * $Id: nexus_control.h,v 1.8 2008/10/09 06:48:10 stuart_hc Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -23,6 +23,11 @@
 
 #ifndef NEXUS_CONTROL_H
 #define NEXUS_CONTROL_H
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 #ifndef _MSC_VER
 #include <pthread.h>
@@ -160,5 +165,9 @@ extern int nexus_lastframe_tc(const NexusControl *pctl, uint8_t *ring[], int cha
 
 extern const uint8_t *nexus_lastframe_audio12(const NexusControl *pctl, uint8_t *ring[], int channel);
 extern const uint8_t *nexus_lastframe_audio34(const NexusControl *pctl, uint8_t *ring[], int channel);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // NEXUS_CONTROL_H
