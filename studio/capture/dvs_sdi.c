@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.10 2008/10/08 21:19:27 stuart_hc Exp $
+ * $Id: dvs_sdi.c,v 1.11 2008/10/09 06:47:47 stuart_hc Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -882,24 +882,25 @@ static void * sdi_monitor(void *arg)
 		usleep(10000 + 5000 * chan);				
 	}
 
-    const int flagbase = 0;
 #ifdef SV_FIFO_FLAG_NO_LIVE
 	// No loop-through to avoid clash with player
 	// (macro available in sdk3.2.14.0 and later versions)
-	flagbase |= SV_FIFO_FLAG_NO_LIVE;
+	const int flagbase = SV_FIFO_FLAG_NO_LIVE;
+#else
+	const int flagbase = 0;
 #endif
 
 	SV_CHECK( sv_fifo_init(	sv,
-                            &poutput,
-                            1,          // Input
-                            FALSE,      // bShared (TRUE for input/output share memory)
-                            1,          // DMA FIFO
-                            flagbase,   // Base SV_FIFO_FLAG_xxxx flags
-                            0) );       // nFrames (0 means use maximum)
+							&poutput,
+							1,			// Input
+							FALSE,		// bShared (TRUE for input/output share memory)
+							1,			// DMA FIFO
+							flagbase,	// Base SV_FIFO_FLAG_xxxx flags
+							0) );		// nFrames (0 means use maximum)
 
 	SV_CHECK( sv_fifo_start(sv, poutput) );
 
-    logTF("chan %ld: fifo init/start completed\n", chan);
+	logTF("chan %ld: fifo init/start completed\n", chan);
 
 	int recover_from_video_loss = 0;
 	int last_res = -1;
