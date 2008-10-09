@@ -7,7 +7,7 @@
 
 #define MPA_FRAME_SIZE 1152
 
-typedef void mpegts_encoder_t;
+#include "multicast_compressed.h"
 
 typedef struct 
 {
@@ -57,7 +57,7 @@ static int initialise_tc_mask (internal_mpegts_encoder_t *ts)
 
 
 /* add a video output stream */
-AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int bit_rate, int thread_count)
+AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int height, int bit_rate, int thread_count)
 {
     //Modifiying all values to ts format values
     AVCodecContext *c;
@@ -92,9 +92,9 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int bit_rate, int 
     //c->qcompress = 0.1;
     
     /* resolution must be a multiple of two */
-    c->width = 720;  
-    c->height = 576;
-    c->sample_aspect_ratio = av_d2q(4.0/3*576/720, 255);
+    c->width = width;  
+    c->height = height;
+    c->sample_aspect_ratio = av_d2q(16.0/9*height/width, 255);
     /* time base: this is the fundamental unit of time (in seconds) in terms
        of which frame timestamps are represented. for fixed-fps content,
        timebase should be 1/framerate and timestamp increments should be
@@ -325,7 +325,7 @@ static void cleanup (internal_mpegts_encoder_t *ts)
 	}
 }
 
-extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, uint32_t kbit_rate, int thread_count)
+extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, int width, int height, uint32_t kbit_rate, int thread_count)
 {
 	internal_mpegts_encoder_t *mpegts;
 	AVOutputFormat *fmt;
@@ -370,7 +370,7 @@ extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, uint32_t kbi
 	*/
 	if (fmt->video_codec != CODEC_ID_NONE)
 	{
-		mpegts->video_st = add_video_stream(mpegts->oc, fmt->video_codec, kbit_rate, thread_count);
+		mpegts->video_st = add_video_stream(mpegts->oc, fmt->video_codec, width, height, kbit_rate, thread_count);
 		if (!mpegts->video_st)
 		{
 			cleanup(mpegts);
@@ -617,13 +617,13 @@ extern int main (int argc, char **argv)
 		exit(-1);
 	}
 #endif
-	ts = mpegts_encoder_init(argv[idx+2], 2700, 4);
+	ts = mpegts_encoder_init(argv[idx+2], 720, 576, 2700, 4);
 	if (ts == NULL) {
 		return 1;
 	}
 	
     gettimeofday(&prev, NULL);
-	while ((frames_read = fread (video_samples,  video_frame_size, 1, vfp)) == 1)
+	while ((frames_read = fread (video_samples, video_frame_size, 1, vfp)) == 1)
 	{
 		int16_t audio_samples[1920*2];
 
