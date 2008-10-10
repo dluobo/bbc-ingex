@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.1 2008/09/03 10:50:32 john_f Exp $
+ * $Id: Timecode.cpp,v 1.2 2008/10/10 17:07:03 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -21,7 +21,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
-
+#include <cstring>
 #include "Timecode.h"
 
 // constants for 30 fps drop frame

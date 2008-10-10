@@ -1,0 +1,242 @@
+/*
+ * Copyright (C) 2008  British Broadcasting Corporation
+ * Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+body {
+	overflow-x: hidden;
+}
+
+.contentPane {
+	overflow-x: auto;
+}
+
+#logging h1 {
+	margin: 0px;
+	margin-bottom: 5px;
+	padding-bottom: 1px;
+	font-size: 1.2em;
+	border-bottom: 1px solid #aaa;
+}
+
+#logging #leftColumn {
+	float: left;
+	width: 132px;
+	margin: 0px;
+	padding: 0px;
+}
+
+#logging #programmeInfo {
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 100%;
+}
+
+#logging #currentTC {
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 100%;
+}
+
+#logging #actions {
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 100%;
+}
+
+#logging #recorderSelect {
+	margin: 0px;
+	border: 1px solid black;
+	background-color: #eef;
+	padding: 5px;
+	margin-bottom: 8px;
+	width: 100%;
+}
+
+#logging #takes {
+	margin-left: 150px;
+	border: 1px solid black;
+	background-color: #f6f6f6;
+	padding: 5px;
+	margin-bottom: 8px;
+}
+
+#logging #newTake {
+	margin-left: 150px;
+	border: 1px solid black;
+	background-color: #ffe;
+	padding: 5px;
+	margin-bottom: 8px;
+}
+
+#logging .takeInfo{
+	width: 250px;
+}
+
+#logging .progInfoFormElement {
+	width: 122px;
+	margin-top: 2px;
+	margin-bottom: 5px;
+}
+
+#logging #newTake .progInfoFormElement {
+	font-size: 120%;
+}
+
+#logging #newTake select {
+	width: 250px;
+}
+
+#logging textarea {
+	width: 100%;
+	height: 100%;
+}
+
+#logging .rightButtons {
+	text-align: right;
+	margin-top: 8px;
+	margin-bottom: 5px;
+}
+
+#logging .leftButtons {
+	float: left;
+	margin-top: 5px;
+	margin-bottom: 10px;
+	line-height: 25px;
+}
+
+#logging .leftExtraButtons{
+	float: left;
+	margin-left: 85px;
+	margin-top: 5px;
+	margin-bottom: 2px;
+	line-height: 25px;
+}
+
+#logging .good {
+	color: #383;
+}
+
+#logging .noGood {
+	color: #f33;
+}
+
+#logging .alignmentTable{
+	width: 100%;
+	padding: 0px;
+	border-spacing: 0px;
+}
+
+#logging .alignmentTable th{
+	font-size: 0.8em;
+	padding: 0px;
+	padding-left: 3px;
+	padding-right: 5px;
+	vertical-align: middle;
+}
+	
+#logging .alignmentTable tr{
+	padding: 0px;
+}
+
+#logging .alignmentTable td{
+	padding: 0px;
+	padding-left: 3px;
+	padding-right: 5px;
+	vertical-align: middle;
+}
+
+#logging .spacer{
+	clear: both;
+	line-height: 0.3em;
+}
+
+
+
+/* Make up for bits that I've disabled on a global scope in ext-all.css */
+#logging ol, #logging ul{list-style:none; margin:0;padding:0;}
+#logging dl, #logging dt, #logging dd, #logging li{margin:0;padding:0;}
+
+
+
+
+.x-column-tree .x-tree-node {
+    zoom:1;
+}
+.x-column-tree .x-tree-node-el {
+    /*border-bottom:1px solid #eee; borders? */
+    zoom:1;
+}
+.x-column-tree .x-tree-selected {
+    background: #d9e8fb;
+}
+.x-column-tree  .x-tree-node a {
+    line-height:18px;
+    vertical-align:middle;
+}
+.x-column-tree  .x-tree-node a span{
+	
+}
+.x-column-tree  .x-tree-node .x-tree-selected a span{
+	background:transparent;
+	color:#000;
+}
+.x-tree-col {
+    float:left;
+    overflow:hidden;
+    padding:0 1px;
+    zoom:1;
+}
+ 
+.x-tree-col-text, .x-tree-hd-text {
+    overflow:hidden;
+    -o-text-overflow: ellipsis;
+	text-overflow: ellipsis;
+    padding:3px 3px 3px 5px;
+    white-space: nowrap;
+    font:normal 11px arial, tahoma, helvetica, sans-serif;
+}
+ 
+.x-tree-headers {
+    background: #f9f9f9 url(/ingex/ext-images/default/grid/grid3-hrow.gif) repeat-x 0 bottom;
+	cursor:default;
+    zoom:1;
+}
+ 
+.x-tree-hd {
+    float:left;
+    overflow:hidden;
+    border-left:1px solid #eee;
+    border-right:1px solid #d0d0d0;
+}
+ 
+.task {
+    background-image:url(../shared/icons/fam/cog.png) !important;
+}
+.task-folder {
+    background-image:url(../shared/icons/fam/folder_go.png) !important;
+}
