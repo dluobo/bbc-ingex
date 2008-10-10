@@ -1,8 +1,13 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
+#include <ffmpeg/avcodec.h>
+#include <ffmpeg/avformat.h>
+#else
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#endif
 
 
 #define MPA_FRAME_SIZE 1152
@@ -75,6 +80,7 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int hei
 
     st->r_frame_rate.num = 25;
     st->r_frame_rate.den = 1;
+    st->sample_aspect_ratio = av_d2q(16.0/9 * height/width, 255);
     c = st->codec;
     c->codec_id = codec_id;
     c->codec_type = CODEC_TYPE_VIDEO;
@@ -94,7 +100,7 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int hei
     /* resolution must be a multiple of two */
     c->width = width;  
     c->height = height;
-    c->sample_aspect_ratio = av_d2q(16.0/9*height/width, 255);
+    c->sample_aspect_ratio = st->sample_aspect_ratio;
     /* time base: this is the fundamental unit of time (in seconds) in terms
        of which frame timestamps are represented. for fixed-fps content,
        timebase should be 1/framerate and timestamp increments should be
