@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.3 2008/09/03 14:27:24 john_f Exp $
+ * $Id: test.cpp,v 1.4 2008/10/10 09:52:34 philipn Exp $
  *
  * Tests the database library
  *
@@ -680,7 +680,7 @@ static SourcePackage* create_source_package(UMID uid, Timestamp now,
     sourcePackage->uid = uid;
     sourcePackage->name = "Test package";
     sourcePackage->creationDate = now;
-    sourcePackage->projectName = g_testProjectName;
+    sourcePackage->projectName = create_project_name(g_testProjectName);
     FileEssenceDescriptor* fDesc = new FileEssenceDescriptor();
     sourcePackage->descriptor = fDesc;
     fDesc->fileLocation = "file:///media";
@@ -724,7 +724,7 @@ static MaterialPackage* create_material_package(UMID uid, Timestamp now)
     materialPackage->uid = uid;
     materialPackage->name = "Test material package";
     materialPackage->creationDate = now;
-    materialPackage->projectName = g_testProjectName;
+    materialPackage->projectName = create_project_name(g_testProjectName);
     
     track = new Track();
     materialPackage->tracks.push_back(track);
