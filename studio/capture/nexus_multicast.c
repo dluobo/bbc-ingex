@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.4 2008/10/09 06:48:34 stuart_hc Exp $
+ * $Id: nexus_multicast.c,v 1.5 2008/10/10 05:36:42 stuart_hc Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -87,7 +87,7 @@ static void usage_exit(void)
     fprintf(stderr, "                  (use 360x288 for 1/4-picture)\n");
     fprintf(stderr, "                  (use 180x144 for 1/16-picture)\n");
     fprintf(stderr, "    -t            send compressed MPEG-TS stream suitable for VLC playback\n");
-    fprintf(stderr, "    -b bps        MPEG-2 video bitrate to use for compressed MPEG-TS\n");
+    fprintf(stderr, "    -b kps        MPEG-2 video bitrate to use for compressed MPEG-TS [default 3500 kbps]\n");
     fprintf(stderr, "    -q            quiet operation (fewer messages)\n");
 	exit(1);
 }
@@ -98,7 +98,7 @@ extern int main(int argc, char *argv[])
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
 	int				channelnum = 0;
-	int				bitrate = 0;
+	int				bitrate = 3500;
 	int				opt_size = 0;
 	int				mpegts = 0;
 	int				out_width = 240, out_height = 192;
@@ -165,7 +165,6 @@ extern int main(int argc, char *argv[])
 		// default MPEG-TS to fullsize picture
 		out_width = 720;
 		out_height = 576;
-		bitrate = 3500;
 	}
 
 	/* Parse address - udp://@224.1.0.50:1234 or 224.1.0.50:1234 forms */
@@ -264,7 +263,7 @@ extern int main(int argc, char *argv[])
 		sprintf(url, "udp://%s:%d", remote, port);
 
 		// setup MPEG-TS encoder
-		if ((ts = mpegts_encoder_init(url, out_width, out_height, 2700, 4)) == NULL) {
+		if ((ts = mpegts_encoder_init(url, out_width, out_height, bitrate, 4)) == NULL) {
 			return 1;
 		}
 	}

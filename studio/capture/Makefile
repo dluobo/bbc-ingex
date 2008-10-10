@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.8 2008/10/08 10:16:06 john_f Exp $
+# $Id: Makefile,v 1.9 2008/10/10 05:36:42 stuart_hc Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -38,7 +38,7 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
-FFMPEG_LIBS=-lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm -lpthread
+FFMPEG_LIBS=-lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
 PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nexus_multicast nexus_set_source 
 
