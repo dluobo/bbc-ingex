@@ -108,6 +108,7 @@ class HelpDlg;
 class RecorderGroupCtrl;
 class CuePointsDlg;
 class TestModeDlg;
+class wxToggleButton;
 
 /// The main displayed frame, at the heart of the application
 class IngexguiFrame : public wxFrame
@@ -141,6 +142,8 @@ class IngexguiFrame : public wxFrame
 		MENU_AutoClear,
 		MENU_ClearLog,
 		MENU_DisablePlayer,
+		MENU_PlayMOV,
+		MENU_PlayMXF,
 		MENU_PlayerType,
 		MENU_ExtOutput,
 		MENU_AccelOutput,
@@ -164,6 +167,7 @@ class IngexguiFrame : public wxFrame
 		BUTTON_PrevTake,
 		BUTTON_NextTake,
 		BUTTON_DeleteCue,
+		BUTTON_PlayFile,
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
@@ -220,20 +224,20 @@ class IngexguiFrame : public wxFrame
 		void OnPlaybackTrackSelect(wxCommandEvent&);
 		void OnShortcut(wxCommandEvent&);
 		void OnDisablePlayer(wxCommandEvent&);
+		void OnPlayerOpenFile(wxCommandEvent&);
 		void OnClearDescription(wxCommandEvent&);
 		void OnDescriptionChange(wxCommandEvent&);
 		void OnDescriptionEnterKey(wxCommandEvent&);
 		void OnFocusGot(wxFocusEvent&);
 		void OnFocusLost(wxFocusEvent&);
 		void OnTestMode(wxCommandEvent&);
+		void OnPlayFile(wxCommandEvent&);
 
-		void UpdatePlayerAndEventControls(bool = false);
+		void UpdatePlayerAndEventControls(bool = false, bool = false);
 		void UpdateTextShortcutStates();
 		void AddEvent(EventType, const wxString = wxT(""), ProdAuto::MxfTimecode = InvalidMxfTimecode, const int64_t = 0, const wxString = wxT(""), const wxColour = wxT("WHITE"), const wxColour = wxT("BLACK"), const ProdAuto::LocatorColour::EnumType = ProdAuto::LocatorColour::DEFAULT_COLOUR);
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
-		bool AtStopEvent();
-		bool AtStartEvent();
 		void ClearLog();
 		void SelectAdjacentEvent(bool down);
 		void ResetPlayer();
@@ -258,6 +262,7 @@ class IngexguiFrame : public wxFrame
 		wxTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
+		wxToggleButton * mPlayFileButton;
 		wxButton * mDeleteCueButton;
 		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;
@@ -278,7 +283,9 @@ class IngexguiFrame : public wxFrame
 		bool mLastPlayingBackwards;
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
-
+		wxArrayString mFileModeFiles;
+		int64_t mFileModeFrameOffset;
+		int64_t mTakeModeFrameOffset;
 		DECLARE_EVENT_TABLE()
 };
 

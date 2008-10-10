@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.7 2008/10/08 10:16:06 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.8 2008/10/10 16:50:49 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -70,10 +70,9 @@ IngexRecorderImpl::IngexRecorderImpl (void)
 }
 
 // Initialise the recorder
-bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string db_pw)
+bool IngexRecorderImpl::Init(const std::string & name)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C, %C, %C)\n"),
-        name.c_str(), db_user.c_str(), db_pw.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C)\n"), name.c_str()));
 
     // Shared memory initialisation
     bool ok = true;
@@ -112,7 +111,7 @@ bool IngexRecorderImpl::Init(std::string name, std::string db_user, std::string 
     // Each channel has 1 video and 4 or 8 audio tracks
     const unsigned int max_inputs = IngexShm::Instance()->Channels();
     const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
-    ok = ok && RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
+    ok = ok && RecorderImpl::Init(name, max_inputs, max_tracks_per_input);
 
 
     // Store video source names in shared memory

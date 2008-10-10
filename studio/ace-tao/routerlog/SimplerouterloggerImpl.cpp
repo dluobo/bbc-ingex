@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.5 2008/10/08 10:16:06 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.6 2008/10/10 16:50:49 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -53,7 +53,7 @@ Vt::Vt(int rd, const std::string & n)
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpCutsDatabase(0), mpFile(0), mMixDestination(0)
+: mpFile(0), mpCutsDatabase(0), mMixDestination(0)
 {
 }
 
@@ -65,11 +65,11 @@ SimplerouterloggerImpl::~SimplerouterloggerImpl (void)
 
 
 // Initialise the routerlogger
-bool SimplerouterloggerImpl::Init(const std::vector<RouterDestination> & destinations, unsigned int mix_dest,
-                                  const std::string & db_file,
-                                  const std::string & name,
-                                  const std::string & db_user, const std::string & db_pw)
+bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & db_file,
+                                  unsigned int mix_dest, const std::vector<RouterDestination*> & dests)
 {
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Init() name \"%C\" mix_dest %d\n"),
+        name.c_str(), mix_dest));
     bool ok = true;
 
     // Assume 25 fps
@@ -85,30 +85,12 @@ bool SimplerouterloggerImpl::Init(const std::vector<RouterDestination> & destina
     mMaxPostRoll.undefined = true; // no limit to post-roll
     mMaxPostRoll.edit_rate = mEditRate;
     mMaxPostRoll.samples = 0;
-#if 0
-    // Create tracks
-    mTracks->length(1);
-    ProdAuto::Track & track = mTracks->operator[](0);
-    track.type = ProdAuto::VIDEO;
-    track.name = "V";
-    track.id = 1;
-    // Setting source package name to appear in controller
-    track.has_source = 1;
-    track.src.package_name = CORBA::string_dup("Mixer out destination");
-
-    mTracksStatus->length(1);
-    ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
-    ts.signal_present = true;
-    ts.timecode.edit_rate = mEditRate;
-    ts.timecode.undefined = 0;
-    ts.timecode.samples = 0;
-#endif
 
     // Base class initialisation
     // Each channel has 1 video and 4 or 8 audio tracks
     const unsigned int max_inputs = 1;
     const unsigned int max_tracks_per_input = 1;
-    ok = ok && RecorderImpl::Init(name, db_user, db_pw, max_inputs, max_tracks_per_input);
+    ok = ok && RecorderImpl::Init(name, max_inputs, max_tracks_per_input);
 
     // Setup format reply
     mFormat = "*ROUTER*";
@@ -126,10 +108,11 @@ bool SimplerouterloggerImpl::Init(const std::vector<RouterDestination> & destina
 
     // VT name and router info
     mVts.clear();
-    for (std::vector<RouterDestination>::const_iterator
-        it = destinations.begin(); it != destinations.end(); ++it)
+    for (std::vector<RouterDestination *>::const_iterator
+        it = dests.begin(); it != dests.end(); ++it)
     {
-        mVts.push_back( Vt(it->output_number, it->name) );
+        RouterDestination * rd = *it;
+        mVts.push_back( Vt(rd->output_number, rd->name) );
     }
 
     return ok;
@@ -147,6 +130,7 @@ bool SimplerouterloggerImpl::Init(const std::vector<RouterDestination> & destina
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.timecode.samples = tc.FramesSinceMidnight();
+    ts.timecode.undefined = 0;
 
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("TracksStatus - timecode %C\n"), tc.Text()));
 
@@ -312,7 +296,7 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
     // Process changes to mixer-out destination
     if (dest == mMixDestination)
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("mixer-out destination\n")));
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("%C: matched mix_dest\n"), mName.c_str()));
 
         // Are we recording the source just selected?
         // Avoid VT1 if possible as that may be recording mixer out

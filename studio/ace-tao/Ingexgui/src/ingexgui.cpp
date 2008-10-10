@@ -25,6 +25,7 @@
 #include "wx/filename.h"
 #include "wx/xml/xml.h"
 #include "wx/file.h"
+#include "wx/tglbtn.h"
 #include "help.h"
 #include "ingexgui.xpm"
 #include "stop.xpm"
@@ -98,6 +99,8 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_MENU( MENU_Space, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_ClearLog, IngexguiFrame::OnClearLog )
 	EVT_MENU( MENU_DisablePlayer, IngexguiFrame::OnDisablePlayer )
+	EVT_MENU( MENU_PlayMOV, IngexguiFrame::OnPlayerOpenFile )
+	EVT_MENU( MENU_PlayMXF, IngexguiFrame::OnPlayerOpenFile )
 	EVT_MENU( MENU_AbsoluteTimecode, IngexguiFrame::OnPlayerOSDTypeChange )
 	EVT_MENU( MENU_RelativeTimecode, IngexguiFrame::OnPlayerOSDTypeChange )
 	EVT_MENU( MENU_NoOSD, IngexguiFrame::OnPlayerOSDTypeChange )
@@ -130,6 +133,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_BUTTON( BUTTON_NextTake, IngexguiFrame::OnNextTake )
 	EVT_BUTTON( BUTTON_JumpToTimecode, IngexguiFrame::OnJumpToTimecode )
 	EVT_BUTTON( BUTTON_DeleteCue, IngexguiFrame::OnDeleteCue )
+	EVT_TOGGLEBUTTON( BUTTON_PlayFile, IngexguiFrame::OnPlayFile )
 	EVT_COMMAND( wxID_ANY, wxEVT_PLAYER_MESSAGE, IngexguiFrame::OnPlayerEvent )
 	EVT_COMMAND( wxID_ANY, wxEVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
 	EVT_COMMAND( wxID_ANY, wxEVT_RECORDERGROUP_MESSAGE, IngexguiFrame::OnRecorderGroupEvent )
@@ -235,6 +239,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	//Player menu
 	wxMenu * menuPlayer = new wxMenu;
 	menuPlayer->AppendCheckItem(MENU_DisablePlayer, wxT("Disable player"));
+	menuPlayer->Append(MENU_PlayMOV, wxT("Play MOV file..."));
+	menuPlayer->Append(MENU_PlayMXF, wxT("Play MXF file(s)..."));
 	wxMenu * menuPlayerType = new wxMenu;
 	wxMenu * menuPlayerOSD = new wxMenu;
 	menuPlayerType->AppendRadioItem(MENU_AccelOutput, wxT("On-screen (accelerated if possible)")); //first item is selected by default
@@ -434,9 +440,10 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	sizer2dH->Add(mPrevTakeButton, 0, wxALL, CONTROL_BORDER);
 	mNextTakeButton = new wxButton(eventPanel, BUTTON_NextTake, wxT("End of Take"));
 	sizer2dH->Add(mNextTakeButton, 0, wxALL, CONTROL_BORDER);
-	mJumpToTimecodeButton = new wxButton(eventPanel, BUTTON_JumpToTimecode, wxT("Jump to Timecode"));
-	sizer2dH->Add(mJumpToTimecodeButton, 0, wxALL, CONTROL_BORDER);
-mJumpToTimecodeButton->Hide(); //TEMP until this function is fully implemented!
+//	mJumpToTimecodeButton = new wxButton(eventPanel, BUTTON_JumpToTimecode, wxT("Jump to Timecode"));
+//	sizer2dH->Add(mJumpToTimecodeButton, 0, wxALL, CONTROL_BORDER);
+	mPlayFileButton = new wxToggleButton(eventPanel, BUTTON_PlayFile, wxT("Play file"));
+	sizer2dH->Add(mPlayFileButton, 0, wxALL, CONTROL_BORDER);
 	sizer2dH->AddStretchSpacer();
 	mDeleteCueButton = new wxButton(eventPanel, BUTTON_DeleteCue, wxT("Delete Cue Point"));
 	sizer2dH->Add(mDeleteCueButton, 0, wxALL, CONTROL_BORDER);
@@ -745,7 +752,8 @@ void IngexguiFrame::OnPrevTake( wxCommandEvent & WXUNUSED(event))
 	mEventList->GetItem(item); //the take info index is in this item's data
 
 	//set the selection
-	if (AtStartEvent() && !mPlayer->Within()) {
+
+	if (mCurrentTakeInfo && (unsigned long) mEventList->GetFirstSelected() == mCurrentTakeInfo->GetStartIndex() && !mPlayer->Within()) {
 		//the start of this take is selected: select the start of the previous
 		if (item.GetData()) {
 			//not the first take
@@ -758,7 +766,7 @@ void IngexguiFrame::OnPrevTake( wxCommandEvent & WXUNUSED(event))
 	}
 	mEventList->EnsureVisible(mEventList->GetFirstSelected());
 
-	UpdatePlayerAndEventControls(true); //force player to jump to cue, as this won't happen if the selected event hasn't changed
+	UpdatePlayerAndEventControls(false, true); //force player to jump to cue, as this won't happen if the selected event hasn't changed
 }
 
 /// Responds to the Next Take button/menu item by moving to the start of the next take
@@ -799,6 +807,10 @@ void IngexguiFrame::OnNextTake( wxCommandEvent& WXUNUSED(event))
 ///		Event extra long: Frame number.
 ///	WITHIN_TAKE: Update "Previous Take" button because it will now cause a jump to the start of the current take.
 ///	CLOSE_REQ: Switch the player to external output only, or disable completely if external output is not being used.
+///	QUADRANT_CLICK: Toggle between full-screen and single source defined by the quadrant.
+///		Event int: the quadrant clicked on.
+///	FILE_MODE: Reflect status in controls.
+///		Event int: non-zero for file mode enabled.
 ///	KEYPRESS: Respond to the user pressing a shortcut key in the player window.
 ///		Event int: X-windows key value.
 void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
@@ -881,18 +893,26 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 			break;
 		case prodauto::CUE_POINT :
 			//move to the right position in the list
-			mCurrentSelectedEvent = event.GetInt(); //As it is the player selecting this event, stop the player being told to jump to it
-			mEventList->Select(event.GetInt()); //generates and processes a selection event immediately
+			if (!mPlayFileButton->GetValue()) {
+				mCurrentSelectedEvent = event.GetInt(); //As it is the player selecting this event, stop the player being told to jump to it
+				mEventList->Select(event.GetInt()); //generates and processes a selection event immediately
+			}
 			break;
 		case prodauto::FRAME_DISPLAYED :
 			if (event.GetInt()) {
 				//valid position
 				mTimepos->SetPosition(event.GetExtraLong());
+				if (mPlayFileButton->GetValue()) { //file mode
+					mFileModeFrameOffset = event.GetExtraLong(); //so that we can reinstate the correct position if we come out of file mode
+				}
+				else {
+					mTakeModeFrameOffset = event.GetExtraLong(); //so that we can reinstate the correct position if we come out of take mode
+				}
 			}
 			else {
 				mTimepos->SetPositionUnknown(true); //display "no position"
 			}
-			if ((AtStopEvent() && PLAYING == mStatus) || (AtStartEvent() && !mPlayer->Within() && PLAYING_BACKWARDS == mStatus)) {
+			if ((mPlayer->AtEnd() && PLAYING == mStatus) || (!mPlayer->Within() && PLAYING_BACKWARDS == mStatus)) {
 				mPlayer->Pause(); //player is already banging its head against the end stop, but this will issue a state change event
 			}
 			break;
@@ -1483,6 +1503,34 @@ void IngexguiFrame::OnDisablePlayer(wxCommandEvent& WXUNUSED( event ))
 	mPlayer->Enable(enabled);
 	GetMenuBar()->FindItem(MENU_PlayerType)->Enable(enabled);
 	GetMenuBar()->FindItem(MENU_PlayerOSD)->Enable(enabled);
+	mPlayFileButton->Enable(enabled && mFileModeFiles.GetCount());
+}
+
+/// Responds to the "Play File..." menu command
+/// Opens a file select dialogue
+void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
+{
+	if (MENU_PlayMOV == event.GetId()) {
+		wxFileDialog dlg(this, wxT("Choose a MOV file"), wxT(""), wxT(""), wxT("MOV files |*.mov;*.MOV|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR); //select single file only
+		if (wxID_OK == dlg.ShowModal()) {
+		}
+	}
+	else { //MXF
+		wxFileDialog dlg(this, wxT("Choose one or more MXF files"), wxT(""), wxT(""), wxT("MXF files|*.mxf;*.MXF|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR | wxFD_MULTIPLE); //select multiple files
+		if (wxID_OK == dlg.ShowModal()) { //at least one file has been chosen
+			dlg.GetPaths(mFileModeFiles);
+			mFileModeFrameOffset = 0;
+			mPlayFileButton->SetValue(true); //go into file mode if not already in that mode
+			UpdatePlayerAndEventControls(true); //reload player
+		}
+	}
+}
+
+/// Responds to the Play File toggle button being pressed
+/// Loads the player with the correct set of files
+void IngexguiFrame::OnPlayFile(wxCommandEvent & WXUNUSED( event ))
+{
+	UpdatePlayerAndEventControls(true); //force player reload
 }
 
 /// Adds a stop/start/cue point event to the event list.
@@ -1659,6 +1707,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
+			mPlayFileButton->Enable(mFileModeFiles.GetCount());
 			break;
 		case RUNNING_UP:
 			if (changed) {
@@ -1676,6 +1725,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable(false);
 			mTree->EnableChanges(false);
+			mPlayFileButton->Enable(false);
 			break;
 		case RECORDING:
 			if (changed) {
@@ -1702,6 +1752,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			EnableButtonReliably(mStopButton);
 			mStopButton->SetToolTip(wxT("Stop recording after postroll"));
 			mTree->EnableChanges(false);
+			mPlayFileButton->Enable(false);
 			break;
 		case RUNNING_DOWN:
 			if (changed) {
@@ -1727,6 +1778,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			EnableButtonReliably(mStopButton);
 			mStopButton->SetToolTip(wxT("Stop recording after postroll"));
 			mTree->EnableChanges(false);
+			mPlayFileButton->Enable(false);
 			break;
 		case PLAYING:
 			if (changed) {
@@ -1745,6 +1797,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
+			mPlayFileButton->Enable(mFileModeFiles.GetCount());
 			break;
 		case PLAYING_BACKWARDS:
 			if (changed) {
@@ -1763,6 +1816,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStopButton->SetToolTip(wxT(""));
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
+			mPlayFileButton->Enable(mFileModeFiles.GetCount());
 			break;
 		case PAUSED:
 			if (changed) {
@@ -1781,97 +1835,30 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
+			mPlayFileButton->Enable(mFileModeFiles.GetCount());
 			break;
 	}
 	UpdatePlayerAndEventControls();
 }
 
 /// Updates player and various controls.
-/// @param force Force player to jump to current cue point.
+/// @param forceLoad Force player to load new file(s).
+/// @param forceCueJump Force player to jump to current cue point.
 /// If a new valid take has been selected in the event list, updates the playback notebook page and loads the player with the new files.
 /// If a new cue point has been selected in the event list, or if force is true, instruct player to jump to this cue point.
-void IngexguiFrame::UpdatePlayerAndEventControls(bool force)
+void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCuePoint)
 {
-	if (mTakeInfoArray.GetCount()) {
-		//work out the current take info
-		wxListItem item;
-		item.SetId(mEventList->GetFirstSelected());
-		item.SetColumn(0);
-		mEventList->GetItem(item);
-		TakeInfo * currentTakeInfo = &(mTakeInfoArray.Item(item.GetData()));
-		//"Delete Cue" button
-		mDeleteCueButton->Enable(
-			RECORDING == mStatus //no point in deleting cue points after recording, as the descriptions have already been sent to the recorder
-			&& (long) mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartIndex() < mEventList->GetFirstSelected() //an event in the current (latest) recording
-			&& CUE_LABEL == item.GetText() //a cue event
-		);
-		//player control
-		if (currentTakeInfo->GetFiles()->GetCount()) { //the take is complete and there are at least some files available
-			if (currentTakeInfo != mCurrentTakeInfo) { //a new take
-				mCurrentTakeInfo = currentTakeInfo;
-				//update playback tracks notebook page
-				mPlayProjectNameCtrl->SetLabel(currentTakeInfo->GetProjectName());
-				std::vector<std::string> fileNames;
-				std::vector<std::string> trackNames;
-				mPlaybackTrackSelector->SetTracks(currentTakeInfo, &fileNames, &trackNames);
-				//load files and jump to current position
-				mPlayer->Load(&fileNames, &trackNames, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
-				mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
-			}
-			else if ((unsigned long) mEventList->GetFirstSelected() != mCurrentSelectedEvent || force) { //only the selected event has changed
-				mPlayer->JumpToCue(mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
-			}
-			mCurrentSelectedEvent = mEventList->GetFirstSelected();
+	if (mPlayFileButton->GetValue()) { //File Mode
+		if (forceLoad) {
+			//load player with file mode data
+			std::vector<std::string> fileNames;
+			std::vector<std::string> trackNames;
+			ProdAuto::MxfTimecode editRate;
+			mPlayProjectNameCtrl->SetLabel(mPlaybackTrackSelector->SetMXFFiles(mFileModeFiles, fileNames, trackNames, editRate));
+			mTimepos->SetDefaultEditRate(editRate); //allows position display to work in case we haven't got it from anywhere else
+			mPlayer->Load(&fileNames, &trackNames, mFileModeFrameOffset);
+			mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
 		}
-		//"previous" button/"previous", "up" and "first" menu items
-		if (mCurrentSelectedEvent || mPlayer->Within()) {
-			//not at the beginning of the first take
-//			mPrevTakeButton->Enable();
-			EnableButtonReliably(mPrevTakeButton);
-			GetMenuBar()->FindItem(MENU_PageUp)->Enable();
-			GetMenuBar()->FindItem(MENU_Up)->Enable();
-			if (mCurrentSelectedEvent == mCurrentTakeInfo->GetStartIndex() && !mPlayer->Within()) {
-				//the start of this take is selected
-				mPrevTakeButton->SetLabel(wxT("Previous Take"));
-				GetMenuBar()->FindItem(MENU_PageUp)->SetText(wxT("Move to start of previous take\tPGUP"));
-			}
-			else {
-				//somewhere within a take
-				mPrevTakeButton->SetLabel(wxT("Start of Take"));
-				GetMenuBar()->FindItem(MENU_PageUp)->SetText(wxT("Move to start of take\tPGUP"));
-			}
-		}
-		else {
-			mPrevTakeButton->Disable();
-			GetMenuBar()->FindItem(MENU_PageUp)->Enable(false);
-			GetMenuBar()->FindItem(MENU_Up)->Enable(false);
-		}
-		//"next" button/"next", "down" and "last" menu items
-		if (mCurrentSelectedEvent != (unsigned long) mEventList->GetItemCount() - 1) {
-			//not at the end of the last take
-//			mNextTakeButton->Enable();
-			EnableButtonReliably(mNextTakeButton);
-			GetMenuBar()->FindItem(MENU_PageDown)->Enable();
-			GetMenuBar()->FindItem(MENU_Down)->Enable();
-			if (item.GetData() != mTakeInfoArray.GetCount() - 1) {
-				//not in the last take
-				mNextTakeButton->SetLabel(wxT("Next Take"));
-				GetMenuBar()->FindItem(MENU_PageDown)->SetText(wxT("Move to start of next take\tPGDN"));
-			}
-			else {
-				//somewhere in the last take
-				mNextTakeButton->SetLabel(wxT("End of Take"));
-				GetMenuBar()->FindItem(MENU_PageDown)->SetText(wxT("Move to end of take\tPGDN"));
-			}
-		}
-		else {
-			mNextTakeButton->Disable();
-			GetMenuBar()->FindItem(MENU_PageDown)->Enable(false);
-			GetMenuBar()->FindItem(MENU_Down)->Enable(false);
-		}
-	}
-	else {
-		//empty list
 		mPrevTakeButton->Disable();
 		GetMenuBar()->FindItem(MENU_PageUp)->Enable(false);
 		mNextTakeButton->Disable();
@@ -1879,11 +1866,104 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool force)
 		GetMenuBar()->FindItem(MENU_Up)->Enable(false);
 		GetMenuBar()->FindItem(MENU_Down)->Enable(false);
 		mDeleteCueButton->Disable();
-		mPlayProjectNameCtrl->SetLabel(wxT(""));
-		mPlaybackTrackSelector->Clear();
-		mCurrentTakeInfo = 0; //no takes
-		mCurrentSelectedEvent = 0;
 	}
+	else { //not file mode
+		if (mTakeInfoArray.GetCount()) {
+			//work out the current take info
+			wxListItem item;
+			item.SetId(mEventList->GetFirstSelected());
+			item.SetColumn(0);
+			mEventList->GetItem(item);
+			TakeInfo * currentTakeInfo = &(mTakeInfoArray.Item(item.GetData()));
+			//"Delete Cue" button
+			mDeleteCueButton->Enable(
+				RECORDING == mStatus //no point in deleting cue points after recording, as the descriptions have already been sent to the recorder
+				&& (long) mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartIndex() < mEventList->GetFirstSelected() //an event in the current (latest) recording
+				&& CUE_LABEL == item.GetText() //a cue event
+			);
+			//player control
+			if (currentTakeInfo->GetFiles()->GetCount()) { //the take is complete and there are at least some files available
+				if (currentTakeInfo != mCurrentTakeInfo || forceLoad) { //a new take
+					if (!forceLoad) { //not returning to previous situation
+						mTakeModeFrameOffset = 0;
+					}
+					//load player with current take data
+					mCurrentTakeInfo = currentTakeInfo;
+					//update playback tracks notebook page
+					mPlayProjectNameCtrl->SetLabel(currentTakeInfo->GetProjectName());
+					std::vector<std::string> fileNames;
+					std::vector<std::string> trackNames;
+					mPlaybackTrackSelector->SetTracks(*currentTakeInfo, fileNames, trackNames);
+					//load files and jump to current position
+					mPlayer->Load(&fileNames, &trackNames, mTakeModeFrameOffset, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
+					mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
+				}
+				else if ((unsigned long) mEventList->GetFirstSelected() != mCurrentSelectedEvent || forceNewCuePoint) { //only the selected event has changed
+					mPlayer->JumpToCue(mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
+				}
+				mCurrentSelectedEvent = mEventList->GetFirstSelected();
+			}
+			//"previous" button/"previous", "up" and "first" menu items
+			if (mCurrentSelectedEvent || mPlayer->Within()) {
+				//not at the beginning of the first take
+	//			mPrevTakeButton->Enable();
+				EnableButtonReliably(mPrevTakeButton);
+				GetMenuBar()->FindItem(MENU_PageUp)->Enable();
+				GetMenuBar()->FindItem(MENU_Up)->Enable();
+				if (mCurrentSelectedEvent == mCurrentTakeInfo->GetStartIndex() && !mPlayer->Within()) {
+					//the start of this take is selected
+					mPrevTakeButton->SetLabel(wxT("Previous Take"));
+					GetMenuBar()->FindItem(MENU_PageUp)->SetText(wxT("Move to start of previous take\tPGUP"));
+				}
+				else {
+					//somewhere within a take
+					mPrevTakeButton->SetLabel(wxT("Start of Take"));
+					GetMenuBar()->FindItem(MENU_PageUp)->SetText(wxT("Move to start of take\tPGUP"));
+				}
+			}
+			else {
+				mPrevTakeButton->Disable();
+				GetMenuBar()->FindItem(MENU_PageUp)->Enable(false);
+				GetMenuBar()->FindItem(MENU_Up)->Enable(false);
+			}
+			//"next" button/"next", "down" and "last" menu items
+			if (mCurrentSelectedEvent != (unsigned long) mEventList->GetItemCount() - 1) {
+				//not at the end of the last take
+	//			mNextTakeButton->Enable();
+				EnableButtonReliably(mNextTakeButton);
+				GetMenuBar()->FindItem(MENU_PageDown)->Enable();
+				GetMenuBar()->FindItem(MENU_Down)->Enable();
+				if (item.GetData() != mTakeInfoArray.GetCount() - 1) {
+					//not in the last take
+					mNextTakeButton->SetLabel(wxT("Next Take"));
+					GetMenuBar()->FindItem(MENU_PageDown)->SetText(wxT("Move to start of next take\tPGDN"));
+				}
+				else {
+					//somewhere in the last take
+					mNextTakeButton->SetLabel(wxT("End of Take"));
+					GetMenuBar()->FindItem(MENU_PageDown)->SetText(wxT("Move to end of take\tPGDN"));
+				}
+			}
+			else {
+				mNextTakeButton->Disable();
+				GetMenuBar()->FindItem(MENU_PageDown)->Enable(false);
+				GetMenuBar()->FindItem(MENU_Down)->Enable(false);
+			}
+		}
+		else {
+			//empty list
+			mPrevTakeButton->Disable();
+			GetMenuBar()->FindItem(MENU_PageUp)->Enable(false);
+			mNextTakeButton->Disable();
+			GetMenuBar()->FindItem(MENU_PageDown)->Enable(false);
+			GetMenuBar()->FindItem(MENU_Up)->Enable(false);
+			GetMenuBar()->FindItem(MENU_Down)->Enable(false);
+			mDeleteCueButton->Disable();
+			mPlayProjectNameCtrl->SetLabel(wxT(""));
+			mCurrentTakeInfo = 0; //no takes
+			mCurrentSelectedEvent = 0;
+		}
+	} //not file mode
 	//player shortcuts
 	UpdateTextShortcutStates();
 	GetMenuBar()->FindItem(MENU_PrevTrack)->Enable(mPlaybackTrackSelector->EarlierTrack(false));
@@ -1913,7 +1993,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool force)
 			mCueButton->SetToolTip(wxT("Freeze playback"));
 			break;
 		case PAUSED:
-			if (AtStopEvent()) {
+			if (mPlayer->AtEnd()) {
 				mCueButton->SetLabel(wxT("Replay"));
 				mCueButton->SetToolTip(wxT("Playback from start"));
 			}
@@ -1935,23 +2015,9 @@ void IngexguiFrame::UpdateTextShortcutStates()
 	GetMenuBar()->FindItem(MENU_L)->Enable(!mDescriptionControlHasFocus && mPlayer->IsOK() && !mPlayer->AtMaxForwardSpeed());
 	GetMenuBar()->FindItem(MENU_Space)->Enable(!mDescriptionControlHasFocus && mPlayer->IsOK() && (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || (PAUSED == mStatus && (!mLastPlayingBackwards || mPlayer->Within()))));
 	GetMenuBar()->FindItem(MENU_3)->Enable(!mDescriptionControlHasFocus && PAUSED == mStatus && mPlayer->Within());
-	GetMenuBar()->FindItem(MENU_4)->Enable(!mDescriptionControlHasFocus && PAUSED == mStatus && !AtStopEvent());
+	GetMenuBar()->FindItem(MENU_4)->Enable(!mDescriptionControlHasFocus && PAUSED == mStatus && !mPlayer->AtEnd());
 	GetMenuBar()->FindItem(MENU_Home)->Enable(!mDescriptionControlHasFocus && mTakeInfoArray.GetCount() && (mCurrentSelectedEvent || mPlayer->Within()));
 	GetMenuBar()->FindItem(MENU_End)->Enable(!mDescriptionControlHasFocus && mTakeInfoArray.GetCount() && (mCurrentSelectedEvent != (unsigned long) mEventList->GetItemCount() - 1));
-}
-
-/// Determine whether the currently selected event is a stop point (which also means that the player must be at the end of the file)
-/// @return True if at a stop point.
-bool IngexguiFrame::AtStopEvent()
-{
-	return (mCurrentTakeInfo && (unsigned long) mEventList->GetFirstSelected() == mCurrentTakeInfo->GetStartIndex() + mCurrentTakeInfo->GetCuePointFrames()->size() + 1);
-}
-
-/// Determine whether the currently selected event is a start point (which means that the player is between the start and the first cue point inclusive)
-/// @return True if at a start point
-bool IngexguiFrame::AtStartEvent()
-{
-	return (mCurrentTakeInfo && (unsigned long) mEventList->GetFirstSelected() == mCurrentTakeInfo->GetStartIndex());
 }
 
 /// Clears the list of events, the track buttons and anything being displayed by the player
@@ -1967,8 +2033,8 @@ void IngexguiFrame::ClearLog()
 /// Clears the track buttons and anything being displayed by the player
 void IngexguiFrame::ResetPlayer()
 {
-	mPlaybackTrackSelector->Clear();
 	mPlayer->Reset();
+	mPlaybackTrackSelector->Clear();
 }
 
 /// Starts playing forwards or backwards, remembering the direction supplied
@@ -1980,7 +2046,7 @@ void IngexguiFrame::Play(const bool backwards)
 		mPlayer->PlayBackwards();
 	}
 	else {
-		if (AtStopEvent()) {
+		if (mPlayer->AtEnd()) {
 			mPlayer->JumpToCue(0); //the start - replay
 		}
 		mPlayer->Play();

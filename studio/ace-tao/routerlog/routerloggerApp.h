@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.h,v 1.3 2008/10/08 10:16:06 john_f Exp $
+ * $Id: routerloggerApp.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -31,11 +31,26 @@
 #include "RecorderC.h"
 
 #include <ace/Thread_Mutex.h>
-#include <orbsvcs/CosNamingC.h>
 #include <string>
+#include <vector>
 
 class TimecodeReader;
 class Router;
+
+// Details of a CORBA servant
+class ServantInfo
+{
+public:
+    ServantInfo() : servant(0) {}
+
+    std::string name;
+    unsigned int mix_dest;
+    std::vector<RouterDestination *> destinations;
+    std::string db_file;
+    CosNaming::Name cosname;
+	SimplerouterloggerImpl * servant;
+	ProdAuto::Recorder_var ref;
+};
 
 class routerloggerApp : public App
 {
@@ -78,17 +93,15 @@ private:
     // Timecode reader
     TimecodeReader * mpTcReader;
 
-    // CORBA servant
-	SimplerouterloggerImpl * mpServant;
-	ProdAuto::Recorder_var mRef;
-	CosNaming::Name mName;
+    // CORBA servants
+    std::vector<ServantInfo *> mServantInfo;
+	//SimplerouterloggerImpl * mpServant;
+	//ProdAuto::Recorder_var mRef;
+	//CosNaming::Name mName;
 
 // flag for terminating main loop
 	bool mTerminated;
 
-// router destinations we're interested in
-    std::vector<RouterDestination> mDestinations;
-    unsigned int mMixDestination;
 };
 
 #endif //#ifndef routerloggerApp_h

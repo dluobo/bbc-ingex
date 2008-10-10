@@ -879,6 +879,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             ((unsigned int)streamInfo->height == sink->rasterHeight || 
                     (streamInfo->height == 576 && sink->rasterHeight == 592)))
         {
+            /* the video stream input buffer is set to the output buffer because no 
+            transformations are required */
             if (sink->rasterHeight == 592 && streamInfo->height == 576)
             {
                 // If raster is PALFF mode, skip first 16 lines
@@ -895,6 +897,9 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         }
         else
         {
+            /* create a video stream input buffer separate from the output buffer because 
+            transformations (image format or fitting) are required */
+            
             CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize);
             CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
 
@@ -1055,11 +1060,21 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     /* else convert yuv422 input video */
     else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
     {
+        /* convert to uyvy and use the fifo buffer as a work buffer */
         yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer], 
             fifoBuffer->buffer);
+            
+        /* TODO: avoid this memcpy and memset below by writing the incoming data to another temp buffer */
         
-        /* TODO: avoid this memcpy */
         memcpy(sink->videoStream.data[sink->currentFifoBuffer], fifoBuffer->buffer, sink->width * sink->height * 2);        
+
+        /* cleanup the fifo buffer if the intermediate data goes beyond the video data and into the audio data */
+        if ((unsigned int)(sink->width * sink->height * 2) > sink->rasterWidth * sink->rasterHeight * 2)
+        {
+            /* set audio data overlap to 0 */
+            memset(&fifoBuffer->buffer[sink->rasterWidth * sink->rasterHeight * 2], 0, 
+                sink->width * sink->height * 2 - sink->rasterWidth * sink->rasterHeight * 2);
+        }
     }
     
     
@@ -1079,11 +1094,11 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         unsigned char* inData = sink->videoStream.data[sink->currentFifoBuffer];
         unsigned char* outData = fifoBuffer->buffer;
         
-        if (sink->rasterHeight == 592) /* PALFF mode */
+        if (sink->rasterHeight > (unsigned int)sink->height) /* e.g. PALFF mode, 592 lines, when input is 576 lines */
         {
-            /* skip the first 16 lines */
-            outData += 16 * sink->rasterWidth * 2;
-            height = 576;
+            /* skip lines, e.g. for PALFF mode and image height 576 skip 16 lines */
+            outData += (sink->rasterHeight - sink->height) * sink->rasterWidth * 2;
+            height = sink->height;
         }
         else
         {

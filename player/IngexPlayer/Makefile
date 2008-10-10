@@ -81,7 +81,7 @@ ifdef FFMPEG_INCLUDE_PATH
 		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 	else
 		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
-			LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+			LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 			CFLAGS += -DHAVE_DNXHD
 		else
 			LIBS += -lavformat -lavcodec -lavutil -lm

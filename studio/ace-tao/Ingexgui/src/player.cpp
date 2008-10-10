@@ -19,7 +19,7 @@
  ***************************************************************************/
 
 #include "player.h"
-#include <wx/file.h>
+#include "wx/file.h"
 
 DEFINE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE)
 
@@ -30,7 +30,6 @@ BEGIN_EVENT_TABLE( Player, wxEvtHandler )
 	EVT_COMMAND( STATE_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnStateChange )
 	EVT_COMMAND( SPEED_CHANGE, wxEVT_PLAYER_MESSAGE, Player::OnSpeedChange )
 	EVT_COMMAND( PROGRESS_BAR_DRAG, wxEVT_PLAYER_MESSAGE, Player::OnProgressBarDrag )
-	EVT_COMMAND( QUADRANT_CLICK, wxEVT_PLAYER_MESSAGE, Player::OnQuadrantClick )
 	EVT_TIMER( wxID_ANY, Player::OnFilePollTimer )
 END_EVENT_TABLE()
 
@@ -117,18 +116,17 @@ void Player::Enable(bool state)
 /// If player is enabled, tries to load the given filenames or re-load previously given filenames.  Starts polling if it can't open them all.
 /// If player is disabled, stores the given filenames for later.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
-/// @param trackNames Corresponding list of track names, for display as the player window title.
+/// @param trackNames List of track names corresponding to fileNames, for display as the player window title.
+/// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
-void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Load" << std::endl;
 	std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
-	if (!fNames->size()) { //router recorder recording only, for instance
-		Reset(); //otherwise it keeps showing what was there before
-	}
-	else {
+	Reset(); //otherwise it keeps showing what was there before even if it can't open any files
+	if (fNames->size()) { //not a router recorder recording only, for instance
 		if (mEnabled) {
 			mFilePollTimer->Stop(); //may be running from another take
 			//see how many files we have before the player loads them, so we can start polling even if more appear just after loading
@@ -140,7 +138,7 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 			}
 		}
 		//load the player (this will merely store the parameters if the player is not enabled
-		if (!Start(fileNames, trackNames, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
+		if (!Start(fileNames, trackNames, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
 			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
 			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
 		}
@@ -153,15 +151,16 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 /// This method is the same as Load() except that it does not manipulate the polling timer.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param trackNames Corresponding list of track names, for display as the player window title.
+/// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
 /// @return True if all files were opened.
-bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Start" << std::endl;
 	if (fileNames) {
-		//a new set of files; assume all parameters are supplied
+		//a new set of files
 		mFileNames.clear();
 		mTrackNames.clear();
 		for (size_t i = 0; i < fileNames->size(); i++) {
@@ -173,18 +172,21 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 		mCuePoints.clear();
 		mListener->ClearCuePoints();
 		mStartIndex = startIndex;
+		mLastFrameDisplayed = offset;
 		mListener->SetStartIndex(mStartIndex); //an offset for all the cue point event values
-		for (size_t i = 0; i < cuePoints->size(); i++) {
-			mCuePoints.push_back((*cuePoints)[i]); //so that we know where to jump to for a given cue point
-			mListener->AddCuePoint((*cuePoints)[i]); //so we can work out which cue point has been reached
+		if (cuePoints) {
+			for (size_t i = 0; i < cuePoints->size(); i++) {
+				mCuePoints.push_back((*cuePoints)[i]); //so that we know where to jump to for a given cue point
+				mListener->AddCuePoint((*cuePoints)[i]); //so we can work out which cue point has been reached
+			}
 		}
-		mLastFrameDisplayed = 0; //new clip, so previous position not relevant
 		mLastRequestedCuePoint = cuePoint;
 		mMode = PAUSE;
 	}
 	bool allFilesOpen = false;
 	if (mEnabled) {
 		mOpened.clear();
+		mAtEnd = false;
 		mOK = start(mFileNames, mOpened);
 		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
@@ -421,6 +423,7 @@ void Player::SetOutputType(const PlayerOutputType outputType)
 
 /// Responds to a frame displayed event from the listener.
 /// Detects moving into a take and generates a player event when this happens.
+/// Notes the frame number and if at the end of the file
 /// Skips the event so it passes to the parent handler
 /// @param event The command event.
 void Player::OnFrameDisplayed(wxCommandEvent& event) {
@@ -433,6 +436,7 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 			AddPendingEvent(guiFrameEvent);
 		}
 		mLastFrameDisplayed = event.GetExtraLong();
+		mAtEnd = (int) event.GetClientData();
 	}
 	//tell the gui so it can update the position display
 	event.Skip();
@@ -477,13 +481,6 @@ void Player::OnProgressBarDrag(wxCommandEvent& event)
 	seek(event.GetInt(), SEEK_SET, PERCENTAGE_PLAY_UNIT);
 }
 
-/// Responds to a quadrant clicked signal from the listener.
-/// Passes to the GUI
-void Player::OnQuadrantClick(wxCommandEvent& event)
-{
-	event.Skip();
-}
-
 /// Responds to the file poll timer.
 /// Checks to see if any more files have appeared, and if so, restarts the player.
 /// If all files have appeared, kills the timer.
@@ -513,6 +510,13 @@ void Player::OnFilePollTimer(wxTimerEvent& WXUNUSED(event))
 bool Player::Within()
 {
 	return mOK && mLastFrameDisplayed;
+}
+
+/// Indicates whether player is at the end of the file or not.
+/// @return True if at the end.
+bool Player::AtEnd()
+{
+	return mOK && mAtEnd;
 }
 
 /// @param player The player associated with this listener.
@@ -553,10 +557,12 @@ void Listener::AddCuePoint(const int64_t frameNo)
 void Listener::frameDisplayedEvent(const FrameInfo* frameInfo)
 {
 	//work out which cue point area we're in
-	unsigned int mark = 0;
+	unsigned int mark = 0; //assume before first cue point/end of file
 	wxMutexLocker lock(mMutex);
+	wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
 	if (frameInfo->position == frameInfo->sourceLength - 1) { //at the end of the file
 		mark = mCuePoints.size() + 1;
+		guiFrameEvent.SetClientData((void *) 1);
 	}
 	else { //somewhere within the file
 		for (mark = 0; mark < mCuePoints.size(); mark++) {
@@ -569,14 +575,13 @@ void Listener::frameDisplayedEvent(const FrameInfo* frameInfo)
 	mark += mStartIndex;
 	if (mLastCuePointNotified != mark) {
 //std::cerr << "cue point event" << std::endl;
-		mLastCuePointNotified = mark;
 		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
 		guiEvent.SetExtraLong(frameInfo->position);
-		guiEvent.SetInt(mLastCuePointNotified);
+		guiEvent.SetInt(mark);
 		mPlayer->AddPendingEvent(guiEvent);
+		mLastCuePointNotified = mark;
 	}
 	//tell gui the frame number
-	wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
 	guiFrameEvent.SetInt(true); //valid position
 	guiFrameEvent.SetExtraLong(frameInfo->position);
 	mPlayer->AddPendingEvent(guiFrameEvent);
@@ -694,7 +699,7 @@ void Listener::keyReleased(int)
 void Listener::progressBarPositionSet(float position)
 {
 	wxCommandEvent event(wxEVT_PLAYER_MESSAGE, PROGRESS_BAR_DRAG);
-	event.SetInt((int) (position * 1000.)); //this is the resulution the player seek command works to
+	event.SetInt((int) (position * 1000.)); //this is the resolution the player seek command works to
 	mPlayer->AddPendingEvent(event);
 }
 

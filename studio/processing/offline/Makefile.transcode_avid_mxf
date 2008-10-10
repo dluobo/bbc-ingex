@@ -12,7 +12,7 @@ C_COMPILE = gcc $(CFLAGS) $(INCLUDES)
 CPP_COMPILE = g++ $(CFLAGS) $(INCLUDES)
 AR = ar cr
 
-FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 
 
 SOURCES = transcode_avid_mxf.cpp

@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.4 2008/10/08 10:16:06 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.5 2008/10/10 16:50:49 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -26,7 +26,7 @@
 #include <ace/Log_Msg.h>
 
 #include "CorbaUtil.h"
-
+#include "Logfile.h"
 #include "routerloggerApp.h"
 #include "SimplerouterloggerImpl.h"
 #include "quartzRouter.h"
@@ -37,15 +37,15 @@
 #include <sstream>
 
 const char * const USAGE =
-    "Usage: Routerlogger.exe [-r <router port>] [-s] [-t <timecode port>] [-u]"
+    "Usage: Routerlogger.exe [-v] [-r <router port>] [-s] [-t <timecode port>] [-u]"
     " [-n <name>] [-f <db file>]"
-    " [-a <VT1 dest>]  [-b <VT2 dest>] [-c <VT1 dest>]  [-d <VT2 dest>] [-m <MixerOut dest>"
+    " [-d <name> -p <number>] [-m <MixerOut dest>]"
     " <CORBA options>\n"
     "    -s  router on TCP socket, router port in format host:port\n"
     "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
 
-const char * const OPTS = "r:st:un:f:a:b:c:d:m:";
+const char * const OPTS = "vr:st:un:f:d:p:m:";
 
 #ifdef WIN32
     const char * const DB_PATH = "C:\\TEMP\\RouterLogs\\";
@@ -59,7 +59,7 @@ routerloggerApp * routerloggerApp::mInstance = 0;
 
 // Constructor
 routerloggerApp::routerloggerApp()
-: mpServant(0), mpRouter(0)
+: mpRouter(0)
 {
 }
 
@@ -77,11 +77,11 @@ bool routerloggerApp::Init(int argc, char * argv[])
 {
     bool ok = true;
 
-// Initialise ORB
+    // Initialise ORB
     int initial_argc = argc;
     CorbaUtil::Instance()->InitOrb(argc, argv);
 
-// and check whether ORB options were supplied
+    // and check whether ORB options were supplied
     if (argc == initial_argc)
     {
         // No CORBA options supplied
@@ -106,12 +106,19 @@ bool routerloggerApp::Init(int argc, char * argv[])
     unsigned int vt3_dest = 3;
     unsigned int vt4_dest = 4;
 
+    unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
+
     int option;
     while ((option = cmd_opts ()) != EOF)
     {
         //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("option %d\n"), option ));
         switch (option)
         {
+        case 'v':
+            // verbose
+            ++debug_level;
+            break;
+
         case 'r':
             // router port
             router_port = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
@@ -131,37 +138,45 @@ bool routerloggerApp::Init(int argc, char * argv[])
             break;
         
         case 'n':
-          routerlogger_name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+            {
+                ServantInfo * servant_info = new ServantInfo();
+                mServantInfo.push_back(servant_info);
+            }
+            mServantInfo.back()->name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
             break;
 
         case 'f':
             // cuts databse filename
-            db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+            // If not supplied, a name will be generated.
+            if (!mServantInfo.empty())
+            {
+                mServantInfo.back()->db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+            }
             break;
     
-        case 'a':
-            // Router destination for VT1
-            vt1_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
-            break;
-
-        case 'b':
-            // Router destination for VT2
-            vt2_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
-            break;
-
-        case 'c':
-            // Router destination for VT3
-            vt3_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
-            break;
-
         case 'd':
-            // Router destination for VT4
-            vt4_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            // Router destination name
+            if (!mServantInfo.empty())
+            {
+                RouterDestination * rd = new RouterDestination(ACE_TEXT_ALWAYS_CHAR(cmd_opts.opt_arg()), 0);
+                mServantInfo.back()->destinations.push_back(rd);
+            }
+            break;
+
+        case 'p':
+            // Router destination number
+            if (!mServantInfo.empty() && !mServantInfo.back()->destinations.empty())
+            {
+                mServantInfo.back()->destinations.back()->output_number = ACE_OS::atoi(cmd_opts.opt_arg());
+            }
             break;
 
         case 'm':
             // Router destination to record
-            mix_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            if (!mServantInfo.empty())
+            {
+                mServantInfo.back()->mix_dest = ACE_OS::atoi( cmd_opts.opt_arg() );
+            }
             break;
 
         case 'h':
@@ -183,25 +198,23 @@ bool routerloggerApp::Init(int argc, char * argv[])
         }
     }
 
+// Set verbosity of debug messages
+    Logfile::DebugLevel(debug_level);
+
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("routerlogger name is \"%C\"\n"), routerlogger_name.c_str() ));
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"\n"), router_port.c_str() ));
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"\n"), tc_port.c_str() ));
 
-    if (db_file.empty())
-    {
-        std::ostringstream ss;
-        ss << DB_PATH << routerlogger_name << ".txt";
-        db_file = ss.str();
-    }
-
 // Note the router destinations we're interested in.
 // Eventually this will come from database but 
 // hard-coded for now.
+#if 0
     mDestinations.push_back(RouterDestination("VT1", vt1_dest));
     mDestinations.push_back(RouterDestination("VT2", vt2_dest));
     mDestinations.push_back(RouterDestination("VT3", vt3_dest));
     mDestinations.push_back(RouterDestination("VT4", vt4_dest));
     mMixDestination = mix_dest;
+#endif
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 5;
@@ -246,28 +259,64 @@ bool routerloggerApp::Init(int argc, char * argv[])
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode will be derived from PC clock\n")));
     }
 
-// Create the servant object.
-    mpServant = new SimplerouterloggerImpl();
+    // Initialise database connection
+    try
+    {
+        prodauto::Database::initialise("prodautodb", "bamzooki", "bamzooki", 4, 12);
+    }
+    catch (...)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
+    }
 
-// and initialise
-    ok = ok && mpServant->Init(mDestinations, mix_dest, db_file, routerlogger_name, "bamzooki", "bamzooki");
-
-// incarnate servant object
-    mRef = mpServant->_this();
-
-// get the NameService object reference(s)
-// which were passed to Orb from command line arguments
+    // Get the NameService object reference(s)
+    // which were passed to Orb from command line arguments
     CorbaUtil::Instance()->InitNs();
 
-// Set the name to be used in Naming Service
-    mName.length(3);
-    mName[0].id = CORBA::string_dup("ProductionAutomation");
-    mName[1].id = CORBA::string_dup("RecordingDevices");
-    mName[2].id = CORBA::string_dup(routerlogger_name.c_str());
+#if 0
+    ServantInfo * servant_info1 = new ServantInfo();
+    mServantInfo.push_back(servant_info1);
+    servant_info1->mName = "RouterLog1";
+    servant_info1->mDest = 1;
 
+    ServantInfo * servant_info2 = new ServantInfo();
+    servant_info2->mName = "RouterLog2";
+    servant_info2->mDest = 2;
+    mServantInfo.push_back(servant_info2);
+#endif
 
-// Try to advertise in naming services
-    ok = ok && CorbaUtil::Instance()->Advertise(mRef, mName);
+    // Set up the servant(s)
+    for (std::vector<ServantInfo *>::iterator
+        it = mServantInfo.begin(); it != mServantInfo.end(); ++it)
+    {
+        ServantInfo * servant_info = *it;
+
+        if (servant_info->db_file.empty())
+        {
+            std::ostringstream dbf;
+            dbf << DB_PATH << servant_info->name << ".txt";
+            servant_info->db_file = dbf.str();
+        }
+
+        // Create object
+        servant_info->servant = new SimplerouterloggerImpl();
+
+        // Initialise
+        ok = ok && servant_info->servant->Init(servant_info->name, servant_info->db_file,
+                                                    servant_info->mix_dest, servant_info->destinations);
+
+        // Incarnate servant object
+        servant_info->ref = servant_info->servant->_this();
+
+        // Set the name to be used in Naming Service
+        servant_info->cosname.length(3);
+        servant_info->cosname[0].id = CORBA::string_dup("ProductionAutomation");
+        servant_info->cosname[1].id = CORBA::string_dup("RecordingDevices");
+        servant_info->cosname[2].id = CORBA::string_dup(servant_info->name.c_str());
+
+        // Try to advertise in naming services
+        ok = ok && CorbaUtil::Instance()->Advertise(servant_info->ref, servant_info->cosname);
+    }
 
 // other initialisation
     mTerminated = false;
@@ -280,16 +329,26 @@ void routerloggerApp::Run()
     if (mpRouter->Connected())
     {
         // Start monitoring messages from router
-        mpRouter->SetObserver(mpServant);
+        for (std::vector<ServantInfo *>::iterator
+            it = mServantInfo.begin(); it != mServantInfo.end(); ++it)
+        {
+            ServantInfo * servant_info = *it;
+            mpRouter->AddObserver(servant_info->servant);
+        }
         mpRouter->activate();
 
-        // Query routing to destinations we're interested in
-        for (std::vector<RouterDestination>::const_iterator
-            it = mDestinations.begin(); it != mDestinations.end(); ++it)
+        for (std::vector<ServantInfo *>::iterator
+            it = mServantInfo.begin(); it != mServantInfo.end(); ++it)
         {
-            mpRouter->QuerySrc(it->output_number);
+            ServantInfo * svi = *it;
+            // Query routing to destinations we're interested in
+            for (std::vector<RouterDestination *>::const_iterator
+                it = svi->destinations.begin(); it != svi->destinations.end(); ++it)
+            {
+                mpRouter->QuerySrc((*it)->output_number);
+            }
+            mpRouter->QuerySrc(svi->mix_dest);
         }
-        mpRouter->QuerySrc(mMixDestination);
     }
 
     // Accept CORBA requests until told to stop
@@ -308,14 +367,23 @@ void routerloggerApp::Stop()
 
 void routerloggerApp::Clean()
 {
-// remove from naming services
-    CorbaUtil::Instance()->Unadvertise(mName);
-// Deactivate the CORBA object and
-// relinquish our reference to the servant.
-// The POA will delete it at an appropriate time.
-    if (mpServant)
+    for (std::vector<ServantInfo *>::iterator
+        it = mServantInfo.begin(); it != mServantInfo.end(); ++it)
     {
-        mpServant->Destroy();
+        ServantInfo * servant_info = *it;
+
+        // remove from naming services
+        CorbaUtil::Instance()->Unadvertise(servant_info->cosname);
+
+        // Deactivate the CORBA object and
+        // relinquish our reference to the servant.
+        // The POA will delete it at an appropriate time.
+        if (servant_info->servant)
+        {
+            servant_info->servant->Destroy();
+        }
+
+        delete servant_info;
     }
 }
 

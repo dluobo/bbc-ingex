@@ -41,6 +41,7 @@
 #include "blank_source.h"
 #include "clapper_source.h"
 #include "clip_source.h"
+#include "raw_dv_source.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -74,7 +75,8 @@ typedef enum
     MXF_INPUT,
     BBALLS_INPUT,
     BLANK_INPUT,
-    CLAPPER_INPUT
+    CLAPPER_INPUT,
+    DV_INPUT
 } InputType;
 
 typedef struct
@@ -906,6 +908,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
     fprintf(stderr, "  --raw-in  <file>         Raw file input\n");
+    fprintf(stderr, "  --dv <file>              Raw DV-DIF input (currently video only)\n");
     fprintf(stderr, "  --balls <num>            Bouncing balls\n");
     fprintf(stderr, "  --blank                  Blank video source\n");
     fprintf(stderr, "  --clapper                Clapper source\n");
@@ -1963,6 +1966,19 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--dv") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].type = DV_INPUT;
+            inputs[numInputs].filename = argv[cmdlnIndex + 1];
+            numInputs++;
+            cmdlnIndex += 2;
+        }
         else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2206,6 +2222,13 @@ int main(int argc, const char **argv)
                 }
                 break;
                 
+            case DV_INPUT:
+                if (!rds_open(inputs[i].filename, &mediaSource))
+                {
+                    ml_log_error("Failed to open DV file source\n");
+                    goto fail;
+                }
+                break;
                 
             default:
 				ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
@@ -2221,7 +2244,35 @@ int main(int argc, const char **argv)
         /* set the source name */
         if (inputs[i].sourceName != NULL)
         {
-            printf("%s = %s\n", inputs[i].sourceName, inputs[i].filename);
+            switch (inputs[i].type)
+            {
+                case MXF_INPUT:
+                case RAW_INPUT:
+                case UDP_INPUT:
+                    printf("%s = %s\n", inputs[i].sourceName, inputs[i].filename);
+                    break;
+    
+                case SHM_INPUT:
+                    printf("%s = %s\n", inputs[i].sourceName, inputs[i].shmSourceName);
+                    break;
+    
+               case BBALLS_INPUT:    
+                    printf("%s = bballs\n", inputs[i].sourceName);
+                    break;
+                    
+               case BLANK_INPUT:    
+                    printf("%s = blank\n", inputs[i].sourceName);
+                    break;
+                    
+               case CLAPPER_INPUT:    
+                    printf("%s = clapper\n", inputs[i].sourceName);
+                    break;
+
+               default:
+                    ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
+                    assert(0);
+            }
+            
             msc_set_source_name(mediaSource, inputs[i].sourceName);
         }
 

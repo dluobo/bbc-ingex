@@ -164,6 +164,7 @@ int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourc
         ml_log_error("Failed to write video switch database entry: %s\n", strerror(errno));
         return 0;
     }
+    fflush(db->file);
     
     return 1;
 }

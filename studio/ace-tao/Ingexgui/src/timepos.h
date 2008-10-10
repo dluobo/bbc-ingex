@@ -39,6 +39,7 @@ class Timepos : public wxEvtHandler
 		void Reset();
 		void SetTimecode(const ProdAuto::MxfTimecode, bool);
 		void SetPosition(unsigned long);
+		void SetDefaultEditRate(const ProdAuto::MxfTimecode);
 		void SetPositionUnknown(bool = false);
 		const wxString Record(const ProdAuto::MxfTimecode);
 		void Stop(const ProdAuto::MxfTimecode);

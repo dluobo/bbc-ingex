@@ -35,8 +35,8 @@ typedef enum PlayerOutputType
 class LocalIngexPlayer : public IngexPlayer
 {
 public:
-    LocalIngexPlayer(PlayerOutputType outputType, bool videoSwitch, int numFFMPEGThreads, 
-        bool initiallyLocked, bool useWorkerThreads, bool applyQuadSplitFilter,
+    LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit videoSplit, int numFFMPEGThreads, 
+        bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
         int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
         Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale,
         bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel);
@@ -48,11 +48,14 @@ public:
     std::string getVersion();
     std::string getBuildTimestamp();
 
+    
     /* returns true if a DVS card is available for output */
     bool dvsCardIsAvailable();
     
+    
     /* set the window-id when used as a browser plugin */
     void setPluginInfo(X11PluginWindowInfo *pluginInfo);
+    
     
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
@@ -62,6 +65,11 @@ public:
     /* same as getOutputType(), except it returns the actual output type if an auto type is used */
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
     PlayerOutputType getActualOutputType();
+    
+    
+    /* sets the video split type (see ingex_player/video_switch_sink.h for enum values) when start() is called again */
+    void setVideoSplit(VideoSwitchSplit videoSplit);
+    
     
     /* will reset the player and display blank video on the output - returns false if a reset fails and
        the player will be closed */
@@ -121,11 +129,12 @@ private:
     PlayerOutputType _nextOutputType;
     PlayerOutputType _outputType;
     PlayerOutputType _actualOutputType;
-    bool _videoSwitch;
+    VideoSwitchSplit _nextVideoSplit;
+    VideoSwitchSplit _videoSplit;
     int _numFFMPEGThreads;
     bool _initiallyLocked;
     bool _useWorkerThreads;
-    bool _applyQuadSplitFilter;
+    bool _applySplitFilter;
     int _srcBufferSize;
     bool _disableSDIOSD;
     bool _disableX11OSD;

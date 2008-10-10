@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.cpp,v 1.3 2008/10/08 10:16:06 john_f Exp $
+ * $Id: quartzRouter.cpp,v 1.4 2008/10/10 16:50:49 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -48,7 +48,7 @@ int Router::svc ()
 Default Constructor
 */
 Router::Router()
-: mpObserver(0), mpCommunicationPort(0), mConnected(false), mRun(false)
+: mpCommunicationPort(0), mConnected(false), mRun(false)
 {
 }
 
@@ -470,8 +470,9 @@ void Router::ProcessMessage(const std::string & message)
     unsigned int dest = ACE_OS::atoi(message.substr(2, 3).c_str());
     unsigned int src  = ACE_OS::atoi(message.substr(6).c_str());
 
-    if (mpObserver)
+    for (std::vector<RouterObserver *>::iterator
+        it = mObservers.begin(); it != mObservers.end(); ++it)
     {
-        mpObserver->Observe(src, dest);
+        (*it)->Observe(src, dest);
     }
 }

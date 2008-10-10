@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.7 2008/10/08 10:16:06 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.8 2008/10/10 16:50:49 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -53,7 +53,7 @@ public:
   void Destroy();
 
   // Initialisation
-  bool Init(std::string name, std::string db_user, std::string db_pw,
+  bool Init(const std::string & name,
       unsigned int max_inputs, unsigned int max_tracks_per_input);
 
   // Identity

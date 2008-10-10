@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.6 2008/10/08 10:16:06 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.7 2008/10/10 16:50:49 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -47,11 +47,10 @@ RecorderImpl::RecorderImpl (void)
 }
 
 // Initialise the recorder
-bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw,
+bool RecorderImpl::Init(const std::string & name,
                         unsigned int max_inputs, unsigned int max_tracks_per_input)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::Init(%C, %C, %C)\n"),
-        name.c_str(), db_user.c_str(), db_pw.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::Init(%C)\n"), name.c_str()));
 
     // Save name
     mName = name;
@@ -61,27 +60,15 @@ bool RecorderImpl::Init(std::string name, std::string db_user, std::string db_pw
     mMaxInputs = max_inputs;
     mMaxTracksPerInput = max_tracks_per_input;
 
-    // Initialise database connection
-    bool db_init_ok = false;
-    try
-    {
-        prodauto::Database::initialise("prodautodb", db_user, db_pw, 4, 12);
-        db_init_ok = true;
-    }
-    catch (...)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
-    }
-
     // Read enumeration names from database.
     // Do it now to avoid any delay when first used.
     DatabaseEnums::Instance();
 
     // Update tracks and settings from database
-    UpdateFromDatabase();
+    bool ok = UpdateFromDatabase();
 
 
-    return db_init_ok;
+    return ok;
 }
 
 // Implementation skeleton destructor

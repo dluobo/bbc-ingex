@@ -118,7 +118,7 @@ ifdef FFMPEG_INCLUDE_PATH
 		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 	else
 		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 		CFLAGS += -DHAVE_DNXHD
 		else
 		LIBS += -lavformat -lavcodec -lavutil -lm
@@ -183,7 +183,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	frame_sequence_sink.c qc_lto_extract.c mpegi_stream_connect.c mjpeg_stream_connect.c shared_mem_source.c \
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
-	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c
+	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

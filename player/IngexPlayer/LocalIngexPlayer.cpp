@@ -371,14 +371,16 @@ static void x11_mouse_clicked(void* data, int imageWidth, int imageHeight, int x
 
 
 
-LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, bool videoSwitch, 
-    int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applyQuadSplitFilter,
+LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit videoSplit, 
+    int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
     int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
     Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
     int audioDevice, int numAudioLevelMonitors, float audioLineupLevel)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _videoSwitch(videoSwitch), _numFFMPEGThreads(numFFMPEGThreads),
+: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), 
+_nextVideoSplit(videoSplit), _videoSplit(videoSplit), 
+_numFFMPEGThreads(numFFMPEGThreads),
 _initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
-_applyQuadSplitFilter(applyQuadSplitFilter), _srcBufferSize(srcBufferSize), 
+_applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize), 
 _disableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("Ingex Player"), 
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
@@ -389,9 +391,11 @@ _numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLeve
 }
 
 LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _videoSwitch(true), _numFFMPEGThreads(4),
+: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), 
+_nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
+_numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
-_applyQuadSplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
+_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
 _x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
 _numAudioLevelMonitors(2), _audioLineupLevel(-18.0)
 {
@@ -513,6 +517,11 @@ PlayerOutputType LocalIngexPlayer::getOutputType()
 PlayerOutputType LocalIngexPlayer::getActualOutputType()
 {
     return _actualOutputType;
+}
+
+void LocalIngexPlayer::setVideoSplit(VideoSwitchSplit videoSplit)
+{
+    _nextVideoSplit = videoSplit;
 }
 
 bool LocalIngexPlayer::reset()
@@ -774,6 +783,13 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                 newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 resetPlayer = false;
             }
+            else if (_nextVideoSplit != _videoSplit)
+            {
+                // video split has changed - stop the player
+                SAFE_DELETE(&currentPlayState);
+                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                resetPlayer = false;
+            }
             
             if (resetPlayer)
             {
@@ -935,10 +951,10 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
 
             // create video switch sink 
             
-            if (_videoSwitch)
+            if (_nextVideoSplit == QUAD_SPLIT_VIDEO_SWITCH || _nextVideoSplit == NONA_SPLIT_VIDEO_SWITCH)
             {
                 VideoSwitchSink* videoSwitch;
-                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, QUAD_SPLIT_VIDEO_SWITCH, _applyQuadSplitFilter, 
+                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, _nextVideoSplit, _applySplitFilter, 
                     0, 0, 0, -1, -1, -1, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
@@ -982,6 +998,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
 
         _outputType = _nextOutputType;
         _prevScale = _scale;
+        _videoSplit = _nextVideoSplit;
         {
             ReadWriteLockGuard guard(&_playStateRWLock, true);
             _playState = newPlayState.release();

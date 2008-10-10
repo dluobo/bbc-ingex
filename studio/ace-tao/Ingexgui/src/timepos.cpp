@@ -294,3 +294,11 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 		DisableTimecode(UNKNOWN_TIMECODE);
 	}
 }
+
+/// Sets the edit rate if it's not already set
+/// @param rate Edit rate - this is not checked for sensible values.
+void Timepos::SetDefaultEditRate(const ProdAuto::MxfTimecode rate) {
+	if (mLastKnownTimecode.undefined) {
+		mLastKnownTimecode = rate;
+	}
+}

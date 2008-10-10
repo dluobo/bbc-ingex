@@ -45,7 +45,7 @@ else
 	AC_MSG_ERROR([wxWidgets 2.3.3 or newer is required])
 fi
 
-WORKSPACE=`pwd | sed 's/\(\/ingex\)\/.*/\1/'`
+WORKSPACE=`pwd | sed 's/\(.*\/ingex\)\/.*/\1/'`
 
 AC_DEFUN([PLAYERTEST],
 [
@@ -113,9 +113,9 @@ AC_DEFUN([ACETAOTEST],
 #call ACETAOTEST func
 ACETAOTEST
 
-CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer"
+CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
 CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -L$IDLLOC $IDLLOC/$IDLLIB -L/usr/X11R6/lib $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -L$WORKSPACE/libMXF/examples/reader -lMXFReader -L$WORKSPACE/libMXF/lib -lMXF -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
+LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
 

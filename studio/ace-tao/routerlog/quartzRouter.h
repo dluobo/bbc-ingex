@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.h,v 1.3 2008/10/08 10:16:06 john_f Exp $
+ * $Id: quartzRouter.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -34,6 +34,7 @@
 #include <ace/Task.h>
 
 #include <string>
+#include <vector>
 
 const int qbufsize = 128;
 
@@ -56,7 +57,7 @@ public:
 
     virtual int svc ();
 
-    void SetObserver(RouterObserver * obs) { mpObserver = obs; }
+    void AddObserver(RouterObserver * obs) { mObservers.push_back(obs); }
 
     void QuerySrc(unsigned int dest);
 
@@ -79,7 +80,7 @@ private:
     char * mWritePtr;
     char * mBufferEnd;
 
-    RouterObserver * mpObserver;
+    std::vector<RouterObserver *> mObservers;
     CommunicationPort * mpCommunicationPort;
     bool mConnected;
     bool mRun;

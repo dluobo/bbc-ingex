@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Use hostname to see if we're on a direct internet connection
+# or whether we need to use a SOCKS proxy
 case "$HOSTNAME" in
 	hobbes|max|hoyle)
 		TSOCKS=""
@@ -15,6 +17,12 @@ case "$USER" in
 		;;
 	philipn)
 		SF_USER=philipn
+		;;
+	john)
+		SF_USER=john_f
+		;;
+	david)
+		SF_USER=david_gk
 		;;
 	*)
 		echo "Add your sourceforge username to this script's switch statement"

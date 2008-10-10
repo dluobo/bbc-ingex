@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.5 2008/10/08 10:16:06 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.6 2008/10/10 16:50:49 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -27,6 +27,7 @@
 
 #include <vector>
 #include <string>
+#include <orbsvcs/CosNamingC.h>
 
 #include "RecorderS.h"
 
@@ -34,8 +35,6 @@
 #include "TimecodeReader.h"
 #include "RouterObserver.h"
 #include "RouterDestination.h"
-
-class CutsDatabase;
 
 class Vt
 {
@@ -45,6 +44,8 @@ public:
     unsigned int router_src; // what is routed to that VT
     std::string name;
 };
+
+class CutsDatabase;
 
 class  SimplerouterloggerImpl
   : public RouterObserver, public RecorderImpl
@@ -60,8 +61,8 @@ public:
 
 
   // Initialisation
-  bool Init(const std::vector<RouterDestination> & destinations, unsigned int mix_dest, const std::string & db_file,
-      const std::string & name, const std::string & db_user, const std::string & db_pw);
+  bool Init(const std::string & name, const std::string & db_file,
+            unsigned int mix_dest, const std::vector<RouterDestination*> & dests);
 
   void Destination(unsigned int dest) { mMixDestination = dest; }
 

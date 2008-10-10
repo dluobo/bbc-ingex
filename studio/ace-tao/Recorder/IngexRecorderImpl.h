@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.3 2008/09/03 14:09:05 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -49,7 +49,7 @@ public:
 
 
   // Initialisation
-  bool Init(std::string name, std::string db_user, std::string db_pw);
+  bool Init(const std::string & name);
 
   // Identity
   const char * Name() const { return mName.c_str(); }

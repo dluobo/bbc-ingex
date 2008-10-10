@@ -20,6 +20,7 @@
 
 #include "dragbuttonlist.h"
 #include "ingexgui.h"
+#include "avid_mxf_info.h"
 
 /// @param parent The parent window.
 DragButtonList::DragButtonList(wxWindow * parent)
@@ -34,32 +35,32 @@ DragButtonList::DragButtonList(wxWindow * parent)
 /// Returns information about the current state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
-/// @param takeInfo The file names, the track names and the track types.
-/// @param fileNames Returns the file name associated with each video track which has a file.
+/// @param takeInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet
+/// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
-void DragButtonList::SetTracks(TakeInfo * takeInfo, std::vector<std::string> * fileNames, std::vector<std::string> * trackNames)
+void DragButtonList::SetTracks(TakeInfo & takeInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
 {
 	mSizer->Clear(true); //delete all buttons
-	fileNames->clear();
-	trackNames->clear();
+	fileNames.clear();
+	trackNames.clear();
 	wxRadioButton * quadSplit = new wxRadioButton(this, 0, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
 	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
 	mSizer->Add(quadSplit, -1, wxEXPAND);
 	quadSplit->Enable(false); //enable later if any files successfully loaded
 	std::vector<std::string> audioFileNames;
-	if (takeInfo->GetFiles()->GetCount()) { //this take has files associated
-		for (size_t i = 0; i < takeInfo->GetFiles()->GetCount(); i++) { //recorder loop
-			for (size_t j = 0; j < (*takeInfo->GetFiles())[i]->length(); j++) { //file loop
-				if (ProdAuto::VIDEO == (*takeInfo->GetTracks())[i][j].type && strlen((*takeInfo->GetFiles())[i][j])) {
-					fileNames->push_back((*takeInfo->GetFiles())[i][j].in());
-					wxRadioButton * rb = new wxRadioButton(this, fileNames->size(), wxString((*takeInfo->GetTracks())[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
+	if (takeInfo.GetFiles()->GetCount()) { //this take has files associated
+		for (size_t i = 0; i < takeInfo.GetFiles()->GetCount(); i++) { //recorder loop
+			for (size_t j = 0; j < (*takeInfo.GetFiles())[i]->length(); j++) { //file loop
+				if (ProdAuto::VIDEO == (*takeInfo.GetTracks())[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
+					fileNames.push_back((*takeInfo.GetFiles())[i][j].in());
+					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString((*takeInfo.GetTracks())[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
 					rb->Enable(false); //we don't know whether the player can open this file yet
-					rb->SetToolTip(wxString((*takeInfo->GetFiles())[i][j], *wxConvCurrent));
+					rb->SetToolTip(wxString((*takeInfo.GetFiles())[i][j], *wxConvCurrent));
 					mSizer->Add(rb, -1, wxEXPAND);
-					trackNames->push_back((*takeInfo->GetTracks())[i][j].src.package_name.in());
+					trackNames.push_back((*takeInfo.GetTracks())[i][j].src.package_name.in());
 				}
-				else if (ProdAuto::AUDIO == (*takeInfo->GetTracks())[i][j].type && strlen((*takeInfo->GetFiles())[i][j])) {
-					audioFileNames.push_back((*takeInfo->GetFiles())[i][j].in());
+				else if (ProdAuto::AUDIO == (*takeInfo.GetTracks())[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
+					audioFileNames.push_back((*takeInfo.GetFiles())[i][j].in());
 				}
 			}
 		}
@@ -67,8 +68,69 @@ void DragButtonList::SetTracks(TakeInfo * takeInfo, std::vector<std::string> * f
 	Layout();
 	//add audio files at the end
 	for (size_t i = 0; i < audioFileNames.size(); i++) {
-		fileNames->push_back(audioFileNames.at(i));
+		fileNames.push_back(audioFileNames.at(i));
 	}
+}
+
+/// Alternative to SetTracks for MXF file mode
+/// Replaces current state with a new column of video file radio buttons, and with a quad split button at the top.
+/// Returns information about the current state.
+/// Single track buttons are labelled with the Clip Track String and have a tool tip showing the associated filename.
+/// All buttons are disabled.
+/// @param paths The file names.
+/// @param fileNames Returns the file name associated with each video file, with the audio filenames at the end.
+/// @param trackNames Returns corresponding Clip Track Strings.
+/// @param editRate Returns an edit rate
+/// @return Project name if possible to get.
+const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, ProdAuto::MxfTimecode & editRate)
+{
+	mSizer->Clear(true); //delete all buttons
+	fileNames.clear();
+	trackNames.clear();
+	wxRadioButton * quadSplit = new wxRadioButton(this, 0, wxT("Quad Split")); //the quad split is always the first video track (id = 0)
+	quadSplit->SetToolTip(wxT("Up to the first four successfully opened files"));
+	mSizer->Add(quadSplit, -1, wxEXPAND);
+	quadSplit->Enable(false); //enable later if any files successfully loaded
+	std::vector<std::string> audioFileNames;
+	wxString projName;
+	AvidMXFInfo info;
+	editRate.undefined = true;
+	editRate.samples = 0;
+	for (size_t i = 0; i < paths.GetCount(); i++) {
+		std::string path = (const char *) paths[i].mb_str(*wxConvCurrent);
+		if (!ami_read_info(path.c_str(), &info, 0)) { //recognises the file
+			if (info.isVideo) {
+				fileNames.push_back(path);
+				wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString(info.tracksString, *wxConvCurrent)); //ID corresponds to file index
+				rb->Enable(false); //we don't know whether the player can open this file yet
+				rb->SetToolTip(paths[i]);
+				mSizer->Add(rb, -1, wxEXPAND);
+				trackNames.push_back(info.tracksString);
+				wxString p = wxString(info.projectName, *wxConvCurrent);
+				if (info.projectName && p != projName) {
+					if (projName.Length()) {
+						projName = wxT("<Various projects>");
+					}
+					else {
+						projName = p;
+					}
+				}
+				editRate.edit_rate.numerator = info.editRate.numerator;
+				editRate.edit_rate.denominator = info.editRate.denominator;
+				editRate.undefined = false;
+			}
+			else {
+				audioFileNames.push_back(path);
+			}
+			ami_free_info(&info);
+		}
+	}
+	Layout();
+	//add audio files at the end
+	for (size_t i = 0; i < audioFileNames.size(); i++) {
+		fileNames.push_back(audioFileNames.at(i));
+	}
+	return projName;
 }
 
 /// Enables/disables and selects the track select buttons.
@@ -90,11 +152,11 @@ void DragButtonList::EnableAndSelectTracks(std::vector<bool> * enables, const un
 	}
 	if (mSizer->GetItem((size_t) 0)) { //sanity check
 //		if (enables->size() < 2) {
-			//no point in having a quad split if only one track to show
+//			//no point in having a quad split if only one track to show
 //			mSizer->GetItem((size_t) 0)->GetWindow()->Hide();
 //		}
 //		else {
-			//enable quad split if any files OK
+//			//enable quad split if any files OK
 			mSizer->GetItem((size_t) 0)->GetWindow()->Enable(someOK);
 //		}
 	}
@@ -171,20 +233,22 @@ bool DragButtonList::LaterTrack(bool select)
 /// @param source The quadrant (1-4).
 void DragButtonList::SelectQuadrant(unsigned int source)
 {
-	if (((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->GetValue()) { //quad split is displayed: display the individual source
-		if (mSizer->GetItem(source) && ((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->IsEnabled()){ //a source exists in this quadrant, and its file is successfully loaded
-			//press the button (this deselects the others)
-			((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->SetValue(true);
+	if (mSizer->GetItem((size_t) 0)) { //sanity check (may have been an event hanging around while the sizer was cleared?)
+		if (((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->GetValue()) { //quad split is displayed: display the individual source
+			if (mSizer->GetItem(source) && ((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->IsEnabled()){ //a source exists in this quadrant, and its file is successfully loaded
+				//press the button (this deselects the others)
+				((wxRadioButton *) mSizer->GetItem(source)->GetWindow())->SetValue(true);
+				//this doesn't generate an event, so do so manually
+				wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, source);
+				AddPendingEvent(event);
+			}
+		}
+		else { //source is displayed: display the quad split
+			((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->SetValue(true);
 			//this doesn't generate an event, so do so manually
-			wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, source);
+			wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, 0);
 			AddPendingEvent(event);
 		}
-	}
-	else { //source is displayed: display the quad split
-		((wxRadioButton *) mSizer->GetItem((size_t) 0)->GetWindow())->SetValue(true);
-		//this doesn't generate an event, so do so manually
-		wxCommandEvent event(wxEVT_COMMAND_RADIOBUTTON_SELECTED, 0);
-		AddPendingEvent(event);
 	}
 }
 

@@ -230,6 +230,14 @@ int main (int argc, const char** argv)
     CHECK(player->start(filenames, opened));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
+
+    player->setVideoSplit(NONA_SPLIT_VIDEO_SWITCH);
+    CHECK(player->start(filenames, opened));
+    sleep(2);
+    
+    player->setVideoSplit(QUAD_SPLIT_VIDEO_SWITCH);
+    CHECK(player->start(filenames, opened));
+    sleep(2);
     
     CHECK(player->close());
     printf("Closed player\n");

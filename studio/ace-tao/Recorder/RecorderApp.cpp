@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.1 2007/09/11 14:08:31 stuart_hc Exp $
+ * $Id: RecorderApp.cpp,v 1.2 2008/10/10 16:50:49 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -92,8 +92,18 @@ bool RecorderApp::Init(int argc, char * argv[])
 
 	ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Recorder name \"%C\"\n\n"), recorder_name.c_str() ));
 
-// and initialise recorder with name
-    bool ok = mpServant->Init(recorder_name, db_user, db_pw);
+    // Initialise database connection
+    try
+    {
+        prodauto::Database::initialise("prodautodb", db_user, db_pw, 4, 12);
+    }
+    catch (...)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
+    }
+
+// Initialise recorder with name
+    bool ok = mpServant->Init(recorder_name);
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 8;

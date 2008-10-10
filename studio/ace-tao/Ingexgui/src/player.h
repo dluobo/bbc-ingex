@@ -101,7 +101,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		~Player();
 		bool IsOK();
 		void Enable(bool);
-		void Load(std::vector<std::string> *, std::vector<std::string> * = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void SelectTrack(const int);
 		void SetOSD(const OSDtype);
 		void SetOutputType(const PlayerOutputType);
@@ -112,19 +112,19 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		void Reset();
 		void JumpToCue(unsigned int cuePoint);
 		bool Within();
+		bool AtEnd();
 		bool ExtOutputIsAvailable();
 		bool AtMaxForwardSpeed();
 		bool AtMaxReverseSpeed();
 //		std::vector<bool> GetFilesStatus();
 	private:
-		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void OnFrameDisplayed(wxCommandEvent&);
 //		void OnPlayerClosing(wxCommandEvent&);
 		void OnFilePollTimer(wxTimerEvent&);
 		void OnStateChange(wxCommandEvent& event);
 		void OnSpeedChange(wxCommandEvent& event);
 		void OnProgressBarDrag(wxCommandEvent& event);
-		void OnQuadrantClick(wxCommandEvent& event);
 		Listener * mListener;
 		OSDtype mOSDtype;
 		bool mEnabled;
@@ -138,6 +138,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		std::vector<bool> mOpened;
 		std::vector<int64_t> mCuePoints;
 		long mLastFrameDisplayed;
+		bool mAtEnd;
 		wxTimer * mFilePollTimer;
 		unsigned int mLastRequestedCuePoint;
 		int mSpeed;

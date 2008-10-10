@@ -24,6 +24,7 @@
 #include <wx/wx.h>
 #include <vector>
 #include <string>
+#include "RecorderC.h"
 
 class TakeInfo;
 
@@ -32,7 +33,8 @@ class DragButtonList : public wxScrolledWindow
 {
 	public:
 		DragButtonList(wxWindow *);
-		void SetTracks(TakeInfo *, std::vector<std::string> *, std::vector<std::string> *);
+		void SetTracks(TakeInfo &, std::vector<std::string> &, std::vector<std::string> &);
+		const wxString SetMXFFiles(wxArrayString & paths, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames, ProdAuto::MxfTimecode &);
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
 		void Clear();
 		bool EarlierTrack(bool);
