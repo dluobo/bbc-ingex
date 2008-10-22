@@ -120,21 +120,30 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help               display this usage message\n");
     fprintf(stderr, "  --window-id <id>         X11 window id to test plugin\n");
     fprintf(stderr, "Inputs:\n");
-    fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
-//    fprintf(stderr, "  --rawin  <file>          Raw UYVY video file input\n");
+    fprintf(stderr, "  --option <name> <value>  Option passed to next input\n");
+    fprintf(stderr, "  -m | --mxf  <file>       MXF file input\n");
+    fprintf(stderr, "  --raw <file>             Raw input\n");
+    fprintf(stderr, "  --dv <file>              Raw DV input\n");
+    fprintf(stderr, "  --ffmpeg <file>          FFMPEG input\n");
+    fprintf(stderr, "  --shm <name>             Shared memory input\n");
+    fprintf(stderr, "  --udp <name>             UDP input\n");
+    fprintf(stderr, "  --balls                  Balls input\n");
+    fprintf(stderr, "  --blank                  Blank input\n");
+    fprintf(stderr, "  --clapper                Clapperboard input\n");
     fprintf(stderr, "\n");
 }
 
 int main (int argc, const char** argv)
 {
     auto_ptr<LocalIngexPlayer> player;
-    vector<string> filenames;
+    vector<PlayerInput> inputs;
     vector<bool> opened;
     int cmdlnIndex = 1;
     unsigned long windowId = 0;
     auto_ptr<TestIngexPlayerListener> listener;
     bool dvsCardIsAvailable = false;
-
+    PlayerInput input;
+    
     while (cmdlnIndex < argc)
     {
         if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
@@ -158,6 +167,17 @@ int main (int argc, const char** argv)
             }
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--option") == 0)
+        {
+            if (cmdlnIndex + 2 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument(s) for --option\n");
+                return 1;
+            }
+            input.options.insert(pair<string, string>(argv[cmdlnIndex + 1], argv[cmdlnIndex + 2]));
+            cmdlnIndex += 3;
+        }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
         {
@@ -167,8 +187,105 @@ int main (int argc, const char** argv)
                 fprintf(stderr, "Missing argument for --mxf\n");
                 return 1;
             }
-            filenames.push_back(argv[cmdlnIndex + 1]);
+            input.type = MXF_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--raw") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --raw\n");
+                return 1;
+            }
+            input.type = RAW_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--dv") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --dv\n");
+                return 1;
+            }
+            input.type = DV_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--ffmpeg") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --ffmpeg\n");
+                return 1;
+            }
+            input.type = FFMPEG_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--shm") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --shm\n");
+                return 1;
+            }
+            input.type = SHM_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--udp") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for --udp\n");
+                return 1;
+            }
+            input.type = UDP_INPUT;
+            input.name = argv[cmdlnIndex + 1];
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
+        {
+            input.type = BALLS_INPUT;
+            input.name = "";
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--blank") == 0)
+        {
+            input.type = BLANK_INPUT;
+            input.name = "";
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--clapper") == 0)
+        {
+            input.type = CLAPPER_INPUT;
+            input.name = "";
+            inputs.push_back(input);
+            input.options = map<string, string>();
+            cmdlnIndex += 1;
         }
         else
         {
@@ -178,14 +295,18 @@ int main (int argc, const char** argv)
         }
     }
     
-    if (filenames.size() == 0)
+    if (inputs.size() == 0)
     {
         usage(argv[0]);
         fprintf(stderr, "No inputs\n");
         return 1;
     }
 
-    filenames.push_back("filenotexist.mxf");
+    input.type = MXF_INPUT;
+    input.name = "filenoexist.mxf";
+    input.options = map<string, string>();
+    inputs.push_back(input);
+    input.options = map<string, string>();
     
     
     
@@ -203,40 +324,40 @@ int main (int argc, const char** argv)
     }
 
     CHECK(player->setX11WindowName("test 0"));
-    CHECK(player->start(filenames, opened));
-    vector<string>::const_iterator iterFilenames;
+    CHECK(player->start_2(inputs, opened));
+    vector<PlayerInput>::const_iterator iterInputs;
     vector<bool>::const_iterator iterOpened;
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
-    CHECK(player->start(filenames, opened));
+    CHECK(player->start_2(inputs, opened));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
     
-    CHECK(player->start(filenames, opened));
+    CHECK(player->start_2(inputs, opened));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
     player->setVideoSplit(NONA_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start(filenames, opened));
+    CHECK(player->start_2(inputs, opened));
     sleep(2);
     
     player->setVideoSplit(QUAD_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start(filenames, opened));
+    CHECK(player->start_2(inputs, opened));
     sleep(2);
     
     CHECK(player->close());
@@ -256,18 +377,18 @@ int main (int argc, const char** argv)
     }
     
     CHECK(player->setX11WindowName("test 1"));
-    CHECK(player->start(filenames, opened));
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    CHECK(player->start_2(inputs, opened));
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     
@@ -297,18 +418,18 @@ int main (int argc, const char** argv)
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 3"));
-    CHECK(player->start(filenames, opened));
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    CHECK(player->start_2(inputs, opened));
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     
@@ -474,18 +595,18 @@ int main (int argc, const char** argv)
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 4"));
-    CHECK(player->start(filenames, opened));
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    CHECK(player->start_2(inputs, opened));
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     sleep(4);
@@ -510,18 +631,18 @@ int main (int argc, const char** argv)
 
     opened.clear();
     CHECK(player->setX11WindowName("test 5"));
-    CHECK(player->start(filenames, opened));
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    CHECK(player->start_2(inputs, opened));
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     printf("Actual output type is %d\n", player->getActualOutputType());
@@ -549,18 +670,18 @@ int main (int argc, const char** argv)
     
     opened.clear();
     CHECK(player->setX11WindowName("test 6"));
-    CHECK(player->start(filenames, opened));
-    for (iterFilenames = filenames.begin(), iterOpened = opened.begin();
-        iterFilenames != filenames.end() && iterOpened != opened.end();
-        iterFilenames++, iterOpened++)
+    CHECK(player->start_2(inputs, opened));
+    for (iterInputs = inputs.begin(), iterOpened = opened.begin();
+        iterInputs != inputs.end() && iterOpened != opened.end();
+        iterInputs++, iterOpened++)
     {
         if (*iterOpened)
         {
-            printf("Opened '%s'\n", (*iterFilenames).c_str());
+            printf("Opened '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
         else
         {
-            printf("Failed to open '%s'\n", (*iterFilenames).c_str());
+            printf("Failed to open '%s' (%d)\n", (*iterInputs).name.c_str(), (*iterInputs).type);
         }
     }
     

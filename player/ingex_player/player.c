@@ -42,6 +42,7 @@
 #include "clapper_source.h"
 #include "clip_source.h"
 #include "raw_dv_source.h"
+#include "ffmpeg_source.h"
 #include "version.h"
 #include "utils.h"
 #include "logging.h"
@@ -76,7 +77,8 @@ typedef enum
     BBALLS_INPUT,
     BLANK_INPUT,
     CLAPPER_INPUT,
-    DV_INPUT
+    DV_INPUT,
+    FFMPEG_INPUT
 } InputType;
 
 typedef struct
@@ -908,7 +910,12 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
     fprintf(stderr, "  --raw-in  <file>         Raw file input\n");
+#if defined(HAVE_FFMPEG)
     fprintf(stderr, "  --dv <file>              Raw DV-DIF input (currently video only)\n");
+#endif    
+#if defined(HAVE_FFMPEG) && defined(HAVE_FFMPEG_SWSCALE)
+    fprintf(stderr, "  --ffmpeg <file>          FFmpeg input\n");
+#endif    
     fprintf(stderr, "  --balls <num>            Bouncing balls\n");
     fprintf(stderr, "  --blank                  Blank video source\n");
     fprintf(stderr, "  --clapper                Clapper source\n");
@@ -1966,6 +1973,7 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
+#if defined(HAVE_FFMPEG)        
         else if (strcmp(argv[cmdlnIndex], "--dv") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1979,6 +1987,22 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
+#endif
+#if defined(HAVE_FFMPEG) && defined(HAVE_FFMPEG_SWSCALE)
+        else if (strcmp(argv[cmdlnIndex], "--ffmpeg") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].type = FFMPEG_INPUT;
+            inputs[numInputs].filename = argv[cmdlnIndex + 1];
+            numInputs++;
+            cmdlnIndex += 2;
+        }
+#endif        
         else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -2226,6 +2250,14 @@ int main(int argc, const char **argv)
                 if (!rds_open(inputs[i].filename, &mediaSource))
                 {
                     ml_log_error("Failed to open DV file source\n");
+                    goto fail;
+                }
+                break;
+                
+            case FFMPEG_INPUT:
+                if (!fms_open(inputs[i].filename, numFFMPEGThreads, &mediaSource))
+                {
+                    ml_log_error("Failed to open FFmpeg file source\n");
                     goto fail;
                 }
                 break;

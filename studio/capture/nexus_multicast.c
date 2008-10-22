@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.5 2008/10/10 05:36:42 stuart_hc Exp $
+ * $Id: nexus_multicast.c,v 1.6 2008/10/22 09:32:19 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -27,7 +27,7 @@
 #include <inttypes.h>
 
 #include <signal.h>
-#include <unistd.h>	
+#include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
@@ -39,6 +39,7 @@
 #include "multicast_compressed.h"
 #include "video_conversion.h"
 #include "video_test_signals.h"
+#include "audio_utils.h"
 
 
 int verbose = 1;
@@ -59,25 +60,6 @@ static char *framesToStr(int tc, char *s)
 	return s;
 }
 
-static void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
-{
-    int i;
-    // A DVS audio buffer contains a mix of two 32bits-per-sample channels
-    // Data for one sample pair is 8 bytes:
-    //  a0 a0 a0 a0  a1 a1 a1 a1
-
-    int channel_offset = 0;
-    if (channel == 1)
-        channel_offset = 4;
-
-    // Skip every other channel, copying 16 most significant bits of 32 bits
-    // from little-endian DVS format to little-endian 16bits
-    for (i = channel_offset; i < 1920*4*2; i += 8) {
-        *buf16++ = buf32[i+2];
-        *buf16++ = buf32[i+3];
-    }
-}
-
 static void usage_exit(void)
 {
     fprintf(stderr, "Usage: nexus_multicast [options] address:port\n");
@@ -94,9 +76,6 @@ static void usage_exit(void)
 
 extern int main(int argc, char *argv[])
 {
-	int				shm_id, control_id;
-	uint8_t			*ring[MAX_CHANNELS];
-	NexusControl	*pctl = NULL;
 	int				channelnum = 0;
 	int				bitrate = 3500;
 	int				opt_size = 0;
@@ -186,54 +165,13 @@ extern int main(int argc, char *argv[])
 		*p = '\0';
 	}
 
-	// If shared memory not found, sleep and try again
-	if (verbose) {
-		printf("Waiting for shared memory... ");
-		fflush(stdout);
-	}
+	// Connect to NexusControl structure in shared mem
+	NexusConnection	nc;
+	nexus_connect_to_shared_mem(INT_MAX, 1, &nc);
 
-	while (1)
-	{
-		control_id = shmget(9, sizeof(*pctl), 0444);
-		if (control_id != -1)
-			break;
-		usleep(20 * 1000);
-	}
-
-	pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
-	if (verbose)
-		printf("connected to pctl\n");
-
-	if (verbose)
-		printf("  channels=%d elementsize=%d ringlen=%d\n",
-				pctl->channels,
-				pctl->elementsize,
-				pctl->ringlen);
-
-	if (channelnum+1 > pctl->channels)
-	{
-		printf("  channelnum not available\n");
-		return 1;
-	}
-
-	int i;
-	for (i = 0; i < pctl->channels; i++)
-	{
-		while (1)
-		{
-			shm_id = shmget(10 + i, pctl->elementsize, 0444);
-			if (shm_id != -1)
-				break;
-			usleep(20 * 1000);
-		}
-		ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
-		if (verbose)
-			printf("  attached to channel[%d]\n", i);
-	}
-
-	NexusBufCtl *pc;
-	pc = &pctl->channel[channelnum];
-	int tc, ltc, signal_ok;
+	const NexusControl *pctl = nc.pctl;
+	const uint8_t	*const *ring = nc.ring;
+	const NexusBufCtl *pc = &pctl->channel[channelnum];
 	int last_saved = -1;
 	int width = pctl->width;
 	int height = pctl->height;
@@ -274,59 +212,75 @@ extern int main(int argc, char *argv[])
 		}
 	}
 
+	int frames_sent = 0;
 	while (1)
 	{
-		if (last_saved == pc->lastframe) {
-			usleep(2 * 1000);		// 0.020 seconds = 50 times a sec
-			continue;
-		}
+		const uint8_t *p_video = blank_video, *p_audio = blank_audio;
+		int tc = 0, ltc = 0, signal_ok = 0;
 
-		int diff_to_last = pc->lastframe - last_saved;
-		if (diff_to_last != 1) {
-			printf("\ndiff_to_last = %d\n", diff_to_last);
-		}
-
-		tc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
-							+ pctl->vitc_offset);
-		ltc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
-							+ pctl->ltc_offset);
-		signal_ok = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
-							+ pctl->signal_ok_offset);
-
-		// get video and audio pointers
-		uint8_t *video_frame = ring[channelnum] + video_offset +
-								pctl->elementsize * (pc->lastframe % pctl->ringlen);
-		uint8_t *audio_dvs_fmt = ring[channelnum] + pctl->audio12_offset +
-								pctl->elementsize * (pc->lastframe % pctl->ringlen);
-
-		uint8_t audio[1920*2*2];
-		uint8_t *p_video, *p_audio;
-
-		if (signal_ok) {
-			if (width != out_width || height != out_height) {
-				// scale down video suitable for multicast
-				if (video_422yuv)
-					scale_video422_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
-				else
-					scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
-				p_video = scaled_frame;
+		if (! nexus_connection_status(&nc, NULL, NULL)) {
+			last_saved = -1;
+			if (nexus_connect_to_shared_mem(40000, 1, &nc)) {
+				pctl = nc.pctl;
+				ring = nc.ring;
+				pc = &pctl->channel[channelnum];
+				continue;
 			}
-			else {
-				p_video = video_frame;
-			}
-
-			// reformat audio to two mono channels one after the other
-			// i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
-			dvsaudio32_to_16bitmono(0, audio_dvs_fmt, audio);
-			dvsaudio32_to_16bitmono(1, audio_dvs_fmt, audio + 1920*2);
-			p_audio = audio;
 		}
 		else {
-			p_video = blank_video;
-			p_audio = blank_audio;
+			if (last_saved == pc->lastframe) {
+				usleep(20 * 1000);		// 0.020 seconds = 50 times a sec
+				continue;
+			}
+
+			int diff_to_last = pc->lastframe - last_saved;
+			if (diff_to_last != 1) {
+				printf("\ndiff_to_last = %d\n", diff_to_last);
+			}
+
+			tc = *(int*)(ring[channelnum] + pctl->elementsize *
+										(pc->lastframe % pctl->ringlen)
+								+ pctl->vitc_offset);
+			ltc = *(int*)(ring[channelnum] + pctl->elementsize *
+										(pc->lastframe % pctl->ringlen)
+								+ pctl->ltc_offset);
+			signal_ok = *(int*)(ring[channelnum] + pctl->elementsize *
+										(pc->lastframe % pctl->ringlen)
+								+ pctl->signal_ok_offset);
+
+			// get video and audio pointers
+			const uint8_t *video_frame = ring[channelnum] + video_offset +
+									pctl->elementsize * (pc->lastframe % pctl->ringlen);
+			const uint8_t *audio_dvs_fmt = ring[channelnum] + pctl->audio12_offset +
+									pctl->elementsize * (pc->lastframe % pctl->ringlen);
+
+			uint8_t audio[1920*2*2];
+
+			if (signal_ok) {
+				if (width != out_width || height != out_height) {
+					// scale down video suitable for multicast
+					if (video_422yuv)
+						scale_video422_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+					else
+						scale_video420_for_multicast(width, height, out_width, out_height, video_frame, scaled_frame);
+					p_video = scaled_frame;
+				}
+				else {
+					p_video = video_frame;
+				}
+
+				if (ts) {
+					// MPEG-2 audio encoder needs 16bit stereo pair
+					dvsaudio32_to_16bitpair(1920, audio_dvs_fmt, audio);
+				}
+				else {
+					// reformat audio to two mono channels one after the other
+					// i.e. 1920 samples of channel 0, followed by 1920 samples of channel 1
+					dvsaudio32_to_16bitmono(0, audio_dvs_fmt, audio);
+					dvsaudio32_to_16bitmono(1, audio_dvs_fmt, audio + 1920*2);
+				}
+				p_audio = audio;
+			}
 		}
 
 		// Send the frame.
@@ -334,7 +288,7 @@ extern int main(int argc, char *argv[])
 			mpegts_encoder_encode(ts,
 									p_video,
 									(int16_t*)p_audio,
-									pc->lastframe);
+									frames_sent++);
 		}
 		else {
 			send_audio_video(fd, out_width, out_height, 2,
@@ -345,6 +299,7 @@ extern int main(int argc, char *argv[])
 
 		if (verbose) {
 			char tcstr[32], ltcstr[32];
+
 			printf("\rcam%d lastframe=%d %s  tc=%10d  %s   ltc=%11d  %s ",
 					channelnum, pc->lastframe, signal_ok ? "ok" : "--",
 					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));

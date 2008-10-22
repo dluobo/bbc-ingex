@@ -14,6 +14,12 @@
 #include <udp_source.h>
 #include <blank_source.h>
 #include <buffered_media_source.h>
+#include <raw_file_source.h>
+#include <shared_mem_source.h>
+#include <raw_dv_source.h>
+#include <ffmpeg_source.h>
+#include <bouncing_ball_source.h>
+#include <clapper_source.h>
 #include <x11_display_sink.h>
 #include <x11_xv_display_sink.h>
 #include <buffered_media_sink.h>
@@ -209,7 +215,141 @@ public:
 };
 
 
+static string get_option(const map<string, string>& options, string name)
+{
+    map<string, string>::const_iterator result = options.find(name);
+    if (result == options.end())
+    {
+        return "";
+    }
+    return (*result).second;
+}
 
+static int parse_int_option(const map<string, string>& options, string name, int defaultValue)
+{
+    int result = defaultValue;
+    string value = get_option(options, name);
+    if (value.size() != 0)
+    {
+        if (sscanf(value.c_str(), "%d", &result) != 1)
+        {
+            ml_log_warn("Failed to parse int option: '%s' = '%s'\n", name.c_str(), value.c_str());
+        }
+    }
+    return result;
+}
+
+static Rational parse_rational_option(const map<string, string>& options, string name, Rational defaultValue)
+{
+    Rational result = defaultValue;
+    string value = get_option(options, name);
+    if (value.size() != 0)
+    {
+        if (sscanf(value.c_str(), "%d/%d", &result.num, &result.den) != 2)
+        {
+            ml_log_warn("Failed to parse int option: '%s' = '%s'\n", name.c_str(), value.c_str());
+        }
+    }
+    return result;
+}
+
+static void parse_streaminfo_options(const map<string, string>& options, StreamInfo* streamInfo)
+{
+    string typeStr = get_option(options, "stream_type");
+    if (strcmp(typeStr.c_str(), "picture") == 0)
+    {
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    else if (strcmp(typeStr.c_str(), "sound") == 0)
+    {
+        streamInfo->type = SOUND_STREAM_TYPE;
+    }
+    else if (strcmp(typeStr.c_str(), "timecode") == 0)
+    {
+        streamInfo->type = TIMECODE_STREAM_TYPE;
+    }
+    else if (strcmp(typeStr.c_str(), "event") == 0)
+    {
+        streamInfo->type = EVENT_STREAM_TYPE;
+    }
+    else if (streamInfo->type == UNKNOWN_STREAM_TYPE)
+    {
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    
+    string formatStr = get_option(options, "stream_format");
+    if (strcmp(formatStr.c_str(), "uyvy") == 0)
+    {
+        streamInfo->format = UYVY_FORMAT;
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    else if (strcmp(formatStr.c_str(), "yuv422") == 0)
+    {
+        streamInfo->format = YUV422_FORMAT;
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    else if (strcmp(formatStr.c_str(), "yuv420") == 0)
+    {
+        streamInfo->format = YUV420_FORMAT;
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    else if (strcmp(formatStr.c_str(), "yuv411") == 0)
+    {
+        streamInfo->format = YUV411_FORMAT;
+        streamInfo->type = PICTURE_STREAM_TYPE;
+    }
+    else if (strcmp(formatStr.c_str(), "pcm") == 0)
+    {
+        streamInfo->format = PCM_FORMAT;
+        streamInfo->type = SOUND_STREAM_TYPE;
+    }
+    else if (strcmp(formatStr.c_str(), "timecode") == 0)
+    {
+        streamInfo->format = TIMECODE_FORMAT;
+        streamInfo->type = TIMECODE_STREAM_TYPE;
+    }
+    else if (streamInfo->format == UNKNOWN_FORMAT)
+    {
+        if (streamInfo->type == PICTURE_STREAM_TYPE)
+        {
+            streamInfo->format = UYVY_FORMAT;
+        }
+        else if (streamInfo->type == SOUND_STREAM_TYPE)
+        {
+            streamInfo->format = PCM_FORMAT;
+        }
+        else if (streamInfo->type == TIMECODE_STREAM_TYPE)
+        {
+            streamInfo->format = TIMECODE_FORMAT;
+        }
+    }
+    
+    streamInfo->frameRate = parse_rational_option(options, "frame_rate", (Rational){25, 1});
+    if (streamInfo->type == PICTURE_STREAM_TYPE)
+    {
+        streamInfo->width = parse_int_option(options, "width", 720);
+        streamInfo->height = parse_int_option(options, "height", 576);
+        streamInfo->aspectRatio = parse_rational_option(options, "aspect_ratio", (Rational){4, 3});
+    }
+    else if (streamInfo->type == SOUND_STREAM_TYPE)
+    {
+        streamInfo->samplingRate = parse_rational_option(options, "sampling_rate", (Rational){48000, 1});
+        streamInfo->numChannels = parse_int_option(options, "num_channels", 1);
+        streamInfo->bitsPerSample = parse_int_option(options, "bits_per_sample", 16);
+    }
+}
+
+static void init_sound_streaminfo(StreamInfo* streamInfo)
+{
+    memset(streamInfo, 0, sizeof(*streamInfo));
+    
+    streamInfo->type = SOUND_STREAM_TYPE;
+    streamInfo->format = PCM_FORMAT;
+    streamInfo->frameRate = (Rational){25, 1};
+    streamInfo->samplingRate = (Rational){48000, 1};
+    streamInfo->numChannels = 1;
+    streamInfo->bitsPerSample = 16;
+}
 
 
 static void* player_thread(void* arg)
@@ -376,7 +516,7 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit
     int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
     Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
     int audioDevice, int numAudioLevelMonitors, float audioLineupLevel)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), 
+: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1), 
 _nextVideoSplit(videoSplit), _videoSplit(videoSplit), 
 _numFFMPEGThreads(numFFMPEGThreads),
 _initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
@@ -391,7 +531,7 @@ _numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLeve
 }
 
 LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), 
+: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1),
 _nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
 _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
@@ -490,7 +630,12 @@ string LocalIngexPlayer::getBuildTimestamp()
 
 bool LocalIngexPlayer::dvsCardIsAvailable()
 {
-    return dvs_card_is_available() == 1;
+    return dvsCardIsAvailable(-1, -1);
+}
+
+bool LocalIngexPlayer::dvsCardIsAvailable(int card, int channel)
+{
+    return dvs_card_is_available(card, channel) == 1;
 }
 
 bool LocalIngexPlayer::x11XVIsAvailable()
@@ -507,6 +652,12 @@ void LocalIngexPlayer::setOutputType(PlayerOutputType outputType, float scale)
 {
     _nextOutputType = outputType;
     _scale = scale;
+}
+
+void LocalIngexPlayer::setDVSTarget(int card, int channel)
+{
+    _dvsCard = card;
+    _dvsChannel = channel;
 }
 
 PlayerOutputType LocalIngexPlayer::getOutputType()
@@ -567,6 +718,24 @@ bool LocalIngexPlayer::close()
 
 bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
 {
+    vector<PlayerInput> inputs;
+    PlayerInput input;
+    
+    vector<string>::const_iterator iter;
+    for (iter = mxfFilenames.begin(); iter != mxfFilenames.end(); iter++)
+    {
+        input.type = MXF_INPUT;
+        input.name = (*iter);
+        input.options.clear();
+        
+        inputs.push_back(input);
+    }
+    
+    return start_2(inputs, opened);
+}
+
+bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
+{
     auto_ptr<LocalIngexPlayerState> newPlayState;
     MultipleMediaSources* multipleSource = 0;
     BufferedMediaSource* bufferedSource = 0;
@@ -583,7 +752,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
     
     try
     {
-        if (mxfFilenames.size() == 0)
+        if (inputs.size() == 0)
         {
             THROW_EXCEPTION(("No files to play\n"));
         }
@@ -602,39 +771,146 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
         mainMediaSource = mls_get_media_source(multipleSource);
     
         
-        // open the MXF media sources 
+        // open the media sources 
         
         int videoStreamIndex = -1;
         bool videoChanged = false;
         bool atLeastOneInputOpened = false;
-        vector<string>::const_iterator iter;
-        for (iter = mxfFilenames.begin(); iter != mxfFilenames.end(); iter++)
+        vector<PlayerInput>::const_iterator iter;
+        for (iter = inputs.begin(); iter != inputs.end(); iter++)
         {
-            string filename = *iter;
-            MediaSource* mediaSource;
+            const PlayerInput& input = *iter;
+            MediaSource* mediaSource = 0;
+            StreamInfo streamInfo;
+            StreamInfo soundStreamInfo;
+            int numBalls = 5;
+            int numFFMPEGThreads = 0;
+            
+            memset(&streamInfo, 0, sizeof(streamInfo));
+            memset(&soundStreamInfo, 0, sizeof(soundStreamInfo));
 
-            // udp MRLs start with "udp://" while MXF MRLs are plain file paths
-            if (filename.find("udp://", 0 ) != string::npos)
-			{
-				if (! udp_open(filename.c_str()+6, &mediaSource))
-				{
-                    ml_log_warn("Failed to open UDP source '%s'\n", filename.c_str());
-                    opened.push_back(false);
-                    inputsPresent.push_back(false);
-					continue;
-                }
-			}
-            else
+            switch (input.type)
             {
-                MXFFileSource* mxfSource = 0;
-                if (! mxfs_open(filename.c_str(), 0, 0, 0, &mxfSource))
-				{
-                    ml_log_warn("Failed to open MXF file source '%s'\n", filename.c_str());
-                    opened.push_back(false);
-                    inputsPresent.push_back(false);
-					continue;
-				}
-                mediaSource = mxfs_get_media_source(mxfSource);
+                case MXF_INPUT:
+                {
+                    MXFFileSource* mxfSource = 0;
+                    if (!mxfs_open(input.name.c_str(), 0, 0, 0, &mxfSource))
+                    {
+                        ml_log_warn("Failed to open MXF file source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                    mediaSource = mxfs_get_media_source(mxfSource);
+                }
+                break;
+                    
+                case RAW_INPUT:
+                {
+                    parse_streaminfo_options(input.options, &streamInfo);
+                    if (!rfs_open(input.name.c_str(), &streamInfo, &mediaSource))
+                    {
+                        ml_log_error("Failed to open raw file source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case DV_INPUT:
+                {
+                    if (!rds_open(input.name.c_str(), &mediaSource))
+                    {
+                        ml_log_error("Failed to open DV file source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case FFMPEG_INPUT:
+                {
+                    numFFMPEGThreads = parse_int_option(input.options, "num_ffmpeg_threads", 0);
+                    if (!fms_open(input.name.c_str(), numFFMPEGThreads, &mediaSource))
+                    {
+                        ml_log_warn("Failed to open FFmpeg file source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case SHM_INPUT:
+                {
+                    if (!shared_mem_open(input.name.c_str(), &mediaSource))
+                    {
+                        ml_log_error("Failed to open shared memory source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+    
+                case UDP_INPUT:
+                {
+                    if (!udp_open(input.name.c_str(), &mediaSource))
+                    {
+                        ml_log_warn("Failed to open UDP source '%s'\n", input.name.c_str());
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case BALLS_INPUT:
+                {
+                    streamInfo.type = PICTURE_STREAM_TYPE;
+                    parse_streaminfo_options(input.options, &streamInfo);
+                    numBalls = parse_int_option(input.options, "num_balls", 5);
+                    if (!bbs_create(&streamInfo, 2160000, numBalls, &mediaSource))
+                    {
+                        ml_log_error("Failed to create bouncing balls source\n");
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case BLANK_INPUT:
+                {
+                    streamInfo.type = PICTURE_STREAM_TYPE;
+                    parse_streaminfo_options(input.options, &streamInfo);
+                    if (!bks_create(&streamInfo, 2160000, &mediaSource))
+                    {
+                        ml_log_error("Failed to create blank source\n");
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
+                case CLAPPER_INPUT:
+                {
+                    streamInfo.type = PICTURE_STREAM_TYPE;
+                    parse_streaminfo_options(input.options, &streamInfo);
+                    init_sound_streaminfo(&soundStreamInfo);
+                    if (!clp_create(&streamInfo, &soundStreamInfo, 2160000, &mediaSource))
+                    {
+                        ml_log_error("Failed to create clapper source\n");
+                        opened.push_back(false);
+                        inputsPresent.push_back(false);
+                        continue;
+                    }
+                }
+                break;
+                    
             }
 
             // set software scaling to 2 if the material dimensions exceeds 1024
@@ -893,13 +1169,13 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                     break;
         
                 case DVS_OUTPUT:
-                    CHK_OTHROW_MSG(dvs_open(-1, -1, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
+                    CHK_OTHROW_MSG(dvs_open(_dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
                         ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
                     
                 case DUAL_DVS_X11_OUTPUT:
-                    CHK_OTHROW_MSG(dusk_open(20, -1, -1, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
+                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
                         &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
@@ -912,7 +1188,7 @@ bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
                     break;
                     
                 case DUAL_DVS_X11_XV_OUTPUT:
-                    CHK_OTHROW_MSG(dusk_open(20, -1, -1, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
+                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
                         &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));

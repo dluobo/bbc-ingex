@@ -1,5 +1,5 @@
 /*
- * $Id: FCPFile.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
+ * $Id: FCPFile.h,v 1.2 2008/10/22 09:32:19 john_f Exp $
  *
  * Final Cut Pro XML file for defining clips, multi-camera clips, etc
  *
@@ -38,6 +38,24 @@
 
 namespace prodauto
 {
+// utility class to clean-up Package pointers
+class MaterialHolder
+{
+public:
+    ~MaterialHolder()
+    {
+        PackageSet::iterator iter;
+        for (iter = packages.begin(); iter != packages.end(); iter++)
+        {
+            delete *iter;
+        }
+        
+        // topPackages only holds references so don't delete
+    }
+    
+    MaterialPackageSet topPackages; 
+    PackageSet packages;
+};   
 
 class FCPFile
 {
@@ -49,13 +67,19 @@ public:
     void save();
     
     // add a single clip corresponding to the material package
-    void addClip(MaterialPackage* materialPackage, PackageSet& packages);
+    void addClip(MaterialPackage* materialPackage, PackageSet& packages, int totalClips, std::string fcppath);
 
-    // add a multi-camera clip and cut sequence
-    void addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages, std::vector<CutInfo> sequence);
+    // add a multi-camera clip
+    void addMCClip(MCClipDef* itmcP, MaterialHolder &material, int idname);
+
+    // add a multi-camera clip sequence from Directors Cut
+    void addMCSequence(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,std::vector<CutInfo> sequence);
+
     
     
 private:
+    bool getSource(Track* track, PackageSet& packages, SourcePackage** fileSourcePackage, SourcePackage** sourcePackage, Track** sourceTrack);
+
     std::string _filename;
     
     xercesc::DOMImplementation* _impl;

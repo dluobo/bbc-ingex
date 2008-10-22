@@ -2,7 +2,10 @@
 #define __PRODAUTO_LOCAL_INGEX_PLAYER_H__
 
 
+#include <map>
+
 #include "IngexPlayer.h"
+
 
 
 namespace prodauto
@@ -30,6 +33,67 @@ typedef enum PlayerOutputType
     DUAL_DVS_X11_XV_OUTPUT
 };
 
+typedef enum
+{
+    MXF_INPUT,
+    RAW_INPUT,
+    DV_INPUT,
+    FFMPEG_INPUT,
+    SHM_INPUT,
+    UDP_INPUT,
+    BALLS_INPUT,
+    BLANK_INPUT,
+    CLAPPER_INPUT
+} PlayerInputType;
+
+typedef struct
+{
+    PlayerInputType type;
+    std::string name;
+    std::map<std::string, std::string> options;
+} PlayerInput;
+
+/* options for each PlayerInputType are as follows:
+
+    MXF_INPUT: 
+        none
+    
+    RAW_INPUT:
+        "stream_type": "picture", "sound", "timecode" or "event"  (default "picture")
+        "stream_format": "uyvy", "yuv422", "yuv420", "yuv411", "pcm", "timecode"  (default "uyvy")
+        "frame_rate": "<numerator>/<denominator>"  (default 25/1)
+      video only:
+        "width": <image width> (default 720)
+        "height": <image height> (default 576)
+        "aspect_ratio": "<numerator>/<denominator>" (default 4/3)
+      audio only:
+        "sampling rate": "<numerator>/<denominator>" (default 48000/1)
+        "num_channels": <num>  (default 1)
+        "bits_per_sample": <bps>  (default 16)
+    
+    DV_INPUT:
+        none
+        
+    FFMPEG_INPUT:
+        "num_ffmpeg_threads" <num> (default 0)
+        
+    SHM_INPUT:
+        none
+        
+    UDP_INPUT:
+        none
+        
+    BBALLS_INPUT:
+        same as RAW_INPUT
+        "num_balls": <num> (default 5)
+        
+    BLANK_INPUT:
+        same as RAW_INPUT
+        
+    CLAPPER_INPUT:
+        same as RAW_INPUT, but video only
+*/    
+
 
 /* IngexPlayer that runs locally on the machine */
 class LocalIngexPlayer : public IngexPlayer
@@ -51,6 +115,7 @@ public:
     
     /* returns true if a DVS card is available for output */
     bool dvsCardIsAvailable();
+    bool dvsCardIsAvailable(int card, int channel);
     
     
     /* set the window-id when used as a browser plugin */
@@ -59,6 +124,7 @@ public:
     
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
+    void setDVSTarget(int card, int channel);
     
     /* returns the output type used */
     PlayerOutputType getOutputType();
@@ -79,9 +145,13 @@ public:
     bool close();
     
     
-    /* opens the files and start playing. The opened parameter indicates for each file whether
+    /* opens the MXF files and start playing. The opened parameter indicates for each file whether
     it was successfully opened or not */
     virtual bool start(std::vector<std::string> mxfFilenames, std::vector<bool>& opened);
+
+    /* opens the files/sources and start playing. The opened parameter indicates for each file/source whether
+    it was successfully opened or not */
+    virtual bool start_2(std::vector<PlayerInput> inputs, std::vector<bool>& opened);
     
     /* functions inherited from IngexPlayerListenerRegistry */
     virtual bool registerListener(IngexPlayerListener* listener);
@@ -129,6 +199,8 @@ private:
     PlayerOutputType _nextOutputType;
     PlayerOutputType _outputType;
     PlayerOutputType _actualOutputType;
+    int _dvsCard;
+    int _dvsChannel;
     VideoSwitchSplit _nextVideoSplit;
     VideoSwitchSplit _videoSplit;
     int _numFFMPEGThreads;

@@ -431,7 +431,7 @@ extern mpegts_encoder_t *mpegts_encoder_init (const char *filename, int width, i
 	return (mpegts_encoder_t *)mpegts;
 }
 
-static int write_audio_frame(internal_mpegts_encoder_t *ts, int16_t *p_audio)
+static int write_audio_frame(internal_mpegts_encoder_t *ts, const int16_t *p_audio)
 {
 	AVFormatContext *oc = ts->oc;
 	AVStream *st = ts->audio_st;
@@ -459,11 +459,11 @@ static int write_audio_frame(internal_mpegts_encoder_t *ts, int16_t *p_audio)
 	return 0;
 }
 
-static void fill_yuv_image (uint8_t *p_video, AVFrame *pict, int width, int height)
+static void fill_yuv_image (const uint8_t *p_video, AVFrame *pict, int width, int height)
 {
 	int chroma_size = (width * height)/4;
-	uint8_t *u_comp = p_video + (width*height);
-	uint8_t *v_comp = u_comp + (width*height)/4;
+	const uint8_t *u_comp = p_video + (width*height);
+	const uint8_t *v_comp = u_comp + (width*height)/4;
 	/* Y */
 	memcpy (pict->data[0], p_video, width * height);
 	/* U */
@@ -472,7 +472,7 @@ static void fill_yuv_image (uint8_t *p_video, AVFrame *pict, int width, int heig
 	memcpy (pict->data[2], v_comp, chroma_size);
 }
 
-static int write_video_frame(internal_mpegts_encoder_t *ts, uint8_t *p_video, int32_t frame_num)
+static int write_video_frame(internal_mpegts_encoder_t *ts, const uint8_t *p_video, int32_t frame_num)
 {
 	AVFormatContext *oc = ts->oc;
 	AVStream *st = ts->video_st;
@@ -526,7 +526,7 @@ static int write_video_frame(internal_mpegts_encoder_t *ts, uint8_t *p_video, in
 	return ret;
 }
 
-extern int mpegts_encoder_encode (mpegts_encoder_t *in_ts, uint8_t *p_video, int16_t *p_audio, int32_t frame_number)
+extern int mpegts_encoder_encode (mpegts_encoder_t *in_ts, const uint8_t *p_video, const int16_t *p_audio, int32_t frame_number)
 {
 	internal_mpegts_encoder_t *ts = (internal_mpegts_encoder_t *)in_ts;
 	if (!ts)

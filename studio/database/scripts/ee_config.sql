@@ -25,10 +25,10 @@ INSERT INTO sourceconfig VALUES (110, 'Stage - VT1', 2, NULL, 11);
 INSERT INTO sourceconfig VALUES (111, 'Stage - VT2', 2, NULL, 11);
 INSERT INTO sourceconfig VALUES (112, 'Stage - VT3', 2, NULL, 11);
 INSERT INTO sourceconfig VALUES (113, 'Stage - VT4', 2, NULL, 11);
-INSERT INTO sourceconfig VALUES (120, 'Studio A - VT1', 2, NULL, 12);
-INSERT INTO sourceconfig VALUES (121, 'Studio A - VT2', 2, NULL, 12);
-INSERT INTO sourceconfig VALUES (122, 'Studio A - VT3', 2, NULL, 12);
-INSERT INTO sourceconfig VALUES (123, 'Studio A - VT4', 2, NULL, 12);
+INSERT INTO sourceconfig VALUES (120, 'StudioA - VT1', 2, NULL, 12);
+INSERT INTO sourceconfig VALUES (121, 'StudioA - VT2', 2, NULL, 12);
+INSERT INTO sourceconfig VALUES (122, 'StudioA - VT3', 2, NULL, 12);
+INSERT INTO sourceconfig VALUES (123, 'StudioA - VT4', 2, NULL, 12);
 
 SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 
@@ -109,21 +109,30 @@ SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
 --
 -- recorder
 --
+-- rer_identifier | rer_name | rer_conf_id
 
-INSERT INTO recorder VALUES (3, 'Ingex', NULL);
+INSERT INTO recorder VALUES (1, 'Ingex-Lot', NULL);
+INSERT INTO recorder VALUES (2, 'Ingex-Stage', NULL);
+INSERT INTO recorder VALUES (3, 'Ingex-StudioA', NULL);
+
 SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
 
 
 --
 -- recorderconfig
 --
+-- rec_identifier | rec_name | rec_recorder_id
 
-INSERT INTO recorderconfig VALUES (10, 'Lot', 3);
-INSERT INTO recorderconfig VALUES (11, 'Stage', 3);
-INSERT INTO recorderconfig VALUES (12, 'Studio A', 3);
+INSERT INTO recorderconfig VALUES (11, 'Lot', 1);
+INSERT INTO recorderconfig VALUES (12, 'Stage', 2);
+INSERT INTO recorderconfig VALUES (13, 'Studio A', 3);
 
 SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
 
+-- set current recorder config for each recorder
+UPDATE recorder SET rer_conf_id=11 WHERE rer_identifier = 1;
+UPDATE recorder SET rer_conf_id=12 WHERE rer_identifier = 2;
+UPDATE recorder SET rer_conf_id=13 WHERE rer_identifier = 3;
 
 
 --
@@ -131,182 +140,196 @@ SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
 --
 
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (1, 'MXF', 'true', 1);
+    VALUES (1, 'IMAGE_ASPECT', '16/9', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (2, 'RAW', 'false', 1);
+    VALUES (2, 'TIMECODE_MODE', '1', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (3, 'QUAD_MPEG2', 'false', 1);
+    VALUES (3, 'COPY_COMMAND', '', 1);
+    
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (4, 'BROWSE_AUDIO', 'true', 1);
+    VALUES (10, 'ENCODE1_RESOLUTION', '8', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (5, 'IMAGE_ASPECT', '16/9', 1);
+    VALUES (11, 'ENCODE1_WRAPPING', '2', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (6, 'MXF_RESOLUTION', '3', 1);
+    VALUES (12, 'ENCODE1_BITC', 'false', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (7, 'MPEG2_BITRATE', '5000', 1);
+    VALUES (13, 'ENCODE1_DIR', '/video/mxf_offline/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (8, 'RAW_AUDIO_BITS', '32', 1);
+    VALUES (14, 'ENCODE1_DEST', '/store/mxf_offline/', 1);
+    
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (9, 'MXF_AUDIO_BITS', '16', 1);
+    VALUES (20, 'ENCODE2_RESOLUTION', '4', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (10, 'BROWSE_AUDIO_BITS', '16', 1);
+    VALUES (21, 'ENCODE2_WRAPPING', '2', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (11, 'RAW_DIR', '/video/raw/', 1);
+    VALUES (22, 'ENCODE2_BITC', 'false', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (12, 'MXF_DIR', '/video/mxf/', 1);
+    VALUES (23, 'ENCODE2_DIR', '/video/mxf_online/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (13, 'MXF_SUBDIR_CREATING', 'Creating/', 1);
+    VALUES (24, 'ENCODE2_DEST', '/store/mxf_online/', 1);
+    
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (14, 'MXF_SUBDIR_FAILURES', 'Failures/', 1);
+    VALUES (30, 'QUAD_RESOLUTION', '0', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (15, 'BROWSE_DIR', '/video/browse/', 1);
+    VALUES (31, 'QUAD_WRAPPING', '1', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (16, 'COPY_COMMAND', '../../processing/media_transfer/media_transfer.pl -i /bigmo1/video1/mxf_incoming -l /bigmo1/video1/mxf', 1);
+    VALUES (32, 'QUAD_BITC', 'true', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (17, 'TIMECODE_MODE', '1', 1);
+    VALUES (33, 'QUAD_DIR', '/video/browse/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (34, 'QUAD_DEST', '', 1);
     
 --
 -- recorderparameters
 --
 
--- Simple Lot
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF', 'true', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW', 'false', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_MPEG2', 'false', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO', 'true', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('IMAGE_ASPECT', '16/9', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_RESOLUTION', '3', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MPEG2_BITRATE', '5000', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_AUDIO_BITS', '32', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_AUDIO_BITS', '16', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO_BITS', '16', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_DIR', '/video/raw/', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_DIR', '/video/mxf/', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_CREATING', 'Creating/', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_FAILURES', 'Failures/', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_DIR', '/video/browse/', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '../../processing/media_transfer/media_transfer.pl -i /bigmo1/video1/mxf_incoming -l /bigmo1/video1/mxf', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('TIMECODE_MODE', '1', 1, 10);
-
--- Simple Stage
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF', 'true', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW', 'false', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_MPEG2', 'false', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO', 'true', 1, 11);
+-- Lot
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_RESOLUTION', '3', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MPEG2_BITRATE', '5000', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_AUDIO_BITS', '32', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_AUDIO_BITS', '16', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO_BITS', '16', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_DIR', '/video/raw/', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_DIR', '/video/mxf/', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_CREATING', 'Creating/', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_FAILURES', 'Failures/', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_DIR', '/video/browse/', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '../../processing/media_transfer/media_transfer.pl -i /bigmo1/video1/mxf_incoming -l /bigmo1/video1/mxf', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('TIMECODE_MODE', '1', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 11);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_RESOLUTION', '4', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_WRAPPING', '2', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_BITC', 'false', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 11);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_RESOLUTION', '8', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_WRAPPING', '2', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_BITC', 'false', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DIR', '/video/mxf_online/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DEST', '/store/mxf_online/', 1, 11);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_RESOLUTION', '0', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_WRAPPING', '1', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_BITC', 'true', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DIR', '/video/browse/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DEST', '', 1, 11);
 
--- Simple Studio A
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF', 'true', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW', 'false', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_MPEG2', 'false', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO', 'true', 1, 12);
+-- Stage
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_RESOLUTION', '3', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MPEG2_BITRATE', '5000', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_AUDIO_BITS', '32', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_AUDIO_BITS', '16', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_AUDIO_BITS', '16', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('RAW_DIR', '/video/raw/', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_DIR', '/video/mxf/', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_CREATING', 'Creating/', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('MXF_SUBDIR_FAILURES', 'Failures/', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('BROWSE_DIR', '/video/browse/', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '../../processing/media_transfer/media_transfer.pl -i /bigmo1/video1/mxf_incoming -l /bigmo1/video1/mxf', 1, 12);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('TIMECODE_MODE', '1', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 12);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_RESOLUTION', '4', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_WRAPPING', '2', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_BITC', 'false', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 12);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_RESOLUTION', '8', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_WRAPPING', '2', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_BITC', 'false', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DIR', '/video/mxf_online/', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DEST', '/store/mxf_online/', 1, 12);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_RESOLUTION', '0', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_WRAPPING', '1', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_BITC', 'true', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DIR', '/video/browse/', 1, 12);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DEST', '', 1, 12);
 
 
---
--- recorder update
---
-
-UPDATE recorder SET rer_conf_id=11 WHERE rer_identifier = 3;
+-- Studio A
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('IMAGE_ASPECT', '16/9', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('TIMECODE_MODE', '1', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 13);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_RESOLUTION', '4', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_WRAPPING', '2', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_BITC', 'false', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 13);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_RESOLUTION', '8', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_WRAPPING', '2', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_BITC', 'false', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DIR', '/video/mxf_online/', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_DEST', '/store/mxf_online/', 1, 13);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_RESOLUTION', '0', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_WRAPPING', '1', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_BITC', 'true', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DIR', '/video/browse/', 1, 13);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_DEST', '', 1, 13);
 
 
 --
 -- recorderinputconfig
 --
+-- ric_identifier | ric_index | ric_name | ric_recorder_conf_id
 
--- Ingex
--- Simple Lot
-INSERT INTO recorderinputconfig VALUES (100, 1, 'Card 0', 10);
-INSERT INTO recorderinputconfig VALUES (101, 2, 'Card 1', 10);
-INSERT INTO recorderinputconfig VALUES (102, 3, 'Card 2', 10);
-INSERT INTO recorderinputconfig VALUES (103, 4, 'Card 3', 10);
+-- Ingex-Lot
+INSERT INTO recorderinputconfig VALUES (100, 1, 'Channel 0', 11);
+INSERT INTO recorderinputconfig VALUES (101, 2, 'Channel 1', 11);
+INSERT INTO recorderinputconfig VALUES (102, 3, 'Channel 2', 11);
+INSERT INTO recorderinputconfig VALUES (103, 4, 'Channel 3', 11);
 
--- Simple Stage
-INSERT INTO recorderinputconfig VALUES (110, 1, 'Card 0', 11);
-INSERT INTO recorderinputconfig VALUES (111, 2, 'Card 1', 11);
-INSERT INTO recorderinputconfig VALUES (112, 3, 'Card 2', 11);
-INSERT INTO recorderinputconfig VALUES (113, 4, 'Card 3', 11);
+-- Ingex-Stage
+INSERT INTO recorderinputconfig VALUES (110, 1, 'Channel 0', 12);
+INSERT INTO recorderinputconfig VALUES (111, 2, 'Channel 1', 12);
+INSERT INTO recorderinputconfig VALUES (112, 3, 'Channel 2', 12);
+INSERT INTO recorderinputconfig VALUES (113, 4, 'Channel 3', 12);
 
--- Simple Stage
-INSERT INTO recorderinputconfig VALUES (120, 1, 'Card 0', 12);
-INSERT INTO recorderinputconfig VALUES (121, 2, 'Card 1', 12);
-INSERT INTO recorderinputconfig VALUES (122, 3, 'Card 2', 12);
-INSERT INTO recorderinputconfig VALUES (123, 4, 'Card 3', 12);
+-- Ingex-StudioA
+INSERT INTO recorderinputconfig VALUES (120, 1, 'Channel 0', 13);
+INSERT INTO recorderinputconfig VALUES (121, 2, 'Channel 1', 13);
+INSERT INTO recorderinputconfig VALUES (122, 3, 'Channel 2', 13);
+INSERT INTO recorderinputconfig VALUES (123, 4, 'Channel 3', 13);
 
 
 SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;
@@ -315,8 +338,9 @@ SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;
 --
 -- recorderinputtrackconfig
 --
+-- rtc_identifier | rtc_index | rtc_track_number | rtc_recorder_input_id | rtc_source_id | rtc_source_track_id
 
--- Simple Lot
+-- Lot
 INSERT INTO recorderinputtrackconfig VALUES (400, 1, 1, 100, 100, 1);
 INSERT INTO recorderinputtrackconfig VALUES (401, 2, 1, 100, 100, 2);
 INSERT INTO recorderinputtrackconfig VALUES (402, 3, 2, 100, 100, 3);
@@ -339,7 +363,7 @@ INSERT INTO recorderinputtrackconfig VALUES (433, 4, 0, 103, NULL, NULL);
 INSERT INTO recorderinputtrackconfig VALUES (434, 5, 0, 103, NULL, NULL);
 
 
--- Simple Stage
+-- Stage
 INSERT INTO recorderinputtrackconfig VALUES (500, 1, 1, 110, 110, 1);
 INSERT INTO recorderinputtrackconfig VALUES (501, 2, 1, 110, 110, 2);
 INSERT INTO recorderinputtrackconfig VALUES (502, 3, 2, 110, 110, 3);
@@ -361,7 +385,7 @@ INSERT INTO recorderinputtrackconfig VALUES (532, 3, 2, 113, 113, 3);
 INSERT INTO recorderinputtrackconfig VALUES (533, 4, 0, 113, NULL, NULL);
 INSERT INTO recorderinputtrackconfig VALUES (534, 5, 0, 113, NULL, NULL);
 
--- Simple Studio A
+-- Studio A
 INSERT INTO recorderinputtrackconfig VALUES (600, 1, 1, 120, 120, 1);
 INSERT INTO recorderinputtrackconfig VALUES (601, 2, 1, 120, 120, 2);
 INSERT INTO recorderinputtrackconfig VALUES (602, 3, 2, 120, 120, 3);
@@ -384,18 +408,17 @@ INSERT INTO recorderinputtrackconfig VALUES (633, 4, 0, 123, NULL, NULL);
 INSERT INTO recorderinputtrackconfig VALUES (634, 5, 0, 123, NULL, NULL);
 
 
-
 SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
 
 
 --
 -- multicameraclipdef
 --
+-- mcd_identifier | mcd_name
 
-INSERT INTO multicameraclipdef VALUES (2, 'KW-A44 multi-camera clip');
-INSERT INTO multicameraclipdef VALUES (3, 'Studio A multi-camera clip');
-INSERT INTO multicameraclipdef VALUES (4, 'Lot multi-camera clip');
-INSERT INTO multicameraclipdef VALUES (5, 'Stage multi-camera clip');
+INSERT INTO multicameraclipdef VALUES (1, 'Lot multi-camera clip');
+INSERT INTO multicameraclipdef VALUES (2, 'Stage multi-camera clip');
+INSERT INTO multicameraclipdef VALUES (3, 'StudioA multi-camera clip');
 
 SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 
@@ -403,26 +426,22 @@ SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 --
 -- multicameratrackdef
 --
-
--- KW-A44 multi-camera clip
-INSERT INTO multicameratrackdef VALUES (4, 1, 1, 2);
-INSERT INTO multicameratrackdef VALUES (5, 2, 1, 2);
-INSERT INTO multicameratrackdef VALUES (6, 3, 2, 2);
-
--- Studio A (Main and Iso) multi-camera clip
-INSERT INTO multicameratrackdef VALUES (10, 1, 1, 3);
-INSERT INTO multicameratrackdef VALUES (11, 2, 1, 3);
-INSERT INTO multicameratrackdef VALUES (12, 3, 2, 3);
+-- mct_identifier | mct_index | mct_track_number | mct_multi_camera_def_id
 
 -- Lot multi-camera clip
-INSERT INTO multicameratrackdef VALUES (20, 1, 1, 4);
-INSERT INTO multicameratrackdef VALUES (21, 2, 1, 4);
-INSERT INTO multicameratrackdef VALUES (22, 3, 2, 4);
+INSERT INTO multicameratrackdef VALUES (10, 1, 1, 1);
+INSERT INTO multicameratrackdef VALUES (11, 2, 1, 1);
+INSERT INTO multicameratrackdef VALUES (12, 3, 2, 1);
 
 -- Stage multi-camera clip
-INSERT INTO multicameratrackdef VALUES (30, 1, 1, 5);
-INSERT INTO multicameratrackdef VALUES (31, 2, 1, 5);
-INSERT INTO multicameratrackdef VALUES (32, 3, 2, 5);
+INSERT INTO multicameratrackdef VALUES (20, 1, 1, 2);
+INSERT INTO multicameratrackdef VALUES (21, 2, 1, 2);
+INSERT INTO multicameratrackdef VALUES (22, 3, 2, 2);
+
+-- StudioA multi-camera clip
+INSERT INTO multicameratrackdef VALUES (30, 1, 1, 3);
+INSERT INTO multicameratrackdef VALUES (31, 2, 1, 3);
+INSERT INTO multicameratrackdef VALUES (32, 3, 2, 3);
 
 SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 
@@ -430,30 +449,31 @@ SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 --
 -- multicameraselectordef
 --
+-- mcs_identifier | mcs_index | mcs_multi_camera_track_def_id | mcs_source_id | mcs_source_track_id
 
 -- Lot
-INSERT INTO multicameraselectordef VALUES (100, 1, 20, 100, 1);
-INSERT INTO multicameraselectordef VALUES (101, 2, 20, 101, 1);
-INSERT INTO multicameraselectordef VALUES (102, 3, 20, 102, 1);
-INSERT INTO multicameraselectordef VALUES (103, 4, 20, 103, 1);
-INSERT INTO multicameraselectordef VALUES (104, 1, 21, 100, 2);
-INSERT INTO multicameraselectordef VALUES (105, 1, 22, 100, 3);
+INSERT INTO multicameraselectordef VALUES (10, 1, 10, 100, 1);
+INSERT INTO multicameraselectordef VALUES (11, 2, 10, 101, 1);
+INSERT INTO multicameraselectordef VALUES (12, 3, 10, 102, 1);
+INSERT INTO multicameraselectordef VALUES (13, 4, 10, 103, 1);
+INSERT INTO multicameraselectordef VALUES (14, 1, 11, 100, 2);
+INSERT INTO multicameraselectordef VALUES (15, 1, 12, 100, 3);
 
 -- Stage
-INSERT INTO multicameraselectordef VALUES (40, 1, 30, 110, 1);
-INSERT INTO multicameraselectordef VALUES (41, 2, 30, 111, 1);
-INSERT INTO multicameraselectordef VALUES (42, 3, 30, 112, 1);
-INSERT INTO multicameraselectordef VALUES (43, 4, 30, 113, 1);
-INSERT INTO multicameraselectordef VALUES (44, 1, 31, 110, 2);
-INSERT INTO multicameraselectordef VALUES (45, 1, 32, 110, 3);
+INSERT INTO multicameraselectordef VALUES (20, 1, 20, 110, 1);
+INSERT INTO multicameraselectordef VALUES (21, 2, 20, 111, 1);
+INSERT INTO multicameraselectordef VALUES (22, 3, 20, 112, 1);
+INSERT INTO multicameraselectordef VALUES (23, 4, 20, 113, 1);
+INSERT INTO multicameraselectordef VALUES (24, 1, 21, 110, 2);
+INSERT INTO multicameraselectordef VALUES (25, 1, 22, 110, 3);
 
 -- Studio A
-INSERT INTO multicameraselectordef VALUES (20, 1, 10, 120, 1);
-INSERT INTO multicameraselectordef VALUES (21, 2, 10, 121, 1);
-INSERT INTO multicameraselectordef VALUES (22, 3, 10, 122, 1);
-INSERT INTO multicameraselectordef VALUES (23, 4, 10, 123, 1);
-INSERT INTO multicameraselectordef VALUES (24, 1, 11, 120, 2);
-INSERT INTO multicameraselectordef VALUES (25, 1, 12, 120, 3);
+INSERT INTO multicameraselectordef VALUES (30, 1, 30, 120, 1);
+INSERT INTO multicameraselectordef VALUES (31, 2, 30, 121, 1);
+INSERT INTO multicameraselectordef VALUES (32, 3, 30, 122, 1);
+INSERT INTO multicameraselectordef VALUES (33, 4, 30, 123, 1);
+INSERT INTO multicameraselectordef VALUES (34, 1, 31, 120, 2);
+INSERT INTO multicameraselectordef VALUES (35, 1, 32, 120, 3);
 
 SELECT setval('mcs_id_seq', max(mcs_identifier)) FROM multicameraselectordef;
 

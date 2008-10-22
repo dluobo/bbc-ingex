@@ -4,10 +4,12 @@ project(common2Lib) {
   includes += $(ACE_ROOT) $(TAO_ROOT) $(TAO_ROOT)/orbsvcs
   includes += ../../common
   includes += ../../database/src
-  specific(vc71) {
-    includes += $(LIBODBCPP)/include
-  }
   includes += ../IDL/Generated
+  specific(vc71,vc8,vc9) {
+    includes += $(LIBODBCPP)/include
+    Debug::runtime_library = 3
+    Release::runtime_library = 2
+  }
   after += idlLib
 }
 

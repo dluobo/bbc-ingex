@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.5 2008/10/08 10:16:07 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.6 2008/10/22 09:32:19 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -28,10 +28,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include <sstream>
-
 #include "AAFFile.h"
+#include "FCPFile.h"
 #include "CreateAAFException.h"
 #include "CutsDatabase.h"
 #include <Database.h>
@@ -39,7 +38,6 @@
 #include <Utilities.h>
 #include <DBException.h>
 #include "Timecode.h"
-
 #include "XmlTools.h"
 #include <xercesc/util/PlatformUtils.hpp>
 #include <xercesc/util/XMLString.hpp>
@@ -50,35 +48,259 @@ using namespace std;
 using namespace prodauto;
 
 
-
 static const char* g_dns = "prodautodb";
 static const char* g_databaseUserName = "bamzooki";
 static const char* g_databasePassword = "bamzooki";
-
 static const char* g_filenamePrefix = "ingex";
-
 static const char* g_resultsPrefix = "RESULTS:";
 
 
-// utility class to clean-up Package pointers
-class MaterialHolder
-{
-public:
-    ~MaterialHolder()
-    {
-        PackageSet::iterator iter;
-        for (iter = packages.begin(); iter != packages.end(); iter++)
-        {
-            delete *iter;
-        }
-        
-        // topPackages only holds references so don't delete
-    }
-    
-    MaterialPackageSet topPackages; 
-    PackageSet packages;
-};
+ 
 
+/*
+void makeMultiClip(MCClipDef* itmcP, int in, int out, int &totalMulticamGroups, MaterialHolder &material, DOMDocument * doc, int idname)
+{
+
+	    static const char * ntsc = "FALSE";
+	    static const char * tb ="25";
+
+
+	    // load multi-camera clip definitions- need MCClip defs    
+	    Database* database = Database::getInstance();
+	    VectorGuard<MCClipDef> mcClipDefs;
+	    mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
+
+            vector<MCClipDef*>::iterator itmc;
+	    DOMElement * rootElem = doc->getDocumentElement();
+
+            //for (itmc = mcClipDefs.get().begin(); itmc != mcClipDefs.get().end(); itmc++)
+	    {
+
+                MaterialPackageSet::const_iterator iter1 = material.topPackages.begin();
+		{
+
+	            //De-bugging info
+	            //printf("\n");
+	            //printf("--------- START OF MULTICLIP ---------\n");
+
+	            std::ostringstream idname_ss;
+                    idname_ss << idname;
+	            //printf("Multiclip \n");       
+  	            int c1 = 0;
+	            //DOM Details for Multiclip
+	            //TAGS
+	            //Rate Tag
+	            DOMElement * rateElem = doc->createElement(X("rate"));
+
+	            DOMElement * rate2Elem = doc->createElement(X("rate"));
+	            //Media Tag
+	            DOMElement * mediaElem = doc->createElement(X("media"));
+	            //Video Tag
+	            DOMElement * videoElem = doc->createElement(X("video"));
+ 	            //rate
+	            DOMElement * ntscElem = doc->createElement(X("ntsc"));
+	            ntscElem->appendChild(doc->createTextNode(X(ntsc)));
+	            DOMElement * tbElem = doc->createElement(X("timebase"));
+	            tbElem->appendChild(doc->createTextNode(X(tb)));
+	            rateElem->appendChild(ntscElem);
+	            rateElem->appendChild(tbElem);
+
+	            DOMElement * ntscElem2 = doc->createElement(X("ntsc"));
+	            ntscElem2->appendChild(doc->createTextNode(X(ntsc)));
+	            DOMElement * tbElem2 = doc->createElement(X("timebase"));
+	            tbElem2->appendChild(doc->createTextNode(X(tb)));
+	            rate2Elem->appendChild(ntscElem2);
+	            rate2Elem->appendChild(tbElem2);
+	    
+                    //Mduration
+	            DOMElement * MdurElem = doc->createElement(X("duration"));
+	            DOMElement * Mdur2Elem = doc->createElement(X("duration"));
+	            //Mclipitem1
+	            DOMElement * Mclipitem1Elem = doc->createElement(X("clipitem"));
+	            //Multiclip id
+	            DOMElement * MclipidElem = doc->createElement(X("multiclip"));
+	            //Mcollapsed
+	            DOMElement * McollapsedElem = doc->createElement(X("collapsed"));
+	            //Msynctype
+	            DOMElement * MsyncElem = doc->createElement(X("synctype"));
+	            //Mclip
+	            DOMElement * MclipElem = doc->createElement(X("clip"));
+	            //Mname
+	            DOMElement * MnameElem = doc->createElement(X("name"));
+	            DOMElement * Mname1Elem = doc->createElement(X("name"));
+	            DOMElement * Mname2Elem = doc->createElement(X("name"));
+	            //Track Tag
+	            DOMElement * trackElem = doc->createElement(X("track"));
+
+	            DOMElement * inElem = doc->createElement(X("in"));
+	            std::ostringstream in_ss;
+                    in_ss << in;
+	            inElem->appendChild(doc->createTextNode(X(in_ss.str().c_str())));
+
+	            DOMElement * outElem = doc->createElement(X("out"));
+	            std::ostringstream out_ss;
+                    out_ss << out;
+	            outElem->appendChild(doc->createTextNode(X(out_ss.str().c_str())));
+
+	            DOMElement * ismasterElem = doc->createElement(X("ismasterclip"));
+	            ismasterElem->appendChild(doc->createTextNode(X("FALSE")));
+		  
+
+	            MaterialPackageSet donePackages;
+	            //Name
+                    MaterialPackage* topPackage1 = *iter1;
+                    MaterialPackageSet materialPackages;
+                    materialPackages.insert(topPackage1);
+
+                    //DOM Multicam 
+                    // add material to group that has same start time and creation date
+
+                    Rational palEditRate = {25, 1}; 
+
+
+                    for (MaterialPackageSet::const_iterator iter2 = iter1; iter2 != material.topPackages.end(); iter2++)
+                    {
+	               MaterialPackage* topPackage2 = *iter2;
+		       int64_t st_time;
+
+
+
+		       if (topPackage2->creationDate.year == topPackage1->creationDate.year && topPackage2->creationDate.month == topPackage1->creationDate.month && topPackage2->creationDate.day == topPackage1->creationDate.day && getStartTime(topPackage1, material.packages, palEditRate) ==  getStartTime(topPackage2, material.packages, palEditRate))
+		       {
+			  
+
+			   //looks in at Track Detail
+		          materialPackages.insert(topPackage2);
+			  donePackages.insert(topPackage2);
+
+			   for (std::vector<prodauto::Track*>::const_iterator iter6 = topPackage2->tracks.begin(); iter6 != topPackage2->tracks.end(); iter6++) 
+			   {
+
+			       c1++;
+			       prodauto::Track * track = *iter6;
+			       if (c1 == 1)
+			       {
+
+			           //MClip DOM Start
+				   rootElem->appendChild(MclipElem);
+
+				   MclipElem->setAttribute(X("id"), X(idname_ss.str().c_str()));
+				   //Name
+				   Mname2Elem->appendChild(doc->createTextNode(X("Multicam")));
+				   Mname2Elem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
+				   Mname1Elem->appendChild(doc->createTextNode(X("Multicam")));
+				   Mname1Elem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
+				   MnameElem->appendChild(doc->createTextNode(X("Multicam")));
+				   MnameElem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
+				   //Duration
+
+				   std::ostringstream tMdurss;
+				   tMdurss << track->sourceClip->length;
+				   MdurElem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
+				   Mdur2Elem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
+				   //Clip Items: name
+				   Mclipitem1Elem->setAttribute(X("id"), X(idname_ss.str().c_str()));
+				   //Collapsed
+				   McollapsedElem->appendChild(doc->createTextNode(X("FALSE")));
+				   //Sync Type
+				   //Append above to Tracks
+				   MclipElem->appendChild(Mname1Elem);
+				   MclipElem->appendChild(MdurElem);
+				   //Rate
+				   MclipElem->appendChild(rateElem);
+				   MclipElem->appendChild(inElem);
+				   MclipElem->appendChild(outElem);
+				   MclipElem->appendChild(ismasterElem);
+				   //Multiclip
+
+				   Mclipitem1Elem->appendChild(Mname2Elem);
+				   Mclipitem1Elem->appendChild(Mdur2Elem);
+				   Mclipitem1Elem->appendChild(rate2Elem);
+				   Mclipitem1Elem->setAttribute(X("id"), X(idname_ss.str().c_str()));
+				   MclipidElem->appendChild(MnameElem);
+				   MclipidElem->appendChild(McollapsedElem);
+				   MclipidElem->appendChild(MsyncElem);
+				   MclipidElem->setAttribute(X("id"), X(idname_ss.str().c_str()));
+	
+			        }
+			        //Material Package Name
+			        SourcePackage dummy;
+			        dummy.uid = track->sourceClip->sourcePackageUID;
+			        PackageSet::iterator result = material.packages.find(&dummy);
+			        vector<MCClipDef*>::iterator itmc1;
+				
+			        for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
+			        {
+
+			            MCClipDef * mcClipDef = itmcP;				
+				    if ((*itmc1)->name == itmcP->name)
+				    {
+				        for (std::vector<SourceConfig*>::const_iterator itmc2 = mcClipDef->sourceConfigs.begin(); itmc2 != mcClipDef->sourceConfigs.end(); itmc2++)
+				        {
+				            //SourceConfig * sourceConfigs = *itmc2;
+				            Package* package = *result;
+				            SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
+				            if ((*itmc2)->name == sourcePackage->sourceConfigName)
+				            {
+				                //printf("\n  <-START OF TRACK DETAILS-> \n");
+				    	        //printf("Track file name=%s\n",topPackage2->name.c_str());
+				                st_time = getStartTime(topPackage2, material.packages, palEditRate);
+				                Timecode tc(st_time);
+				                //printf("Time code=%s\n",tc.Text());
+				                //printf("Source Config Name %s\n", sourcePackage->sourceConfigName.c_str());
+				    	        if (track->dataDef != PICTURE_DATA_DEFINITION) //audio
+				                {
+					            //printf("Audio Track Name=%s\n",track->name.c_str()); //track name
+					            //printf("Audio Source Clip Length=%lld\n",track->sourceClip->length); 
+				                }
+				                if (track->dataDef == PICTURE_DATA_DEFINITION) //VIDEO
+				                { 
+					            //Mclip
+					            DOMElement * Mclip2Elem = doc->createElement(X("clip"));
+					            //Mclip
+					            DOMElement * MfileElem = doc->createElement(X("file"));
+					            //Mangle1
+					            DOMElement * Mangle1Elem = doc->createElement(X("angle"));
+					            //printf("Video Track Name=%s\n",track->name.c_str()); //track name
+					            //printf("Video Source Clip Length=%lld\n",track->sourceClip->length);
+						    Mclip2Elem->setAttribute(X("id"), X(topPackage2->name.c_str()));	
+						    MfileElem->setAttribute(X("id"), X(topPackage2->name.c_str()));
+
+						    Mclip2Elem->appendChild(MfileElem);
+
+						    Mangle1Elem->appendChild(Mclip2Elem);
+
+						    MclipidElem->appendChild(Mangle1Elem);
+
+						    Mclipitem1Elem->appendChild(MclipidElem);
+
+						    trackElem->appendChild(Mclipitem1Elem);
+
+						    videoElem->appendChild(trackElem);
+
+						    mediaElem->appendChild(videoElem);
+
+						    MclipElem->appendChild(mediaElem);		
+				                }
+			    	                //printf("  <-END OF TRACK DETAILS-> \n\n");	
+				            }
+					}
+			            }
+			        }
+			    }
+		        }//if multicam
+		    }//for material package
+		}
+	    }
+ ++ totalMulticamGroups;
+printf("total=%d\n",totalMulticamGroups);
+
+
+}	
+	    //printf("--------- END OF MULTICLIP ---------\n");
+
+
+*/
 
 static void parseDateAndTimecode(string dateAndTimecodeStr, Date* date, int64_t* timecode)
 {
@@ -190,6 +412,15 @@ static string createSingleClipFilename(string prefix, string suffix, int index)
     return filename.str();
 }
 
+static string createSingleClipFilenameX(string prefix, string suffix)
+{
+    stringstream filenameX;
+    
+    filenameX << prefix << "_" << suffix << "_" <<".xml";
+        
+    return filenameX.str();
+}
+
 static string createMCClipFilename(string prefix, int64_t startTime, string suffix, int index)
 {
     stringstream filename;
@@ -252,7 +483,52 @@ static string createUniqueFilename(string prefix)
     
     return result;
 }
+/*
+static string createFilenameX(string prefix, int64_t startTime, string suffix, int index)
+{
+    stringstream filename;
+    
+    filename << prefix << "_xml_" << startTime << "_"  << suffix << "_" << index << ".xml";
+        
+    return filename.str();
+}
 
+static string createUniqueFilenameX(string prefix)
+{
+    string result;
+    int count = 0;
+    struct stat statBuf;
+    
+    while (count < 10000) // more than 10000 files with the same name - you must be joking!
+    {
+        stringstream filename;
+        
+        if (count == 0)
+        {
+            filename << prefix << ".xml";
+        }
+        else
+        {
+            filename << prefix << "_" << count << ".xml";
+        }
+        
+        if (stat(filename.str().c_str(), &statBuf) != 0)
+        {
+            // file does not exist - use it
+            result = filename.str();
+            break;
+        }
+        
+        count++;
+    }
+    if (result.size() == 0)
+    {
+        throw "Failed to create unique filename";
+    }
+    
+    return result;
+}
+*/
 static string addFilename(vector<string>& filenames, string filename)
 {
     filenames.push_back(filename);
@@ -1073,650 +1349,217 @@ int main(int argc, const char* argv[])
     else //if fcpxml
     {
 
+
+        FCPFile * fcpFile = 0;
+
+      
+	fcpFile = new FCPFile(createSingleClipFilenameX(filenamePrefix, suffix));
     //printf("Making XML Doc...\n");
 
 	if (material.topPackages.size() == 0)
 	{
-        printf("\n%s\n", g_resultsPrefix);
-        printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
+            printf("\n%s\n", g_resultsPrefix);
+            printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
 	}
 	else
 	{
-	    //printf("Packages available\n");
-	    //Initialise XML DOM, declare Processing, Doctype, any comments etc..
-	    static const char * newline = "\r\n";
-	    static const char * newline_indent1 = "\r\n\t";
-	    static const char * newline_indent2 = "\r\n\t\t";
-	    static const char * newline_indent3 = "\r\n\t\t\t";
-	    static const char * newline_indent4 = "\r\n\t\t\t\t";
-	    static const char * newline_indent5 = "\r\n\t\t\t\t\t";
-	    static const char * newline_indent6 = "\r\n\t\t\t\t\t\t";
-	    static const char * newline_indent7 = "\r\n\t\t\t\t\t\t\t";
-	    static const char * anamorph = "TRUE";
-	    static const char * ntsc = "FALSE";
-	    static const char * tb ="25";
-	    static const char * df ="DF";
-   	    static const char * src = "source";
-	    int angle = 0;
-	    std::string temptest = "Main";
-	
-	    // Initialize the XML4C2 system.
-	    XmlTools::Initialise();
-	    DOMDocument * doc;
-	    DOMImplementation* impl =  DOMImplementationRegistry::getDOMImplementation(X("Core"));
-	    doc = impl->createDocument(
-                0,                  // root element namespace URI.
-                X("xmeml"),         // root element name
-                0);                 // document type object (DTD).
-
-        DOMElement * rootElem = doc->getDocumentElement();
-        rootElem->setAttribute(X("version"), X("2"));
-        rootElem->appendChild(doc->createTextNode(X(newline)));
-
-	    //Clip Definitions
-        for (MaterialPackageSet::iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
-	    {
-
-	        angle++;
-            std::ostringstream angle_ss;
-            angle_ss << angle; 
-
-		//TAGS
-		//Rate Tag
-		DOMElement * rateElem = doc->createElement(X("rate"));
-		//Timecode Tag
-		DOMElement * timecodeElem = doc->createElement(X("timecode"));		
-		//Duration
-		DOMElement *durElem1 = doc->createElement(X("duration"));
-		//Duration
-		DOMElement *durElem = doc->createElement(X("duration"));
-		//File Path
-		DOMElement * purlElem = doc->createElement(X("pathurl"));
-		//File Tag
-		DOMElement * fileElem = doc->createElement(X("file"));
-		//Media Tag
-		DOMElement * mediaElem = doc->createElement(X("media"));
-		//Video Tag
-		DOMElement * videoElem = doc->createElement(X("video"));
-		//Audio Tag
-		DOMElement * audioElem = doc->createElement(X("audio"));
-		
-		//rate
-		DOMElement * ntscElem = doc->createElement(X("ntsc"));
-		ntscElem->appendChild(doc->createTextNode(X(ntsc)));
-		
-		//set rate properties
-		DOMElement * tbElem = doc->createElement(X("timebase"));
-		tbElem->appendChild(doc->createTextNode(X(tb)));
-		rateElem->appendChild(doc->createTextNode(X(newline_indent2)));
-		rateElem->appendChild(ntscElem);
-		rateElem->appendChild(doc->createTextNode(X(newline_indent2)));
-		rateElem->appendChild(tbElem);
-		rateElem->appendChild(doc->createTextNode(X(newline_indent1)));
-
-		//Open XML Clip
-		DOMElement * clipElem = doc->createElement(X("clip"));
-                rootElem->appendChild(doc->createTextNode(X(newline)));
-                rootElem->appendChild(clipElem);
-		clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-
+	    for(MaterialPackageSet::iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
+	    {	
 		MaterialPackage * topPackage = *iter1;
-		//printf("Package Name=%s\n",topPackage->name.c_str()); //package name: working
- 
-		DOMElement * nameElem = doc->createElement(X("name"));
-		DOMElement * fnameElem = doc->createElement(X("name"));
-		clipElem->setAttribute(X("id"), X(topPackage->name.c_str()));
-                clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-                nameElem->appendChild(doc->createTextNode(X(topPackage->name.c_str())));
-	
-
-		DOMElement * anaElem = doc->createElement(X("anamorphic"));
-		anaElem->appendChild(doc->createTextNode(X(anamorph)));
-
-		//MEDIA INFO
-		DOMElement * vsmplchElem = doc->createElement(X("samplecharacteristics"));
-		DOMElement * asmplchElem = doc->createElement(X("samplecharacteristics"));	
-
-		DOMElement * widthElem = doc->createElement(X("width"));
-		widthElem->appendChild(doc->createTextNode(X("720")));
-
-		DOMElement * heightElem = doc->createElement(X("height"));
-		heightElem->appendChild(doc->createTextNode(X("576")));
-
-		DOMElement * smplrteElem = doc->createElement(X("samplerate"));
-		smplrteElem->appendChild(doc->createTextNode(X("48000")));
-
-		DOMElement * dpthElem = doc->createElement(X("depth"));
-		dpthElem->appendChild(doc->createTextNode(X("16")));
-
-		DOMElement * layoutElem = doc->createElement(X("layout"));
-		layoutElem->appendChild(doc->createTextNode(X("stereo")));
-	
-		DOMElement * inElem = doc->createElement(X("in"));
-		inElem->appendChild(doc->createTextNode(X("-1")));
-
-		DOMElement * outElem = doc->createElement(X("out"));
-		outElem->appendChild(doc->createTextNode(X("-1")));
-
-		DOMElement * ismasterElem = doc->createElement(X("ismasterclip"));
-		ismasterElem->appendChild(doc->createTextNode(X("TRUE")));
-
-		//Audio Channel Tag- right
-
-		DOMElement * chnlElem = doc->createElement(X("channelcount"));
-
-                /*switch(topPackage->getType()) //package type test: not working...
+	        fcpFile->addClip(topPackage, material.packages, totalClips, fcppath);
+		++totalClips;
+	    }
+	    if (createMultiCam) //multi cam
+            {
+		int idname= 1;
+		MaterialPackageSet donePackages;
+                for (MaterialPackageSet::iterator iters1 = material.topPackages.begin(); iters1 != material.topPackages.end(); iters1++)
                 {
-                case MATERIAL_PACKAGE :
-                    printf("Material Package\n");
-                    break;
-                case SOURCE_PACKAGE :
-                    printf("Source Package\n");
-                    break;
-                default:
-                    printf("Unknown Package Type\n");
-                    break;
-                }*/
-        	Rational palEditRate = {25, 1};
-		int64_t st_time;
-                
-                st_time = getStartTime(topPackage, material.packages, palEditRate); //start frames from midnite
-		//printf("Package Start Time=%lld\n",st_time);
-		Timecode tc(st_time);  //returns true time code
-                //printf("Time code=%s\n",tc.Text());
-
-		//Rate details: Timecode, Display Format, Source
-		DOMElement * tcElem = doc->createElement(X("string"));
-		tcElem->appendChild(doc->createTextNode(X(tc.Text())));
-
-		DOMElement * dfElem = doc->createElement(X("displayformat"));
-		dfElem->appendChild(doc->createTextNode(X(df)));
-		
-		DOMElement * scElem = doc->createElement(X("source"));
-		scElem->appendChild(doc->createTextNode(X(src)));
-
-		//Start of DOM
-			//name
-			clipElem->appendChild(nameElem);
-			//duration
-        	        clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-			clipElem->appendChild(durElem1);
-			//anamorphic
-        	        clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-			clipElem->appendChild(anaElem);
-			//rate
-			clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-			clipElem->appendChild(rateElem);
-
-			//file name, tc, path into file
-			fileElem->appendChild(doc->createTextNode(X(newline_indent2)));
-			fileElem->appendChild(fnameElem);
-                	fileElem->appendChild(doc->createTextNode(X(newline_indent2)));
-			fileElem->appendChild(purlElem);
-                	fileElem->appendChild(doc->createTextNode(X(newline_indent2)));
-			fileElem->appendChild(tcElem);
-                	//file into clip
-			fileElem->setAttribute(X("id"), X(topPackage->name.c_str()));
-			clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-			clipElem->appendChild(fileElem);
-
-			//timecode inside file
-			timecodeElem->appendChild(doc->createTextNode(X(newline_indent3)));
-			timecodeElem->appendChild(tcElem);
-			timecodeElem->appendChild(doc->createTextNode(X(newline_indent3)));
-			timecodeElem->appendChild(dfElem);
-			timecodeElem->appendChild(doc->createTextNode(X(newline_indent3)));
-			timecodeElem->appendChild(scElem);
-			timecodeElem->appendChild(doc->createTextNode(X(newline_indent2)));
-			fileElem->appendChild(timecodeElem);	
-			int taudio=0;
-
-            for (std::vector<prodauto::Track*>::const_iterator iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++) //looks in at Track Detail
-	
-	        {
-		    //std::vector<prodauto::Track*>::const_iterator iter2 = topPackage->tracks.begin();
-                    prodauto::Track * track = *iter2;
-		    std::string trackname;
-		    std::string name = track->name.c_str();
-		    size_t pos = name.find_last_of("/");
-		    if(pos != std::string::npos)
-		    {
-			trackname = name.substr(pos + 1);
-		    }
-		    else
-		    {
-			trackname = name;
-		    }
-		    //printf("Track Name=%s\n",trackname.c_str()); //track name
-                    //printf("Source Clip Length=%lld\n",track->sourceClip->length); //track length
-		    //printf("Picture Def=%d\n",track->dataDef);
-
-
-		    SourcePackage dummy;
-                    dummy.uid = track->sourceClip->sourcePackageUID;
-                    PackageSet::iterator result = material.packages.find(&dummy);
-
-                    if (result != material.packages.end())
+                    MaterialPackage* topPackage1 = *iters1;
+        
+                    if (!donePackages.insert(topPackage1).second)
                     {
-                        Package* package = *result;
-                
-                        if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
-			{
-			    continue;
+                        // already done this package
+                        continue;
+                    }
+                    
+                    MaterialPackageSet materialPackages;
+                    materialPackages.insert(topPackage1);
+                    
+                    // add material to group that has same start time and creation date
+                    Rational palEditRate = {25, 1}; // any rate will do
+                    MaterialPackageSet::iterator iter2;
+                    for (iter2 = iters1, iter2++; iter2 != material.topPackages.end(); iter2++)
+                    {
+                        MaterialPackage* topPackage2 = *iter2;
+                        
+                        if (topPackage2->creationDate.year == topPackage1->creationDate.year &&
+                            topPackage2->creationDate.month == topPackage1->creationDate.month &&
+                            topPackage2->creationDate.day == topPackage1->creationDate.day &&
+                            getStartTime(topPackage1, material.packages, palEditRate) == 
+                                getStartTime(topPackage2, material.packages, palEditRate))
+                        {
+                            materialPackages.insert(topPackage2);
+                            donePackages.insert(topPackage2);
+                        }
+                    }
+
+                    // materialPackages now contains all MaterialPackages with same start time and creation date
+
+                    vector<MCClipDef*>::iterator iter3;
+                    for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
+                    {
+                        MCClipDef* mcClipDef = *iter3;
+
+                        fcpFile->addMCClip(mcClipDef, material, idname);
+			idname++;
+			totalMulticamGroups++;
+
+                        vector<CutInfo> sequence;
+                        if (mcCutsDatabase != 0)
+                        {
+                            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
+                            if (includeMCCutsSequence)
+			    {
+				printf("xml directors cut sequence size = %d\n", sequence.size());
+    				printf("--------------------\n");
+    				
+			        fcpFile->addMCSequence(mcClipDef, materialPackages, material.packages, sequence);
+			    }
 			}
-			SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-			if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
-			{
-			    continue;
-			}
-			FileEssenceDescriptor* fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(
-                    	sourcePackage->descriptor);
-			prodauto::Track * track = *iter2;
-		        std::string filelocation;
-		        std::string floc = fileDescriptor->fileLocation.c_str();
-		        size_t pos = floc.find_last_of("/");
-		        if(pos != std::string::npos)
-		        {
-			    filelocation = floc.substr(pos + 1);
-		        }
-		        else
-		        {
-			    filelocation = floc;
-		        }
-                        //printf("Location=%s\n",filelocation.c_str()); //file Location
-			//printf("File Format=%d\n",fileDescriptor->fileFormat); // file Format
 
-		  	//File Name and Location
-		        if (track->dataDef == PICTURE_DATA_DEFINITION)
-		        {
-			
-			    //printf("video\n");
-		            //Length
-		            std::ostringstream dur_ss;
-                            dur_ss << track->sourceClip->length;		
-		            durElem->appendChild(doc->createTextNode(X(dur_ss.str().c_str())));
-		            durElem1->appendChild(doc->createTextNode(X(dur_ss.str().c_str())));
-		            purlElem->appendChild(doc->createTextNode(X(fcppath.c_str())));
-		            purlElem->appendChild(doc->createTextNode(X(filelocation.c_str())));
-			    fnameElem->appendChild(doc->createTextNode(X(trackname.c_str())));
-		            //duration into file->media->video
-		            videoElem->appendChild(doc->createTextNode(X(newline_indent4)));		
-		            videoElem->appendChild(durElem);
-		            videoElem->appendChild(doc->createTextNode(X(newline_indent4)));
-		            //width and height into video sample characterstics
-		            vsmplchElem->appendChild(doc->createTextNode(X(newline_indent5)));
-		            vsmplchElem->appendChild(widthElem);
-		            vsmplchElem->appendChild(doc->createTextNode(X(newline_indent5)));
-		            vsmplchElem->appendChild(heightElem);				
-		            vsmplchElem->appendChild(doc->createTextNode(X(newline_indent4)));
-		            //video sample characteristics into file->media->video
-		            videoElem->appendChild(vsmplchElem);
-		            videoElem->appendChild(doc->createTextNode(X(newline_indent3)));
-	  	            //video into media
-		            mediaElem->appendChild(doc->createTextNode(X(newline_indent3)));
-		            mediaElem->appendChild(videoElem);
-		         }
-		         else if (track->dataDef == SOUND_DATA_DEFINITION)
-                         {
-			     taudio++;
-			     if (sourcePackage->sourceConfigName.c_str() == temptest)
-			     {
-			         if (taudio==1)
-			         {
+                        totalDirectorsCutsSequences = sequence.empty() ? 
+                        totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
+                        //printf("aaf directors cut sequence size = %d\n", sequence.size());
+                    }
+                }//iterate over material.topPackages
+            }
+/*		Rational palEditRate = {25, 1};
+           	int idname= 1;
+                mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
+		vector<MCClipDef*>::iterator itmc1;
+		for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
+		{
+		    MCClipDef * itmcP = *itmc1;
+		    fcpFile->addMCClip(itmcP, material, idname);
+		    idname++;
+		    ++totalMulticamGroups;
+		}
+		if(includeMCCutsSequence) //sequence
+		{
 
-			             //samplerate + depth into sample characteristics
-			             asmplchElem->appendChild(doc->createTextNode(X(newline_indent5)));
-			             asmplchElem->appendChild(smplrteElem);
-			             asmplchElem->appendChild(doc->createTextNode(X(newline_indent5)));
-			             asmplchElem->appendChild(dpthElem);				
-			             asmplchElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			             //audio sample characteristics into file->media->audio
-			             audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			             audioElem->appendChild(asmplchElem);
-			             //layout into audio
-			             audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			             audioElem->appendChild(layoutElem);
-			         }
-			         //int t=taudio;
-			         //if(t == 1)
-			         //{			
-			             std::ostringstream t1_ss;
-			             t1_ss << taudio;			
-			             //audio channel label into audio channel
-			             {
-			               DOMElement * chnllbrElem = doc->createElement(X("channellabel"));
-			               DOMElement * audiochrElem1 = doc->createElement(X("audiochannel"));
-			               audiochrElem1->appendChild(doc->createTextNode(X(newline_indent5)));
-			               chnllbrElem->appendChild(doc->createTextNode(X("ch")));
-			               chnllbrElem->appendChild(doc->createTextNode(X(t1_ss.str().c_str())));
-			               audiochrElem1->appendChild(chnllbrElem);
-			               audiochrElem1->appendChild(doc->createTextNode(X(newline_indent4)));
-			               //audio channel into file->media->audio
-			               audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			               audioElem->appendChild(audiochrElem1);
-			               audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			             }
-			             mediaElem->appendChild(doc->createTextNode(X(newline_indent3)));
-			             mediaElem->appendChild(audioElem) ;
-			             //t--;
-			         //}
-			         /*if(t == 2)
-			         {			
-			             std::ostringstream t1_ss;
-			             t1_ss << t;			
-			             //audio channel label into audio channel
-			             {
-			               DOMElement * chnllbrElem = doc->createElement(X("channellabel"));
-			               DOMElement * audiochrElem1 = doc->createElement(X("audiochannel"));
-			               audiochrElem1->appendChild(doc->createTextNode(X(newline_indent5)));
-			               chnllbrElem->appendChild(doc->createTextNode(X("ch")));
-			               chnllbrElem->appendChild(doc->createTextNode(X(t1_ss.str().c_str())));
-			               audiochrElem1->appendChild(chnllbrElem);
-			               audiochrElem1->appendChild(doc->createTextNode(X(newline_indent4)));
-			               //audio channel into file->media->audio
-			               audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			               audioElem->appendChild(audiochrElem1);
-			               audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-			             }
-			             mediaElem->appendChild(doc->createTextNode(X(newline_indent3)));
-			             mediaElem->appendChild(audioElem) ;
-			             t--;
-			         }*/
-			     }
-                         }
-		         else
-                         {
-	                     printf("unknown clip type");
-                         }
 
-		     }	
 
-		     //printf("---------------------\n");
-	             //printf("\n");
-		 }    
-		 std::ostringstream taudioss;
-                 taudioss << taudio;	
-		 //channel count into audio
-		 //printf("ch taudio=%d\n",taudio);
-		 chnlElem->appendChild(doc->createTextNode(X("2")));
-		 audioElem->appendChild(doc->createTextNode(X(newline_indent4)));
-		 audioElem->appendChild(chnlElem);	
-		 //media into file
-		 mediaElem->appendChild(doc->createTextNode(X(newline_indent2)));
-		 fileElem->appendChild(doc->createTextNode(X(newline_indent2)));
-		 fileElem->appendChild(mediaElem);
-		 fileElem->appendChild(doc->createTextNode(X(newline_indent1)));	
-		 //clip details cntd.
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-		 clipElem->appendChild(inElem);
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-		 clipElem->appendChild(outElem);
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-		 //master clip id, name plus M
-		 DOMElement * masteridElem = doc->createElement(X("masterclipid"));
-		 masteridElem->appendChild(doc->createTextNode(X("M")));
-		 masteridElem->appendChild(doc->createTextNode(X(topPackage->name.c_str())));
-		 clipElem->appendChild(masteridElem);
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-		 clipElem->appendChild(ismasterElem);
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-		
-		 //default angle, must increase by 1 for each clip
-		 DOMElement * defangleElem = doc->createElement(X("defaultangle"));
-		 defangleElem->appendChild(doc->createTextNode(X(angle_ss.str().c_str())));
-		 clipElem->appendChild(defangleElem);			
-		 clipElem->appendChild(doc->createTextNode(X(newline_indent1)));
 
-		 clipElem->appendChild(doc->createTextNode(X(newline)));
-		 clipElem->appendChild(doc->createTextNode(X(newline)));	
-	         ++ totalClips;	
-	    }// End of Clip definitions
-                
+
+
+
+
+		    MaterialPackageSet donePackages;
+		    MaterialPackageSet::iterator iters1;
+               	    for (iters1 = material.topPackages.begin(); iters1 != material.topPackages.end(); iters1++)
+                    {
+                    	MaterialPackage* topPackageS1 = *iters1;
+                    	MaterialPackageSet materialPackages;
+                    	materialPackages.insert(topPackageS1);
+                    	// add material to group that has same start time and creation date
+                   	MaterialPackageSet::iterator iters2;
+                   	for (iters2 = iters1, iters2++; iters2 != material.topPackages.end(); iters2++)
+                   	{
+                            MaterialPackage* topPackageS2 = *iters2;
+                            if (topPackageS2->creationDate.year == topPackageS1->creationDate.year && topPackageS2->creationDate.month == topPackageS1->creationDate.month && topPackageS2->creationDate.day == topPackageS1->creationDate.day && getStartTime(topPackageS1, material.packages, palEditRate) == getStartTime(topPackageS2, material.packages, palEditRate))
+                            {
+                                materialPackages.insert(topPackageS2);
+                                donePackages.insert(topPackageS2);
+                            }
+			    // materialPackages now contains all MaterialPackages with same start time and creation date
+			    mcClipDefs.get() = database->loadAllMultiCameraClipDefs(); 
+			    vector<MCClipDef*>::iterator iterS3;
+                            for (iterS3 = mcClipDefs.get().begin(); iterS3 != mcClipDefs.get().end(); iterS3++)
+                            {
+                                MCClipDef* mcClipDef = *iterS3;
+                                vector<CutInfo> sequence;
+                                if (mcCutsDatabase != 0)
+                                {
+                                    sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackageS1->creationDate, getStartTime(topPackageS1, material.packages, palEditRate));
+				    totalDirectorsCutsSequences = sequence.empty() ? 
+                            	    totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
+				    if (sequence.empty() != true)
+				    {
+				        fcpFile->addMCSequence(mcClipDef, materialPackages, material.packages, sequence);
+				    }
+				}// end of if any sequences
+                            }// end of mcClipsDef
+			}// end of material package set 2!
+		    }
+
+
+		}// end of Sequences
+	    }// end of FCP M-Clips	*/
+	}	
+   
+				    
+        //printf("its out\n");
+        printf("\n%s\n", g_resultsPrefix);
+        printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
+	//XmlTools::DomToFile(doc, (*filenamesIter2).c_str());
+        fcpFile->save();
+	delete fcpFile;
+	//doc->release();
+        //XmlTools::Terminate();
+        printf("%s\n", createSingleClipFilenameX(filenamePrefix, suffix).c_str());
+    }//CLOSES XML DOM
+
+    Database::close();
+    return 0;
+}
+
+/*                
 	if (createMultiCam)
         {	
 
-	    int n=0;
-	    // load multi-camera clip definitions- need MCClip defs(?)
-            vector<MCClipDef*>::iterator itmc;
-	    MaterialPackageSet materialPackages;
-            for (itmc = mcClipDefs.get().begin(); itmc != mcClipDefs.get().end(); itmc++)
-	    {
-	        MaterialPackageSet donePackages;
-	        for (MaterialPackageSet::const_iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
-                {
-	            //De-bugging info
-	            //printf("\n");
-	            //printf("--------- START OF MULTICLIP ---------\n");
-	            ++n;
-	            std::ostringstream n_ss;
-                    n_ss << n;
-	            //printf("Multiclip \n");       
-  	            int c1 = 0;
-	            //DOM Details for Multiclip
-	            //TAGS
-	            //Rate Tag
-	            DOMElement * rateElem = doc->createElement(X("rate"));
-	            DOMElement * rate2Elem = doc->createElement(X("rate"));
-	            //Media Tag
-	            DOMElement * mediaElem = doc->createElement(X("media"));
-	            //Video Tag
-	            DOMElement * videoElem = doc->createElement(X("video"));
- 	            //rate
-	            DOMElement * ntscElem = doc->createElement(X("ntsc"));
-	            ntscElem->appendChild(doc->createTextNode(X(ntsc)));
-	            DOMElement * tbElem = doc->createElement(X("timebase"));
-	            tbElem->appendChild(doc->createTextNode(X(tb)));
-	            rateElem->appendChild(doc->createTextNode(X(newline_indent2)));
-	            rateElem->appendChild(ntscElem);
-	            rateElem->appendChild(doc->createTextNode(X(newline_indent2)));
-	            rateElem->appendChild(tbElem);
-	            rateElem->appendChild(doc->createTextNode(X(newline_indent1)));
-
-	            DOMElement * ntscElem2 = doc->createElement(X("ntsc"));
-	            ntscElem2->appendChild(doc->createTextNode(X(ntsc)));
-	            DOMElement * tbElem2 = doc->createElement(X("timebase"));
-	            tbElem2->appendChild(doc->createTextNode(X(tb)));
-	            rate2Elem->appendChild(doc->createTextNode(X(newline_indent5)));
-	            rate2Elem->appendChild(ntscElem2);
-	            rate2Elem->appendChild(doc->createTextNode(X(newline_indent5)));
-	            rate2Elem->appendChild(tbElem2);
-	            rate2Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-	    
-                    //Mduration
-	            DOMElement * MdurElem = doc->createElement(X("duration"));
-	            DOMElement * Mdur2Elem = doc->createElement(X("duration"));
-	            //Mclipitem1
-	            DOMElement * Mclipitem1Elem = doc->createElement(X("clipitem"));
-	            //Multiclip id
-	            DOMElement * MclipidElem = doc->createElement(X("multiclip"));
-	            //Mcollapsed
-	            DOMElement * McollapsedElem = doc->createElement(X("collapsed"));
-	            //Msynctype
-	            DOMElement * MsyncElem = doc->createElement(X("synctype"));
-	            //Mclip
-	            DOMElement * MclipElem = doc->createElement(X("clip"));
-	            //Mname
-	            DOMElement * MnameElem = doc->createElement(X("name"));
-	            DOMElement * Mname1Elem = doc->createElement(X("name"));
-	            DOMElement * Mname2Elem = doc->createElement(X("name"));
-	            //Track Tag
-	            DOMElement * trackElem = doc->createElement(X("track"));
-
-	            DOMElement * inElem = doc->createElement(X("in"));
-	            inElem->appendChild(doc->createTextNode(X("-1")));
-
-	            DOMElement * outElem = doc->createElement(X("out"));
-	            outElem->appendChild(doc->createTextNode(X("-1")));
-
-	            DOMElement * ismasterElem = doc->createElement(X("ismasterclip"));
-	            ismasterElem->appendChild(doc->createTextNode(X("FALSE")));
-
-	            //Name
-                    MaterialPackage* topPackage1 = *iter1;
-                    if (!donePackages.insert(topPackage1).second)
-                    {
-                    // already done this package
-                       continue;
-                    }
-                   
-                    MaterialPackageSet materialPackages;
-                    materialPackages.insert(topPackage1);
-
-                    //DOM Multicam 
-                    // add material to group that has same start time and creation date
-
-                    Rational palEditRate = {25, 1}; 
-                    for (MaterialPackageSet::const_iterator iter2 = iter1; iter2 != material.topPackages.end(); iter2++)
-                    {
-	               MaterialPackage* topPackage2 = *iter2;
-		       int64_t st_time;
-
-		       if (topPackage2->creationDate.year == topPackage1->creationDate.year && topPackage2->creationDate.month == topPackage1->creationDate.month && topPackage2->creationDate.day == topPackage1->creationDate.day && getStartTime(topPackage1, material.packages, palEditRate) ==  getStartTime(topPackage2, material.packages, palEditRate))
-		       {
-			  
-		           materialPackages.insert(topPackage2);
-			   donePackages.insert(topPackage2);
-			   //looks in at Track Detail
-			   for (std::vector<prodauto::Track*>::const_iterator iter2 = topPackage2->tracks.begin(); iter2 != topPackage2->tracks.end(); iter2++) 
-			   {
-			       c1++;
-			       prodauto::Track * track = *iter2;
-			       if (c1 == 1)
-			       {
-			           //MClip DOM Start
-				   rootElem->appendChild(doc->createTextNode(X(newline)));
-				   rootElem->appendChild(MclipElem);
-				   MclipElem->setAttribute(X("id"), X(n_ss.str().c_str()));
-				   //Name
-				   Mname2Elem->appendChild(doc->createTextNode(X("Multicam")));
-				   Mname2Elem->appendChild(doc->createTextNode(X(n_ss.str().c_str())));
-				   Mname1Elem->appendChild(doc->createTextNode(X("Multicam")));
-				   Mname1Elem->appendChild(doc->createTextNode(X(n_ss.str().c_str())));
-				   MnameElem->appendChild(doc->createTextNode(X("Multicam")));
-				   MnameElem->appendChild(doc->createTextNode(X(n_ss.str().c_str())));
-				   //Duration
-				   std::ostringstream tMdurss;
-				   tMdurss << track->sourceClip->length;
-				   MdurElem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
-				   Mdur2Elem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
-				   //Clip Items: name
-				   rootElem->appendChild(doc->createTextNode(X(newline)));
-				   Mclipitem1Elem->setAttribute(X("id"), X(n_ss.str().c_str()));
-				   //Collapsed
-				   McollapsedElem->appendChild(doc->createTextNode(X("FALSE")));
-				   //Sync Type
-				   MsyncElem->appendChild(doc->createTextNode(X("3")));
-				   //Append above to Tracks
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   MclipElem->appendChild(Mname1Elem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   MclipElem->appendChild(MdurElem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   //Rate
-				   MclipElem->appendChild(rateElem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   MclipElem->appendChild(inElem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   MclipElem->appendChild(outElem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   MclipElem->appendChild(ismasterElem);
-				   MclipElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				   //Multiclip
-				   Mclipitem1Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   Mclipitem1Elem->appendChild(Mname2Elem);
-				   Mclipitem1Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   Mclipitem1Elem->appendChild(Mdur2Elem);
-				   Mclipitem1Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   Mclipitem1Elem->appendChild(rate2Elem);
-				   Mclipitem1Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   Mclipitem1Elem->setAttribute(X("id"), X(n_ss.str().c_str()));
-				   MclipidElem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   MclipidElem->appendChild(MnameElem);
-				   MclipidElem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   MclipidElem->appendChild(McollapsedElem);
-				   MclipidElem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   MclipidElem->appendChild(MsyncElem);
-				   MclipidElem->appendChild(doc->createTextNode(X(newline_indent4)));
-				   MclipidElem->setAttribute(X("id"), X(n_ss.str().c_str()));
-			        }
-			        //Material Package Name
-			        SourcePackage dummy;
-			        dummy.uid = track->sourceClip->sourcePackageUID;
-			        PackageSet::iterator result = material.packages.find(&dummy);
-			        vector<MCClipDef*>::iterator itmc1;
-			        MaterialPackageSet materialPackages;
-			        for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
-			        {
-			            MCClipDef * mcClipDef = *itmc1;				
-				    if (itmc1 == itmc)
-				    {
-				        for (std::vector<SourceConfig*>::const_iterator itmc2 = mcClipDef->sourceConfigs.begin(); itmc2 != mcClipDef->sourceConfigs.end(); itmc2++)
-				        {
-				            //SourceConfig * sourceConfigs = *itmc2;
-				            Package* package = *result;
-				            SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-				            if ((*itmc2)->name == sourcePackage->sourceConfigName)
-				            {
-				                //printf("\n  <-START OF TRACK DETAILS-> \n");
-				    	        //printf("Track file name=%s\n",topPackage2->name.c_str());
-				                st_time = getStartTime(topPackage2, material.packages, palEditRate);
-				                Timecode tc(st_time);
-				                //printf("Time code=%s\n",tc.Text());
-				                //printf("Source Config Name %s\n", sourcePackage->sourceConfigName.c_str());
-				    	        if (track->dataDef != PICTURE_DATA_DEFINITION) //audio
-				                {
-					            //printf("Audio Track Name=%s\n",track->name.c_str()); //track name
-					            //printf("Audio Source Clip Length=%lld\n",track->sourceClip->length); 
-				                }
-				                if (track->dataDef == PICTURE_DATA_DEFINITION) //VIDEO
-				                { 
-					            //Mclip
-					            DOMElement * Mclip2Elem = doc->createElement(X("clip"));
-					            //Mclip
-					            DOMElement * MfileElem = doc->createElement(X("file"));
-					            //Mangle1
-					            DOMElement * Mangle1Elem = doc->createElement(X("angle"));
-					            //printf("Video Track Name=%s\n",track->name.c_str()); //track name
-					            //printf("Video Source Clip Length=%lld\n",track->sourceClip->length);
-						    Mclip2Elem->setAttribute(X("id"), X(topPackage2->name.c_str()));	
-						    MfileElem->setAttribute(X("id"), X(topPackage2->name.c_str()));
-						    Mangle1Elem->appendChild(doc->createTextNode(X(newline_indent6)));
-						    Mclip2Elem->appendChild(doc->createTextNode(X(newline_indent7)));
-						    Mclip2Elem->appendChild(MfileElem);
-						    Mclip2Elem->appendChild(doc->createTextNode(X(newline_indent7)));
-						    Mangle1Elem->appendChild(Mclip2Elem);
-						    Mangle1Elem->appendChild(doc->createTextNode(X(newline_indent6)));
-						    MclipidElem->appendChild(doc->createTextNode(X(newline_indent5)));
-						    MclipidElem->appendChild(Mangle1Elem);
-						    Mclipitem1Elem->appendChild(MclipidElem);
-						    Mclipitem1Elem->appendChild(doc->createTextNode(X(newline_indent4)));
-						    trackElem->appendChild(Mclipitem1Elem);
-						    trackElem->appendChild(doc->createTextNode(X(newline_indent3)));
-						    videoElem->appendChild(trackElem);
-						    videoElem->appendChild(doc->createTextNode(X(newline_indent2)));
-						    mediaElem->appendChild(videoElem);
-						    mediaElem->appendChild(doc->createTextNode(X(newline_indent2)));
-						    MclipElem->appendChild(mediaElem);		
-				                }
-			    	                //printf("  <-END OF TRACK DETAILS-> \n\n");	
-				            }
-				        }
-			            }
-			        }
-			    }
-			
-		        }//if multicam
-	        
-		    }//for material package
-
-	    ++ totalMulticamGroups;
+		int in= -1;
+		int out= -1;
+           	int idname= 1;
+		
+                mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
+		vector<MCClipDef*>::iterator itmc1;
+		for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
+		{
+		    
+		    MCClipDef * itmcP = *itmc1;
+		    makeMultiClip(itmcP, in, out, totalMulticamGroups, material, fcpFile.addMCClip, idname);
+		    idname++;
 		}
-
-	    }	
-	    //printf("--------- END OF MULTICLIP ---------\n");
-
 	}// end of multicam  
+*/
+/*
+	if (includeMCCutsSequence)
+	{
+		// 1-load Cut Data
+	    vector<MCClipDef*>::iterator iter6;
+            MaterialPackageSet materialPackages;
+	    
 
+	    for (iter6 = mcClipDefs.get().begin(); iter6 != mcClipDefs.get().end(); iter6++)
+	    {
+		int palEditRate = 25;
+	        MCClipDef* mcClipDef = *iter6;
+	        vector<CutInfo> sequence;
+		for (MaterialPackageSet::iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
+		{
+		    TopPackage* topPackages1 = *iter1;
+	            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
+		}
+	        printf("xml directors cut sequence size = %d\n", sequence.size());
+	    }
+	}
+*/
+	    //loads packages to comare in topPackages10
+	    
+		// 2-iterate through each cut
+		// 3-at each cut, find the active track details
+		// 4-print to DOM Multiclip info, including cut times.
 
 
 		    //SEQUENCES
@@ -1728,57 +1571,10 @@ int main(int argc, const char* argv[])
 
 	
         
-        // add clips for each material package that includes a track that will be
-        // referenced (active) by the multi-camera clip
-        MaterialPackageSet::const_iterator iter;
-        for (iter = materialPackages.begin(); iter != materialPackages.end(); iter++)
-        {
-            MaterialPackage* materialPackage = *iter;
-
-            SourcePackage* fileSourcePackage = 0;
-            SourcePackage* sourcePackage = 0;
-            Track* sourceTrack = 0;
-
-            vector<Track*>::const_iterator iter2;
-            for (iter2 = materialPackage->tracks.begin(); iter2 != materialPackage->tracks.end(); iter2++)
-            {
-                Track* track = *iter2;
-                
-                // get the source package and track for this material package track
-                if (getSource(track, packages, &fileSourcePackage, &sourcePackage, &sourceTrack))
-                {
-                    bool donePackage = false;
-                    map<uint32_t, MCTrackDef*>::const_iterator iter3;
-                    for (iter3 = mcClipDef->trackDefs.begin(); !donePackage && iter3 != mcClipDef->trackDefs.end(); iter3++)
-                    {
-                        MCTrackDef* trackDef = (*iter3).second;
-                        
-                        map<uint32_t, MCSelectorDef*>::const_iterator iter4;
-                        for (iter4 = trackDef->selectorDefs.begin(); !donePackage && iter4 != trackDef->selectorDefs.end(); iter4++)
-                        {
-                            MCSelectorDef* selectorDef = (*iter4).second;
-                        
-                            if (!selectorDef->isConnectedToSource())
-                            {
-                                continue;
-                            }
-                            
-                            // if the source package and track match the multi-camera selection
-                            if (selectorDef->sourceConfig->name.compare(fileSourcePackage->sourceConfigName) == 0 && 
-                                sourceTrack->id == selectorDef->sourceTrackID)
-                            {
-                                if (activeMaterialPackages.insert(materialPackage).second)
-                                {
-                                    printf("sourceConfig name %s\n", selectorDef->sourceConfig->name.c_str());
-				    printf("fileConfig name %s\n", fileSourcePackage->sourceConfigName.c_str());
-                                }
-                                donePackage = true;
-                            }
-                        }
-                    }
-                }
+        
 	    
 */
+
 /*		   //load sequence 
 	vector<MCClipDef*>::iterator iter6;
 	printf("im here1\n");
@@ -1963,21 +1759,8 @@ int main(int argc, const char* argv[])
 		
 //DOM Print Details
    
-        XmlTools::DomToFile(doc, filenamePrefix.c_str());
-        doc->release();
-        XmlTools::Terminate();
-        //printf("its out\n");
-        printf("\n%s\n", g_resultsPrefix);
-        printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
-        vector<string>::const_iterator filenamesIter;
-        printf("%s\n",filenamePrefix.c_str());
-    }//CLOSES XML DOM
 
-    }//CLOSES IF FCPXML
 
-    Database::close();
-    return 0;
-}
 
 
 

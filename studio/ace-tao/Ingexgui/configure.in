@@ -114,8 +114,8 @@ AC_DEFUN([ACETAOTEST],
 ACETAOTEST
 
 CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
-CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -la52 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
+m CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
+LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
 

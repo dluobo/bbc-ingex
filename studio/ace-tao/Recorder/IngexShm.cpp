@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.6 2008/10/08 10:16:06 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.7 2008/10/22 09:32:19 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -33,7 +33,7 @@
 IngexShm * IngexShm::mInstance = 0;
 
 IngexShm::IngexShm(void)
-: mChannels(0), mAudioTracksPerChannel(0), mTcMode(VITC)
+: mChannels(0), mAudioTracksPerChannel(0), mpControl(0), mTcMode(VITC)
 {
 }
 

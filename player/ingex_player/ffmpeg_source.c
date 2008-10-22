@@ -1,0 +1,1700 @@
+/* used ffmpeg's ffplay.c as a starting point */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <assert.h>
+
+
+#if !defined(HAVE_FFMPEG) || !defined(HAVE_FFMPEG_SWSCALE)
+
+#include "ffmpeg_source.h"
+
+int fms_open(const char* filename, int threadCount, MediaSource** source)
+{
+    return 0;
+}
+
+
+
+#else /* defined(HAVE_FFMPEG) && defined(HAVE_FFMPEG_SWSCALE) */
+
+
+#ifdef FFMPEG_OLD_INCLUDE_PATHS
+#include <ffmpeg/avformat.h>
+#include <ffmpeg/swscale.h>
+#else
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
+#endif
+
+#include "ffmpeg_source.h"
+#include "video_conversion.h"
+#include "logging.h"
+#include "macros.h"
+
+
+/* results returned by process_video_packet and process_audio_packet */
+#define PROCESS_FRAME_SUCCESS           0
+#define PROCESS_FRAME_FAILED            -1
+#define NO_FRAME_DATA                   -2
+#define EARLY_FRAME                     1
+#define LATE_FRAME                      2
+
+/* max frames to go back if a read returns a frame beyond the target frame */ 
+#define MAX_ADJUST_READ_START_COUNT     32
+
+
+#if 0
+#define DEBUG(format) {printf("Debug: "); printf(format);}
+#define DEBUG1(format, p1) {printf("Debug: "); printf(format, p1);}
+#define DEBUG2(format, p1, p2) {printf("Debug: "); printf(format, p1, p2);}
+#define DEBUG3(format, p1, p2, p3) {printf("Debug: "); printf(format, p1, p2, p3);}
+#define DEBUG4(format, p1, p2, p3, p4) {printf("Debug: "); printf(format, p1, p2, p3, p4);}
+#define DEBUG5(format, p1, p2, p3, p4, p5) {printf("Debug: "); printf(format, p1, p2, p3, p4, p5);}
+#else
+#define DEBUG(format)
+#define DEBUG1(format, p1)
+#define DEBUG2(format, p1, p2)
+#define DEBUG3(format, p1, p2, p3)
+#define DEBUG4(format, p1, p2, p3, p4)
+#define DEBUG5(format, p1, p2, p3, p4, p5)
+#endif
+
+
+typedef struct
+{
+    int streamIndex;
+    StreamInfo streamInfo;
+    int isDisabled;
+
+    unsigned char* buffer;
+    int bufferSize;
+    int dataSize; /* will be different from bufferSize when audio with 525 line video is supported */
+} OutputStreamData;
+
+typedef struct
+{
+    int index;
+    int avStreamIndex;
+    
+    AVFrame* frame;
+    struct SwsContext* imageConvertContext;
+    int dataOffset[3];
+    int lineSize[3];
+    enum PixelFormat outputPixelFormat;
+    
+    OutputStreamData outputStream;
+    int isReady;
+} VideoStream;
+
+typedef struct
+{
+    int index;
+    int avStreamIndex;
+    
+    OutputStreamData outputStreams[16];
+    int numOutputStreams;
+    int isReady;
+    
+    AVPacket* packet;
+    uint8_t* packetNextData;
+    int packetNextSize;
+    
+    unsigned char* decodeBuffer;
+    int decodeBufferSize;
+    int decodeDataSize;
+    
+    int64_t initialDecodeSample;
+    int64_t firstDecodeSample;
+    int numDecodeSamples;
+    
+    int64_t firstOutputSample;
+    int numOutputSamples;
+} AudioStream;
+
+typedef struct
+{
+    int threadCount;
+    
+    MediaSource mediaSource;
+
+    AVFormatContext* formatContext;
+    AVPacket flushPacket;
+    
+    VideoStream videoStreams[32];
+    int numVideoStreams;
+    AudioStream audioStreams[32];
+    int numAudioStreams;
+    
+    Rational frameRate;
+    
+    int64_t position;
+    int64_t length;
+} FFMPEGSource;
+
+
+static int64_t g_videoPacketPTS = (int64_t)AV_NOPTS_VALUE;
+
+
+
+static void deinterleave_audio(const int16_t* input, int numChannels, int numSamples, int outputChannel, unsigned char* output)
+{
+    int i;
+    const int16_t* inputPtr = input + outputChannel;
+    unsigned char* outputPtr = output;
+    
+    for (i = 0; i < numSamples; i++)
+    {
+        /* output is 16-bit PCM little endian */
+        *outputPtr++ = *inputPtr & 0x00ff;
+        *outputPtr++ = (*inputPtr >> 8) & 0x00ff;
+        
+        inputPtr += numChannels;
+    }
+}
+
+
+static VideoStream* get_video_stream(FFMPEGSource* source, int avStreamIndex)
+{
+    int i;
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        if (source->videoStreams[i].avStreamIndex == avStreamIndex)
+        {
+            return &source->videoStreams[i];
+        }
+    }
+    
+    return NULL;
+}
+
+static AudioStream* get_audio_stream(FFMPEGSource* source, int avStreamIndex)
+{
+    int i;
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        if (source->audioStreams[i].avStreamIndex == avStreamIndex)
+        {
+            return &source->audioStreams[i];
+        }
+    }
+    
+    return NULL;
+}
+
+static void clear_stream_data(FFMPEGSource* source)
+{
+    int i;
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        source->videoStreams[i].isReady = 0;
+    }
+
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        source->audioStreams[i].isReady = 0;
+        source->audioStreams[i].firstOutputSample = 0;
+        source->audioStreams[i].numOutputSamples = 0;
+    }
+}
+
+static int all_streams_ready(FFMPEGSource* source)
+{
+    int i;
+    int j;
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        if (!source->videoStreams[i].isReady)
+        {
+            return 0;
+        }
+    }
+
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
+        {
+            if (!source->audioStreams[i].isReady)
+            {
+                return 0;
+            }
+        }
+    }
+    
+    return 1;
+}
+
+static OutputStreamData* get_output_stream(FFMPEGSource* source, int streamIndex)
+{
+    int i;
+    int j;
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        if (source->videoStreams[i].outputStream.streamIndex == streamIndex)
+        {
+            return &source->videoStreams[i].outputStream;
+        }
+    }
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
+        {
+            if (source->audioStreams[i].outputStreams[j].streamIndex == streamIndex)
+            {
+                return &source->audioStreams[i].outputStreams[j];
+            }
+        }
+    }
+    
+    return NULL;
+}
+
+static int is_disabled(FFMPEGSource* source)
+{
+    int i;
+    int j;
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        if (!source->videoStreams[i].outputStream.isDisabled)
+        {
+            return 0;
+        }
+    }
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
+        {
+            if (!source->audioStreams[i].outputStreams[j].isDisabled)
+            {
+                return 0;
+            }
+        }
+    }
+    
+    return 1;
+}
+
+
+
+static void flush_video_buffers(FFMPEGSource* source, VideoStream* videoStream)
+{
+    avcodec_flush_buffers(source->formatContext->streams[videoStream->avStreamIndex]->codec);    
+}
+
+static void flush_audio_buffers(FFMPEGSource* source, AudioStream* audioStream)
+{
+    avcodec_flush_buffers(source->formatContext->streams[audioStream->avStreamIndex]->codec);
+    
+    if (audioStream->packet != NULL)
+    {
+        av_free_packet(audioStream->packet);
+        av_freep(&audioStream->packet);
+    }
+    audioStream->firstDecodeSample = 0;
+    audioStream->numDecodeSamples = 0;
+}
+
+static int get_video_buffer(struct AVCodecContext* c, AVFrame *pic)
+{
+    int ret = avcodec_default_get_buffer(c, pic);
+    
+    /* attach the pts from the packet so we know the pts of the returned decoded frame */
+    int64_t* pts = av_malloc(sizeof(int64_t));
+    *pts = g_videoPacketPTS;
+    pic->opaque = pts;
+    
+    return ret;
+}
+
+static void release_video_buffer(struct AVCodecContext* c, AVFrame* pic)
+{
+    if (pic != NULL) 
+    {
+        av_freep(&pic->opaque);
+    }
+    
+    avcodec_default_release_buffer(c, pic);
+}
+
+static int open_video_stream(FFMPEGSource* source, int avStreamIndex, int* outputStreamIndex)
+{
+    AVStream* stream = source->formatContext->streams[avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    AVCodec* codec = NULL;
+    VideoStream* videoStream = &source->videoStreams[source->numVideoStreams];
+    const double imageAspectRatio4By3 = 4 / (double)3;
+    const double imageAspectRatio16By9 = 16 / (double)9;
+    double imageAspectRatio;
+    
+    if (source->numVideoStreams + 1 >= (int)(sizeof(source->videoStreams) / sizeof(VideoStream)))
+    {
+        ml_log_error("Maximum video streams (%d) exceeded\n", sizeof(source->videoStreams) / sizeof(VideoStream));
+        return 0;
+    }
+    
+    
+    codec = avcodec_find_decoder(codecContext->codec_id);
+    if (codec == NULL)
+    {
+        ml_log_error("Failed to find video decoder\n");
+        return 0;
+    }
+    
+    codecContext->debug_mv = 0;
+    codecContext->debug = 0;
+    codecContext->workaround_bugs = 1;
+    codecContext->lowres = 0;
+    if (codecContext->lowres) 
+    {
+        codecContext->flags |= CODEC_FLAG_EMU_EDGE;
+    }
+    codecContext->idct_algo = FF_IDCT_AUTO;
+    codecContext->skip_frame = AVDISCARD_DEFAULT;
+    codecContext->skip_idct = AVDISCARD_DEFAULT;
+    codecContext->skip_loop_filter = AVDISCARD_DEFAULT;
+    codecContext->error_resilience = FF_ER_CAREFUL;
+    codecContext->error_concealment = 3;
+
+    if (avcodec_open(codecContext, codec) < 0)
+    {
+        ml_log_error("Failed to open ffmpeg video codec\n");
+        return 0;
+    }
+    
+    if (source->threadCount > 1)
+    {
+        if (avcodec_thread_init(codecContext, source->threadCount) < 0)
+        {
+            ml_log_error("Failed to initialise ffmpeg threads\n");
+            avcodec_close(codecContext);
+            return 0;
+        }
+        codecContext->thread_count = source->threadCount;
+    }
+
+    codecContext->get_buffer = get_video_buffer;
+    codecContext->release_buffer = release_video_buffer;
+    
+    
+    videoStream->frame = avcodec_alloc_frame();
+    if (videoStream->frame == NULL)
+    {
+        ml_log_error("Failed to allocate ffmpeg video frame\n");
+        avcodec_close(codecContext);
+        return 0;
+    }
+    
+
+    videoStream->index = source->numVideoStreams;
+    videoStream->avStreamIndex = avStreamIndex;
+
+    videoStream->outputStream.streamIndex = (*outputStreamIndex)++;
+    
+    videoStream->outputStream.streamInfo.type = PICTURE_STREAM_TYPE;
+    videoStream->outputStream.streamInfo.sourceId = msc_create_id();
+
+    videoStream->outputStream.streamInfo.width = codecContext->width;
+    videoStream->outputStream.streamInfo.height = codecContext->height;
+    
+    videoStream->outputStream.streamInfo.singleField = 0; /* TODO: can we tell? */
+
+    /* TODO: support non-PAL frame rates */
+    if ((stream->r_frame_rate.den * 25) % stream->r_frame_rate.num != 0)
+    {
+        ml_log_error("Non-PAL frame rates (%d/%d) are not yet supported\n",
+            stream->r_frame_rate.num, stream->r_frame_rate.den);
+        avcodec_close(codecContext);
+        return 0;
+    }
+    videoStream->outputStream.streamInfo.frameRate = (Rational){25, 1};
+    source->frameRate = (Rational){25, 1};
+    
+    if (codecContext->sample_aspect_ratio.num == 0 || codecContext->sample_aspect_ratio.den == 0)
+    {
+        /* assume 4:3 */
+        videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
+    }
+    else 
+    {
+        if ((codecContext->sample_aspect_ratio.num == 16 && codecContext->sample_aspect_ratio.den == 15) ||
+            (codecContext->sample_aspect_ratio.num == 12 && codecContext->sample_aspect_ratio.den == 11) ||
+            (codecContext->sample_aspect_ratio.num == 59 && codecContext->sample_aspect_ratio.den == 54))
+        {
+            /* 4:3 PAL */
+            videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
+        }
+        else if ((codecContext->sample_aspect_ratio.num == 64 && codecContext->sample_aspect_ratio.den == 45) ||
+            (codecContext->sample_aspect_ratio.num == 16 && codecContext->sample_aspect_ratio.den == 11) ||
+            (codecContext->sample_aspect_ratio.num == 118 && codecContext->sample_aspect_ratio.den == 81))
+        {
+            /* 16:9 PAL */
+            videoStream->outputStream.streamInfo.aspectRatio = (Rational){16, 9};
+        }
+        else
+        {
+            /* TODO: is this code correct? */
+            imageAspectRatio = (codecContext->width * codecContext->sample_aspect_ratio.num) / 
+                (double)(codecContext->height * codecContext->sample_aspect_ratio.den);
+            if (imageAspectRatio <= imageAspectRatio4By3 + 0.01 && imageAspectRatio >= imageAspectRatio4By3 - 0.01)
+            {
+                videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
+            }
+            else if (imageAspectRatio <= imageAspectRatio16By9 + 0.01 && imageAspectRatio >= imageAspectRatio16By9 - 0.01)
+            {
+                videoStream->outputStream.streamInfo.aspectRatio = (Rational){16, 9};
+            }
+            else
+            {
+                ml_log_warn("Unknown sample aspect ratio %d/%d; assuming 4:3\n", codecContext->sample_aspect_ratio.num, codecContext->sample_aspect_ratio.den);
+                videoStream->outputStream.streamInfo.aspectRatio = (Rational){4, 3};
+            }
+        }
+    }
+    
+    switch (codecContext->pix_fmt)
+    {
+        case PIX_FMT_YUV420P:
+        case PIX_FMT_YUVJ420P:
+            videoStream->outputStream.streamInfo.format = YUV420_FORMAT;
+            videoStream->dataOffset[0] = 0;
+            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+            videoStream->lineSize[0] = codecContext->width;
+            videoStream->lineSize[1] = codecContext->width / 2;
+            videoStream->lineSize[2] = codecContext->width / 2;
+            videoStream->outputPixelFormat = PIX_FMT_YUV420P;
+            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
+            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+            break;
+        case PIX_FMT_YUV411P:
+            videoStream->outputStream.streamInfo.format = YUV411_FORMAT;
+            videoStream->dataOffset[0] = 0;
+            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+            videoStream->lineSize[0] = codecContext->width;
+            videoStream->lineSize[1] = codecContext->width / 4;
+            videoStream->lineSize[2] = codecContext->width / 4;
+            videoStream->outputPixelFormat = PIX_FMT_YUV411P;
+            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
+            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+            break;
+        case PIX_FMT_YUV422P:
+        case PIX_FMT_YUVJ422P:
+            videoStream->outputStream.streamInfo.format = YUV422_FORMAT;
+            videoStream->dataOffset[0] = 0;
+            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 3 / 2;
+            videoStream->lineSize[0] = codecContext->width;
+            videoStream->lineSize[1] = codecContext->width / 2;
+            videoStream->lineSize[2] = codecContext->width / 2;
+            videoStream->outputPixelFormat = PIX_FMT_YUV422P;
+            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
+            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+            break;
+        default:
+            videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
+            videoStream->dataOffset[0] = 0;
+            videoStream->dataOffset[1] = 0;
+            videoStream->dataOffset[2] = 0;
+            videoStream->lineSize[0] = codecContext->width * 2;
+            videoStream->lineSize[1] = 0;
+            videoStream->lineSize[2] = 0;
+            videoStream->outputPixelFormat = PIX_FMT_UYVY422;
+            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
+            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+            break;
+    }
+    
+    videoStream->outputStream.buffer = av_malloc(videoStream->outputStream.bufferSize);
+    if (videoStream->outputStream.buffer == NULL)
+    {
+        ml_log_error("Failed to allocate video output buffer\n");
+        avcodec_close(codecContext);
+        return 0;
+    }
+    
+    
+    source->numVideoStreams++;
+    
+    return 1;
+}
+
+static void close_video_stream(FFMPEGSource* source, VideoStream* videoStream)
+{
+    AVStream* stream = source->formatContext->streams[videoStream->avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+
+    if (videoStream->frame != NULL)
+    {
+        av_freep(&videoStream->frame);
+    }
+    
+    if (videoStream->outputStream.buffer != NULL)
+    {
+        av_freep(&videoStream->outputStream.buffer);
+        videoStream->outputStream.bufferSize = 0;
+        videoStream->outputStream.dataSize = 0;
+    }
+    
+    if (videoStream->imageConvertContext != NULL)
+    {
+        sws_freeContext(videoStream->imageConvertContext);
+        videoStream->imageConvertContext = NULL;
+    }
+
+    avcodec_close(codecContext);
+
+    clear_stream_info(&videoStream->outputStream.streamInfo);
+}
+
+static int allocate_audio_output_buffers(FFMPEGSource* source)
+{
+    AudioStream* audioStream;
+    int i;
+    int j;
+    int audioFrameSize = (int)(48000 * source->frameRate.den / (double)source->frameRate.num + 0.5);
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        audioStream = &source->audioStreams[i];
+        
+        for (j = 0; j < audioStream->numOutputStreams; j++)
+        {
+            audioStream->outputStreams[j].bufferSize = audioFrameSize * 2;
+            audioStream->outputStreams[j].dataSize = audioStream->outputStreams[j].bufferSize;
+            audioStream->outputStreams[j].buffer = av_malloc(audioStream->outputStreams[j].bufferSize);
+            if (audioStream->outputStreams[j].buffer == NULL)
+            {
+                ml_log_error("Failed to allocate audio output buffer\n");
+                return 0;
+            }
+        }
+    }
+    
+    return 1;
+}
+
+static int open_audio_stream(FFMPEGSource* source, int avStreamIndex, int* outputStreamIndex)
+{
+    AVStream* stream = source->formatContext->streams[avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    AVCodec* codec = NULL;
+    AudioStream* audioStream = &source->audioStreams[source->numAudioStreams];
+    int j;
+    
+    
+    if (source->numAudioStreams + 1 >= (int)(sizeof(source->audioStreams) / sizeof(AudioStream)))
+    {
+        ml_log_error("Maximum audio streams (%d) exceeded\n", sizeof(source->audioStreams) / sizeof(AudioStream));
+        return 0;
+    }
+    
+    
+    codec = avcodec_find_decoder(codecContext->codec_id);
+    if (codec == NULL)
+    {
+        ml_log_error("Failed to find audio decoder\n");
+        return 0;
+    }
+    
+    codecContext->debug_mv = 0;
+    codecContext->debug = 0;
+    codecContext->workaround_bugs = 1;
+    codecContext->lowres = 0;
+    if (codecContext->lowres) 
+    {
+        codecContext->flags |= CODEC_FLAG_EMU_EDGE;
+    }
+    codecContext->idct_algo = FF_IDCT_AUTO;
+    codecContext->skip_frame = AVDISCARD_DEFAULT;
+    codecContext->skip_idct = AVDISCARD_DEFAULT;
+    codecContext->skip_loop_filter = AVDISCARD_DEFAULT;
+    codecContext->error_resilience = FF_ER_CAREFUL;
+    codecContext->error_concealment = 3;
+    
+    /* TODO: will this force sample rate conversion if the source is not 48 kHz? */
+    codecContext->sample_rate = 48000;
+
+    if (avcodec_open(codecContext, codec) < 0)
+    {
+        ml_log_error("Failed to open ffmpeg video codec\n");
+        return 0;
+    }
+    
+    if (source->threadCount > 1)
+    {
+        if (avcodec_thread_init(codecContext, source->threadCount) < 0)
+        {
+            ml_log_error("Failed to initialise ffmpeg threads\n");
+            avcodec_close(codecContext);
+            return 0;
+        }
+        codecContext->thread_count = source->threadCount;
+    }
+
+    
+    audioStream->index = source->numAudioStreams;
+    audioStream->avStreamIndex = avStreamIndex;
+    
+    /* the player doesn't (yet) support multi-channel audio and therefore each channel
+    becomes is a separate output stream */
+    
+    audioStream->numOutputStreams = codecContext->channels;
+    if (audioStream->numOutputStreams > (int)(sizeof(audioStream->outputStreams) / sizeof(OutputStreamData)))
+    {
+        audioStream->numOutputStreams = (int)(sizeof(audioStream->outputStreams) / sizeof(OutputStreamData));
+        ml_log_warn("Limiting audio channel-to-streams to %d streams\n", audioStream->numOutputStreams);
+    }
+    
+    for (j = 0; j < audioStream->numOutputStreams; j++)
+    {
+        audioStream->outputStreams[j].streamIndex = (*outputStreamIndex)++;
+    
+        audioStream->outputStreams[j].streamInfo.type = SOUND_STREAM_TYPE;
+        audioStream->outputStreams[j].streamInfo.format = PCM_FORMAT;
+        audioStream->outputStreams[j].streamInfo.sourceId = msc_create_id();
+    
+        audioStream->outputStreams[j].streamInfo.samplingRate = (Rational){48000, 1};;
+        audioStream->outputStreams[j].streamInfo.numChannels = 1;
+        audioStream->outputStreams[j].streamInfo.bitsPerSample = 16;
+    }
+    
+    audioStream->decodeBufferSize = AVCODEC_MAX_AUDIO_FRAME_SIZE;
+    audioStream->decodeBuffer = av_malloc(audioStream->decodeBufferSize);
+    if (audioStream->decodeBuffer == NULL)
+    {
+        ml_log_error("Failed to allocate audio decode buffer\n");
+        avcodec_close(codecContext);
+        return 0;
+    }
+    
+
+    source->numAudioStreams++;
+    
+    return 1;
+}
+
+static void close_audio_stream(FFMPEGSource* source, AudioStream* audioStream)
+{
+    AVStream* stream = source->formatContext->streams[audioStream->avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    int j;
+
+    for (j = 0; j < audioStream->numOutputStreams; j++)
+    {
+        if (audioStream->outputStreams[j].buffer != NULL)
+        {
+            av_freep(&audioStream->outputStreams[j].buffer);
+            audioStream->outputStreams[j].bufferSize = 0;
+            audioStream->outputStreams[j].dataSize = 0;
+        }
+
+        clear_stream_info(&audioStream->outputStreams[j].streamInfo);
+    }
+
+    if (audioStream->decodeBuffer != NULL)
+    {
+        av_freep(&audioStream->decodeBuffer);
+        audioStream->decodeBufferSize = 0;
+        audioStream->decodeDataSize = 0;
+    }
+
+    if (audioStream->packet != NULL)
+    {
+        av_free_packet(audioStream->packet);
+        av_freep(&audioStream->packet);
+    }
+    
+    avcodec_close(codecContext);
+}
+
+static int process_video_packet(FFMPEGSource* source, VideoStream* videoStream, AVPacket* packet)
+{
+    AVStream* stream = source->formatContext->streams[videoStream->avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    AVPicture pict;
+    int havePicture;
+    int result;
+    double pts;
+    int64_t position;
+
+
+    /* g_videoPacketPTS is set in the AVFrame and therefore tells us the pts for the decoded frame 
+       which could be in a different order than the packets */
+    g_videoPacketPTS = packet->pts;
+    
+    
+    result = avcodec_decode_video(codecContext, videoStream->frame, &havePicture, packet->data, packet->size);
+    if (result < 0)
+    {
+        ml_log_error("Failed to decode video frame\n");
+        return PROCESS_FRAME_FAILED;
+    }
+    if (!havePicture)
+    {
+        /* why? non-index frame? */
+        DEBUG("Video packet has no video data\n");
+        return NO_FRAME_DATA;
+    }
+    
+#if 0
+    {
+        int ftype;
+        if (videoStream->frame->pict_type == FF_B_TYPE)
+            ftype = 'B';
+        else if (videoStream->frame->pict_type == FF_I_TYPE)
+            ftype = 'I';
+        else
+            ftype = 'P';
+        printf("++++++++ frame_type=%c (%d)\n", ftype, videoStream->frame->pict_type);
+    }
+#endif
+
+    if (packet->dts == (int64_t)AV_NOPTS_VALUE &&
+        videoStream->frame->opaque && *(int64_t*)videoStream->frame->opaque != (int64_t)AV_NOPTS_VALUE)
+    {
+        if (stream->start_time != (int64_t)AV_NOPTS_VALUE)
+        {
+            pts = *(int64_t*)videoStream->frame->opaque - stream->start_time;
+        }
+        else
+        {
+            pts = *(int64_t*)videoStream->frame->opaque;
+        }
+    }
+    else if (packet->dts != (int64_t)AV_NOPTS_VALUE)
+    {
+        if (stream->start_time != (int64_t)AV_NOPTS_VALUE)
+        {
+            pts = packet->dts - stream->start_time;
+        }
+        else
+        {
+            pts = packet->dts;
+        }
+    }
+    else
+    {
+        /* TODO: what now? */
+        pts = 0;
+    }
+    pts *= av_q2d(stream->time_base);
+    position = (int64_t)(pts * source->frameRate.num / (double)source->frameRate.den + 0.5);
+    
+    DEBUG5("Video pts: %lld, %lld, %lld - %lld (file pos %lld)\n", position, (int64_t)(pts * 48000 + 0.5), position, source->position, packet->pos);
+    
+        
+    if (position < source->position)
+    {
+        /* not there yet - keep decoding */
+        return EARLY_FRAME;
+    }
+    else if (position > source->position)
+    {
+        /* missed the frame - need to go back */
+        return LATE_FRAME;
+    }
+    
+    
+    /* convert to required pixel format */
+    
+    pict.data[0] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[0];
+    pict.linesize[0] = videoStream->lineSize[0];
+    if (videoStream->dataOffset[1] <= videoStream->dataOffset[0])
+    {
+        pict.data[1] = NULL;
+        pict.linesize[1] = 0;
+    }
+    else
+    {
+        pict.data[1] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[1];
+        pict.linesize[1] = videoStream->lineSize[1];
+    }
+    if (videoStream->dataOffset[2] <= videoStream->dataOffset[1])
+    {
+        pict.data[2] = NULL;
+        pict.linesize[2] = 0;
+    }
+    else
+    {
+        pict.data[2] = &videoStream->outputStream.buffer[0] + videoStream->dataOffset[2];
+        pict.linesize[2] = videoStream->lineSize[2];
+    }
+
+    videoStream->imageConvertContext = sws_getCachedContext(videoStream->imageConvertContext,
+        codecContext->width, codecContext->height,
+        codecContext->pix_fmt,
+        codecContext->width, codecContext->height,
+        videoStream->outputPixelFormat, 
+        SWS_BICUBIC, NULL, NULL, NULL);
+        
+    if (videoStream->imageConvertContext == NULL) 
+    {
+        ml_log_error("Cannot initialize the FFmpeg video conversion context\n");
+        return PROCESS_FRAME_FAILED;
+    }
+    
+    sws_scale(videoStream->imageConvertContext, 
+        videoStream->frame->data, videoStream->frame->linesize, 0, codecContext->height, 
+        pict.data, pict.linesize);
+    
+
+    videoStream->isReady = 1;
+    return PROCESS_FRAME_SUCCESS;
+}
+
+static int transfer_audio_samples(FFMPEGSource* source, AudioStream* audioStream, int64_t firstDecodeSample, int numDecodeSamples, 
+    int64_t targetFirstSample, int targetNumSamples)
+{
+    AVStream* stream = source->formatContext->streams[audioStream->avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    int64_t firstTransferSample;
+    int numTransferSamples;
+    int j;
+
+    DEBUG5("Transfer: target=%lld+%d, decode=%lld+%d, initial=%lld, ", 
+        targetFirstSample, targetNumSamples, firstDecodeSample, numDecodeSamples, audioStream->initialDecodeSample);
+
+    /* check whether the samples are within the target range for the output streams */
+    
+    if (firstDecodeSample + numDecodeSamples <= targetFirstSample)
+    {
+        /* either old samples or not there yet - keep decoding */
+        DEBUG("\n");
+        return EARLY_FRAME;
+    }
+    else if (audioStream->numOutputSamples == 0 && firstDecodeSample > targetFirstSample)
+    {
+        /* missed the start of the frame - need to go back */
+        DEBUG("\n");
+        DEBUG("Missed the start of the audio frame\n");
+        return LATE_FRAME;
+    }
+    else if (firstDecodeSample >= targetFirstSample + targetNumSamples)
+    {
+        /* past the end */
+        DEBUG("\n");
+        DEBUG("Packet data is beyond the end of the audio frame\n");
+        return LATE_FRAME;
+    }
+    
+    
+    /* deinterleave the target samples from the decode buffer and write to the output buffers */
+    
+    firstTransferSample = targetFirstSample;
+    if (firstTransferSample < firstDecodeSample)
+    {
+        firstTransferSample = firstDecodeSample;
+    }
+    numTransferSamples = (firstDecodeSample + numDecodeSamples) - firstTransferSample;
+    if (firstTransferSample + numTransferSamples > targetFirstSample + targetNumSamples)
+    {
+        numTransferSamples = (targetFirstSample + targetNumSamples) - firstTransferSample;
+    }
+
+    for (j = 0; j < audioStream->numOutputStreams; j++)
+    {
+        deinterleave_audio(
+            (int16_t*)(audioStream->decodeBuffer + codecContext->channels * sizeof(int16_t) * (firstTransferSample - firstDecodeSample)),
+            codecContext->channels, numTransferSamples, j, 
+            audioStream->outputStreams[j].buffer + 2 * (firstTransferSample - targetFirstSample));
+    }
+    
+    if (audioStream->numOutputSamples == 0)
+    {
+        audioStream->firstOutputSample = firstTransferSample;
+        audioStream->numOutputSamples = numTransferSamples;
+    }
+    else
+    {
+        if (audioStream->firstOutputSample > firstTransferSample)
+        {
+            audioStream->firstOutputSample = firstTransferSample;
+        }
+        if (firstTransferSample + numTransferSamples > audioStream->firstOutputSample + audioStream->numOutputSamples)
+        {
+            audioStream->numOutputSamples = (firstTransferSample + numTransferSamples) - audioStream->firstOutputSample;
+        }
+    }
+
+    DEBUG2("output=%lld+%d\n", audioStream->firstOutputSample, audioStream->numOutputSamples);
+    
+    
+    return PROCESS_FRAME_SUCCESS;
+}
+
+static int process_audio_packet(FFMPEGSource* source, AudioStream* audioStream, AVPacket* inPacket)
+{
+    AVStream* stream = source->formatContext->streams[audioStream->avStreamIndex];
+    AVCodecContext* codecContext = stream->codec;
+    int dataSize;
+    int result;
+    double pts;
+    int64_t firstDecodeSample;
+    int numDecodeSamples;
+    int64_t targetFirstSample;
+    int targetNumSamples;
+
+    
+    targetFirstSample = (int64_t)(source->position * 48000 * source->frameRate.den / (double)source->frameRate.num + 0.5);
+    targetNumSamples = 1920; /* TODO: fixed for PAL */
+    
+    
+    if (inPacket != NULL)
+    {
+        /* clear existing packet and take ownership of new packet */
+        
+        if (audioStream->packet != NULL)
+        {
+            av_free_packet(audioStream->packet);
+            av_freep(&audioStream->packet);
+        }
+        audioStream->firstDecodeSample = 0;
+        audioStream->numDecodeSamples = 0;
+        
+        CHK_ORET(av_dup_packet(inPacket) >= 0);
+        CHK_ORET((audioStream->packet = av_malloc(sizeof(AVPacket))) != NULL);
+        *audioStream->packet = *inPacket;
+        
+        audioStream->packetNextData = inPacket->data;
+        audioStream->packetNextSize = inPacket->size;
+    }
+    
+    if (audioStream->packet == NULL)
+    {
+        return NO_FRAME_DATA; /* no audio data available */
+    }
+
+    
+    if (audioStream->packet->pts != (int64_t)AV_NOPTS_VALUE) 
+    {
+        if (stream->start_time != (int64_t)AV_NOPTS_VALUE)
+        {
+            pts = av_q2d(stream->time_base) * (audioStream->packet->pts - stream->start_time);
+        }
+        else
+        {
+            pts = av_q2d(stream->time_base) * audioStream->packet->pts;
+        }
+    }
+    else
+    {
+        /* TODO: what now? */
+        pts = 0;
+    }
+
+    
+    /* transfer existing samples from the decode buffer */
+    
+    if (inPacket == NULL && audioStream->numDecodeSamples > 0)
+    {
+        result = transfer_audio_samples(source, audioStream, audioStream->firstDecodeSample, audioStream->numDecodeSamples,
+            targetFirstSample, targetNumSamples);
+        if (result != PROCESS_FRAME_SUCCESS && result != EARLY_FRAME)
+        {
+            return result;
+        }
+        
+        if (result == PROCESS_FRAME_SUCCESS)
+        {
+            /* check if we have all the samples */
+            
+            if (audioStream->firstOutputSample == targetFirstSample &&
+                audioStream->numOutputSamples == targetNumSamples)
+            {
+                audioStream->isReady = 1;
+                return 0;
+            }
+        }
+    }
+    
+    
+    /* decode frame */
+
+    while (audioStream->packetNextSize > 0)
+    {
+        dataSize = audioStream->decodeBufferSize;
+        result = avcodec_decode_audio2(codecContext, (int16_t*)audioStream->decodeBuffer, &dataSize, 
+            audioStream->packetNextData, audioStream->packetNextSize);
+        if (result < 0)
+        {
+            ml_log_error("Failed to decode audio frame\n");
+            return PROCESS_FRAME_FAILED;
+        }
+        
+        audioStream->packetNextData += result;
+        audioStream->packetNextSize -= result;
+        
+        if (dataSize <= 0)
+        {
+            continue;
+        }
+
+        /* calc samples available in the decode buffer */
+        
+        if (audioStream->numDecodeSamples == 0)
+        {
+            firstDecodeSample = (int64_t)(pts * 48000 + 0.5);
+            audioStream->initialDecodeSample = firstDecodeSample;
+        }
+        else
+        {
+            firstDecodeSample = audioStream->firstDecodeSample + audioStream->numDecodeSamples;
+        }
+        numDecodeSamples = dataSize / (sizeof(int16_t) * codecContext->channels);
+        
+        audioStream->firstDecodeSample = firstDecodeSample;
+        audioStream->numDecodeSamples = numDecodeSamples;
+        
+        
+        /* transfer samples from decode buffer */
+        
+        result = transfer_audio_samples(source, audioStream, firstDecodeSample, numDecodeSamples, targetFirstSample, targetNumSamples);
+        if (result != PROCESS_FRAME_SUCCESS && result != EARLY_FRAME)
+        {
+            return result;
+        }
+        
+        
+        /* check if we have all the samples */
+        
+        if (audioStream->firstOutputSample == targetFirstSample &&
+            audioStream->numOutputSamples == targetNumSamples)
+        {
+            audioStream->isReady = 1;
+            return PROCESS_FRAME_SUCCESS;
+        }
+    }    
+    
+    
+    return PROCESS_FRAME_SUCCESS;
+}
+
+static int process_packet(FFMPEGSource* source, AVPacket* packet)
+{
+    AudioStream* audioStream = NULL;
+    VideoStream* videoStream = NULL;
+    int result = PROCESS_FRAME_SUCCESS;
+
+#if 0    
+    {    
+        int64_t position = (int64_t)(packet->pts * source->frameRate.num / (double)source->frameRate.den + 0.5);
+    
+        DEBUG3("Packet pts: %lld, %lld (file pos %lld)\n", position, (int64_t)(packet->pts * 48000 + 0.5), packet->pos);
+    }
+#endif    
+    
+    if ((videoStream = get_video_stream(source, packet->stream_index)) != NULL)
+    {
+        if (videoStream->isReady)
+        {
+            DEBUG("Received video packet when video data is already present\n");
+            videoStream->isReady = 0;
+        }
+
+        result = process_video_packet(source, videoStream, packet);
+        if (result == PROCESS_FRAME_FAILED)
+        {
+            ml_log_error("Failed to process video frame data\n");
+        }
+
+        av_free_packet(packet);
+    }
+    else if ((audioStream = get_audio_stream(source, packet->stream_index)) != NULL)
+    {
+        if (audioStream->isReady)
+        {
+            DEBUG("Received audio packet when audio data is already present\n");
+            audioStream->isReady = 0;
+        }
+
+        result = process_audio_packet(source, audioStream, packet);
+        if (result == PROCESS_FRAME_FAILED)
+        {
+            ml_log_error("Failed to process audio frame data\n");
+        }
+        
+        /* clear but don't free - audioStream owns the packet */
+        memset(packet, 0, sizeof(*packet));
+    }
+    else
+    {
+        av_free_packet(packet);
+    }
+    
+    return result;
+}
+
+
+
+static int fms_get_num_streams(void* data)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int result;
+    int i;
+    
+    result = source->numVideoStreams;
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        result += source->audioStreams[i].numOutputStreams;
+    }
+    
+    return result;
+}
+
+static int fms_get_stream_info(void* data, int streamIndex, const StreamInfo** streamInfo)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    OutputStreamData* outputStream = NULL;
+    
+    outputStream = get_output_stream(source, streamIndex);
+    if (outputStream == NULL)
+    {
+        return 0;
+    }
+    
+    *streamInfo = &outputStream->streamInfo;
+    return 1;
+}
+
+static int fms_disable_stream(void* data, int streamIndex)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    OutputStreamData* outputStream = NULL;
+    
+    outputStream = get_output_stream(source, streamIndex);
+    if (outputStream == NULL)
+    {
+        return 0;
+    }
+    
+    outputStream->isDisabled = 1;
+    return 1;
+}
+
+static void fms_disable_audio(void* data)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int i;
+    int j;
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
+        {
+            source->audioStreams[i].outputStreams[j].isDisabled = 1;
+        }
+    }
+}
+
+static int fms_stream_is_disabled(void* data, int streamIndex)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+
+    OutputStreamData* outputStream = NULL;
+    
+    outputStream = get_output_stream(source, streamIndex);
+    if (outputStream == NULL)
+    {
+        return 1;
+    }
+    
+    return outputStream->isDisabled;
+}
+
+static int fms_is_seekable(void* data)
+{
+    return 1;
+}
+
+static int fms_seek(void* data, int64_t position)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int64_t timestamp;
+    int result;
+    int i;
+
+    if (is_disabled(source))
+    {
+        return 0;
+    }
+
+    timestamp = (int64_t)(position * (source->frameRate.den / (double)source->frameRate.num) * AV_TIME_BASE + 0.5);
+    if (source->formatContext->start_time != (int64_t)AV_NOPTS_VALUE)
+    {
+        timestamp += source->formatContext->start_time;
+    }
+    
+    /* the AVSEEK_FLAG_BACKWARD flag means we end up at or before the target position */
+    result = av_seek_frame(source->formatContext, -1, timestamp, AVSEEK_FLAG_BACKWARD);
+    if (result < 0) 
+    {
+        ml_log_error("Could not seek to position %0.3f\n", (double)timestamp / AV_TIME_BASE);
+        return -1;
+    }
+
+    
+    /* flush the buffers */
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        flush_video_buffers(source, &source->videoStreams[i]);
+    }
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        flush_audio_buffers(source, &source->audioStreams[i]);
+    }
+    
+
+    source->position = position;
+
+    return 0;
+}
+
+static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceListener* listener)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int result;
+    AVPacket packet;
+    AudioStream* audioStream = NULL;
+    VideoStream* videoStream = NULL;
+    int i;
+    int j;
+    unsigned char* buffer = NULL;
+    int error;
+    int adjustReadStartCount = 0;
+    int adjustReadStart = 0;
+    int sendBlankFrame = 0;
+
+    memset(&packet, 0, sizeof(packet));
+    
+
+    if (is_disabled(source))
+    {
+        return 0;
+    }
+
+    
+    DEBUG("********************** read frame\n");
+    
+    clear_stream_data(source);
+
+
+    /* audio packets can contain multiple frames and therefore we process existing audio packets first */
+
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        audioStream = &source->audioStreams[i];
+        
+        if (audioStream->isReady)
+        {
+            continue;
+        }
+        
+        result = process_audio_packet(source, audioStream, NULL);
+        if (result != PROCESS_FRAME_SUCCESS)
+        {
+            if (result == PROCESS_FRAME_FAILED)
+            {
+                ml_log_error("Failed to process audio frame data\n");
+                return -1;
+            }
+            /* else keep reading */
+        }
+    }
+
+    
+    while (!all_streams_ready(source))
+    {
+        /* seek back if the frame data was late */
+        if (adjustReadStart)
+        {
+            if (adjustReadStartCount > MAX_ADJUST_READ_START_COUNT)
+            {
+                /* TODO: invalidate the position */
+                ml_log_error("Seek back count exceeded\n");
+                return -1;
+            }
+            else if (source->position - adjustReadStartCount < 0)
+            {
+                /* TODO: invalidate the position */
+                DEBUG("seeking to position + 1\n");
+                if (fms_seek(source->mediaSource.data, source->position + 1) != 0)
+                {
+                    /* TODO: invalidate the position */
+                    return -1;
+                }
+                ml_log_warn("Sending blank frame\n");
+                sendBlankFrame = 1;
+                break;
+            }
+
+            clear_stream_data(source);
+            
+            DEBUG1("adjusting start to position %lld\n", source->position - adjustReadStartCount);
+            if (fms_seek(source->mediaSource.data, source->position - adjustReadStartCount) != 0)
+            {
+                /* TODO: invalidate the position */
+                return -1;
+            }
+            
+            /* return target position back to what it was */
+            source->position += adjustReadStart;
+            
+            adjustReadStart = 0;
+        }
+        
+        
+        /* read the next frame */
+        
+        result = av_read_frame(source->formatContext, &packet);
+        if (result < 0)
+        {
+            error = url_ferror(&source->formatContext->pb);
+            if (error != 0)
+            {
+                ml_log_error("Failed to read frame from file (%d)\n", error);
+                return -1;
+            } 
+            else
+            {
+#if 0
+                /* TODO: this doesn't work because the media_player uses it's own length */
+                /* reached end of file. The actual length is 1 or more frames less */
+                if (source->length > 0)
+                {
+                    source->length--;
+                }
+                ml_log_warn("Unexpected EOF - adjusting source length\n");
+#else
+                ml_log_warn("Unexpected EOF\n");
+#endif
+                return -1;
+            }
+        }
+
+        
+        /* process the video or audio packet */
+        
+        result = process_packet(source, &packet);
+        if (result == PROCESS_FRAME_FAILED)
+        {
+            return -1;
+        }
+        else if (result == LATE_FRAME)
+        {
+            adjustReadStart = 1;
+            adjustReadStartCount++;
+        }
+        
+    }
+
+    source->position++;
+
+
+    
+    /* send video output stream data */
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        videoStream = &source->videoStreams[i];
+        if (!videoStream->outputStream.isDisabled)
+        {
+            if (sdl_accept_frame(listener, videoStream->outputStream.streamIndex, frameInfo))
+            {
+                if (!sdl_allocate_buffer(listener, videoStream->outputStream.streamIndex, &buffer, videoStream->outputStream.dataSize))
+                {
+                    return -1;
+                }
+                
+                if (sendBlankFrame)
+                {
+                    fill_black(videoStream->outputStream.streamInfo.format, videoStream->outputStream.streamInfo.width, 
+                        videoStream->outputStream.streamInfo.height, buffer);
+                }
+                else
+                {
+                    memcpy(buffer, videoStream->outputStream.buffer, videoStream->outputStream.dataSize);
+                }
+                sdl_receive_frame(listener, videoStream->outputStream.streamIndex, buffer, videoStream->outputStream.dataSize);
+            }
+        }
+    }
+    
+    
+    /* send audio output stream data */
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        audioStream = &source->audioStreams[i];
+        
+        for (j = 0; j < audioStream->numOutputStreams; j++)
+        {
+            if (!audioStream->outputStreams[j].isDisabled)
+            {
+                if (sdl_accept_frame(listener, audioStream->outputStreams[j].streamIndex, frameInfo))
+                {
+                    if (!sdl_allocate_buffer(listener, audioStream->outputStreams[j].streamIndex, &buffer, audioStream->outputStreams[j].dataSize))
+                    {
+                        return -1;
+                    }
+                    
+                    if (sendBlankFrame)
+                    {
+                        memset(buffer, 0, audioStream->outputStreams[j].dataSize);
+                    }
+                    else
+                    {
+                        memcpy(buffer, audioStream->outputStreams[j].buffer, audioStream->outputStreams[j].dataSize);
+                    }
+                    sdl_receive_frame(listener, audioStream->outputStreams[j].streamIndex, buffer, audioStream->outputStreams[j].dataSize);
+                }
+            }
+        }
+    }
+    
+    
+    return 0;
+}
+
+static int fms_get_length(void* data, int64_t* length)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+
+    if (source->length <= 0)
+    {
+        return 0;
+    }
+    
+    *length = source->length;
+    return 1;
+}
+
+static int fms_get_position(void* data, int64_t* position)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+
+    *position = source->position;
+    return 1;
+}
+
+static int fms_get_available_length(void* data, int64_t* length)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+
+    if (source->length <= 0)
+    {
+        return 0;
+    }
+    
+    *length = source->length;    
+    return 1;
+}
+
+static int fms_eof(void* data)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+
+    if (source->length <= 0)
+    {
+        /* if length is unknown then we haven't reached the end */
+        return 0;
+    }
+    else if (source->position >= source->length)
+    {
+        return 1;
+    }
+    
+    return 0;
+}
+
+static void fms_set_source_name(void* data, const char* name)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int i;
+    int j;
+
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        add_known_source_info(&source->videoStreams[i].outputStream.streamInfo, SRC_INFO_NAME, name);
+    }
+    
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
+        {
+            add_known_source_info(&source->audioStreams[i].outputStreams[j].streamInfo, SRC_INFO_NAME, name);
+        }
+    }
+}
+
+static void fms_close(void* data)
+{
+    FFMPEGSource* source = (FFMPEGSource*)data;
+    int i;
+    
+    if (data == NULL)
+    {
+        return;
+    }
+
+    
+    for (i = 0; i < source->numVideoStreams; i++)
+    {
+        close_video_stream(source, &source->videoStreams[i]);
+    }
+    for (i = 0; i < source->numAudioStreams; i++)
+    {
+        close_audio_stream(source, &source->audioStreams[i]);
+    }
+
+    if (source->formatContext != NULL)
+    {
+        av_close_input_file(source->formatContext);
+        source->formatContext = NULL;
+    }
+
+    
+    SAFE_FREE(&source);
+}
+
+
+
+int fms_open(const char* filename, int threadCount, MediaSource** source)
+{
+    FFMPEGSource* newSource = NULL;
+    AVFormatParameters formatParams;
+    AVInputFormat* inputFormat = NULL;
+    AVCodecContext* codecContext = NULL;
+    int result;
+    int i;
+    int outputStreamIndex = 0;
+    
+    memset(&formatParams, 0, sizeof(formatParams));
+
+    av_register_all();
+
+    
+    CALLOC_ORET(newSource, FFMPEGSource, 1);
+    newSource->threadCount = threadCount;
+    newSource->frameRate = (Rational){25, 1};
+
+
+    /* open the file */
+    
+    formatParams.width = 0;
+    formatParams.height= 0;
+    formatParams.time_base = (AVRational){1, 25};
+    formatParams.pix_fmt = PIX_FMT_NONE;
+
+    result = av_open_input_file(&newSource->formatContext, filename, inputFormat, 0, &formatParams);
+    if (result < 0) 
+    {
+        switch (result) 
+        {
+            case AVERROR_NUMEXPECTED:
+                ml_log_error("%s: Incorrect image filename syntax.\n", filename);
+                break;
+            case AVERROR_INVALIDDATA:
+                ml_log_error("%s: Error while parsing header\n", filename);
+                break;
+            case AVERROR_NOFMT:
+                ml_log_error("%s: Unknown format\n", filename);
+                break;
+            case AVERROR(EIO):
+                ml_log_error("%s: I/O error occured\n", filename);
+                break;
+            case AVERROR(ENOMEM):
+                ml_log_error("%s: memory allocation error occured\n", filename);
+                break;
+            case AVERROR(ENOENT):
+                ml_log_error("%s: no such file or directory\n", filename);
+                break;
+            default:
+                ml_log_error("%s: Error while opening file\n", filename);
+                break;
+        }
+        goto fail;
+    }
+    
+    result = av_find_stream_info(newSource->formatContext);
+    if (result < 0) 
+    {
+        ml_log_error("%s: could not find codec parameters\n", filename);
+        goto fail;
+    }
+    newSource->formatContext->pb.eof_reached= 0; /* FIXME hack, ffplay maybe should not use url_feof() to test for the end */
+
+    
+    /* open the video and audio streams */
+    
+    for (i = 0; i < (int)newSource->formatContext->nb_streams; i++) 
+    {
+        codecContext = newSource->formatContext->streams[i]->codec;
+        
+        switch (codecContext->codec_type) 
+        {
+            case CODEC_TYPE_AUDIO:
+                CHK_OFAIL(open_audio_stream(newSource, i, &outputStreamIndex));
+                break;
+                
+            case CODEC_TYPE_VIDEO:
+                CHK_OFAIL(open_video_stream(newSource, i, &outputStreamIndex));
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    /* allocate the audio buffers now that we know what the video frame rate it */
+    
+    CHK_OFAIL(allocate_audio_output_buffers(newSource));
+
+
+    /* length in newSource->frameRate units */    
+
+    newSource->length = (int64_t)(newSource->formatContext->duration / ((double)AV_TIME_BASE) * 
+        newSource->frameRate.num / (double)(newSource->frameRate.den) + 0.5);
+
+    
+    
+    newSource->mediaSource.get_num_streams = fms_get_num_streams;
+    newSource->mediaSource.get_stream_info = fms_get_stream_info;
+    newSource->mediaSource.disable_stream = fms_disable_stream;
+    newSource->mediaSource.disable_audio = fms_disable_audio;
+    newSource->mediaSource.stream_is_disabled = fms_stream_is_disabled;
+    newSource->mediaSource.read_frame = fms_read_frame;
+    newSource->mediaSource.is_seekable = fms_is_seekable;
+    newSource->mediaSource.seek = fms_seek;
+    newSource->mediaSource.get_length = fms_get_length;
+    newSource->mediaSource.get_position = fms_get_position;
+    newSource->mediaSource.get_available_length = fms_get_available_length;
+    newSource->mediaSource.eof = fms_eof;
+    newSource->mediaSource.set_source_name = fms_set_source_name;
+    newSource->mediaSource.close = fms_close;
+    newSource->mediaSource.data = newSource;
+
+
+    
+    *source = &newSource->mediaSource;
+    return 1;
+    
+    
+fail:
+    fms_close(newSource);
+    return 0;
+}
+
+
+#endif 
+

@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.4 2008/10/08 10:16:06 john_f Exp $
+ * $Id: nexus_web.c,v 1.5 2008/10/22 09:32:19 john_f Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -47,59 +47,6 @@
 int verbose = 1;
 int show_audio34 = 0;
 
-typedef struct {
-	uint8_t			*ring[MAX_CHANNELS];
-	NexusControl	*pctl;
-} NexusConnection;
-
-static int nexus_connect_to_shared_mem(int timeout_microsec, int verbose, NexusConnection *p)
-{
-	int				shm_id, control_id;
-
-	if (timeout_microsec > 0 && verbose) {
-		printf("Waiting for shared memory... ");
-		fflush(stdout);
-	}
-
-	// If shared memory not found, sleep and try again
-	int retry_time = 20 * 1000;		// 20ms
-	int time_taken = 0;
-	while (1)
-	{
-		control_id = shmget(9, sizeof(NexusControl), 0444);
-		if (control_id != -1)
-			break;
-
-		if (timeout_microsec == 0)
-			return 0;
-
-		usleep(retry_time);
-		time_taken += retry_time;
-		if (time_taken >= timeout_microsec)
-			return 0;
-	}
-
-	p->pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
-	if (verbose)
-		printf("connected to pctl\n");
-
-	int i;
-	for (i = 0; i < p->pctl->channels; i++)
-	{
-		while (1)
-		{
-			shm_id = shmget(10 + i, p->pctl->elementsize, 0444);
-			if (shm_id != -1)
-				break;
-			usleep(20 * 1000);
-		}
-		p->ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
-		if (verbose)
-			printf("  attached to channel[%d]: '%s'\n", i, p->pctl->channel[i].source_name);
-	}
-
-	return 1;
-}
 
 struct NexusTC {
 	int h;

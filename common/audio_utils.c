@@ -1,5 +1,5 @@
 /*
- * $Id: audio_utils.c,v 1.4 2008/09/16 09:37:59 stuart_hc Exp $
+ * $Id: audio_utils.c,v 1.5 2008/10/22 09:32:18 john_f Exp $
  *
  * Write uncompressed audio in WAV format, and update WAV header.
  *
@@ -150,6 +150,36 @@ extern void dvsaudio32_to_16bitmono(int channel, const uint8_t *buf32, uint8_t *
     for (i = channel_offset; i < 1920*4*2; i += 8) {
         *buf16++ = buf32[i+2];
         *buf16++ = buf32[i+3];
+    }
+}
+
+extern void dvsaudio32_to_16bitpair(int samples, const uint8_t *buf32, uint8_t *buf16)
+{
+    //  a0 a0 a0 a0  b0 b0 b0 b0  a1 a1 a1 a1  b1 b1 b1 b1
+	// to
+	//  a0 a0 b0 b0  a1 a1 b1 b1
+
+    int i;
+    for (i = 0; i < samples*4 * 2; i += 4) {
+        *buf16++ = buf32[i+2];
+        *buf16++ = buf32[i+3];
+    }
+}
+
+// Convert a buffer with 2-channel multiplex pair of 16bits-per-sample audio into
+// the DVS 32bits-per-sample 2-channel multiplex format (zero-filled LSBs)
+extern void pair16bit_to_dvsaudio32(int samples, const uint8_t *buf16, uint8_t *buf32)
+{
+    //  a0 a0 b0 b0 a1 a1 b1 b1
+	// to
+	//   0  0 a0 a0  0  0 b0 b0  0  0 a1 a1  0  0 b1 b1
+
+	int i;
+    for (i = 0; i < samples*2 * 2; i += 2) {
+        *buf32++ = 0;
+        *buf32++ = 0;
+        *buf32++ = buf16[i+0];
+        *buf32++ = buf16[i+1];
     }
 }
 

@@ -33,7 +33,7 @@ void dvs_close_card(DVSSink* sink)
 {
 }
 
-int dvs_card_is_available()
+int dvs_card_is_available(int card, int channel)
 {
     return 0;
 }
@@ -1409,13 +1409,13 @@ static void dvs_osd_screen_changed(void* data, OSDScreen screen)
 
 
 
-int dvs_card_is_available()
+int dvs_card_is_available(int card, int channel)
 {
     sv_handle* sv;
     int selectedCard;
     int selectedChannel;
     
-    if (!open_dvs_card(-1, -1, 0, &sv, &selectedCard, &selectedChannel))
+    if (!open_dvs_card(card, channel, 0, &sv, &selectedCard, &selectedChannel))
     {
         return 0;
     }

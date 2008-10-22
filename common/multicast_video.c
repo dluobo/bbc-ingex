@@ -729,7 +729,7 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 	return total_bytes_written;
 }
 
-extern void scale_video420_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame)
+extern void scale_video420_for_multicast(int in_width, int in_height, int out_width, int out_height, const uint8_t *video_frame, uint8_t *scaled_frame)
 {
 	YUV_frame input_frame;
 	YUV_frame output_frame;
@@ -774,7 +774,7 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
 				workspace);
 }
 
-extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, uint8_t *video_frame, uint8_t *scaled_frame)
+extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, const uint8_t *video_frame, uint8_t *scaled_frame)
 {
 	YUV_frame input_frame;
 	YUV_frame output_frame;

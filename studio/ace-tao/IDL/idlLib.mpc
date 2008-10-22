@@ -13,14 +13,19 @@ project(idlLib): taoidldefaults {
     Timecode.idl
     Track.idl
     Source.idl
-    //SourceClip.idl
-    //Package.idl
-    //EssenceDescriptor.idl
-    //PackageObserver.idl
     DataSource.idl
     StatusClient.idl
     Subject.idl
     Observer.idl
+    //SourceClip.idl
+    //Package.idl
+    //EssenceDescriptor.idl
+    //PackageObserver.idl
+  }
+
+  specific(vc71,vc8,vc9) {
+    Debug::runtime_library = 3
+    Release::runtime_library = 2
   }
 }
 

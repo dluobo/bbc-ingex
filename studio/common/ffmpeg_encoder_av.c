@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.2 2008/09/03 14:22:47 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -69,6 +69,7 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     /* mpeg2video is the default codec for DVD format */
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
+    codec_context->pix_fmt = PIX_FMT_YUV420P;
 
     const int dvd_kbit_rate = 5000;
 
@@ -81,21 +82,7 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     codec_context->rc_max_rate = 9000000;
     codec_context->rc_min_rate = 0;
     codec_context->rc_buffer_size = 224*1024*8;
-
-    /* resolution must be a multiple of two */
-    codec_context->width = 720;  
-    codec_context->height = 576;
-    codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255);
-
-    /* time base: this is the fundamental unit of time (in seconds) in terms
-       of which frame timestamps are represented. for fixed-fps content,
-       timebase should be 1/framerate and timestamp increments should be
-       identically 1. */
-    codec_context->time_base.den = 25;  
-    codec_context->time_base.num = 1;
-
     codec_context->gop_size = 15; /* emit one intra frame every 15 frames at most */
-    codec_context->pix_fmt = PIX_FMT_YUV420P;
 
     if (codec_context->codec_id == CODEC_ID_MPEG2VIDEO)
     {
@@ -159,8 +146,9 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
-    /* mpeg4 is the default codec for MOV format */
-    const int codec_id = CODEC_ID_MPEG4;
+    codec_context->codec_id = CODEC_ID_MPEG4;
+    codec_context->codec_type = CODEC_TYPE_VIDEO;
+    codec_context->pix_fmt = PIX_FMT_YUV420P;
 
     /* bit rate */
     const int kbit_rate = 800;
@@ -168,25 +156,9 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
     enc->video_st->r_frame_rate.num = 25;
     enc->video_st->r_frame_rate.den = 1;
 
-    codec_context->codec_id = codec_id;
-    codec_context->codec_type = CODEC_TYPE_VIDEO;
-
     /* set coding parameters */
     codec_context->bit_rate = kbit_rate * 1000;
 
-    /* resolution must be a multiple of two */
-    codec_context->width = 720;  
-    codec_context->height = 576;
-    codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255);
-
-    /* time base: this is the fundamental unit of time (in seconds) in terms
-       of which frame timestamps are represented. for fixed-fps content,
-       timebase should be 1/framerate and timestamp increments should be
-       identically 1. */
-    codec_context->time_base.num = 1;
-    codec_context->time_base.den = 25;  
-
-    codec_context->pix_fmt = PIX_FMT_YUV420P;
 
     // some formats want stream headers to be seperate
     if(!strcmp(enc->oc->oformat->name, "mp4")
@@ -238,44 +210,21 @@ static int init_video_dv25(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
-    enc->video_st->r_frame_rate.num = 25;
-    enc->video_st->r_frame_rate.den = 1;
-
     codec_context->codec_id = CODEC_ID_DVVIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
+
     const int encoded_frame_size = 144000;
 
-    /* resolution must be a multiple of two */
-    codec_context->width = 720;  
-    codec_context->height = 576;
-#if 0
-    // 4:3
-    codec_context->sample_aspect_ratio.num = 59;
-    codec_context->sample_aspect_ratio.den = 54;
-#elif 0
-    // 16:9
-    codec_context->sample_aspect_ratio.num = 118;
-    codec_context->sample_aspect_ratio.den = 81;
-#else
-    // bodge for FCP
-    codec_context->sample_aspect_ratio.num = 1;
-    codec_context->sample_aspect_ratio.den = 1;
-#endif
-
-    /* time base: this is the fundamental unit of time (in seconds) in terms
-       of which frame timestamps are represented. for fixed-fps content,
-       timebase should be 1/framerate and timestamp increments should be
-       identically 1. */
-    codec_context->time_base.num = 1;
-    codec_context->time_base.den = 25;
+    enc->video_st->r_frame_rate.num = 25;
+    enc->video_st->r_frame_rate.den = 1;
 
     /* Setting this gives us a timecode track in MOV format */
     codec_context->timecode_frame_start = start_tc;
 
 
     // some formats want stream headers to be seperate
-    if(!strcmp(enc->oc->oformat->name, "mp4")
+    if (!strcmp(enc->oc->oformat->name, "mp4")
         || !strcmp(enc->oc->oformat->name, "mov")
         || !strcmp(enc->oc->oformat->name, "3gp"))
     {
@@ -653,10 +602,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     }
 
     
-    /* 
-    * add the audio and videostreams and
-    * initialise the codecs
-    */
+    /* Add the audio and videostreams */
     enc->video_st = av_new_stream(enc->oc, 0);
     if (!enc->video_st)
     {
@@ -671,6 +617,8 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         cleanup(enc);
         return NULL;
     }
+
+    /* Initialise the codecs */
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DVD:
@@ -688,6 +636,35 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     default:
         break;
     }
+
+    /* Set aspect ratio for video stream */
+    AVRational sar;
+#if 0
+    // 4:3
+    sar.num = 59;
+    sar.den = 54;
+#elif 1
+    // 16:9
+    sar.num = 118;
+    sar.den = 81;
+#else
+    // bodge for FCP
+    sar.num = 1;
+    sar.den = 1;
+#endif
+    enc->video_st->sample_aspect_ratio = sar;
+    enc->video_st->codec->sample_aspect_ratio = sar;
+
+    /* Set size for video stream */
+    enc->video_st->codec->width = 720;  
+    enc->video_st->codec->height = 576;
+
+    /* Set time base: This is the fundamental unit of time (in seconds) in terms
+       in terms of which frame timestamps are represented.
+       For fixed-fps content, timebase should be 1/framerate and timestamp
+       increments should be identically 1. */
+    enc->video_st->codec->time_base.num = 1;
+    enc->video_st->codec->time_base.den = 25;
 
     /*
     * Set the output parameters - must be done even if no parameters 

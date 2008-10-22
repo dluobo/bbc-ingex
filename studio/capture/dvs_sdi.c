@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.11 2008/10/09 06:47:47 stuart_hc Exp $
+ * $Id: dvs_sdi.c,v 1.12 2008/10/22 09:32:19 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -193,7 +193,7 @@ static int check_sdk_version3(void)
 	int device = 0;
 	int result = 0;
 
-	SV_CHECK( sv_openex(&sv, (char*)"PCI,card=0", SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_INPUT, 0, 0) );
+	SV_CHECK( sv_openex(&sv, (char*)"PCI,card=0", SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_QUERY, 0, 0) );
 	SV_CHECK( sv_version_status(sv, &version, sizeof(version), device, 1, 0) );
 	printf("%s version = (%d,%d,%d,%d)\n", version.module, version.release.v.major, version.release.v.minor, version.release.v.patch, version.release.v.fix);
 	if (version.release.v.major >= 3)
@@ -202,6 +202,91 @@ static int check_sdk_version3(void)
 	SV_CHECK( sv_close(sv) );
 
 	return result;
+}
+
+static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
+{
+	// Assume SDK multichannel capability (> major version 3)
+	int card = 0;
+	int channel = 0;
+	for (card = 0; card < max_channels && channel < max_channels; card++)
+	{
+		char card_str[64] = {0};
+
+		snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
+
+		int res = sv_openex(&a_sv[channel],
+							card_str, SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_DEFAULT, 0, 0);
+		if (res == SV_ERROR_WRONGMODE)
+		{
+			// Multichannel mode not on so doesn't like "channel=0"
+			snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+			res = sv_openex(&a_sv[channel], card_str, SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_DEFAULT, 0, 0);
+		}
+		if (res == SV_OK)
+		{
+			res = sv_videomode(a_sv[channel], opt_video_mode);
+			if (res != SV_OK) {
+				fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
+				sv_errorprint(a_sv[channel], res);
+				sv_close(a_sv[channel]);
+				return 0;
+			}
+
+			// check for multichannel mode
+			int multichannel_mode = 0;
+			if ((res = sv_option_get(a_sv[channel], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
+				logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
+			}
+
+			channel++;
+
+			// If card has a multichannel mode on, open second channel
+			if (multichannel_mode)
+			{
+				if (channel < max_channels)
+				{
+					snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=1", card);
+					int res = sv_openex(&a_sv[channel], card_str, SV_OPENPROGRAM_DEMOPROGRAM, SV_OPENTYPE_DEFAULT, 0, 0);
+					if (res == SV_OK)
+					{
+						res = sv_videomode(a_sv[channel], opt_video_mode);
+						if (res != SV_OK) {
+							fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
+							sv_errorprint(a_sv[channel], res);
+							sv_close(a_sv[channel]);
+							return 0;
+						}
+
+						sv_close(a_sv[channel]);
+
+						channel++;
+					}
+					else
+					{
+						logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
+					}
+				}
+			}
+			else
+			{
+				logTF("card %d: multichannel mode off\n", card);
+			}
+
+			sv_close(a_sv[channel-2]);
+		}
+		else
+		{
+			// SV_ERROR_DEVICENOTFOUND is returned when there is no more hardware
+			if (res == SV_ERROR_DEVICENOTFOUND)
+				return 1;
+
+			logTF("card %d: sv_openex(%s) %s\n", card, card_str, sv_geterrortext(res));
+			return 0;
+		}
+	}
+
+	return 1;
 }
 
 static void catch_sigusr1(int sig_number)
@@ -960,6 +1045,9 @@ static void usage_exit(void)
 	fprintf(stderr, "                         DV50   - secondary buffer is planar YUV 4:2:2 with field order line shift\n");
 	fprintf(stderr, "                         MPEG   - secondary buffer is planar YUV 4:2:0\n");
 	fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
+	fprintf(stderr, "    -mode vid[:AUDIO8]   set input mode on all DVS cards, vid is one of:\n");
+	fprintf(stderr, "                         PAL,NTSC,1920x1080i50,1920x1080i60,1280x720p50,1280x720p60\n");
+	fprintf(stderr, "                         E.g. -mode 1920x1080i50:AUDIO8\n");
 	fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
 	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
@@ -983,6 +1071,7 @@ int main (int argc, char ** argv)
 	int				n, max_channels = MAX_CHANNELS;
 	long long		opt_max_memory = 0;
 	const char		*logfiledir = ".";
+	int				opt_video_mode = -1;
 
 	time_t now;
 	struct tm *tm_now;
@@ -1075,14 +1164,14 @@ int main (int argc, char ** argv)
 			n++;
 		}
 		else if (strcmp(argv[n], "-m") == 0)
-        {
-            if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
-                fprintf(stderr, "-m requires integer maximum memory in MB\n");
-                return 1;
-            }
-            opt_max_memory = opt_max_memory * 1024 * 1024;
-            n++;
-        }
+		{
+			if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
+				fprintf(stderr, "-m requires integer maximum memory in MB\n");
+				return 1;
+			}
+			opt_max_memory = opt_max_memory * 1024 * 1024;
+			n++;
+		}
 		else if (strcmp(argv[n], "-c") == 0)
 		{
 			if (argc <= n+1)
@@ -1093,6 +1182,46 @@ int main (int argc, char ** argv)
 			{
 				fprintf(stderr, "-c requires integer maximum channel number <= %d\n", MAX_CHANNELS);
 				return 1;
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-mode") == 0)
+		{
+			char vidmode[256] = "", audmode[256] = "";
+			if (sscanf(argv[n+1], "%s:%s", vidmode, audmode) != 2) {
+				if (sscanf(argv[n+1], "%s", vidmode) != 1) {
+					fprintf(stderr, "-mode requires option of the form videomode[:audiomode]\n");
+					return 1;
+				}
+			}
+
+			// Default video mode is PAL/YUV422/FRAME/AUDIO8CH/32
+			opt_video_mode =	SV_MODE_PAL |
+								SV_MODE_COLOR_YUV422 |
+								SV_MODE_STORAGE_FRAME |
+								SV_MODE_AUDIO_4CHANNEL;
+			if (strcmp(vidmode, "PAL") == 0) {
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_PAL;
+			}
+			else if (strcmp(vidmode, "NTSC") == 0) {
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_NTSC;
+			}
+			else if (strcmp(vidmode, "1920x1080i50") == 0) {	// SMPTE274/25I
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE274_25I;
+			}
+			else if (strcmp(vidmode, "1920x1080i60") == 0) {	// SMPTE274/30I
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE274_30I;
+			}
+			else if (strcmp(vidmode, "1280x720p50") == 0) {		// SMPTE296/50P
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE296_50P;
+			}
+			else if (strcmp(vidmode, "1280x720p60") == 0) {		// SMPTE296/60P
+				opt_video_mode = (opt_video_mode & ~SV_MODE_MASK) | SV_MODE_SMPTE296_60P;
+			}
+
+			// Default audio mode is 4 channels per SDI input
+			if (strcmp(audmode, "AUDIO8") == 0) {
+				audio8ch = 1;
 			}
 			n++;
 		}
@@ -1235,6 +1364,12 @@ int main (int argc, char ** argv)
 	{
 		perror("signal(SIGUSR1)");
 		return 1;
+	}
+
+	// Set video mode if specified
+	if (opt_video_mode != -1) {
+		if (! set_videomode_on_all_channels(max_channels, opt_video_mode))
+			return 1;
 	}
 
 	//////////////////////////////////////////////////////

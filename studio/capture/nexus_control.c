@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.2 2008/09/18 09:26:43 john_f Exp $
+ * $Id: nexus_control.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -108,4 +108,99 @@ extern const uint8_t *nexus_lastframe_audio34(const NexusControl *pctl, uint8_t 
 
 	return (ring[channel] + pctl->elementsize * (pc->lastframe % pctl->ringlen)
 								+ pctl->audio34_offset);
+}
+
+extern int nexus_connect_to_shared_mem(int timeout_microsec, int verbose, NexusConnection *p)
+{
+	int				shm_id, control_id;
+
+	if (timeout_microsec > 0 && verbose) {
+		printf("Waiting for shared memory... ");
+		fflush(stdout);
+	}
+
+	// If shared memory not found, sleep and try again
+	int retry_time = 20 * 1000;		// 20ms
+	int time_taken = 0;
+	while (1)
+	{
+		control_id = shmget(9, sizeof(NexusControl), 0444);
+		if (control_id != -1)
+			break;
+
+		if (timeout_microsec == 0)
+			return 0;
+
+		usleep(retry_time);
+		time_taken += retry_time;
+		if (time_taken >= timeout_microsec)
+			return 0;
+	}
+
+	p->pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
+	if (verbose)
+		printf("connected to pctl\n");
+
+	int i;
+	for (i = 0; i < p->pctl->channels; i++)
+	{
+		while (1)
+		{
+			shm_id = shmget(10 + i, p->pctl->elementsize, 0444);
+			if (shm_id != -1)
+				break;
+			usleep(20 * 1000);
+		}
+		p->ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
+		if (verbose)
+			printf("  attached to channel[%d]: '%s'\n", i, p->pctl->channel[i].source_name);
+	}
+
+	return 1;
+}
+
+static int64_t tv_diff_microsecs(const struct timeval* a, const struct timeval* b)
+{
+    int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
+    return diff;
+}
+
+// Returns 1 if connection ok, 0 otherwise and sets return flags
+extern int nexus_connection_status(const NexusConnection *p, int *p_heartbeat_stopped, int *p_capture_dead)
+{
+	int heartbeat_stopped = 0;
+	int capture_dead = 0;
+
+	// p->pctl is NULL before first connection made
+	if (p->pctl) {
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		int64_t diff = tv_diff_microsecs(&p->pctl->owner_heartbeat, &now);
+		// 100ms or lower can give false positives for lost heartbeat
+		if (diff > 160 * 1000) {
+			heartbeat_stopped = 1;
+
+			if (kill(p->pctl->owner_pid, 0) == -1) {
+				// If dvs_sdi is alive and running as root,
+				// kill() will fail with EPERM
+				if (errno != EPERM)
+					capture_dead = 1;
+			}
+		}
+	}
+	else {
+		heartbeat_stopped = 1;
+		capture_dead = 1;
+	}
+
+	if (heartbeat_stopped == 0 && capture_dead == 0)	// i.e. connection OK
+		return 1;
+
+	if (p_heartbeat_stopped)
+		*p_heartbeat_stopped = heartbeat_stopped;
+
+	if (p_capture_dead)
+		*p_capture_dead = capture_dead;
+
+	return 0;
 }

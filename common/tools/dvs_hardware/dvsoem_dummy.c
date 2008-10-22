@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.2 2008/09/16 09:38:02 stuart_hc Exp $
+ * $Id: dvsoem_dummy.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -26,9 +26,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "../../video_burn_in_timecode.h"
 #include "../../video_test_signals.h"
+#include "../../audio_utils.h"
 
 #include "dummy_include/dvs_clib.h"
 #include "dummy_include/dvs_fifo.h"
@@ -62,6 +65,7 @@ typedef struct {
 	int frame_size;
 	int frame_count;
 	int dropped;
+	int source_input_frames;
 	DvsTcQuality tc_quality;
 	struct timeval start_time;
 	sv_fifo_buffer fifo_buffer;
@@ -133,7 +137,8 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 		gettimeofday(&dvs->start_time, NULL);
 
 	// For record, copy video + audio to dma.addr
-	memcpy(pbuffer->dma.addr, dvs->source_dmabuf, dvs->frame_size);
+	int source_offset = dvs->frame_count % dvs->source_input_frames;
+	memcpy(pbuffer->dma.addr, dvs->source_dmabuf + source_offset * dvs->frame_size, dvs->frame_size);
 
 	// Update timecodes
 	dvs->frame_count++;
@@ -256,54 +261,129 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	dvs->width = 720;
 	dvs->height = 576;
 
+	// A ring buffer can be used for sample video and audio loaded from files
+	FILE *fp_video = NULL, *fp_audio = NULL;
+	int64_t vidfile_size = 0;
+	dvs->source_input_frames = 1;
+
 	// Check DVSDUMMY_PARAM environment variable and change defaults if necessary.
-	// Examples of supported parameters are:
+	// The value is a ':' separated list of parameters such as:
 	//
 	// video=1920x1080
 	// good_tc=A/L/V
+	// vidfile=filename.uyvy			// UYVY 4:2:2
+	// audfile=filename.pcm				// 16bit stereo pair at 48kHz
 	const char *p_env = getenv("DVSDUMMY_PARAM");
 	if (p_env) {
-		const char *p_videoparam = strstr(p_env, "video=");
-		const char *p_good_tc = strstr(p_env, "good_tc=");
-		if (p_videoparam) {
-			int tmpw, tmph;
-			if (sscanf(p_env, "video=%dx%d", &tmpw, &tmph) == 2) {
-				dvs->width = tmpw;
-				dvs->height = tmph;
+		// parse ':' separated list
+		const char *p;
+		do {
+			char param[FILENAME_MAX];
+
+			p = strchr(p_env, ':');
+			if (p == NULL) {
+				strcpy(param, p_env);
 			}
-		}
-		if (p_good_tc) {
-			const char *p_qual = p_good_tc + strlen("good_tc=");
-			if (*p_qual == 'L')
-				dvs->tc_quality = DvsTcLTC;
-			if (*p_qual == 'V')
-				dvs->tc_quality = DvsTcVITC;
-		}
+			else {
+				int len = p - p_env;
+				strncpy(param, p_env, len);
+				param[len] = '\0';
+			}
+
+			printf("param[%s]\n", param);
+
+			if (strncmp(param, "video=", strlen("video=")) == 0) {
+				int tmpw, tmph;
+				if (sscanf(param, "video=%dx%d", &tmpw, &tmph) == 2) {
+					dvs->width = tmpw;
+					dvs->height = tmph;
+				}
+			}
+			else if (strncmp(param, "good_tc=", strlen("good_tc=")) == 0) {
+				const char *p_qual = param + strlen("good_tc=");
+				if (*p_qual == 'L')
+					dvs->tc_quality = DvsTcLTC;
+				if (*p_qual == 'V')
+					dvs->tc_quality = DvsTcVITC;
+			}
+			else if (strncmp(param, "vidfile=", strlen("vidfile=")) == 0) {
+				const char *vidfile = param + strlen("vidfile=");
+				if ((fp_video = fopen(vidfile, "rb")) == NULL) {
+					fprintf(stderr, "Could not open %s\n", vidfile);
+					return SV_ERROR_SVOPENSTRING;
+				}
+				struct stat buf;
+				if (stat(vidfile, &buf) != 0)
+					return SV_ERROR_SVOPENSTRING;
+				vidfile_size = buf.st_size;
+			}
+			else if (strncmp(param, "audfile=", strlen("audfile=")) == 0) {
+				const char *audfile = param + strlen("audfile=");
+				if ((fp_audio = fopen(audfile, "rb")) == NULL) {
+					fprintf(stderr, "Could not open %s\n", audfile);
+					return SV_ERROR_SVOPENSTRING;
+				}
+			}
+
+			if (!p)
+				break;
+			p_env = p + 1;
+		} while (*p_env != '\0');
 	}
+
 	int video_size = dvs->width * dvs->height * 2;
 
 	// DVS dma transfer buffer is:
 	// <video (UYVY)><audio ch 1+2 with fill to 0x4000><audio ch 3+4 with fill>
 	dvs->frame_size = video_size + 0x4000 + 0x4000;
-	dvs->source_dmabuf = malloc(dvs->frame_size);
-	unsigned char *video = dvs->source_dmabuf;
-	unsigned char *audio12 = video + video_size;
-	unsigned char *audio34 = audio12 + 0x4000;
 
-	// setup colorbars
-	uyvy_color_bars(dvs->width, dvs->height, video);
+	if (fp_video && fp_audio && vidfile_size) {
+		int max_memory = 103680000;			// 5 seconds of 720x576
+		if (vidfile_size < max_memory)
+			dvs->source_input_frames = vidfile_size / video_size;
+		else
+			dvs->source_input_frames = max_memory / video_size;
+	}
+	dvs->source_dmabuf = malloc(dvs->frame_size * dvs->source_input_frames);
 
-	// TODO: create audio tone or click
-	int i;
-	for (i = 0; i < 0x4000; i += 8) {
-        audio12[i+0] = 0x00;    audio34[i+0] = 0x80;
-        audio12[i+1] = 0x01;    audio34[i+1] = 0x81;
-        audio12[i+2] = 0x02;    audio34[i+2] = 0x82;
-        audio12[i+3] = 0x03;    audio34[i+3] = 0x83;
-        audio12[i+4] = 0x04;    audio34[i+4] = 0x84;
-        audio12[i+5] = 0x05;    audio34[i+5] = 0x85;
-        audio12[i+6] = 0x06;    audio34[i+6] = 0x86;
-        audio12[i+7] = 0x07;    audio34[i+7] = 0x87;
+	if (!fp_video) {
+		unsigned char *video = dvs->source_dmabuf;
+		unsigned char *audio12 = video + video_size;
+		unsigned char *audio34 = audio12 + 0x4000;
+	
+		// setup colorbars
+		uyvy_color_bars(dvs->width, dvs->height, video);
+	
+		// TODO: create audio tone or click
+		int i;
+		for (i = 0; i < 0x4000; i += 8) {
+	        audio12[i+0] = 0x00;    audio34[i+0] = 0x80;
+	        audio12[i+1] = 0x01;    audio34[i+1] = 0x81;
+	        audio12[i+2] = 0x02;    audio34[i+2] = 0x82;
+	        audio12[i+3] = 0x03;    audio34[i+3] = 0x83;
+	        audio12[i+4] = 0x04;    audio34[i+4] = 0x84;
+	        audio12[i+5] = 0x05;    audio34[i+5] = 0x85;
+	        audio12[i+6] = 0x06;    audio34[i+6] = 0x86;
+	        audio12[i+7] = 0x07;    audio34[i+7] = 0x87;
+		}
+	}
+	else {
+		int i;
+		int audio_size = 1920*2*2;
+		unsigned char *video = dvs->source_dmabuf;
+		for (i = 0; i < dvs->source_input_frames; i++) {
+			if (fread(video, video_size, 1, fp_video) != 1) {
+				fprintf(stderr, "Could not read frame %d from video file\n", i);
+				return SV_ERROR_SVOPENSTRING;
+			}
+			uint8_t tmp[audio_size];
+			if (fread(tmp, audio_size, 1, fp_audio) != 1) {
+				fprintf(stderr, "Could not read frame %d from audio file\n", i);
+				return SV_ERROR_SVOPENSTRING;
+			}
+			pair16bit_to_dvsaudio32(1920, tmp, video + video_size);
+			video += dvs->frame_size;
+		}
 	}
 
 	// Setup fifo_buffer which contains offsets to audio buffers

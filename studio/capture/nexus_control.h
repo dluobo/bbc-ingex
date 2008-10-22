@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.8 2008/10/09 06:48:10 stuart_hc Exp $
+ * $Id: nexus_control.h,v 1.9 2008/10/22 09:32:19 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -152,6 +152,17 @@ typedef struct {
 	int				source_name_update;		// incremented each time the source_name is changed
 	
 } NexusControl;
+
+
+// Structure used by nexus_connect_to_shared_mem()
+typedef struct {
+	uint8_t			*ring[MAX_CHANNELS];
+	NexusControl	*pctl;
+} NexusConnection;
+
+extern int nexus_connect_to_shared_mem(int timeout_microsec, int verbose, NexusConnection *p);
+extern int nexus_connection_status(const NexusConnection *p, int *p_heartbeat_stopped, int *p_capture_dead);
+
 
 // Return a char* string name for the CaptureFormat
 extern const char *nexus_capture_format_name(CaptureFormat fmt);

@@ -110,6 +110,12 @@ ifdef FFMPEG_INCLUDE_PATH
 	ifneq "$(FFMPEG_OLDSTYLE_INCLUDE)" ""
 		CFLAGS += -DFFMPEG_OLD_INCLUDE_PATHS
 	endif
+	
+	# Check for swscale
+	FFMPEG_SWSCALE_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/swscale.h && echo YES && break; test -e $$f/libswscale/swscale.h && echo YES && break; done)
+	ifeq "$(FFMPEG_SWSCALE_INCLUDE_PATH)" "YES"
+		CFLAGS += -DHAVE_FFMPEG_SWSCALE
+	endif
 
 	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
 	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
@@ -183,7 +189,8 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	frame_sequence_sink.c qc_lto_extract.c mpegi_stream_connect.c mjpeg_stream_connect.c shared_mem_source.c \
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
-	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c
+	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
+	ffmpeg_source.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 
