@@ -404,45 +404,43 @@ function ILduplicateNode () {
 function ILdeleteNode () {
 	if(tree && tree.getSelectionModel().getSelectedNode()) {
 		var node = tree.getSelectionModel().getSelectedNode();
-		Ext.MessageBox.confirm('Confirm Deletion', 'Are you sure you wish to delete this item and all its takes? You cannot undo this.', function(response){
-			if(response == "yes") {
-				var node = false;
-				if(tree.getSelectionModel().getSelectedNode().attributes.itemName) {
-					node = tree.getSelectionModel().getSelectedNode();
-				} else if (tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
-					node = tree.getSelectionModel().getSelectedNode().parentNode;
-				}
-
-				// -- Remove from database
-				Ext.Ajax.request({
-					url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/deleteItem.pl',
-					params : {
-						id: node.attributes.databaseID
-					},
-					success: function(response) {
-						try {
-							var data = JSON.parse(response.responseText);
-						} catch (e) {
-							insole.log("JSON parse error: "+e.name+" - "+e.message);
-							insole.log("JSON data was: "+response.responseText);
-							insole.alert("Failed to delete item from database: "+node.attributes.itemName+". See previous log message.");
-						}
-						if(data.success) {
-							insole.log("Successfully deleted item from database: "+node.attributes.itemName);
-						} else {
-							insole.error("Error adding to database: "+data.error);
-							insole.alert("Failed to deleting item from database: "+node.attributes.itemName+". See previous log message.");
-						}
-					},
-					failure: function() {
-						insole.alert("Failed to delete item from database: "+node.attributes.itemName+". Recommend you refresh this page to check data integrity.");
-					}
-				});
-				
-				// -- Remove from tree
-				if(node) node.remove();
+		var conf = confirm('Are you sure you wish to delete this item and all its takes? You cannot undo this.');
+		if (conf){
+			var node = false;
+			if(tree.getSelectionModel().getSelectedNode().attributes.itemName) {
+				node = tree.getSelectionModel().getSelectedNode();
+			} else if (tree.getSelectionModel().getSelectedNode().parentNode.attributes.itemName){
+				node = tree.getSelectionModel().getSelectedNode().parentNode;
 			}
-		});
+			// -- Remove from database
+			Ext.Ajax.request({
+				url: '/cgi-bin/ingex-modules/Logging.ingexmodule/data/deleteItem.pl',
+				params : {
+					id: node.attributes.databaseID
+				},
+				success: function(response) {
+					try {
+						var data = JSON.parse(response.responseText);
+					} catch (e) {
+						insole.log("JSON parse error: "+e.name+" - "+e.message);
+						insole.log("JSON data was: "+response.responseText);
+						insole.alert("Failed to delete item from database: "+node.attributes.itemName+". See previous log message.");
+					}
+					if(data.success) {
+						insole.log("Successfully deleted item from database: "+node.attributes.itemName);
+					} else {
+						insole.error("Error adding to database: "+data.error);
+						insole.alert("Failed to deleting item from database: "+node.attributes.itemName+". See previous log message.");
+					}
+				},
+				failure: function() {
+					insole.alert("Failed to delete item from database: "+node.attributes.itemName+". Recommend you refresh this page to check data integrity.");
+				}
+			});
+				
+			// -- Remove from tree
+			if(node) node.remove();
+		}
 	}
 }
 
