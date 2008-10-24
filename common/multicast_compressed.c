@@ -1,5 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
@@ -501,7 +503,7 @@ static int write_video_frame(internal_mpegts_encoder_t *ts, const uint8_t *p_vid
         pkt.size= out_size;
         
 		if (0)
-			printf("pkt: pts=%20lld dts=%20lld sidx=%d fl=%d dur=%d pos=%lld size=%5d data[0..7]={%02x %02x %02x %02x %02x %02x %02x %02x}\n",
+			printf("pkt: pts=%20"PRIi64" dts=%20"PRIi64" sidx=%d fl=%d dur=%d pos=%"PRIi64" size=%5d data[0..7]={%02x %02x %02x %02x %02x %02x %02x %02x}\n",
 				pkt.pts,
 				pkt.dts,
 				pkt.stream_index,

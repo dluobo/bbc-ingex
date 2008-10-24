@@ -1,12 +1,12 @@
 Name: qc_player
 Summary: Archive Quality Check Player
-Version: 0.5.1
+Version: 0.5.2
 Release: 1
 License: GPL
 Group: Productivity/Multimedia/Video/Players
-Packager: Philip de Nier <philip.denier@rd.bbc.co.uk>
+Packager: Jerry Kramskoy <jerry.kramskoy@bbc.co.uk>
 BuildRoot: %{_tmppath}/%{name}-root
-Requires: dvsdriver shttpd codecs-for-ffmpeg ffmpeg-h264-aac
+Requires: dvsdriver shttpd codecs-for-ffmpeg ffmpeg-h264-aac barcode ImageMagick
 
 %description
 The Quality Check player allows playback of D3 Archive MXF files
@@ -92,6 +92,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Oct 8 2008 Jerry Kramskoy, BBC Research 0.5.2
+- Add barcode images to qc report web page
+
 * Mon Jun 9 2008 Philip de Nier, BBC Research 0.5.1
 - Changes for new ingex archive structure
 

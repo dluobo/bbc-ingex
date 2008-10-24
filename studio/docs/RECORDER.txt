@@ -4,7 +4,7 @@ Instructions for building the components needed on a recorder machine
 General
 -------
 
-YaST - make sure the following are installed:
+YaST - make sure the following (and any dependencies) are installed:
   kernel sources
   libuuid1
   libuuid-devel
@@ -14,13 +14,11 @@ YaST - make sure the following are installed:
   unixODBC
   unixODBC-devel
   psqlODBC
-  Xerces-c
-  libXerces-c-27
-  libXerces-c-devel
+  libbz2-devel
 
-RPMs - make sure these are installed:
-  codecs-for-ffmpeg-671-1.i586.rpm
-  ffmpeg-DNxHD-h264-aac-11056-1.i586.rpm
+RPMs - make sure these (or later versions) are installed:
+  codecs-for-ffmpeg-20081009-1.i586.rpm
+  ffmpeg-DNxHD-h264-aac-15593-2.i586.rpm
   libodbc++-0.2.4pre3-1.i586.rpm
 
 The RPMs can be found here:

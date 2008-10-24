@@ -127,10 +127,20 @@ UnixODBC installation for C++ client apps
 
 2) Create and edit "/etc/unixODBC/odbcinst.ini":
 
+For 32-bit systems, enter:
+
 [PostgreSQL]
 Description     = PostgreSQL driver for Linux & Win32
 Driver          = /usr/lib/unixODBC/libodbcpsql.so
 Setup           = /usr/lib/unixODBC/libodbcpsqlS.so
+FileUsage       = 1
+
+For 64-bit systems, enter:
+
+[PostgreSQL]
+Description     = PostgreSQL driver for Linux & Win32
+Driver          = /usr/lib64/unixODBC/libodbcpsql.so
+Setup           = /usr/lib64/unixODBC/libodbcpsqlS.so
 FileUsage       = 1
 
 

@@ -17,7 +17,7 @@ HOW TO BUILD INGEXGUI
 Using YaST, make sure gtk2-devel package is installed.
 
 Either:
-Use YaST to install wxGTK-devel
+Use YaST to install wxGTK-devel and dependencies
 
 Or:
 Download latest wxGTK from http://www.wxwidgets.org/

@@ -55,6 +55,6 @@ chmod 444 /srv/www/htdocs/favicon.ico
 
 # tell the user what's happened
 echo "All files have been copied to the appropriate places in /srv/www/"
-echo "You will need to edit the ingex.conf file to include your database details. e.g. sudo pico /srv/www/cgi-bin/ingex-config/ingex.conf"
+echo "If you haven't already done so, you will need to edit the ingex.conf file to include your database details. e.g. sudo pico /srv/www/cgi-bin/ingex-config/ingex.conf"
 echo "You must also define your Ingex system's nodes (what machines you have at what IP addresses) on the Config page of WebIngex."
 

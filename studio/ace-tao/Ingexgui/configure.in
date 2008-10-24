@@ -113,9 +113,12 @@ AC_DEFUN([ACETAOTEST],
 #call ACETAOTEST func
 ACETAOTEST
 
-CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
-m CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
+CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
+CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
+#LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
+LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lavidmxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lswscale -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio"
+LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/libMXF/lib -L$WORKSPACE/libMXF/examples/avidmxfinfo -L$WORKSPACE/libMXF/examples/archive/info -L$WORKSPACE/libMXF/examples/reader -L$WORKSPACE/common -L$WORKSPACE/common/YUVlib"
+LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
 

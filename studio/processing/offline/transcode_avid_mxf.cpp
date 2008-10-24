@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.4 2008/09/03 15:30:29 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.5 2008/10/24 19:14:08 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -46,7 +46,6 @@ extern "C"
 #include <mxf/mxf.h>
 #include <mxf/mxf_avid.h>
 #include <mxf/mxf_macros.h>
-#include <mxf/mxf_metadata.h>
 
 #include "mjpeg_compress.h"
 }

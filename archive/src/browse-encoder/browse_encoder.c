@@ -1,5 +1,5 @@
 /*
- * $Id: browse_encoder.c,v 1.1 2008/07/08 16:47:04 philipn Exp $
+ * $Id: browse_encoder.c,v 1.2 2008/10/24 19:14:07 john_f Exp $
  *
  * MPEG-2 encodes planar YUV420 video and 16-bit PCM audio
  *
@@ -1132,7 +1132,11 @@ extern int browse_encoder_close (browse_encoder_t *in_dvd)
 	if (!(dvd->oc->oformat->flags & AVFMT_NOFILE))
 	{
         /* close the output file */
+#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(0<<8)+0))
+        url_fclose(dvd->oc->pb);
+#else
         url_fclose(&dvd->oc->pb);
+#endif
     }
 	cleanup (dvd);
 	return 0;

@@ -1,5 +1,5 @@
 /*
- * $Id: QCReport.cpp,v 1.2 2008/10/08 10:22:13 john_f Exp $
+ * $Id: QCReport.cpp,v 1.3 2008/10/24 19:14:07 john_f Exp $
  *
  * Writes a QC report given a session file and D3 MXF file
  *
@@ -296,8 +296,8 @@ void QCReport::write(QCPSEResult pseResult)
     set_html_value(timeStampPng, ".txt", ".png");
     string::size_type pos = timeStampPng.find(".png");
     string timeStampPng2(timeStampPng, pos-TimeStampSize);
-    set_html_value(reportHeader, "$FileItemPng", "/reports/" + fileItemPng);
-    set_html_value(reportHeader, "$TimeStampPng", "/reports/" + timeStampPng2);
+    set_html_value(reportHeader, "$FileItemPng", "/" + fileItemPng);
+    set_html_value(reportHeader, "$TimeStampPng", "/" + timeStampPng2);
     
     set_html_value(reportHeader, "$Filename1", _mxfFile->getFilename());
     set_html_value(reportHeader, "$Filename2", _mxfFile->getFilename());

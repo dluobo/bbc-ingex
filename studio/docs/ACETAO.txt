@@ -5,7 +5,7 @@ Installation of ACE/TAO/MPC using YaST
 Setup access to online repository
 ---------------------------------
 
-In YaST, Software, Software Management
+In YaST, Software, Software Repositories
 
 Add a repository:
 
