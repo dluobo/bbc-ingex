@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.4 2008/10/24 06:12:42 stuart_hc Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -146,6 +146,9 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 	pbuffer->timecode.vitc_tc = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
 	pbuffer->timecode.vitc_tc2 = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
 	pbuffer->timecode.ltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
+	pbuffer->anctimecode.dvitc_tc[0] = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
+	pbuffer->anctimecode.dvitc_tc[1] = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
+	pbuffer->anctimecode.dltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
 
 	// Burn timecode in video at x,y offset 40,40
 	burn_mask_uyvy(dvs->frame_count, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
