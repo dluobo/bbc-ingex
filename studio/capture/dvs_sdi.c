@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.12 2008/10/22 09:32:19 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.13 2008/10/24 05:43:08 stuart_hc Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -85,6 +85,7 @@ CaptureFormat	video_secondary_format = FormatNone;
 static int verbose = 0;
 static int verbose_channel = -1;	// which channel to show when verbose is on
 static int audio8ch = 0;
+static int anc_tc = 0;				// read timecodes from RP188/RP196 ANC data
 static int test_avsync = 0;
 static int benchmark = 0;
 static uint8_t *benchmark_video = NULL;
@@ -649,12 +650,12 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// Handle buggy field order (can happen with misconfigured camera)
 	// Incorrect field order causes vitc_tc and vitc2 to be swapped.
 	// If the high bit is set on vitc use vitc2 instead.
-	int vitc_to_use = pbuffer->timecode.vitc_tc;
-	if ((unsigned)pbuffer->timecode.vitc_tc >= 0x80000000) {
-		vitc_to_use = pbuffer->timecode.vitc_tc2;
+	int vitc_to_use = anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc;
+	if ((unsigned)vitc_to_use >= 0x80000000) {
+		vitc_to_use = anc_tc ? pbuffer->anctimecode.dvitc_tc[1] : pbuffer->timecode.vitc_tc2;
 		if (verbose) {
 			PTHREAD_MUTEX_LOCK( &m_log )
-			logFF("chan %d: vitc_tc >= 0x80000000 (0x%08x), using vitc_tc2 (0x%08x)\n", chan, pbuffer->timecode.vitc_tc, vitc_to_use);
+			logFF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc, vitc_to_use);
 			PTHREAD_MUTEX_UNLOCK( &m_log )
 		}
 	}
@@ -663,12 +664,12 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
 	// A similar check must be done for LTC since the field
 	// flag is occasionally set when the fifo call returns
-	int ltc_to_use = pbuffer->timecode.ltc_tc;
-	if ((unsigned)pbuffer->timecode.ltc_tc >= 0x80000000) {
-		ltc_to_use = (unsigned)pbuffer->timecode.ltc_tc & 0x7fffffff;
+	int ltc_to_use = anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc;
+	if ((unsigned)ltc_to_use >= 0x80000000) {
+		ltc_to_use = (unsigned)(anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc) & 0x7fffffff;
 		if (verbose) {
 			PTHREAD_MUTEX_LOCK( &m_log )
-			logFF("chan %d: ltc_tc >= 0x80000000 (0x%08x), masking high bit (0x%08x)\n", chan, pbuffer->timecode.ltc_tc, ltc_to_use);
+			logFF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit (0x%08x)\n", chan, anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc, ltc_to_use);
 			PTHREAD_MUTEX_UNLOCK( &m_log )
 		}
 	}
@@ -756,9 +757,9 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc_tc=%8x vitc_tc2=%8x ltc=%8x tc_int=%d ltc_int=%d last_vitc=%d vitc_diff=%d %s ltc_diff=%d %s\n",
 		chan, pc->lastframe, pbuffer->control.tick / 2,
 		info.dropped,
-		pbuffer->timecode.vitc_tc,
-		pbuffer->timecode.vitc_tc2,
-		pbuffer->timecode.ltc_tc,
+		anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc,
+		anc_tc ? pbuffer->anctimecode.dvitc_tc[1] : pbuffer->timecode.vitc_tc2,
+		anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc,
 		vitc_as_int,
 		ltc_as_int,
 		last_vitc,
@@ -1047,10 +1048,13 @@ static void usage_exit(void)
 	fprintf(stderr, "                         DV25   - secondary buffer is planar YUV 4:2:0 with field order line shift\n");
 	fprintf(stderr, "    -mode vid[:AUDIO8]   set input mode on all DVS cards, vid is one of:\n");
 	fprintf(stderr, "                         PAL,NTSC,1920x1080i50,1920x1080i60,1280x720p50,1280x720p60\n");
+	fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
 	fprintf(stderr, "                         E.g. -mode 1920x1080i50:AUDIO8\n");
 	fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
 	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
+	fprintf(stderr, "    -anctc               read \"DLTC\" and \"DVITC\" timecodes from RP188/RP196 ANC data\n");
+	fprintf(stderr, "                         instead of SMPTE-12M LTC and VITC\n");
 	fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
 	fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB\n");
 	fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
@@ -1162,6 +1166,10 @@ int main (int argc, char ** argv)
 				usage_exit();
 			}
 			n++;
+		}
+		else if (strcmp(argv[n], "-anctc") == 0)
+		{
+			anc_tc = 1;
 		}
 		else if (strcmp(argv[n], "-m") == 0)
 		{
