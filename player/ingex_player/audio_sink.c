@@ -622,6 +622,13 @@ static VideoSwitchSink* aus_get_video_switch(void* data)
     return msk_get_video_switch(sink->nextSink);
 }
     
+static AudioSwitchSink* aus_get_audio_switch(void* data)
+{
+    AudioSink* sink = (AudioSink*)data;
+
+    return msk_get_audio_switch(sink->nextSink);
+}
+    
 static HalfSplitSink* aus_get_half_split(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
@@ -801,6 +808,7 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
     newSink->sink.cancel_frame = aus_cancel_frame;
     newSink->sink.get_osd = aus_get_osd;
     newSink->sink.get_video_switch = aus_get_video_switch;
+    newSink->sink.get_audio_switch = aus_get_audio_switch;
     newSink->sink.get_half_split = aus_get_half_split;
     newSink->sink.get_frame_sequence = aus_get_frame_sequence;
     newSink->sink.get_buffer_state = aus_get_buffer_state;

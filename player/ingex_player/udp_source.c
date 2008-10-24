@@ -299,6 +299,17 @@ static void udp_set_source_name(void* data, const char* name)
     }
 }
 
+static void udp_set_clip_id(void* data, const char* id)
+{
+    UDPSource* source = (UDPSource*)data;
+
+    int i;
+    for (i = 0; i < source->numTracks; i++)
+    {
+        set_stream_clip_id(&source->tracks[i].streamInfo, id);    
+    }
+}
+
 static void udp_close(void* data)
 {
     UDPSource* source = (UDPSource*)data;
@@ -401,6 +412,7 @@ int udp_open(const char *address, MediaSource** source)
     newSource->mediaSource.get_position = udp_get_position;
     newSource->mediaSource.get_available_length = udp_get_available_length;
     newSource->mediaSource.set_source_name = udp_set_source_name;
+    newSource->mediaSource.set_clip_id = udp_set_clip_id;
     newSource->mediaSource.eof = udp_eof;
     newSource->mediaSource.close = udp_close;
 

@@ -1385,6 +1385,13 @@ static VideoSwitchSink* qvs_get_video_switch(void* data)
     return &swtch->switchSink;
 }
     
+static AudioSwitchSink* qvs_get_audio_switch(void* data)
+{
+    DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
+
+    return msk_get_audio_switch(swtch->targetSink);
+}
+    
 static HalfSplitSink* qvs_get_half_split(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
@@ -1675,6 +1682,52 @@ static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int 
     return 1;
 }
 
+static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
+{
+    DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
+    int result = 0;
+    int showSplitSelect;
+    VideoStreamElement* currentStream;
+    
+    PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
+    
+    if (!swtch->disableSwitching)
+    {
+        /* Note: it is still possible that next... changes after this function call and
+        before the switch is made, possibly resulting in the wrong active clip id returned */
+        currentStream = swtch->nextCurrentStream;
+        showSplitSelect = swtch->nextShowSplitSelect;
+    }
+    else
+    {
+        /* any switches have already been made */
+        currentStream = swtch->currentStream;
+        showSplitSelect = swtch->showSplitSelect;
+    }
+    
+    if (currentStream != NULL)
+    {
+        if (!showSplitSelect && currentStream == swtch->splitStream)
+        {
+            /* the active clip is the clip associated with the first video stream in the split view */
+            strcpy(clipId, swtch->firstInputStream->streamInfo.clipId);
+            *sourceId = swtch->firstInputStream->streamInfo.sourceId;
+            result = 1;
+        }
+        else
+        {
+            /* the active clip is the clip associated with the current video stream */
+            strcpy(clipId, currentStream->streamInfo.clipId);
+            *sourceId = currentStream->streamInfo.sourceId;
+            result = 1;
+        }
+    }
+    
+    PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentStreamMutex);
+    
+    return result;
+}
+
 
 int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySplitFilter, int splitSelect, int prescaledSplit,
     VideoSwitchDatabase* database, int masterTimecodeIndex, int masterTimecodeType, int masterTimecodeSubType,
@@ -1725,6 +1778,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->switchSink.show_source_name = qvs_show_source_name;
     newSwitch->switchSink.toggle_show_source_name = qvs_toggle_show_source_name;
     newSwitch->switchSink.get_video_index = qvs_get_video_index;
+    newSwitch->switchSink.get_first_active_clip_id = qvs_get_first_active_clip_id;
     
     newSwitch->targetSinkListener.data = newSwitch;
     newSwitch->targetSinkListener.frame_displayed = qvs_frame_displayed;
@@ -1744,6 +1798,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->sink.cancel_frame = qvs_cancel_frame;
     newSwitch->sink.get_osd = qvs_get_osd;
     newSwitch->sink.get_video_switch = qvs_get_video_switch;
+    newSwitch->sink.get_audio_switch = qvs_get_audio_switch;
     newSwitch->sink.get_half_split = qvs_get_half_split;
     newSwitch->sink.get_frame_sequence = qvs_get_frame_sequence;
     newSwitch->sink.get_buffer_state = qvs_get_buffer_state;
@@ -1821,6 +1876,15 @@ int vsw_get_video_index(VideoSwitchSink* swtch, int width, int height, int xPos,
     if (swtch && swtch->get_video_index)
     {
         return swtch->get_video_index(swtch->data, width, height, xPos, yPos, index);
+    }
+    return 0;
+}
+
+int vsw_get_first_active_clip_id(VideoSwitchSink* swtch, char* clipId, int* sourceId)
+{
+    if (swtch && swtch->get_first_active_clip_id)
+    {
+        return swtch->get_first_active_clip_id(swtch->data, clipId, sourceId);
     }
     return 0;
 }

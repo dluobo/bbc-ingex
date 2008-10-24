@@ -15,6 +15,7 @@
 #include "connection_matrix.h"
 #include "on_screen_display.h"
 #include "video_switch_sink.h"
+#include "audio_switch_sink.h"
 #include "half_split_sink.h"
 #include "utils.h"
 #include "logging.h"
@@ -1591,6 +1592,54 @@ static void ply_toggle_show_source_name(void* data)
     }
 }
 
+static void ply_switch_next_audio_group(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        asw_switch_next_audio_group(msk_get_audio_switch(player->mediaSink));
+
+        switch_source_info_screen(player);
+    }
+}
+
+static void ply_switch_prev_audio_group(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        asw_switch_prev_audio_group(msk_get_audio_switch(player->mediaSink));
+
+        switch_source_info_screen(player);
+    }
+}
+
+static void ply_switch_audio_group(void* data, int index)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        asw_switch_audio_group(msk_get_audio_switch(player->mediaSink), index);
+
+        switch_source_info_screen(player);
+    }
+}
+
+static void ply_snap_audio_to_video(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    if (!player->state.locked)
+    {
+        asw_snap_audio_to_video(msk_get_audio_switch(player->mediaSink));
+
+        switch_source_info_screen(player);
+    }
+}
+
 static void ply_set_half_split_orientation(void* data, int vertical)
 {
     MediaPlayer* player = (MediaPlayer*)data;
@@ -2476,6 +2525,10 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.switch_video = ply_switch_video;
     newPlayer->control.show_source_name = ply_show_source_name;
     newPlayer->control.toggle_show_source_name = ply_toggle_show_source_name;
+    newPlayer->control.switch_next_audio_group = ply_switch_next_audio_group;
+    newPlayer->control.switch_prev_audio_group = ply_switch_prev_audio_group;
+    newPlayer->control.switch_audio_group = ply_switch_audio_group;
+    newPlayer->control.snap_audio_to_video = ply_snap_audio_to_video;
     newPlayer->control.set_half_split_orientation = ply_set_half_split_orientation;
     newPlayer->control.set_half_split_type = ply_set_half_split_type;
     newPlayer->control.show_half_split = ply_show_half_split;

@@ -68,41 +68,9 @@ static void mxf_log_connect(MXFLogLevel level, const char* format, ...)
     va_end(p_arg);
 }
 
-static char* convert_filename(const char* in, char* out)
-{
-    size_t len = strlen(in);
-    if (len > MAX_SOURCE_INFO_VALUE_LEN - 3)
-    {
-        sprintf(out, "...%s", &in[len - MAX_SOURCE_INFO_VALUE_LEN + 3]);
-    }
-    else
-    {
-        sprintf(out, "%s", in);
-    }
-    return out;
-}
-
 static char* convert_date(mxfTimestamp* date, char* str)
 {
     sprintf(str, "%04u-%02u-%02u", date->year, date->month, date->day);
-    return str;
-}
-
-/* TODO: assuming 25 fps */
-static char* convert_duration(int64_t duration, char* str)
-{
-    if (duration < 0)
-    {
-        sprintf(str, "?"); 
-    }
-    else
-    {
-        sprintf(str, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64, 
-            duration / (60 * 60 * 25),
-            (duration % (60 * 60 * 25)) / (60 * 25),
-            ((duration % (60 * 60 * 25)) % (60 * 25)) / 25,
-            ((duration % (60 * 60 * 25)) % (60 * 25)) % 25);
-    }
     return str;
 }
 
@@ -127,6 +95,39 @@ static char* convert_uint32(uint32_t value, char* str)
     sprintf(str, "%d", value);
     return str;
 }
+
+static void read_clip_umid_string(MXFReader* reader, char* clipId)
+{
+    MXFHeaderMetadata* headerMetadata = get_header_metadata(reader);
+    MXFMetadataSet* materialPackageSet = NULL;
+    mxfUMID umid;
+    
+    if (!mxf_find_singular_set_by_key(headerMetadata, &MXF_SET_K(MaterialPackage), &materialPackageSet))
+    {
+        ml_log_warn("Failed to find the MaterialPackage set in the MXF file\n");
+        return;
+    }
+    
+    if (!mxf_get_umid_item(materialPackageSet, &MXF_ITEM_K(GenericPackage, PackageUID), &umid))
+    {
+        ml_log_warn("Failed to get the MaterialPackage PackageUID item from the MXF file\n");
+        return;
+    }
+
+    sprintf(clipId, "%02x%02x%02x%02x%02x%02x%02x%02x"
+        "%02x%02x%02x%02x%02x%02x%02x%02x" 
+        "%02x%02x%02x%02x%02x%02x%02x%02x" 
+        "%02x%02x%02x%02x%02x%02x%02x%02x", 
+        umid.octet0, umid.octet1, umid.octet2, umid.octet3,
+        umid.octet4, umid.octet5, umid.octet6, umid.octet7,
+        umid.octet8, umid.octet9, umid.octet10, umid.octet11,
+        umid.octet12, umid.octet13, umid.octet14, umid.octet15,
+        umid.octet16, umid.octet17, umid.octet18, umid.octet19,
+        umid.octet20, umid.octet21, umid.octet22, umid.octet23,
+        umid.octet24, umid.octet25, umid.octet26, umid.octet27,
+        umid.octet28, umid.octet29, umid.octet30, umid.octet31);
+}
+
 
 static int map_accept_frame(MXFReaderListener* mxfListener, int trackIndex)
 {
@@ -583,6 +584,17 @@ static void mxfs_set_source_name(void* data, const char* name)
     }
 }
 
+static void mxfs_set_clip_id(void* data, const char* id)
+{
+    MXFFileSource* source = (MXFFileSource*)data;
+
+    int i;
+    for (i = 0; i < source->numStreams; i++)
+    {
+        set_stream_clip_id(&source->streamData[i].streamInfo, id);    
+    }
+}
+
 static void mxfs_close(void* data)
 {
     MXFFileSource* source = (MXFFileSource*)data;
@@ -628,6 +640,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int64_t duration = -1;
     char progNo[16];
     int sourceId;
+    char clipUMIDStr[65] = {0};
     
     assert(MAX_SOURCE_INFO_VALUE_LEN <= 128);
     assert(sizeof(uint8_t) == sizeof(unsigned char));
@@ -699,6 +712,8 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     
     duration = get_duration(newSource->mxfReader);
     
+    read_clip_umid_string(newSource->mxfReader, clipUMIDStr);
+    
     newSource->mediaSource.is_complete = mxfs_is_complete;
     newSource->mediaSource.post_complete = mxfs_post_complete;
     newSource->mediaSource.get_num_streams = mxfs_get_num_streams;
@@ -715,6 +730,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.get_available_length = mxfs_get_available_length;
     newSource->mediaSource.eof = mxfs_eof;
     newSource->mediaSource.set_source_name = mxfs_set_source_name;
+    newSource->mediaSource.set_clip_id = mxfs_set_clip_id;
     newSource->mediaSource.close = mxfs_close;
     newSource->mediaSource.data = newSource;
     
@@ -738,9 +754,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         CHK_OFAIL(initialise_stream_info(&newSource->streamData[i].streamInfo));
         
         newSource->streamData[i].streamInfo.sourceId = sourceId;
+        set_stream_clip_id(&newSource->streamData[i].streamInfo, clipUMIDStr);
         
-        CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_NAME, 
-            convert_filename(filename, stringBuf)));
+        CHK_OFAIL(add_filename_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_NAME, filename));
         if (newSource->isD3MXF)
         {
             CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_TYPE, "D3-MXF"));
@@ -749,15 +765,14 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         {
             CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_TYPE, "MXF"));
         }
-        CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_DURATION, 
-            convert_duration(duration, stringBuf)));
+        CHK_OFAIL(add_timecode_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_DURATION, duration, 25)); 
 
         if (newSource->isD3MXF)
         {
             if (haveD3Info)
             {
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_ORIG_FILENAME, 
-                    convert_filename(d3MXFInfo.filename, stringBuf)));
+                CHK_OFAIL(add_filename_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_ORIG_FILENAME, 
+                    d3MXFInfo.filename));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_CREATION_DATE, 
                     convert_date(&d3MXFInfo.creationDate, stringBuf)));
                 CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_LTO_SPOOL_NO, 

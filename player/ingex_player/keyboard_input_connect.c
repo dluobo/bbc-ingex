@@ -184,34 +184,25 @@ static void default_key_pressed(void* data, int key)
             mc_next_osd_timecode(connect->control);
             break;
         case '0':
-            mc_switch_video(connect->control, 0);
-            break;
         case '1':
-            mc_switch_video(connect->control, 1);
-            break;
         case '2':
-            mc_switch_video(connect->control, 2);
-            break;
         case '3':
-            mc_switch_video(connect->control, 3);
-            break;
         case '4':
-            mc_switch_video(connect->control, 4);
-            break;
         case '5':
-            mc_switch_video(connect->control, 5);
-            break;
         case '6':
-            mc_switch_video(connect->control, 6);
-            break;
         case '7':
-            mc_switch_video(connect->control, 7);
-            break;
         case '8':
-            mc_switch_video(connect->control, 8);
-            break;
         case '9':
-            mc_switch_video(connect->control, 9);
+            mc_switch_video(connect->control, key - '0');
+            break;
+        case 'e':
+            mc_switch_prev_audio_group(connect->control);
+            break;
+        case 'p':
+            mc_snap_audio_to_video(connect->control);
+            break;
+        case 'r':
+            mc_switch_next_audio_group(connect->control);
             break;
         case 'a':
             mc_review_start(connect->control, connect->reviewDuration * 25);

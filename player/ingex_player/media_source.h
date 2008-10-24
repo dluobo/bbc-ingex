@@ -81,6 +81,9 @@ typedef struct MediaSource
     /* set the source name */
     void (*set_source_name)(void* data, const char* name);
     
+    /* set the clip identifier */
+    void (*set_clip_id)(void* data, const char* id);
+    
 } MediaSource;
 
 
@@ -117,6 +120,7 @@ void msc_close(MediaSource* source);
 int msc_get_buffer_state(MediaSource* source, int* numBuffers, int* numBuffersFilled);
 int64_t msc_convert_position(MediaSource* source, int64_t position, MediaSource* childSource);
 void msc_set_source_name(MediaSource* source, const char* name);
+void msc_set_clip_id(MediaSource* source, const char* id);
 
 
 /* create a new unique id for the source */

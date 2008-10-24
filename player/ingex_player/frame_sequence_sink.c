@@ -411,6 +411,13 @@ static VideoSwitchSink* fss_get_video_switch(void* data)
     return msk_get_video_switch(sequence->targetSink);
 }
     
+static AudioSwitchSink* fss_get_audio_switch(void* data)
+{
+    FrameSequenceSink* sequence = (FrameSequenceSink*)data;
+
+    return msk_get_audio_switch(sequence->targetSink);
+}
+    
 static HalfSplitSink* fss_get_half_split(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
@@ -549,6 +556,7 @@ int fss_create_frame_sequence(MediaSink* sink, FrameSequenceSink** sequence)
     newSequence->sink.cancel_frame = fss_cancel_frame;
     newSequence->sink.get_osd = fss_get_osd;
     newSequence->sink.get_video_switch = fss_get_video_switch;
+    newSequence->sink.get_audio_switch = fss_get_audio_switch;
     newSequence->sink.get_half_split = fss_get_half_split;
     newSequence->sink.get_frame_sequence = fss_get_frame_sequence;
     newSequence->sink.get_buffer_state = fss_get_buffer_state;

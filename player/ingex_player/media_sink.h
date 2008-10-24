@@ -14,6 +14,7 @@ extern "C"
 
 typedef struct MediaSink MediaSink;
 typedef struct VideoSwitchSink VideoSwitchSink;
+typedef struct AudioSwitchSink AudioSwitchSink;
 typedef struct HalfSplitSink HalfSplitSink;
 typedef struct FrameSequenceSink FrameSequenceSink;
 
@@ -90,6 +91,10 @@ struct MediaSink
     VideoSwitchSink* (*get_video_switch)(void* data);
     
     
+    /* audio switch */
+    AudioSwitchSink* (*get_audio_switch)(void* data);
+    
+    
     /* half-split */
     HalfSplitSink* (*get_half_split)(void* data);
     
@@ -140,6 +145,8 @@ void msk_close(MediaSink* sink);
 OnScreenDisplay* msk_get_osd(MediaSink* sink);    
 
 VideoSwitchSink* msk_get_video_switch(MediaSink* sink);    
+
+AudioSwitchSink* msk_get_audio_switch(MediaSink* sink);    
 
 HalfSplitSink* msk_get_half_split(MediaSink* sink);    
 

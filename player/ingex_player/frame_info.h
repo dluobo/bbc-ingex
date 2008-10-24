@@ -12,6 +12,7 @@ extern "C"
 {
 #endif
 
+
 #define MAX_SOURCE_INFO_NAME_LEN        15
 #define MAX_SOURCE_INFO_VALUE_LEN       30
 
@@ -27,6 +28,8 @@ extern "C"
 #define M8_MARK_TYPE                0x00000100
 #define D3_VTR_ERROR_MARK_TYPE      0x00010000
 #define D3_PSE_FAILURE_MARK_TYPE    0x00020000
+
+#define CLIP_ID_SIZE                128
 
 
 
@@ -143,6 +146,9 @@ typedef struct
     SourceInfoValue* sourceInfoValues;
     int numSourceInfoValues;
     int numSourceInfoValuesAlloc;
+    
+    /* clip info */
+    char clipId[CLIP_ID_SIZE];
 } StreamInfo;
 
 typedef struct
@@ -188,10 +194,15 @@ const char* get_stream_format_string(StreamFormat format);
 int initialise_stream_info(StreamInfo* streamInfo);
 int add_source_info(StreamInfo* streamInfo, const char* name, const char* value);
 int add_known_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* value);
+int add_filename_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* filename);
+int add_timecode_source_info(StreamInfo* streamInfo, SourceInfoName name, int64_t timecode, int timecodeBase);
 void clear_stream_info(StreamInfo* streamInfo);
 const char* get_source_info_value(const StreamInfo* streamInfo, const char* name);
 const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfoName name);
 
+int duplicate_stream_info(const StreamInfo* fromStreamInfo, StreamInfo* toStreamInfo);
+
+void set_stream_clip_id(StreamInfo* streamInfo, const char* clipId);
 
 int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, int tcSubType, Timecode* timecode);
 

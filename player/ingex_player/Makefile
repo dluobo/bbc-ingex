@@ -115,6 +115,11 @@ ifdef FFMPEG_INCLUDE_PATH
 	FFMPEG_SWSCALE_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/swscale.h && echo YES && break; test -e $$f/libswscale/swscale.h && echo YES && break; done)
 	ifeq "$(FFMPEG_SWSCALE_INCLUDE_PATH)" "YES"
 		CFLAGS += -DHAVE_FFMPEG_SWSCALE
+
+		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib; do test -e $$f/libswscale.a && echo YES && break; done)
+		ifeq "$(FFMPEG_SWSCALE_LIB)" "YES"
+			LIBS += -lswscale
+		endif
 	endif
 
 	# Use the following alternative link line for ffmpeg rpm installed ffmpeg
@@ -190,7 +195,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
 	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
-	ffmpeg_source.c
+	ffmpeg_source.c audio_switch_sink.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

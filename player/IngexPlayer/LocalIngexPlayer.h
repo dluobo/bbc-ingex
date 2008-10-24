@@ -103,7 +103,8 @@ public:
         bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
         int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
         Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale,
-        bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel);
+        bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel,
+        bool enableAudioSwitch);
     LocalIngexPlayer(PlayerOutputType outputType);
     
     virtual ~LocalIngexPlayer();
@@ -180,6 +181,10 @@ public:
     virtual bool switchNextVideo();
     virtual bool switchPrevVideo();
     virtual bool switchVideo(int index);
+    virtual bool switchNextAudioGroup();
+    virtual bool switchPrevAudioGroup();
+    virtual bool switchAudioGroup(int index); /* index == 0 is equiv. to snapAudioToVideo */
+    virtual bool snapAudioToVideo();
     virtual bool reviewStart(int64_t duration);
     virtual bool reviewEnd(int64_t duration);
     virtual bool review(int64_t duration);
@@ -221,6 +226,7 @@ private:
     int _audioDevice;
     int _numAudioLevelMonitors;
     float _audioLineupLevel;
+    bool _enableAudioSwitch;
 
     pthread_rwlock_t _playStateRWLock;
     LocalIngexPlayerState* _playState;

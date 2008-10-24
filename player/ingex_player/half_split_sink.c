@@ -1049,6 +1049,13 @@ static VideoSwitchSink* hss_get_video_switch(void* data)
     return msk_get_video_switch(split->targetSink);
 }
     
+static AudioSwitchSink* hss_get_audio_switch(void* data)
+{
+    HalfSplitSink* split = (HalfSplitSink*)data;
+
+    return msk_get_audio_switch(split->targetSink);
+}
+    
 static HalfSplitSink* hss_get_half_split(void* data)
 {
     HalfSplitSink* split = (HalfSplitSink*)data;
@@ -1274,6 +1281,7 @@ int hss_create_half_split(MediaSink* sink, int verticalSplit, HalfSplitType type
     newSplit->sink.cancel_frame = hss_cancel_frame;
     newSplit->sink.get_osd = hss_get_osd;
     newSplit->sink.get_video_switch = hss_get_video_switch;
+    newSplit->sink.get_audio_switch = hss_get_audio_switch;
     newSplit->sink.get_half_split = hss_get_half_split;
     newSplit->sink.get_buffer_state = hss_get_buffer_state;
     newSplit->sink.reset_or_close = hss_reset_or_close;

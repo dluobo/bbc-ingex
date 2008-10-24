@@ -555,6 +555,33 @@ int main (int argc, const char** argv)
     CHECK(player->switchVideo(3));
 
     sleep(1);
+    CHECK(player->switchVideo(0));
+
+    sleep(1);
+    CHECK(player->switchVideo(2));
+
+    sleep(1);
+    CHECK(player->switchNextAudioGroup());
+
+    sleep(1);
+    CHECK(player->switchNextAudioGroup());
+
+    sleep(1);
+    CHECK(player->switchPrevAudioGroup());
+
+    sleep(1);
+    CHECK(player->switchAudioGroup(1));
+
+    sleep(1);
+    CHECK(player->switchAudioGroup(2));
+
+    sleep(1);
+    CHECK(player->snapAudioToVideo());
+
+    sleep(1);
+    CHECK(player->switchVideo(0));
+
+    sleep(1);
     printf("set timecode 0\n");
     CHECK(player->setOSDTimecode(0, -1, -1));
 

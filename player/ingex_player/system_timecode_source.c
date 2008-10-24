@@ -178,6 +178,13 @@ static void sts_set_source_name(void* data, const char* name)
     add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
 }
 
+static void sts_set_clip_id(void* data, const char* id)
+{
+    SystemTimecodeSource* source = (SystemTimecodeSource*)data;
+    
+    set_stream_clip_id(&source->streamInfo, id);    
+}
+
 static void sts_close(void* data)
 {
     SystemTimecodeSource* source = (SystemTimecodeSource*)data;
@@ -215,6 +222,7 @@ int sts_create(int64_t startTimecode, MediaSource** source)
     newSource->mediaSource.get_available_length = sts_get_available_length;
     newSource->mediaSource.eof = sts_eof;
     newSource->mediaSource.set_source_name = sts_set_source_name;
+    newSource->mediaSource.set_clip_id = sts_set_clip_id;
     newSource->mediaSource.close = sts_close;
     
     CHK_OFAIL(initialise_stream_info(&newSource->streamInfo));

@@ -37,8 +37,19 @@ struct AudioLevelSink
     
     float minAudioLevel;
     float audioLineupLevel;
+    float nullAudioLevel;
 };
 
+
+static void reset_audio_levels(AudioLevelSink* sink)
+{
+    int i;
+    
+    for (i = 0; i < sink->numAudioStreams; i++)
+    {
+        sink->audioStreams[i].level = sink->nullAudioLevel;
+    }
+}
 
 
 static int als_register_listener(void* data, MediaSinkListener* listener)
@@ -162,7 +173,6 @@ static int als_receive_stream_frame(void* data, int streamId, unsigned char* buf
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
-            /* calculate level */
             sink->audioStreams[i].level = calc_audio_peak_power(buffer, 
                 bufferSize / sink->audioStreams[i].byteAlignment, 
                 sink->audioStreams[i].byteAlignment,
@@ -219,23 +229,20 @@ static int als_complete_frame(void* data, const FrameInfo* frameInfo)
 
     if (sink->numAudioStreams > 0)
     {
-        /* send audio levels to OSD */
         for (i = 0; i < sink->numAudioStreams; i++)
         {
-            osd_set_audio_stream_level(msk_get_osd(sink->targetSink), 
-                sink->audioStreams[i].streamId,
-                sink->audioStreams[i].level);
+            if (sink->audioStreams[i].level != sink->nullAudioLevel)
+            {
+                osd_set_audio_stream_level(msk_get_osd(sink->targetSink), 
+                    sink->audioStreams[i].streamId,
+                    sink->audioStreams[i].level);
+            }
         }        
     
-        /* reset levels */
-        for (i = 0; i < sink->numAudioStreams; i++)
-        {
-            sink->audioStreams[i].level = 0.0;
-        }
-    
+        reset_audio_levels(sink);
+        
         result = msk_complete_frame(sink->targetSink, frameInfo);
         
-        /* reset OSD audio levels */
         osd_reset_audio_stream_levels(msk_get_osd(sink->targetSink));
 
         return result;
@@ -249,17 +256,11 @@ static int als_complete_frame(void* data, const FrameInfo* frameInfo)
 static void als_cancel_frame(void* data)
 {
     AudioLevelSink* sink = (AudioLevelSink*)data;
-    int i;
 
-    /* reset levels */
-    for (i = 0; i < sink->numAudioStreams; i++)
-    {
-        sink->audioStreams[i].level = 0.0;
-    }
-    
+    reset_audio_levels(sink);
+
     msk_cancel_frame(sink->targetSink);
 
-    /* reset OSD audio levels */
     osd_reset_audio_stream_levels(msk_get_osd(sink->targetSink));
 }
 
@@ -275,6 +276,13 @@ static VideoSwitchSink* als_get_video_switch(void* data)
     AudioLevelSink* sink = (AudioLevelSink*)data;
 
     return msk_get_video_switch(sink->targetSink);
+}
+    
+static AudioSwitchSink* als_get_audio_switch(void* data)
+{
+    AudioLevelSink* sink = (AudioLevelSink*)data;
+
+    return msk_get_audio_switch(sink->targetSink);
 }
     
 static HalfSplitSink* als_get_half_split(void* data)
@@ -374,6 +382,7 @@ int als_create_audio_level_sink(MediaSink* targetSink, int numAudioStreams,  flo
     newSink->sink.cancel_frame = als_cancel_frame;
     newSink->sink.get_osd = als_get_osd;
     newSink->sink.get_video_switch = als_get_video_switch;
+    newSink->sink.get_audio_switch = als_get_audio_switch;
     newSink->sink.get_half_split = als_get_half_split;
     newSink->sink.get_frame_sequence = als_get_frame_sequence;
     newSink->sink.get_buffer_state = als_get_buffer_state;
@@ -381,10 +390,14 @@ int als_create_audio_level_sink(MediaSink* targetSink, int numAudioStreams,  flo
     newSink->sink.close = als_close;
     
     /* ~ minimum for 16-bit audio */    
-    newSink->minAudioLevel = -96;
+    newSink->minAudioLevel = -96.0;
     newSink->audioLineupLevel = audioLineupLevel;
     osd_set_minimum_audio_stream_level(msk_get_osd(targetSink), newSink->minAudioLevel);
     osd_set_audio_lineup_level(msk_get_osd(targetSink), newSink->audioLineupLevel);
+    
+    newSink->nullAudioLevel = -100.0; /* any invalid audio level */
+    reset_audio_levels(newSink);
+    
     
     *sink = newSink;
     return 1;

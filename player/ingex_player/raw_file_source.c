@@ -58,25 +58,6 @@ static int position_is_valid(RawFileSource* source)
     return 1;
 }
 
-static char* convert_duration(int64_t duration, const Rational* frameRate, char* str)
-{
-    int timeBase = frameRate->num / frameRate->den;
-    
-    if (duration < 0)
-    {
-        sprintf(str, "?"); 
-    }
-    else
-    {
-        sprintf(str, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64, 
-            duration / (60 * 60 * timeBase),
-            (duration % (60 * 60 * timeBase)) / (60 * timeBase),
-            ((duration % (60 * 60 * timeBase)) % (60 * timeBase)) / timeBase,
-            ((duration % (60 * 60 * timeBase)) % (60 * timeBase)) % timeBase);
-    }
-    return str;
-}
-
 
 
 static int rfs_get_num_streams(void* data)
@@ -282,6 +263,13 @@ static void rfs_set_source_name(void* data, const char* name)
     add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
 }
 
+static void rfs_set_clip_id(void* data, const char* id)
+{
+    RawFileSource* source = (RawFileSource*)data;
+
+    set_stream_clip_id(&source->streamInfo, id);    
+}
+
 static void rfs_close(void* data)
 {
     RawFileSource* source = (RawFileSource*)data;
@@ -305,8 +293,8 @@ static void rfs_close(void* data)
 int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** source)
 {
     RawFileSource* newSource = NULL;
-    char stringBuf[128];
     int64_t duration = -1;
+    int timecodeBase;
     
     CALLOC_ORET(newSource, RawFileSource, 1);
 
@@ -361,14 +349,18 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
     newSource->mediaSource.get_available_length = rfs_get_available_length;
     newSource->mediaSource.eof = rfs_eof;
     newSource->mediaSource.set_source_name = rfs_set_source_name;
+    newSource->mediaSource.set_clip_id = rfs_set_clip_id;
     newSource->mediaSource.close = rfs_close;
+    
+
+    rfs_get_length(newSource, &duration);
     
     newSource->streamInfo = *streamInfo;
     newSource->streamInfo.sourceId = msc_create_id();
     
-    rfs_get_length(newSource, &duration);
+    timecodeBase = (int)(newSource->streamInfo.frameRate.num / (double)newSource->streamInfo.frameRate.den + 0.5);
     
-    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
+    CHK_OFAIL(add_filename_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
     switch (streamInfo->format) 
     {    
         case UYVY_FORMAT:
@@ -395,9 +387,9 @@ int rfs_open(const char* filename, const StreamInfo* streamInfo, MediaSource** s
         default:
             goto fail;
     }
-    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, 
-        convert_duration(duration, &streamInfo->frameRate, stringBuf)));
-    
+    CHK_OFAIL(add_timecode_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, duration, timecodeBase));
+
+
     *source = &newSource->mediaSource;
     return 1;
     

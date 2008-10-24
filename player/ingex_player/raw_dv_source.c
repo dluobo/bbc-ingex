@@ -234,25 +234,6 @@ static int position_is_valid(RawDVSource* source)
     return 1;
 }
 
-static char* convert_duration(int64_t duration, const Rational* frameRate, char* str)
-{
-    int timeBase = frameRate->num / frameRate->den;
-    
-    if (duration < 0)
-    {
-        sprintf(str, "?"); 
-    }
-    else
-    {
-        sprintf(str, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64, 
-            duration / (60 * 60 * timeBase),
-            (duration % (60 * 60 * timeBase)) / (60 * timeBase),
-            ((duration % (60 * 60 * timeBase)) % (60 * timeBase)) / timeBase,
-            ((duration % (60 * 60 * timeBase)) % (60 * timeBase)) % timeBase);
-    }
-    return str;
-}
-
 
 
 static int rds_get_num_streams(void* data)
@@ -458,6 +439,13 @@ static void rds_set_source_name(void* data, const char* name)
     add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
 }
 
+static void rds_set_clip_id(void* data, const char* id)
+{
+    RawDVSource* source = (RawDVSource*)data;
+
+    set_stream_clip_id(&source->streamInfo, id);    
+}
+
 static void rds_close(void* data)
 {
     RawDVSource* source = (RawDVSource*)data;
@@ -481,8 +469,8 @@ static void rds_close(void* data)
 int rds_open(const char* filename, MediaSource** source)
 {
     RawDVSource* newSource = NULL;
-    char stringBuf[128];
     int64_t duration = -1;
+    int timecodeBase;
     
     CALLOC_ORET(newSource, RawDVSource, 1);
     newSource->length = -1;
@@ -511,12 +499,15 @@ int rds_open(const char* filename, MediaSource** source)
     newSource->mediaSource.get_available_length = rds_get_available_length;
     newSource->mediaSource.eof = rds_eof;
     newSource->mediaSource.set_source_name = rds_set_source_name;
+    newSource->mediaSource.set_clip_id = rds_set_clip_id;
     newSource->mediaSource.close = rds_close;
 
     
     rds_get_length(newSource, &duration);
     
-    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
+    timecodeBase = (int)(newSource->streamInfo.frameRate.num / (double)newSource->streamInfo.frameRate.den + 0.5);
+    
+    CHK_OFAIL(add_filename_source_info(&newSource->streamInfo, SRC_INFO_FILE_NAME, filename));
     switch (newSource->streamInfo.format) 
     {    
         case DV25_YUV420_FORMAT:
@@ -531,8 +522,7 @@ int rds_open(const char* filename, MediaSource** source)
         default:
             goto fail;
     }
-    CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, 
-        convert_duration(duration, &newSource->streamInfo.frameRate, stringBuf)));
+    CHK_OFAIL(add_timecode_source_info(&newSource->streamInfo, SRC_INFO_FILE_DURATION, duration, timecodeBase));
     
     
     *source = &newSource->mediaSource;

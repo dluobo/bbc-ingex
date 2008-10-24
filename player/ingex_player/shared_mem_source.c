@@ -483,6 +483,17 @@ static void shm_set_source_name(void* data, const char* name)
     }
 }
 
+static void shm_set_clip_id(void* data, const char* id)
+{
+    SharedMemSource* source = (SharedMemSource*)data;
+
+    int i;
+    for (i = 0; i < source->numTracks; i++)
+    {
+        set_stream_clip_id(&source->tracks[i].streamInfo, id);    
+    }
+}
+
 static void shm_close(void* data)
 {
     SharedMemSource* source = (SharedMemSource*)data;
@@ -591,6 +602,7 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->mediaSource.get_available_length = shm_get_available_length;
     newSource->mediaSource.eof = shm_eof;
     newSource->mediaSource.set_source_name = shm_set_source_name;
+    newSource->mediaSource.set_clip_id = shm_set_clip_id;
     newSource->mediaSource.close = shm_close;
 
     

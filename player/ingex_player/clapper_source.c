@@ -567,6 +567,14 @@ static void clp_set_source_name(void* data, const char* name)
     add_known_source_info(&source->audioStreamInfo, SRC_INFO_NAME, name);    
 }    
 
+static void clp_set_clip_id(void* data, const char* id)
+{
+    ClapperSource* source = (ClapperSource*)data;
+
+    set_stream_clip_id(&source->videoStreamInfo, id);    
+    set_stream_clip_id(&source->audioStreamInfo, id);    
+}    
+
 static void clp_close(void* data)
 {
     ClapperSource* source = (ClapperSource*)data;
@@ -648,6 +656,7 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     newSource->mediaSource.get_available_length = clp_get_available_length;
     newSource->mediaSource.eof = clp_eof;
     newSource->mediaSource.set_source_name = clp_set_source_name;
+    newSource->mediaSource.set_clip_id = clp_set_clip_id;
     newSource->mediaSource.close = clp_close;
     
     newSource->videoStreamInfo = *videoStreamInfo;

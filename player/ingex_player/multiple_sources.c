@@ -621,6 +621,18 @@ static void mls_set_source_name(void* data, const char* name)
     }
 }
 
+static void mls_set_clip_id(void* data, const char* id)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+    while (ele != NULL && ele->source != NULL)
+    {
+        msc_set_clip_id(ele->source, id);
+        
+        ele = ele->next;
+    }
+}
+
 static void mls_close(void* data)
 {
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
@@ -705,6 +717,7 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, MultipleMediaSour
     newMultSource->collectiveSource.get_available_length = mls_get_available_length;
     newMultSource->collectiveSource.eof = mls_eof;
     newMultSource->collectiveSource.set_source_name = mls_set_source_name;
+    newMultSource->collectiveSource.set_clip_id = mls_set_clip_id;
     newMultSource->collectiveSource.close = mls_close;
     newMultSource->collectiveSource.convert_position = mls_convert_position;
     

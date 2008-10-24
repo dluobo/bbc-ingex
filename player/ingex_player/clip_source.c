@@ -326,6 +326,13 @@ static void cps_set_source_name(void* data, const char* name)
     msc_set_source_name(clipSource->targetSource, name);    
 }
 
+static void cps_set_clip_id(void* data, const char* id)
+{
+    ClipSource* clipSource = (ClipSource*)data;
+    
+    msc_set_clip_id(clipSource->targetSource, id);
+}
+
 static void cps_close(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
@@ -392,6 +399,7 @@ int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipS
     newClipSource->mediaSource.get_available_length = cps_get_available_length;
     newClipSource->mediaSource.eof = cps_eof;
     newClipSource->mediaSource.set_source_name = cps_set_source_name;
+    newClipSource->mediaSource.set_clip_id = cps_set_clip_id;
     newClipSource->mediaSource.close = cps_close;
     newClipSource->mediaSource.get_buffer_state = cps_get_buffer_state;
     newClipSource->mediaSource.convert_position = cps_convert_position;

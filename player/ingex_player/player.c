@@ -30,6 +30,7 @@
 #include "buffered_media_sink.h"
 #include "console_monitor.h"
 #include "video_switch_sink.h"
+#include "audio_switch_sink.h"
 #include "half_split_sink.h"
 #include "frame_sequence_sink.h"
 #include "audio_level_sink.h"
@@ -101,6 +102,8 @@ typedef struct
     int disableAudio;
     
     const char* sourceName;
+    
+    const char* clipId;
 } InputInfo;
 
 typedef struct
@@ -176,6 +179,9 @@ static const ControlInputHelp g_defaultKeyboardInputHelp[] =
     {"'h'", "Move half split in right/downwards direction"},
     {"1..9", "Switch to video #"},
     {"0", "Switch to quad-split video"},
+    {"e", "Switch to previous audio group"},
+    {"r", "Switch to next audio group"},
+    {"p", "Snap audio group to active video"},
     {"<RIGHT ARROW>", "Step forward"},
     {"<LEFT ARROW>", "Step backward"},
     {"<UP ARROW>", "Fast forward"},
@@ -831,6 +837,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --svitc <timecode>       Start at specified VITC timecode (hh:mm:ss:ff)\n");
     fprintf(stderr, "  --sltc <timecode>        Start at specified LTC timecode (hh:mm:ss:ff)\n");
     fprintf(stderr, "  --video-switch           Use video switcher to switch between multiple video streams\n");
+    fprintf(stderr, "  --audio-switch           Use in combination with the video-switch to switch audio groups\n");
     fprintf(stderr, "  --quad-split             Add a quad split view to the video switch (--video-switch is also set)\n");
     fprintf(stderr, "  --nona-split             Add a nona (9) split view to the video switch (--video-switch is also set)\n");
     fprintf(stderr, "  --no-split-filter        Don't apply horizontal and vertical filtering to video switch splits\n");
@@ -930,6 +937,7 @@ static void usage(const char* cmd)
 #endif
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
     fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
+    fprintf(stderr, "  --clip-id <val>          Set the clip identifier for the source\n");
     fprintf(stderr, "\n");
 }
 
@@ -946,10 +954,12 @@ int main(int argc, const char **argv)
     Timecode startVITCTimecode = g_invalidTimecode;
     Timecode startLTCTimecode = g_invalidTimecode;
     int addVideoSwitch = 0;
+    int addAudioSwitch = 0;
     VideoSwitchSplit videoSwitchSplit = NO_SPLIT_VIDEO_SWITCH; 
     int applySplitFilter = 1;
     int splitSelect = 0;
     VideoSwitchSink* videoSwitch = NULL;
+    AudioSwitchSink* audioSwitch = NULL;
     const char* videoSwitchDatabaseFilename = NULL;
     int vswitchTimecodeType = -1;
     int vswitchTimecodeSubType = -1;
@@ -1306,6 +1316,11 @@ int main(int argc, const char **argv)
         else if (strcmp(argv[cmdlnIndex], "--video-switch") == 0)
         {
             addVideoSwitch = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--audio-switch") == 0)
+        {
+            addAudioSwitch = 1;
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--quad-split") == 0)
@@ -2072,6 +2087,17 @@ int main(int argc, const char **argv)
             inputs[numInputs].sourceName = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--clip-id") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            inputs[numInputs].clipId = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
         else
         {
             usage(argv[0]);
@@ -2306,8 +2332,15 @@ int main(int argc, const char **argv)
             }
             
             msc_set_source_name(mediaSource, inputs[i].sourceName);
+            
         }
 
+        /* set the clip id */
+        if (inputs[i].clipId != NULL)
+        {
+            msc_set_clip_id(mediaSource, inputs[i].clipId);
+        }
+        
         /* add to collection */
         if (!mls_assign_source(multipleSource, &mediaSource))
         {
@@ -2604,7 +2637,18 @@ int main(int argc, const char **argv)
         }
         g_player.mediaSink = als_get_media_sink(audioLevelSink);
     }
+
+    /* create audio switch before the audio level sink */
     
+    if (addAudioSwitch)
+    {
+        if (!qas_create_audio_switch(g_player.mediaSink, &audioSwitch))
+        {
+            ml_log_error("Failed to create audio switch\n");
+            goto fail;
+        }
+        g_player.mediaSink = asw_get_media_sink(audioSwitch);
+    }    
     
     /* create buffer state log */
     

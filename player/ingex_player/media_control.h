@@ -88,6 +88,14 @@ typedef struct
     void (*toggle_show_source_name)(void* data);
 
     
+    /* audio switch control */
+    
+    void (*switch_next_audio_group)(void* data);
+    void (*switch_prev_audio_group)(void* data);
+    void (*switch_audio_group)(void* data, int index);
+    void (*snap_audio_to_video)(void* data);
+
+    
     /* functions for sinks supporting half-split */
 
     void (*set_half_split_orientation)(void* data, int vertical /* -1 == toggle */);
@@ -152,6 +160,11 @@ void mc_switch_prev_video(MediaControl* control);
 void mc_switch_video(MediaControl* control, int index);
 void mc_show_source_name(MediaControl* control, int enable);
 void mc_toggle_show_source_name(MediaControl* control);
+
+void mc_switch_next_audio_group(MediaControl* control);
+void mc_switch_prev_audio_group(MediaControl* control);
+void mc_switch_audio_group(MediaControl* control, int index);
+void mc_snap_audio_to_video(MediaControl* control);
 
 void mc_set_half_split_orientation(MediaControl* sink, int vertical);
 void mc_set_half_split_type(MediaControl* sink, int type);

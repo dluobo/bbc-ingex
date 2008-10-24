@@ -27,6 +27,7 @@
 #include <dual_sink.h>
 #include <raw_file_sink.h>
 #include <video_switch_sink.h>
+#include <audio_switch_sink.h>
 #include <dv_stream_connect.h>
 #include <mjpeg_stream_connect.h>
 #include <audio_sink.h>
@@ -515,7 +516,7 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit
     int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
     int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
     Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
-    int audioDevice, int numAudioLevelMonitors, float audioLineupLevel)
+    int audioDevice, int numAudioLevelMonitors, float audioLineupLevel, bool enableAudioSwitch)
 : _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1), 
 _nextVideoSplit(videoSplit), _videoSplit(videoSplit), 
 _numFFMPEGThreads(numFFMPEGThreads),
@@ -525,7 +526,8 @@ _disableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("In
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
 _disablePCAudio(disablePCAudio), _audioDevice(audioDevice), 
-_numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLevel) 
+_numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLevel),
+_enableAudioSwitch(enableAudioSwitch)
 {
     initialise();
 }
@@ -537,7 +539,8 @@ _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
 _applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
 _x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
-_numAudioLevelMonitors(2), _audioLineupLevel(-18.0)
+_numAudioLevelMonitors(2), _audioLineupLevel(-18.0), 
+_enableAudioSwitch(true)
 {
     _sourceAspectRatio.num = 0;
     _sourceAspectRatio.den = 0;
@@ -1245,7 +1248,16 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
                     _audioLineupLevel, &audioLevelSink));
                 newPlayState->mediaSink = als_get_media_sink(audioLevelSink);
             }
+            
 
+            // create audio switch sink 
+
+            if (_enableAudioSwitch)
+            {
+                AudioSwitchSink* audioSwitch;
+                CHK_OTHROW(qas_create_audio_switch(newPlayState->mediaSink, &audioSwitch));
+                newPlayState->mediaSink = asw_get_media_sink(audioSwitch);
+            }
         }
     
         
@@ -1909,6 +1921,102 @@ bool LocalIngexPlayer::switchVideo(int index)
                 mc_switch_video(ply_get_media_control(_playState->mediaPlayer), actualIndex);
             }
         }
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::switchNextAudioGroup()
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+        
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+    
+        mc_switch_next_audio_group(ply_get_media_control(_playState->mediaPlayer));
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::switchPrevAudioGroup()
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+        
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+    
+        mc_switch_prev_audio_group(ply_get_media_control(_playState->mediaPlayer));
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::switchAudioGroup(int index)
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+        
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+
+        mc_switch_audio_group(ply_get_media_control(_playState->mediaPlayer), index);
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::snapAudioToVideo()
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+        
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+
+        mc_snap_audio_to_video(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
     {

@@ -1,5 +1,6 @@
-#include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 #include "frame_info.h"
@@ -168,6 +169,45 @@ int add_known_source_info(StreamInfo* streamInfo, SourceInfoName name, const cha
     }
 }
 
+int add_filename_source_info(StreamInfo* streamInfo, SourceInfoName name, const char* filename)
+{
+    char limitedFilename[MAX_SOURCE_INFO_VALUE_LEN + 1];
+    size_t len;
+    
+    len = strlen(filename);
+    if (len > MAX_SOURCE_INFO_VALUE_LEN)
+    {
+        sprintf(limitedFilename, "...%s", &filename[len - (MAX_SOURCE_INFO_VALUE_LEN - 3)]);
+    }
+    else
+    {
+        sprintf(limitedFilename, "%s", filename);
+    }
+    
+    return add_known_source_info(streamInfo, name, limitedFilename);
+}
+
+int add_timecode_source_info(StreamInfo* streamInfo, SourceInfoName name, int64_t timecode, int timecodeBase)
+{
+    char timecodeStr[MAX_SOURCE_INFO_VALUE_LEN + 1];
+    
+    if (timecode < 0)
+    {
+        sprintf(timecodeStr, "?"); 
+    }
+    else
+    {
+        sprintf(timecodeStr, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64, 
+            timecode / (60 * 60 * timecodeBase),
+            (timecode % (60 * 60 * timecodeBase)) / (60 * timecodeBase),
+            ((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) / timecodeBase,
+            ((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) % timecodeBase);
+    }
+
+    return add_known_source_info(streamInfo, name, timecodeStr);
+}
+
+
 void clear_stream_info(StreamInfo* streamInfo)
 {
     int i;
@@ -221,6 +261,37 @@ const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfo
     }
    
     return NULL;
+}
+
+
+int duplicate_stream_info(const StreamInfo* fromStreamInfo, StreamInfo* toStreamInfo)
+{
+    int i;
+    
+    *toStreamInfo = *fromStreamInfo;
+    
+    toStreamInfo->sourceInfoValues = NULL;
+    toStreamInfo->numSourceInfoValues = 0;
+    toStreamInfo->numSourceInfoValuesAlloc = 0;
+    for (i = 0; i < fromStreamInfo->numSourceInfoValues; i++)
+    {
+        CHK_ORET(add_source_info(toStreamInfo, fromStreamInfo->sourceInfoValues[i].name, fromStreamInfo->sourceInfoValues[i].value));
+    }
+    
+    return 1;
+}
+
+
+void set_stream_clip_id(StreamInfo* streamInfo, const char* clipId)
+{
+    if (clipId == NULL)
+    {
+        streamInfo->clipId[0] = '\0';
+        return;
+    }
+    
+    strncpy(streamInfo->clipId, clipId, sizeof(streamInfo->clipId));
+    streamInfo->clipId[sizeof(streamInfo->clipId) - 1] = '\0';
 }
 
 

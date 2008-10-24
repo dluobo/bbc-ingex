@@ -78,6 +78,11 @@ ifdef FFMPEG_INCLUDE_PATH
 	FFMPEG_SWSCALE_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/ffmpeg/swscale.h && echo YES && break; test -e $$f/libswscale/swscale.h && echo YES && break; done)
 	ifeq "$(FFMPEG_SWSCALE_INCLUDE_PATH)" "YES"
 		CFLAGS += -DHAVE_FFMPEG_SWSCALE
+
+		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib; do test -e $$f/libswscale.a && echo YES && break; done)
+		ifeq "$(FFMPEG_SWSCALE_LIB)" "YES"
+			LIBS += -lswscale
+		endif
 	endif
 
 	# Use the following alternative link line for ffmpeg rpm installed ffmpeg

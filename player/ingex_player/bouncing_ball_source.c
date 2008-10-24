@@ -293,6 +293,13 @@ static void bbs_set_source_name(void* data, const char* name)
     add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
 }
 
+static void bbs_set_clip_id(void* data, const char* id)
+{
+    BouncingBallSource* source = (BouncingBallSource*)data;
+
+    set_stream_clip_id(&source->streamInfo, id);    
+}
+
 static void bbs_close(void* data)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
@@ -393,6 +400,7 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->mediaSource.get_available_length = bbs_get_available_length;
     newSource->mediaSource.eof = bbs_eof;
     newSource->mediaSource.set_source_name = bbs_set_source_name;
+    newSource->mediaSource.set_clip_id = bbs_set_clip_id;
     newSource->mediaSource.close = bbs_close;
     
     newSource->streamInfo = *videoStreamInfo;

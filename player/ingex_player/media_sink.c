@@ -176,6 +176,15 @@ VideoSwitchSink* msk_get_video_switch(MediaSink* sink)
     return NULL;
 }
     
+AudioSwitchSink* msk_get_audio_switch(MediaSink* sink)
+{
+    if (sink && sink->get_audio_switch)
+    {
+        return sink->get_audio_switch(sink->data);
+    }
+    return NULL;
+}
+    
 HalfSplitSink* msk_get_half_split(MediaSink* sink)
 {
     if (sink && sink->get_half_split)

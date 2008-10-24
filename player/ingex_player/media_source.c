@@ -240,6 +240,14 @@ void msc_set_source_name(MediaSource* source, const char* name)
     }
 }
 
+void msc_set_clip_id(MediaSource* source, const char* id)
+{
+    if (source && source->set_clip_id)
+    {
+        source->set_clip_id(source->data, id);
+    }
+}
+
 
 int msc_create_id()
 {

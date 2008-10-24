@@ -77,6 +77,14 @@ public:
     virtual bool switchVideo(int index) = 0;
 
     
+    /* audio switch control */
+    
+    virtual bool switchNextAudioGroup() = 0;
+    virtual bool switchPrevAudioGroup() = 0;
+    virtual bool switchAudioGroup(int index) = 0; /* index == 0 is equiv. to snapAudioToVideo */
+    virtual bool snapAudioToVideo() = 0;
+
+    
     /* review */
     
     virtual bool reviewStart(int64_t duration) = 0;

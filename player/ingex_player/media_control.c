@@ -245,6 +245,37 @@ void mc_toggle_show_source_name(MediaControl* control)
 }
 
 
+void mc_switch_next_audio_group(MediaControl* control)
+{
+    if (control && control->switch_next_audio_group)
+    {
+        control->switch_next_audio_group(control->data);
+    }
+}
+
+void mc_switch_prev_audio_group(MediaControl* control)
+{
+    if (control && control->switch_prev_audio_group)
+    {
+        control->switch_prev_audio_group(control->data);
+    }
+}
+void mc_switch_audio_group(MediaControl* control, int index)
+{
+    if (control && control->switch_audio_group)
+    {
+        control->switch_audio_group(control->data, index);
+    }
+}
+
+void mc_snap_audio_to_video(MediaControl* control)
+{
+    if (control && control->snap_audio_to_video)
+    {
+        control->snap_audio_to_video(control->data);
+    }
+}
+
 void mc_set_half_split_orientation(MediaControl* control, int vertical)
 {
     if (control && control->set_half_split_orientation)

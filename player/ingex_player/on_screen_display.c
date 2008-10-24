@@ -597,6 +597,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     int secondMarkOverlayUpdated;
     int markPixelSet;
     int markPixel;
+    int hideAudioLevels;
    
 
     /* initialise the YUV lib frame */    
@@ -1145,8 +1146,21 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     
     
     /* audio level */
-    
+
+    /* check audio levels are present */
+    hideAudioLevels = 1;
     if (!osdd->hideAudioLevels && osdd->state->numAudioLevels > 0)
+    {
+        for (i = 0; i < osdd->state->numAudioLevels; i++)
+        {
+            if (osdd->state->audioStreamLevels[i].level >= osdd->state->minimumAudioLevel)
+            {
+                hideAudioLevels = 0;
+                break;
+            }
+        }
+    }
+    if (!hideAudioLevels && osdd->state->numAudioLevels > 0)
     {
         /* white */
         txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;

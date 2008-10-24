@@ -964,6 +964,13 @@ static void bmsrc_set_source_name(void* data, const char* name)
     msc_set_source_name(bufSource->targetSource, name);
 }
 
+static void bmsrc_set_clip_id(void* data, const char* id)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+    
+    msc_set_clip_id(bufSource->targetSource, id);
+}
+
 
 
 int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRateLimit,
@@ -1003,6 +1010,7 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     newBufSource->mediaSource.get_buffer_state = bmsrc_get_buffer_state;
     newBufSource->mediaSource.convert_position = bmsrc_convert_position;
     newBufSource->mediaSource.set_source_name = bmsrc_set_source_name;
+    newBufSource->mediaSource.set_clip_id = bmsrc_set_clip_id;
     
     newBufSource->targetSourceListener.data = newBufSource;
     newBufSource->targetSourceListener.accept_frame = bmsrc_accept_frame;
