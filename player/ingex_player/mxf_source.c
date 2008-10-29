@@ -1,3 +1,25 @@
+/*
+ * $Id: mxf_source.c,v 1.5 2008/10/29 17:45:44 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +32,7 @@
 #include <mxf_reader.h>
 #include <d3_mxf_info_lib.h>
 #include <mxf/mxf_page_file.h>
+#include <mxf/mxf_avid_labels_and_keys.h>
 
 /* undefine macros from libMXF */
 #undef CHK_ORET
@@ -52,10 +75,6 @@ struct MXFFileSource
     int postCompleteTryCount;
     int donePostComplete;
 };
-
-/* TODO: move this into libMXF */
-static const mxfUL MXF_EC_L(AvidMJPEGClipWrapped) = 
-    {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01, 0x0e, 0x04, 0x03, 0x01, 0x02, 0x01, 0x00, 0x00};
 
 
 
@@ -853,7 +872,10 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_40_625_50_picture_only)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_extended_template)) ||
-                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_picture_only)))
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_30_625_50_picture_only)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX50)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX40)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX30)))
             {
                 newSource->streamData[i].streamInfo.format = D10_PICTURE_FORMAT;
             }
