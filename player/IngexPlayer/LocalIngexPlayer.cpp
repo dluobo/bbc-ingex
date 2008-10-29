@@ -1,3 +1,25 @@
+/*
+ * $Id: LocalIngexPlayer.cpp,v 1.10 2008/10/29 17:49:04 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <pthread.h>
 #include <cassert>
 #include <unistd.h>
@@ -522,7 +544,7 @@ _nextVideoSplit(videoSplit), _videoSplit(videoSplit),
 _numFFMPEGThreads(numFFMPEGThreads),
 _initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
 _applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize), 
-_disableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("Ingex Player"), 
+_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("Ingex Player"), 
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
 _disablePCAudio(disablePCAudio), _audioDevice(audioDevice), 
@@ -537,7 +559,7 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
 _nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
 _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
-_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
+_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
 _x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
 _numAudioLevelMonitors(2), _audioLineupLevel(-18.0), 
 _enableAudioSwitch(true)
@@ -676,6 +698,11 @@ PlayerOutputType LocalIngexPlayer::getActualOutputType()
 void LocalIngexPlayer::setVideoSplit(VideoSwitchSplit videoSplit)
 {
     _nextVideoSplit = videoSplit;
+}
+
+void LocalIngexPlayer::setSDIOSDEnable(bool enable)
+{
+    _nextDisableSDIOSD = !enable;
 }
 
 bool LocalIngexPlayer::reset()
@@ -1069,6 +1096,13 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
                 newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 resetPlayer = false;
             }
+            else if (_nextDisableSDIOSD != _disableSDIOSD)
+            {
+                // sdi osd disable has changed - stop the player
+                SAFE_DELETE(&currentPlayState);
+                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                resetPlayer = false;
+            }
             
             if (resetPlayer)
             {
@@ -1137,6 +1171,9 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
             {
                 _actualOutputType = _nextOutputType;
             }
+            
+            
+            _disableSDIOSD = _nextDisableSDIOSD;
         
 
             switch (_actualOutputType)

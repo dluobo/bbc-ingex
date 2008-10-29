@@ -1,3 +1,25 @@
+/*
+ * $Id: LocalIngexPlayer.h,v 1.8 2008/10/29 17:49:04 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #ifndef __PRODAUTO_LOCAL_INGEX_PLAYER_H__
 #define __PRODAUTO_LOCAL_INGEX_PLAYER_H__
 
@@ -122,7 +144,6 @@ public:
     /* set the window-id when used as a browser plugin */
     void setPluginInfo(X11PluginWindowInfo *pluginInfo);
     
-    
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
     void setDVSTarget(int card, int channel);
@@ -133,9 +154,11 @@ public:
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
     PlayerOutputType getActualOutputType();
     
-    
     /* sets the video split type (see ingex_player/video_switch_sink.h for enum values) when start() is called again */
     void setVideoSplit(VideoSwitchSplit videoSplit);
+    
+    /* disables/enables the on screen display in the SDI output */
+    void setSDIOSDEnable(bool enable);
     
     
     /* will reset the player and display blank video on the output - returns false if a reset fails and
@@ -214,6 +237,7 @@ private:
     bool _applySplitFilter;
     int _srcBufferSize;
     bool _disableSDIOSD;
+    bool _nextDisableSDIOSD;
     bool _disableX11OSD;
     X11PluginWindowInfo *_pluginInfo;
     std::string _x11WindowName;
