@@ -82,7 +82,9 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int hei
 
     st->r_frame_rate.num = 25;
     st->r_frame_rate.den = 1;
+#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(21<<8)+0))
     st->sample_aspect_ratio = av_d2q(16.0/9 * height/width, 255);
+#endif    
     c = st->codec;
     c->codec_id = codec_id;
     c->codec_type = CODEC_TYPE_VIDEO;
@@ -102,7 +104,11 @@ AVStream *add_video_stream(AVFormatContext *oc, int codec_id, int width, int hei
     /* resolution must be a multiple of two */
     c->width = width;  
     c->height = height;
+#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(21<<8)+0))
     c->sample_aspect_ratio = st->sample_aspect_ratio;
+#else
+    c->sample_aspect_ratio = av_d2q(16.0/9 * height/width, 255);
+#endif
     /* time base: this is the fundamental unit of time (in seconds) in terms
        of which frame timestamps are represented. for fixed-fps content,
        timebase should be 1/framerate and timestamp increments should be

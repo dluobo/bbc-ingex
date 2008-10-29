@@ -29,8 +29,8 @@ case "$USER" in
 		;;
 esac
 
-if [ -n "$1" ] ; then
-	true
-else
-	tar cf - `find . -type f -not -name publish_to_sf.sh -not -name Root -not -name Repository -not -name Entries` | $TSOCKS ssh $SF_USER@shell.sf.net 'cd /home/groups/i/in/ingex/htdocs && tar xvf -'
-fi
+# Turn on echoing of script commands
+set -x
+
+# Pass any script args straight to rsync command e.g. --dry-run
+$TSOCKS rsync -aiv --no-perms --executability --exclude publish_to_sf.sh --exclude '*.swp' --cvs-exclude $* . $SF_USER,ingex@web.sf.net:htdocs

@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.4 2008/09/03 15:23:32 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.5 2008/10/29 17:54:26 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -682,7 +682,7 @@ void MXFWriter::Construct(int resolutionID,
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
-                                DVBased25, &essenceInfo, &mxfFilePackage));
+                                IECDV25, &essenceInfo, &mxfFilePackage));
                         }
                         break;
                         

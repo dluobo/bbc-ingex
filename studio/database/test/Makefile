@@ -25,7 +25,7 @@ test: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
 	
 %.d : %.cpp
 	@echo Generating dependency file for $<; \
-	$(CC) $(CFLAGS) $(INCLUDES) -M $< > $@.$$$$; \
+	$(CC) $(CFLAGS) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
@@ -42,15 +42,3 @@ clean:
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(DEPENDENCIES)
 endif	
-	
-
-
-
-
-
-
-
-
-
-
-

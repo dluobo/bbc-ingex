@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.5 2008/10/24 19:14:08 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.6 2008/10/29 17:54:26 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -196,15 +196,22 @@ public:
 };
 
     
-class DV50Codec
+class Decoder
 {
 public:
-    DV50Codec()
+    enum DecoderType
+    {
+        DV_DECODER,
+        MJPEG_DECODER
+    };
+    
+public:
+    Decoder()
     : _width(0), _height(0), _dec(NULL), _openedDecoder(false), _decFrame(NULL), 
     _isThreaded(false), _initialised(false)
     {}
     
-    ~DV50Codec()
+    ~Decoder()
     {
         if (_dec != NULL)
         {
@@ -222,7 +229,7 @@ public:
         }
     }
     
-    bool initialise(int numFFMPEGThreads, int width, int height)
+    bool initialise(DecoderType decoderType, int numFFMPEGThreads, int width, int height)
     {
         if (_initialised)
         {
@@ -237,12 +244,24 @@ public:
         _height = height;
         
         
-        // initialise DV50 decode 
+        // initialise decoder 
         
-        AVCodec* decoder = avcodec_find_decoder(CODEC_ID_DVVIDEO);
+        enum CodecID codecId;
+        switch (decoderType)
+        {
+            case DV_DECODER:
+                codecId = CODEC_ID_DVVIDEO;
+                break;
+            case MJPEG_DECODER:
+            default:
+                codecId = CODEC_ID_MJPEG;
+                break;
+        }
+        
+        AVCodec* decoder = avcodec_find_decoder(codecId);
         if (!decoder) 
         {
-            prodauto::Logging::error("Could not find FFMPEG DV-50 decoder\n");
+            prodauto::Logging::error("Could not find FFMPEG decoder\n");
             return false;
         }
     
@@ -257,7 +276,6 @@ public:
             _isThreaded = true;
         }
         
-        // TODO: hardcoded dimensions 
         avcodec_set_dimensions(_dec, width, height);
         _dec->pix_fmt = PIX_FMT_YUV422P;
     
@@ -338,7 +356,7 @@ struct TranscodeAvidMXF
     TranscodeStream streams[MAX_MXF_TRANSCODE_INPUTS];
     int numStreams;
     
-    DV50Codec* dv50Codec;
+    Decoder* decoder;
     
     prodauto::MXFWriter* mxfWriter;
 };
@@ -378,7 +396,9 @@ static inline bool user_quit()
 static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* stream, int numFFMPEGThreads)
 {
     // check transcode is supported 
-    if (!stream->isVideo || stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION)
+    if (!stream->isVideo || 
+        (stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION &&
+            stream->inputVideoResolutionID != MJPEG21_MATERIAL_RESOLUTION))
     {
         fprintf(stderr, "Input essence type not supported for transcode\n");
         return 0;
@@ -390,7 +410,18 @@ static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* st
     }
     
     // TODO: hardcoded WxH
-    CHK_ORET(transcode->dv50Codec->initialise(numFFMPEGThreads, 720, 576));
+    Decoder::DecoderType decoderType;
+    switch (stream->inputVideoResolutionID)
+    {
+        case DV50_MATERIAL_RESOLUTION:
+            decoderType = Decoder::DV_DECODER;
+            break;
+        case MJPEG21_MATERIAL_RESOLUTION:
+        default:
+            decoderType = Decoder::MJPEG_DECODER;
+            break;
+    }
+    CHK_ORET(transcode->decoder->initialise(decoderType, numFFMPEGThreads, 720, 576));
     
     return 1;
 }
@@ -410,7 +441,9 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
     unsigned char* v;
 
     // check transcode is supported
-    if (!stream->isVideo || stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION)
+    if (!stream->isVideo ||
+        (stream->inputVideoResolutionID != DV50_MATERIAL_RESOLUTION &&
+            stream->inputVideoResolutionID != MJPEG21_MATERIAL_RESOLUTION))
     {
         fprintf(stderr, "Input essence type not supported for transcode\n");
         return 0;
@@ -421,10 +454,10 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
         return 0;
     }
     
-    // decode DV50
+    // decode 
 
-    AVCodecContext* dec = transcode->dv50Codec->getDecoder();
-    AVFrame* decFrame = transcode->dv50Codec->getFrame();
+    AVCodecContext* dec = transcode->decoder->getDecoder();
+    AVFrame* decFrame = transcode->decoder->getFrame();
     
     
     avcodec_decode_video(dec, decFrame, &finished, stream->inputBuffer, stream->inputBufferSize);
@@ -504,12 +537,11 @@ static int allocate_buffer(mxfr::MXFReaderListener* listener, int trackIndex, ui
         return 0;
     }
     
-    CHK_ORET(stream->inputBufferSize == 0 || stream->inputBufferSize == bufferSize);
-    
-    if (stream->inputBufferSize == 0)
+    if (stream->inputBufferSize < bufferSize)
     {
-        CHK_MALLOC_ARRAY_ORET(stream->inputBuffer, uint8_t, bufferSize + FF_INPUT_BUFFER_PADDING_SIZE);
-        stream->inputBufferSize = bufferSize;
+        SAFE_FREE(&stream->inputBuffer);
+        stream->inputBufferSize = bufferSize + FF_INPUT_BUFFER_PADDING_SIZE;
+        CHK_MALLOC_ARRAY_ORET(stream->inputBuffer, uint8_t, stream->inputBufferSize);
     }
     
     *buffer = stream->inputBuffer;
@@ -534,13 +566,13 @@ static int receive_frame(mxfr::MXFReaderListener* listener, int trackIndex, uint
         return 0;
     }
     
-    CHK_ORET(stream->inputBufferSize == bufferSize);
+    CHK_ORET(stream->inputBufferSize >= bufferSize);
     
     if (!stream->requireTranscode)
     {
         // no transcode required     
         outputBuffer = stream->inputBuffer;
-        outputBufferSize = stream->inputBufferSize;
+        outputBufferSize = bufferSize;
     }
     else
     {
@@ -582,7 +614,7 @@ int get_stream(MaterialHolder& sourceMaterial, prodauto::UMID uid, vector<string
 }
 
 
-int transcode_avid_mxf(DV50Codec* dv50Codec,
+int transcode_avid_mxf(Decoder* decoder,
                        vector<string>& inputFiles, 
                        MaterialHolder& sourceMaterial,
                        string outputPrefix,
@@ -590,6 +622,7 @@ int transcode_avid_mxf(DV50Codec* dv50Codec,
                        string destinationDirectory, 
                        string failureDirectory, 
                        int numFFMPEGThreads, 
+                       int inputVideoResolutionID,
                        int outputVideoResolutionID)
 {
     TranscodeAvidMXF transcode;
@@ -607,7 +640,7 @@ int transcode_avid_mxf(DV50Codec* dv50Codec,
     vector<prodauto::SourcePackage*>::const_iterator iter2;
 
     memset(&transcode, 0, sizeof(TranscodeAvidMXF));
-    transcode.dv50Codec = dv50Codec;
+    transcode.decoder = decoder;
     
     // get material, file and tape source packages
     CHK_OFAIL(sourceMaterial.sourceMaterialPackage->getType() == prodauto::MATERIAL_PACKAGE);
@@ -928,7 +961,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --create-dir <path>      path to creating directory (default .)\n");
     fprintf(stderr, "  --dest-dir <path>        path to destination directory (default .)\n");
     fprintf(stderr, "  --fail-dir <path>        path to failure directory (default .)\n");
-    fprintf(stderr, "  --mjpeg-201              transcode to Avid MJPEG 20:1 (default)\n");
+    fprintf(stderr, "  --input-mjpeg-21         transcode from Avid MJPEG 2:1 (default)\n");
+    fprintf(stderr, "  --input-dv-50            transcode from DV 50\n");
+    fprintf(stderr, "  --output-mjpeg-201       transcode to Avid MJPEG 20:1 (default)\n");
     fprintf(stderr, "  --fthreads               number of FFMPEG threads (default = 4)\n");
     fprintf(stderr, "  --dsn <string>           database DNS (default '%s')\n", g_dsn);
     fprintf(stderr, "  --db-user <string>       database user name (default '%s')\n", g_databaseUserName);
@@ -943,6 +978,7 @@ int main(int argc, const char* argv[])
 {
     int cmdlnIndex = 1;
     string outputPrefix;
+    int inputVideoResolutionID = MJPEG21_MATERIAL_RESOLUTION;
     int outputVideoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
     int numFFMPEGThreads = 4;
     string sourceDirectory;
@@ -957,7 +993,7 @@ int main(int argc, const char* argv[])
     DatabaseHolder database;
     bool quit = false;
     MJPEGCompressHolder mjpeg;
-    DV50Codec dv50Codec;
+    Decoder decoder;
     bool haveTranscoded;
 
     
@@ -1035,7 +1071,17 @@ int main(int argc, const char* argv[])
             failureDirectory = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--mjpeg-201") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--input-mjpeg-21") == 0)
+        {
+            inputVideoResolutionID = MJPEG21_MATERIAL_RESOLUTION;
+            cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--input-dv-50") == 0)
+        {
+            inputVideoResolutionID = DV50_MATERIAL_RESOLUTION;
+            cmdlnIndex++;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--output-mjpeg-201") == 0)
         {
             outputVideoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
             cmdlnIndex++;
@@ -1243,7 +1289,7 @@ int main(int argc, const char* argv[])
                     if (fileDescriptor->videoResolutionID != 0)
                     {
                         haveVideo = true;
-                        if (fileDescriptor->videoResolutionID != DV50_MATERIAL_RESOLUTION)
+                        if (fileDescriptor->videoResolutionID != inputVideoResolutionID)
                         {
                             supported = false;
                             break;
@@ -1410,10 +1456,10 @@ int main(int argc, const char* argv[])
                     prodauto::Logging::info("  Updated transcode status to STARTED\n");
                     
                     prodauto::Logging::info("  Performing transcode\n");
-                    if (transcode_avid_mxf(&dv50Codec, inputFiles, sourceMaterial, 
+                    if (transcode_avid_mxf(&decoder, inputFiles, sourceMaterial, 
                         outputPrefix.c_str(), 
                         creatingDirectory.c_str(), actualDestinationDirectory.c_str(), failureDirectory.c_str(),
-                        numFFMPEGThreads, outputVideoResolutionID))
+                        numFFMPEGThreads, inputVideoResolutionID, outputVideoResolutionID))
                     {
                         // update with success status      
                         transcode->status = TRANSCODE_STATUS_COMPLETED;

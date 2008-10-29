@@ -39,7 +39,7 @@ create_aaf: $(DATABASELIB_DIR)/libprodautodb.a $(STUDIOCOMMONLIB_DIR)/libstudioc
 
 %.d : %.cpp
 	@echo Generating dependency file for $<; \
-	$(CC) $(CFLAGS) $(INCLUDES) -M $< > $@.$$$$; \
+	$(CC) $(CFLAGS) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 

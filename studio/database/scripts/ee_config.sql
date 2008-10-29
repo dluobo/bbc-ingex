@@ -184,12 +184,13 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 --
 
 -- Lot
+-- NB. Lot is online only
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('TIMECODE_MODE', '1', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 11);
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_RESOLUTION', '4', 1, 11);
@@ -198,12 +199,12 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_BITC', 'false', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 11);
+    VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 11);
+    VALUES ('ENCODE1_DEST', '/store/mxf_online_lot/', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '8', 1, 11);
+    VALUES ('ENCODE2_RESOLUTION', '0', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -230,10 +231,10 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('TIMECODE_MODE', '1', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 12);
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '4', 1, 12);
+    VALUES ('ENCODE1_RESOLUTION', '8', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -244,7 +245,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '8', 1, 12);
+    VALUES ('ENCODE2_RESOLUTION', '4', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -272,10 +273,10 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('TIMECODE_MODE', '1', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/scripts/xferclient.pl', 1, 13);
+    VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '4', 1, 13);
+    VALUES ('ENCODE1_RESOLUTION', '8', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -286,7 +287,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '8', 1, 13);
+    VALUES ('ENCODE2_RESOLUTION', '4', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)

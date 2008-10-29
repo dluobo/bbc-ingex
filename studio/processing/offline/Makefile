@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.4 2008/10/24 19:14:08 john_f Exp $
+# $Id: Makefile,v 1.5 2008/10/29 17:54:26 john_f Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -56,13 +56,13 @@ all: transcode_avid_mxf yuv422_to_mjpeg yuv422_to_mjpeg_threaded
 
 %.d : %.cpp
 	@echo Generating dependency file for $<; \
-	$(CPP_COMPILE) -M $< > $@.$$$$; \
+	$(CPP_COMPILE) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 %.d : %.c
 	@echo Generating dependency file for $<; \
-	$(C_COMPILE) -M $< > $@.$$$$; \
+	$(C_COMPILE) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 

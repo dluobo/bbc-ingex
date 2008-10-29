@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <sys/time.h>
 
@@ -158,7 +159,7 @@ extern int main(int argc, char *argv[])
 		total_size += compressed_size;
 	}
 
-	printf("frames encoded = %d (%.2f sec), compressed size = %llu (%.2fMbps), time = %.2f\n",
+	printf("frames encoded = %d (%.2f sec), compressed size = %"PRIu64" (%.2fMbps), time = %.2f\n",
 			frames_encoded, frames_encoded / 25.0,
 			total_size, total_size / frames_encoded * 25.0 * 8 / 1000,
 			tv_diff_now_us(&start_time) / 1000000.0);

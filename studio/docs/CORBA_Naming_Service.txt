@@ -4,6 +4,28 @@ How to install a CORBA Naming Service
 Recorders advertise themselves in the naming service and controllers
 (or RecorderClient) use it to find the recorders.
 
+With RPM-installed ACE/TAO
+--------------------------
+
+Create the file
+  /etc/sysconfig/TAO-cosnaming
+
+containing:
+
+  TAO_COSNAMING_ENDPOINT="-ORBEndPoint iiop://:8888 -ORBDottedDecimalAddresses 1"
+
+You may want to put an explicit IP address or hostname in that line.
+(Don't put -ORBDottedDecimalAddresses 1 if you want to use hostname rather then IP address.)
+
+
+Then in YaST, System, System Services (runlevel):
+
+Enable the service "tao-cosnaming"
+
+
+With manually-installed ACE/TAO
+-------------------------------
+
 root> cd ...ingex/studio/scripts
 root> cp Naming_Service /etc/init.d
 

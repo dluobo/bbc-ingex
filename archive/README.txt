@@ -129,6 +129,10 @@ The software depends on a number of external libaries:
 - Harding FPA Photo Sensitivity Epilepsy (PSE) analysis module
     - http://www.hardingfpa.com/pse.html
     - A dummy module can used if this software is not available.
+- barcode - version 0.98-330
+    - generates barcode 
+- ImageMagick, version 6.3.5.10-2.2
+    - converts barcode into image
 - Miscellaneous
     - install the C/C++ development, Linux kernel development and Perl
       development software patterns using YaST

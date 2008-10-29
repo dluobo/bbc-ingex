@@ -45,7 +45,8 @@ else
 	AC_MSG_ERROR([wxWidgets 2.3.3 or newer is required])
 fi
 
-WORKSPACE=`pwd | sed 's/\(.*\/ingex\)\/.*/\1/'`
+# WORKSPACE is set to the ingex top-level directory
+WORKSPACE=`pwd | xargs dirname | xargs dirname | xargs dirname`
 
 AC_DEFUN([PLAYERTEST],
 [

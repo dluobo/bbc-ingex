@@ -18,7 +18,7 @@ all: test_JogShuttle
 .deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(COMPILE) $(INCLUDES) -M $< > $@.$$$$; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
