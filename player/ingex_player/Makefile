@@ -116,7 +116,7 @@ ifdef FFMPEG_INCLUDE_PATH
 	ifeq "$(FFMPEG_SWSCALE_INCLUDE_PATH)" "YES"
 		CFLAGS += -DHAVE_FFMPEG_SWSCALE
 
-		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib; do test -e $$f/libswscale.a && echo YES && break; done)
+		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64; do test -e $$f/libswscale.a && echo YES && break; done)
 		ifeq "$(FFMPEG_SWSCALE_LIB)" "YES"
 			LIBS += -lswscale
 		endif
@@ -229,7 +229,7 @@ libingexplayer.a: $(OBJECTS)
 .deps/%.d : %.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -M $< > $@.$$$$; \
+	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
@@ -242,7 +242,7 @@ libingexplayer.a: $(OBJECTS)
 .deps/player.d : player.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -M $< > $@.$$$$; \
+	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
@@ -253,7 +253,7 @@ player: .objs/player.o libingexplayer.a $(LIB_DEPS)
 .deps/qc_player.d : qc_player.c
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -M $< > $@.$$$$; \
+	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
@@ -269,7 +269,7 @@ test_shuttle_input: .objs/test_shuttle_input.o .objs/shuttle_input.o .objs/loggi
 
 TESTAPPS += test_emulate_key	
 test_emulate_key: .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o
-	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -lX11 -L/usr/X11R6/lib64 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
+	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/test_emulate_key.o .objs/emulate_key.o .objs/logging.o -o test_emulate_key
 
 TESTAPPS += test_media_control	
 test_media_control: .objs/test_media_control.o .objs/media_control.o .objs/shuttle_input_connect.o .objs/shuttle_input.o .objs/x11_keyboard_input.o .objs/term_keyboard_input.o .objs/logging.o
