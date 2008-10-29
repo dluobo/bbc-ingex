@@ -135,7 +135,7 @@ libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 .deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -M $< > $@.$$$$; \
+	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
@@ -147,7 +147,7 @@ libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 .deps/test_IngexPlayer.d : test_IngexPlayer.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -M $< > $@.$$$$; \
+	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
