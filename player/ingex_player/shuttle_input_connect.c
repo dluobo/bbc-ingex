@@ -1,3 +1,25 @@
+/*
+ * $Id: shuttle_input_connect.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -44,6 +66,52 @@ struct ShuttleConnect
     MediaControlMode prevModeForClearMarks;
 };
 
+
+static const ControlInputHelp g_defaultShuttleInputHelp[] = 
+{
+    {"1", "Toggle lock"},
+    {"2", "Display next OSD screen"},
+    {"3", "Display next timecode"},
+//    {"4", ""},
+    {"5", "Toggle play/pause"},
+    {"6", "Seek to start"},
+    {"7", "Seek to end"},
+    {"8", "Clear all marks"},
+    {"9", "Quit"},
+    {"10", "Set mark (type M0)"},
+    {"11", "Clear mark"},
+    {"12", "Seek to previous mark"},
+    {"13", "Seek to next mark"},
+    {"14", "Switch to previous video"},
+    {"15", "Switch to next video"},
+    {"<SHUTTLE>", "Fast forward/rewind (clockwise/anti-clockwise)"},
+    {"<JOG>", "Step forward/backward (clockwise/anti-clockwise)"},
+    {NULL, NULL}
+};
+
+static const ControlInputHelp g_qcShuttleInputHelp[] = 
+{
+    {"1", "Display next OSD screen"},
+    {"2", "Display next timecode"},
+    {"3", "Toggle lock"},
+    {"4", "Quit after a 1.5 second hold"},
+    {"5", "Toggle mark magenta (type M1)"},
+    {"6", "Toggle mark green (type M2)"},
+    {"7", "Toggle mark blue (type M3)"},
+    {"8", "Toggle mark cyan (type M4)"},
+    {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
+    {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
+    {"11", "Seek clip mark"},
+    {"12", "Next active mark bar"},
+    {"13", "Toggle mark red (type M0)"},
+    {"14", "Seek to previous mark or seek to start after a 1.5 second hold"},
+    {"15", "Seek to next mark or seek to end after a 1.5 second hold"},
+    {"<SHUTTLE>", "Fast forward/rewind (clockwise/anti-clockwise)"},
+    {"<JOG>", "Step forward/backward (clockwise/anti-clockwise)"},
+    {NULL, NULL}
+};
+
+
 static int g_forwardShuttleSpeed[8] = {1, 1, 2, 5, 10, 20, 50, 100};
 static int g_reverseShuttleSpeed[8] = {1, -1, -2, -5, -10, -20, -50, -100};
 
@@ -53,7 +121,9 @@ static int g_reverseShuttleSpeedPerc[8] = {1, -1, -2, -3, -4, -5, -6, -10};
 static int g_forwardShuttleSpeedMenu[8] = {1, 1, 1, 2, 3, 3, 4, 5};
 static int g_reverseShuttleSpeedMenu[8] = {1, 1, 1, 2, 3, 3, 4, 5};
 
-    
+
+
+
 static long get_time_diff(struct timeval* from)
 {
     long diff;
@@ -660,4 +730,15 @@ void sic_free_shuttle_connect(ShuttleConnect** connect)
     
     SAFE_FREE(connect);
 }
+
+const ControlInputHelp* sic_get_default_control_help()
+{
+    return g_defaultShuttleInputHelp;
+}
+
+const ControlInputHelp* sic_get_qc_control_help()
+{
+    return g_qcShuttleInputHelp;
+}
+
 

@@ -1,3 +1,25 @@
+/*
+ * $Id: player.c,v 1.11 2008/10/29 17:47:42 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -141,133 +163,6 @@ typedef struct
     
     int writeAllMarks;
 } Player;
-
-typedef struct
-{
-    const char* input;
-    const char* description;
-} ControlInputHelp;
-
-/* TODO: shuttle and keyboard connects should hold this info */
-static const ControlInputHelp g_defaultKeyboardInputHelp[] = 
-{
-    {"'q'", "Quit"},
-    {"<SPACE>", "Toggle play/pause"},
-    {"<HOME>", "Seek to start"},
-    {"<END>", "Seek to end"},
-    {"'i'", "Toggle lock"},
-    {"'o'", "Display next OSD screen"},
-    {"'t'", "Display next timecode"},
-    {"'-'", "Toggle source name display"},
-    {"'+'", "Toggle audio level display"},
-    {"'m'", "Set mark (type M0)"},
-    {"'c'", "Clear mark"},
-    {"'b'", "Clear all marks"},
-    {"','", "Seek to previous mark"},
-    {"'.'", "Seek to next mark"},
-    {"'/'", "Seek to clip mark"},
-    {"'a'", "Review start"},
-    {"'z'", "Review end"},
-    {"'x'", "Review mark"},
-    {"'j'", "Increment reverse play speed"},
-    {"'k'", "Pause"},
-    {"'l'", "Increment play speed"},
-    {"'s'", "Toggle half split orientation"},
-    {"'d'", "Toggle continuous split"},
-    {"'f'", "Toggle show half split as black line"},
-    {"'g'", "Move half split in left/upwards direction"},
-    {"'h'", "Move half split in right/downwards direction"},
-    {"1..9", "Switch to video #"},
-    {"0", "Switch to quad-split video"},
-    {"e", "Switch to previous audio group"},
-    {"r", "Switch to next audio group"},
-    {"p", "Snap audio group to active video"},
-    {"<RIGHT ARROW>", "Step forward"},
-    {"<LEFT ARROW>", "Step backward"},
-    {"<UP ARROW>", "Fast forward"},
-    {"<DOWN ARROW>", "Fast rewind"},
-    {"<PAGE UP>", "Forward 1 minute"},
-    {"<PAGE DOWN>", "Backward 1 minute"}
-};
-
-static const ControlInputHelp g_defaultShuttleInputHelp[] = 
-{
-    {"1", "Toggle lock"},
-    {"2", "Display next OSD screen"},
-    {"3", "Display next timecode"},
-//    {"4", ""},
-    {"5", "Toggle play/pause"},
-    {"6", "Seek to start"},
-    {"7", "Seek to end"},
-    {"8", "Clear all marks"},
-    {"9", "Quit"},
-    {"10", "Set mark (type M0)"},
-    {"11", "Clear mark"},
-    {"12", "Seek to previous mark"},
-    {"13", "Seek to next mark"},
-    {"14", "Switch to previous video"},
-    {"15", "Switch to next video"},
-    {"<SHUTTLE>", "Fast forward/rewind (clockwise/anti-clockwise)"},
-    {"<JOG>", "Step forward/backward (clockwise/anti-clockwise)"}
-};
-
-static const ControlInputHelp g_qcKeyboardInputHelp[] = 
-{
-    {"'q'", "Quit"},
-    {"<SPACE>", "Toggle play/pause"},
-    {"<HOME>", "Seek to start"},
-    {"<END>", "Seek to end"},
-    {"'i'", "Toggle lock"},
-    {"'o'", "Display next OSD screen"},
-    {"'t'", "Display next timecode"},
-    {"'''", "Toggle source name display"},
-    {"'m'", "Toggle mark red (type M0)"},
-    {"'c'", "Clear mark (except D3 VTR error and PSE failure)"},
-    {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
-    {"','", "Seek to previous mark"},
-    {"'.'", "Seek to next mark"},
-    {"'/'", "Seek to clip mark"},
-    {"'a'", "Review start"},
-    {"'z'", "Review end"},
-    {"'x'", "Review mark"},
-    {"'j'", "Increment reverse play speed"},
-    {"'k'", "Pause"},
-    {"'l'", "Increment play speed"},
-    {"'s'", "Toggle half split orientation"},
-    {"'d'", "Toggle continuous split"},
-    {"'f'", "Toggle show half split as black line"},
-    {"'g'", "Move half split in left/upwards direction"},
-    {"'h'", "Move half split in right/downwards direction"},
-    {"1..9", "Switch to video #"},
-    {"0", "Switch to quad-split video"},
-    {"<RIGHT ARROW>", "Step forward"},
-    {"<LEFT ARROW>", "Step backward"},
-    {"<UP ARROW>", "Fast forward"},
-    {"<DOWN ARROW>", "Fast rewind"},
-    {"<PAGE UP>", "Forward 1 minute"},
-    {"<PAGE DOWN>", "Backward 1 minute"}
-};
-
-static const ControlInputHelp g_qcShuttleInputHelp[] = 
-{
-    {"1", "Display next OSD screen"},
-    {"2", "Display next timecode"},
-    {"3", "Toggle lock"},
-    {"4", "Quit after a 1.5 second hold"},
-    {"5", "Toggle mark magenta (type M1)"},
-    {"6", "Toggle mark green (type M2)"},
-    {"7", "Toggle mark blue (type M3)"},
-    {"8", "Toggle mark cyan (type M4)"},
-    {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
-    {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
-    {"11", "Seek clip mark"},
-    {"12", "Next active mark bar"},
-    {"13", "Toggle mark red (type M0)"},
-    {"14", "Seek to previous mark or seek to start after a 1.5 second hold"},
-    {"15", "Seek to next mark or seek to end after a 1.5 second hold"},
-    {"<SHUTTLE>", "Fast forward/rewind (clockwise/anti-clockwise)"},
-    {"<JOG>", "Step forward/backward (clockwise/anti-clockwise)"}
-};
 
 
 static void* shuttle_control_thread(void* arg)
@@ -512,38 +407,50 @@ static void x11_window_close_request(void* data)
     mc_stop(ply_get_media_control(g_player.mediaPlayer));
 }
 
-static void input_help()
+static void control_help()
 {
-    size_t i;
-    fprintf(stderr, "\n");
+    const ControlInputHelp* defaultKeyboardHelp = kic_get_default_control_help();
+    const ControlInputHelp* defaultShuttleHelp = sic_get_default_control_help();
+    const ControlInputHelp* qcKeyboardHelp = kic_get_qc_control_help();
+    const ControlInputHelp* qcShuttleHelp = sic_get_qc_control_help();
+    int i;
+
     fprintf(stderr, "Control Inputs:\n");
     fprintf(stderr, "Default keyboard:\n");
-    for (i = 0; i < sizeof(g_defaultKeyboardInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (defaultKeyboardHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_defaultKeyboardInputHelp[i].input, g_defaultKeyboardInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", defaultKeyboardHelp[i].input, defaultKeyboardHelp[i].description);
+        i++;
     }
     
     fprintf(stderr, "\n");
     fprintf(stderr, "Default shuttle:\n");
-    for (i = 0; i < sizeof(g_defaultShuttleInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (defaultShuttleHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_defaultShuttleInputHelp[i].input, g_defaultShuttleInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", defaultShuttleHelp[i].input, defaultShuttleHelp[i].description);
+        i++;
     }
     fprintf(stderr, "\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "QC keyboard:\n");
-    for (i = 0; i < sizeof(g_qcKeyboardInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (qcKeyboardHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_qcKeyboardInputHelp[i].input, g_qcKeyboardInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", qcKeyboardHelp[i].input, qcKeyboardHelp[i].description);
+        i++;
     }
     fprintf(stderr, "\n");
     
     fprintf(stderr, "\n");
     fprintf(stderr, "QC shuttle:\n");
-    for (i = 0; i < sizeof(g_qcShuttleInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (qcShuttleHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_qcShuttleInputHelp[i].input, g_qcShuttleInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", qcShuttleHelp[i].input, qcShuttleHelp[i].description);
+        i++;
     }
     fprintf(stderr, "\n");
 }
@@ -807,6 +714,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
+    fprintf(stderr, "  --help-control           Display keyboard and jog-shuttle control help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
     fprintf(stderr, "  --log-file <name>        Output log messages to file\n");
     fprintf(stderr, "  --log-level <level>      Output log level; 0=debug, 1=info, 2=warning, 3=error (default %d)\n", DEBUG_LOG_LEVEL);
@@ -1047,10 +955,14 @@ int main(int argc, const char **argv)
             strcmp(argv[cmdlnIndex], "--help") == 0)
         {
             usage(argv[0]);
-            input_help();
             return 0;
         }
-        if (strcmp(argv[cmdlnIndex], "-v") == 0 ||
+        else if (strcmp(argv[cmdlnIndex], "--help-control") == 0)
+        {
+            control_help();
+            return 0;
+        }
+        else if (strcmp(argv[cmdlnIndex], "-v") == 0 ||
             strcmp(argv[cmdlnIndex], "--version") == 0)
         {
             printf("Version: %s, build: %s\n", get_player_version(), get_player_build_timestamp());

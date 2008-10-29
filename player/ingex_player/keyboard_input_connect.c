@@ -1,3 +1,25 @@
+/*
+ * $Id: keyboard_input_connect.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,8 +52,91 @@ struct KeyboardConnect
     int halfSplitSpeed;
 };
 
+
+static const ControlInputHelp g_defaultKeyboardInputHelp[] = 
+{
+    {"'q'", "Quit"},
+    {"<SPACE>", "Toggle play/pause"},
+    {"<HOME>", "Seek to start"},
+    {"<END>", "Seek to end"},
+    {"'i'", "Toggle lock"},
+    {"'o'", "Display next OSD screen"},
+    {"'t'", "Display next timecode"},
+    {"'-'", "Toggle source name display"},
+    {"'+'", "Toggle audio level display"},
+    {"'m'", "Set mark (type M0)"},
+    {"'c'", "Clear mark"},
+    {"'b'", "Clear all marks"},
+    {"','", "Seek to previous mark"},
+    {"'.'", "Seek to next mark"},
+    {"'/'", "Seek to clip mark"},
+    {"'a'", "Review start"},
+    {"'z'", "Review end"},
+    {"'x'", "Review mark"},
+    {"'j'", "Increment reverse play speed"},
+    {"'k'", "Pause"},
+    {"'l'", "Increment play speed"},
+    {"'s'", "Toggle half split orientation"},
+    {"'d'", "Toggle continuous split"},
+    {"'f'", "Toggle show half split as black line"},
+    {"'g'", "Move half split in left/upwards direction"},
+    {"'h'", "Move half split in right/downwards direction"},
+    {"1..9", "Switch to video #"},
+    {"0", "Switch to quad-split video"},
+    {"e", "Switch to previous audio group"},
+    {"r", "Switch to next audio group"},
+    {"p", "Snap audio group to active video"},
+    {"<RIGHT ARROW>", "Step forward"},
+    {"<LEFT ARROW>", "Step backward"},
+    {"<UP ARROW>", "Fast forward"},
+    {"<DOWN ARROW>", "Fast rewind"},
+    {"<PAGE UP>", "Forward 1 minute"},
+    {"<PAGE DOWN>", "Backward 1 minute"},
+    {NULL, NULL}
+};
+
+static const ControlInputHelp g_qcKeyboardInputHelp[] = 
+{
+    {"'q'", "Quit"},
+    {"<SPACE>", "Toggle play/pause"},
+    {"<HOME>", "Seek to start"},
+    {"<END>", "Seek to end"},
+    {"'i'", "Toggle lock"},
+    {"'o'", "Display next OSD screen"},
+    {"'t'", "Display next timecode"},
+    {"'m'", "Toggle mark red (type M0)"},
+    {"'c'", "Clear mark (except D3 VTR error and PSE failure)"},
+    {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
+    {"','", "Seek to previous mark"},
+    {"'.'", "Seek to next mark"},
+    {"'/'", "Seek to clip mark"},
+    {"'a'", "Review start"},
+    {"'z'", "Review end"},
+    {"'x'", "Review mark"},
+    {"'j'", "Increment reverse play speed"},
+    {"'k'", "Pause"},
+    {"'l'", "Increment play speed"},
+    {"'s'", "Toggle half split orientation"},
+    {"'d'", "Toggle continuous split"},
+    {"'f'", "Toggle show half split as black line"},
+    {"'g'", "Move half split in left/upwards direction"},
+    {"'h'", "Move half split in right/downwards direction"},
+    {"1..9", "Switch to video #"},
+    {"0", "Switch to quad-split video"},
+    {"<RIGHT ARROW>", "Step forward"},
+    {"<LEFT ARROW>", "Step backward"},
+    {"<UP ARROW>", "Fast forward"},
+    {"<DOWN ARROW>", "Fast rewind"},
+    {"<PAGE UP>", "Forward 1 minute"},
+    {"<PAGE DOWN>", "Backward 1 minute"},
+    {NULL, NULL}
+};
+
+
 static unsigned int g_keyboardSpeed[NUM_SPEEDS] = {1, 2, 5, 10, 20, 50, 100};
 static unsigned int g_reverseKeyboardSpeed[NUM_SPEEDS] = {-1, -2, -5, -10, -20, -50, -100};
+
+
 
 static long get_elapsed_time(struct timeval* from)
 {
@@ -612,5 +717,14 @@ void kic_free_keyboard_connect(KeyboardConnect** connect)
     SAFE_FREE(connect);
 }
 
+const ControlInputHelp* kic_get_default_control_help()
+{
+    return g_defaultKeyboardInputHelp;
+}
+
+const ControlInputHelp* kic_get_qc_control_help()
+{
+    return g_qcKeyboardInputHelp;
+}
 
 

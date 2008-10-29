@@ -1,3 +1,25 @@
+/*
+ * $Id: qc_player.c,v 1.8 2008/10/29 17:47:42 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -161,69 +183,6 @@ static const Options g_defaultOptions =
 #endif
     {0},
     {0}
-};
-
-typedef struct
-{
-    const char* input;
-    const char* description;
-} ControlInputHelp;
-
-static const ControlInputHelp g_qcKeyboardInputHelp[] = 
-{
-    {"'q'", "Quit"},
-    {"<SPACE>", "Toggle play/pause"},
-    {"<HOME>", "Seek to start"},
-    {"<END>", "Seek to end"},
-    {"'i'", "Toggle lock"},
-    {"'o'", "Display next OSD screen"},
-    {"'t'", "Display next timecode"},
-    {"'m'", "Toggle mark red (type M0)"},
-    {"'c'", "Clear mark (except D3 VTR error and PSE failure)"},
-    {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
-    {"','", "Seek to previous mark"},
-    {"'.'", "Seek to next mark"},
-    {"'/'", "Seek to clip mark"},
-    {"'a'", "Review start"},
-    {"'z'", "Review end"},
-    {"'x'", "Review mark"},
-    {"'j'", "Increment reverse play speed"},
-    {"'k'", "Pause"},
-    {"'l'", "Increment play speed"},
-    {"'s'", "Toggle half split orientation"},
-    {"'d'", "Toggle continuous split"},
-    {"'f'", "Toggle show half split as black line"},
-    {"'g'", "Move half split in left/upwards direction"},
-    {"'h'", "Move half split in right/downwards direction"},
-    {"1..9", "Switch to video #"},
-    {"0", "Switch to quad-split video"},
-    {"<RIGHT ARROW>", "Step forward"},
-    {"<LEFT ARROW>", "Step backward"},
-    {"<UP ARROW>", "Fast forward"},
-    {"<DOWN ARROW>", "Fast rewind"},
-    {"<PAGE UP>", "Forward 1 minute"},
-    {"<PAGE DOWN>", "Backward 1 minute"}
-};
-
-static const ControlInputHelp g_qcShuttleInputHelp[] = 
-{
-    {"1", "Display next OSD screen"},
-    {"2", "Display next timecode"},
-    {"3", "Toggle lock"},
-    {"4", "Quit after a 1.5 second hold"},
-    {"5", "Toggle mark magenta (type M1)"},
-    {"6", "Toggle mark green (type M2)"},
-    {"7", "Toggle mark blue (type M3)"},
-    {"8", "Toggle mark cyan (type M4)"},
-    {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
-    {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
-    {"11", "Seek clip mark"},
-    {"12", "Next active mark bar"},
-    {"13", "Toggle mark red (type M0)"},
-    {"14", "Seek to previous mark or seek to start after a 1.5 second hold"},
-    {"15", "Seek to next mark or seek to end after a 1.5 second hold"},
-    {"<SHUTTLE>", "Fast forward/rewind (clockwise/anti-clockwise)"},
-    {"<JOG>", "Step forward/backward (clockwise/anti-clockwise)"}
 };
 
 
@@ -1331,22 +1290,28 @@ static void catch_sigint(int sig_number)
     exit(1);
 }
 
-static void input_help()
+static void control_help()
 {
-    size_t i;
-    fprintf(stderr, "\n");
+    const ControlInputHelp* keyboardHelp = kic_get_qc_control_help();
+    const ControlInputHelp* shuttleHelp = sic_get_qc_control_help();
+    int i;
+    
     fprintf(stderr, "QC keyboard:\n");
-    for (i = 0; i < sizeof(g_qcKeyboardInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (keyboardHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_qcKeyboardInputHelp[i].input, g_qcKeyboardInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", keyboardHelp[i].input, keyboardHelp[i].description);
+        i++;
     }
     fprintf(stderr, "\n");
     
     fprintf(stderr, "\n");
     fprintf(stderr, "QC shuttle:\n");
-    for (i = 0; i < sizeof(g_qcShuttleInputHelp) / sizeof(ControlInputHelp); i++)
+    i = 0;
+    while (shuttleHelp[i].input != NULL)
     {
-        fprintf(stderr, "  %-15s%s\n", g_qcShuttleInputHelp[i].input, g_qcShuttleInputHelp[i].description);
+        fprintf(stderr, "  %-15s%s\n", shuttleHelp[i].input, shuttleHelp[i].description);
+        i++;
     }
     fprintf(stderr, "\n");
 }
@@ -1359,7 +1324,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "Usage: %s [options] [inputs]\n", cmd);
     fprintf(stderr, "\n");
     fprintf(stderr, "Options: (* means is required)\n");
-    fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
+    fprintf(stderr, "  -h, --help               Display this usage message\n");
+    fprintf(stderr, "  --help-control           Display keyboard and jog-shuttle control help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
     fprintf(stderr, "* --tape-cache <dir>       The LTO tape cache directory\n");
     fprintf(stderr, "* --report <dir>           The destination directory for QC and PSE reports\n");
@@ -1441,10 +1407,14 @@ int main(int argc, const char **argv)
             strcmp(argv[cmdlnIndex], "--help") == 0)
         {
             usage(argv[0]);
-            input_help();
             return 0;
         }
-        if (strcmp(argv[cmdlnIndex], "-v") == 0 ||
+        else if (strcmp(argv[cmdlnIndex], "--help-control") == 0)
+        {
+            control_help();
+            return 0;
+        }
+        else if (strcmp(argv[cmdlnIndex], "-v") == 0 ||
             strcmp(argv[cmdlnIndex], "--version") == 0)
         {
             printf("Version: %s, build: %s\n", get_player_version(), get_player_build_timestamp());

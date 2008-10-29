@@ -1,3 +1,25 @@
+/*
+ * $Id: ffmpeg_source.c,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 /* used ffmpeg's ffplay.c as a starting point */
 
 #include <stdlib.h>
@@ -52,19 +74,9 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
 
 
 #if 0
-#define DEBUG(format) {printf("Debug: "); printf(format);}
-#define DEBUG1(format, p1) {printf("Debug: "); printf(format, p1);}
-#define DEBUG2(format, p1, p2) {printf("Debug: "); printf(format, p1, p2);}
-#define DEBUG3(format, p1, p2, p3) {printf("Debug: "); printf(format, p1, p2, p3);}
-#define DEBUG4(format, p1, p2, p3, p4) {printf("Debug: "); printf(format, p1, p2, p3, p4);}
-#define DEBUG5(format, p1, p2, p3, p4, p5) {printf("Debug: "); printf(format, p1, p2, p3, p4, p5);}
+#define DEBUG(format, ...) {printf("Debug: "); printf(format, ## __VA_ARGS__);}
 #else
-#define DEBUG(format)
-#define DEBUG1(format, p1)
-#define DEBUG2(format, p1, p2)
-#define DEBUG3(format, p1, p2, p3)
-#define DEBUG4(format, p1, p2, p3, p4)
-#define DEBUG5(format, p1, p2, p3, p4, p5)
+#define DEBUG(format, ...) 
 #endif
 
 
@@ -300,35 +312,6 @@ static void clear_stream_data(FFMPEGSource* source)
         source->audioStreams[i].firstOutputSample = 0;
         source->audioStreams[i].numOutputSamples = 0;
     }
-}
-
-static int all_streams_ready(FFMPEGSource* source)
-{
-    int i;
-    int j;
-    
-    for (i = 0; i < source->numVideoStreams; i++)
-    {
-        if (!source->videoStreams[i].isReady)
-        {
-            return 0;
-        }
-    }
-
-    for (i = 0; i < source->numAudioStreams; i++)
-    {
-        for (j = 0; j < source->audioStreams[i].numOutputStreams; j++)
-        {
-            if (!source->audioStreams[i].isReady)
-            {
-                return 0;
-            }
-        }
-    }
-    
-    /* timecode stream is always ready */
-    
-    return 1;
 }
 
 static OutputStreamData* get_output_stream(FFMPEGSource* source, int streamIndex)
@@ -879,6 +862,7 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     {
         return NO_PACKET_IN_QUEUE;
     }
+    DEBUG("Popped video packet (%d)\n", videoStream->packetQueue.size);
 
     
     /* decode the packet data */
@@ -948,7 +932,8 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     pts *= av_q2d(stream->time_base);
     packetPosition = (int64_t)(pts * source->frameRate.num / (double)source->frameRate.den + 0.5);
     
-    DEBUG5("Video pts: %lld, %lld, %lld - %lld (file pos %lld)\n", packetPosition, (int64_t)(pts * 48000 + 0.5), packetPosition, source->position, packet.pos);
+    DEBUG("Video pts=%"PFi64", audio pts=%"PFi64", packet pos=%"PFi64", source pos=%"PFi64", file pos=%"PFi64" (%"PFi64")\n", 
+        packetPosition, (int64_t)(pts * 48000 + 0.5), packetPosition, source->position, packet.pos, url_ftell(source->formatContext->pb));
     
         
     if (packetPosition < source->position)
@@ -1026,7 +1011,7 @@ static int transfer_audio_samples(FFMPEGSource* source, AudioStream* audioStream
     int numTransferSamples;
     int j;
 
-    DEBUG5("Transfer: target=%lld+%d, decode=%lld+%d, initial=%lld, ", 
+    DEBUG("Transfer: target=%"PFi64"+%d, decode=%"PFi64"+%d, initial=%"PFi64", ", 
         targetFirstSample, targetNumSamples, firstDecodeSample, numDecodeSamples, audioStream->initialDecodeSample);
 
     /* check whether the samples are within the target range for the output streams */
@@ -1091,7 +1076,7 @@ static int transfer_audio_samples(FFMPEGSource* source, AudioStream* audioStream
         }
     }
 
-    DEBUG2("output=%lld+%d\n", audioStream->firstOutputSample, audioStream->numOutputSamples);
+    DEBUG("output=%"PFi64"+%d\n", audioStream->firstOutputSample, audioStream->numOutputSamples);
     
     
     return PROCESS_PACKETS_SUCCESS;
@@ -1148,6 +1133,7 @@ static int process_audio_packets(FFMPEGSource* source, AudioStream* audioStream)
         {
             return NO_PACKET_IN_QUEUE;
         }
+        DEBUG("Popped audio packet (%d)\n", audioStream->packetQueue.size);
         audioStream->packetNextData = audioStream->packet.data;
         audioStream->packetNextSize = audioStream->packet.size;
 
@@ -1418,6 +1404,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     VideoStream* videoStream = NULL;
     int i;
     int j;
+    int allStreamsReady;
     unsigned char* buffer = NULL;
     int error;
     int adjustReadStartCount = 0;
@@ -1439,125 +1426,71 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     clear_stream_data(source);
 
 
-    /* audio packets can contain multiple frames and therefore we process existing audio packet data first */
-
-    for (i = 0; i < source->numAudioStreams; i++)
+    while (1)
     {
-        audioStream = &source->audioStreams[i];
-        
-        if (audioStream->isReady)
-        {
-            continue;
-        }
-        
-        result = process_audio_packets(source, audioStream);
-        if (result != PROCESS_PACKETS_SUCCESS)
-        {
-            if (result == PROCESS_PACKETS_FAILED)
-            {
-                ml_log_error("Failed to process audio frame data\n");
-                return -1;
-            }
-            /* else keep reading */
-        }
-    }
-
-    
-    while (!all_streams_ready(source))
-    {
-
-        /* read the next frame */
-        
-        result = av_read_frame(source->formatContext, &packet);
-        if (result < 0)
-        {
-#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(0<<8)+0))
-            error = url_ferror(source->formatContext->pb);
-#else
-            error = url_ferror(&source->formatContext->pb);
-#endif
-            if (error != 0)
-            {
-                ml_log_error("Failed to read frame from file (%d)\n", error);
-                return -1;
-            } 
-            else
-            {
-#if 0
-                /* TODO: this doesn't work because the media_player uses it's own length */
-                /* reached end of file. The actual length is 1 or more frames less */
-                if (source->length > 0)
-                {
-                    source->length--;
-                }
-                ml_log_warn("Unexpected EOF - adjusting source length\n");
-#else
-                ml_log_warn("Unexpected EOF\n");
-#endif
-                return -1;
-            }
-        }
-
-        
-        /* process the video or audio packet */
+        /* process audio and video packets in the queue */
         
         result = PROCESS_PACKETS_SUCCESS;
-        
-        if ((videoStream = get_video_stream(source, packet.stream_index)) != NULL)
+        allStreamsReady = 1;
+        for (i = 0; i < source->numVideoStreams + source->numAudioStreams; i++)
         {
-            if (!push_packet(&videoStream->packetQueue, &packet))
+            if (i < source->numVideoStreams)
             {
-                av_free_packet(&packet);
-                return -1;
-            }
-            
-            if (!videoStream->isReady)
-            {
-                result = process_video_packets(source, videoStream);
-                if (result == PROCESS_PACKETS_FAILED)
+                videoStream = &source->videoStreams[i];
+                
+                while (!videoStream->isReady)
                 {
-                    ml_log_error("Failed to process video packet data\n");
+                    result = process_video_packets(source, videoStream);
+                    if (result == PROCESS_PACKETS_FAILED)
+                    {
+                        ml_log_error("Failed to process video packet data\n");
+                        return -1;
+                    }
+                    else if (result == NO_PACKET_IN_QUEUE || result == LATE_FRAME)
+                    {
+                        break;
+                    }
                 }
-            }
-            else
-            {
-                DEBUG("Received video packet when video data is already present\n");
-            }
-        }
-        else if ((audioStream = get_audio_stream(source, packet.stream_index)) != NULL)
-        {
-            if (!push_packet(&audioStream->packetQueue, &packet))
-            {
-                av_free_packet(&packet);
-                return -1;
-            }
-            
-            if (!audioStream->isReady)
-            {
-                result = process_audio_packets(source, audioStream);
-                if (result == PROCESS_PACKETS_FAILED)
-                {
-                    ml_log_error("Failed to process audio frame data\n");
-                }
-            }
-            else
-            {
-                DEBUG("Received audio packet when audio data is already present\n");
-            }
-        }
-        else
-        {
-            av_free_packet(&packet);
-        }
-        
-        if (result == PROCESS_PACKETS_FAILED)
-        {
-            return -1;
-        }
-        else if (result == LATE_FRAME)
-        {
-            /* seek back adjustReadStartCount + 1 frames */ 
 
+                allStreamsReady = allStreamsReady && videoStream->isReady;
+            }
+            else
+            {
+                audioStream = &source->audioStreams[i - source->numVideoStreams];
+                
+                while (!audioStream->isReady)
+                {
+                    result = process_audio_packets(source, audioStream);
+                    if (result == PROCESS_PACKETS_FAILED)
+                    {
+                        ml_log_error("Failed to process audio packet data\n");
+                        return -1;
+                    }
+                    else if (result == NO_PACKET_IN_QUEUE || result == LATE_FRAME)
+                    {
+                        break;
+                    }
+                }
+
+                allStreamsReady = allStreamsReady && audioStream->isReady;
+            }
+            
+            if (result == LATE_FRAME || result == NO_PACKET_IN_QUEUE)
+            {
+                break;
+            }
+        }
+        
+        if (allStreamsReady)
+        {
+            break;
+        }
+        
+        
+        if (result == LATE_FRAME)
+        {
+            /* seek back adjustReadStartCount + 1 frames */
+            
             clear_stream_data(source);
             
             adjustReadStartCount++;
@@ -1565,7 +1498,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             if (adjustReadStartCount > MAX_ADJUST_READ_START_COUNT)
             {
                 ml_log_error("Exceeded maximum seek back frames (%d) to find target frame\n", MAX_ADJUST_READ_START_COUNT);
-                ml_log_warn("Failed to read frame at position %lld - sending blank frame\n", source->position);
+                ml_log_warn("Failed to read frame at position %"PFi64" - sending blank frame\n", source->position);
                 sendBlankFrame = 1;
                 break;
             }
@@ -1581,12 +1514,12 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
                 /* fms_seek changed the position - changed it back to the target position */
                 source->position = position;
                 
-                ml_log_warn("Failed to read frame at position %lld - sending blank frame\n", source->position);
+                ml_log_warn("Failed to read frame at position %"PFi64" - sending blank frame\n", source->position);
                 sendBlankFrame = 1;
                 break;
             }
 
-            DEBUG1("adjusting start to position %lld\n", source->position - adjustReadStartCount);
+            DEBUG("---- Adjusting start to position %"PFi64"\n", source->position - adjustReadStartCount);
             position = source->position;
             if (fms_seek(source->mediaSource.data, source->position - adjustReadStartCount) != 0)
             {
@@ -1595,7 +1528,61 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             /* fms_seek changed the position - changed it back to the target position */
             source->position = position;
         }
+        else /* result == NO_PACKET_IN_QUEUE */
+        {
+            /* read the next frame */
         
+            DEBUG("File position before av_read_frame=%"PFi64"\n", url_ftell(source->formatContext->pb));
+            
+            result = av_read_frame(source->formatContext, &packet);
+            if (result < 0)
+            {
+#if (LIBAVFORMAT_VERSION_INT >= ((52<<16)+(0<<8)+0))
+                error = url_ferror(source->formatContext->pb);
+#else
+                error = url_ferror(&source->formatContext->pb);
+#endif
+                if (error != 0)
+                {
+                    ml_log_error("Failed to read frame from file (%d)\n", error);
+                    return -1;
+                } 
+                else
+                {
+                    ml_log_warn("Unexpected EOF\n");
+                    /* TODO: modify the source length and the media_player needs to read the source length again */
+                    return -1;
+                }
+            }
+
+            DEBUG("File position after av_read_frame=%"PFi64"\n", url_ftell(source->formatContext->pb));
+            
+            
+            /* push packet onto queue */
+            
+            if ((videoStream = get_video_stream(source, packet.stream_index)) != NULL)
+            {
+                if (!push_packet(&videoStream->packetQueue, &packet))
+                {
+                    av_free_packet(&packet);
+                    return -1;
+                }
+                DEBUG("Pushed video packet (%d)\n", videoStream->packetQueue.size);
+            }
+            else if ((audioStream = get_audio_stream(source, packet.stream_index)) != NULL)
+            {
+                if (!push_packet(&audioStream->packetQueue, &packet))
+                {
+                    av_free_packet(&packet);
+                    return -1;
+                }
+                DEBUG("Pushed audio packet (%d)\n", audioStream->packetQueue.size);
+            }
+            else
+            {
+                av_free_packet(&packet);
+            }
+        }
     }
 
     source->position++;
@@ -1924,6 +1911,8 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
 
     newSource->length = (int64_t)(newSource->formatContext->duration / ((double)AV_TIME_BASE) * 
         newSource->frameRate.num / (double)(newSource->frameRate.den) + 0.5);
+    DEBUG("Duration = %"PFi64"\n", newSource->length);
+    /* TODO: found that FFMPEG sometimes rounds the length up rather than down */
 
     
     /* add source infos */
