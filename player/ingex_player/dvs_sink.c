@@ -1,3 +1,26 @@
+/*
+ * $Id: dvs_sink.c,v 1.9 2008/10/29 17:47:16 john_f Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1090,28 +1113,22 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     /* fit video */
     if (sink->videoStream.requireFit)
     {
-        int height;
         unsigned char* inData = sink->videoStream.data[sink->currentFifoBuffer];
         unsigned char* outData = fifoBuffer->buffer;
-        
-        if (sink->rasterHeight > (unsigned int)sink->height) /* e.g. PALFF mode, 592 lines, when input is 576 lines */
-        {
-            /* skip lines, e.g. for PALFF mode and image height 576 skip 16 lines */
-            outData += (sink->rasterHeight - sink->height) * sink->rasterWidth * 2;
-            height = sink->height;
-        }
-        else
-        {
-            height = sink->rasterHeight;
-        }
+        int imageYStart;
+        int imageXStart;
 
-        for (h = 0; h < height; h++)
+        imageYStart = ((int)sink->rasterHeight < sink->height) ? 0 : (sink->rasterHeight - sink->height) / 2;
+        imageXStart = ((int)sink->rasterWidth < sink->width) ? 0 : (sink->rasterWidth - sink->width) / 2;
+        imageXStart -= imageXStart % 2; /* make it even */
+        
+        for (h = 0; h < (int)sink->rasterHeight; h++)
         {
-            if (h < sink->height)
+            if (h >= imageYStart && h < imageYStart + sink->height)
             {
-                for (w = 0; w < (int)(sink->rasterWidth * 2); w += 4) 
+                for (w = 0; w < (int)sink->rasterWidth; w += 2) 
                 {
-                    if (w < sink->width * 2)
+                    if (w >= imageXStart && w < imageXStart + sink->width)
                     {
                         /* copy input data to output data */
                         *outData++ = *inData++;
@@ -1128,16 +1145,17 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
                         *outData++ = 0x10;
                     }
                 }
-                if (w < sink->width * 2)
+                
+                if ((int)sink->rasterWidth < sink->width)
                 {
                     /* skip input data that exceeds raster width */ 
-                    inData += sink->width * 2 - w;
+                    inData += (sink->width - sink->rasterWidth) * 2;
                 }
             }
             else
             {
                 /* fill with black the area space not filled by input data */
-                for (w = 0; w < (int)(sink->rasterWidth * 2); w += 4) 
+                for (w = 0; w < (int)sink->rasterWidth; w += 2) 
                 {
                     *outData++ = 0x80;
                     *outData++ = 0x10;
