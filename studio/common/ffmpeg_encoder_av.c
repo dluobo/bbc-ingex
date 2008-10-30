@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.4 2008/10/30 20:17:31 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -359,8 +359,8 @@ static int init_audio_dvd(internal_ffmpeg_encoder_t * enc)
     return 0;
 }
 
-/* initialise audio stream for MOV encoding */
-static int init_audio_mov(internal_ffmpeg_encoder_t * enc)
+/* initialise audio stream for MP3 encoding */
+static int init_audio_mp3(internal_ffmpeg_encoder_t * enc)
 {
     AVCodecContext * codec_context = enc->audio_st->codec;
 
@@ -618,25 +618,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         return NULL;
     }
 
-    /* Initialise the codecs */
-    switch (res)
-    {
-    case FF_ENCODER_RESOLUTION_DVD:
-        init_video_dvd(enc);
-        init_audio_dvd(enc);
-        break;
-    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
-        init_video_mpeg4(enc);
-        init_audio_mov(enc);
-        break;
-    case FF_ENCODER_RESOLUTION_DV25_MOV:
-        init_video_dv25(enc, start_tc);
-        init_audio_pcm(enc);
-        break;
-    default:
-        break;
-    }
-
     /* Set aspect ratio for video stream */
     AVRational sar;
 #if 0
@@ -665,6 +646,25 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
        increments should be identically 1. */
     enc->video_st->codec->time_base.num = 1;
     enc->video_st->codec->time_base.den = 25;
+
+    /* Initialise the codecs */
+    switch (res)
+    {
+    case FF_ENCODER_RESOLUTION_DVD:
+        init_video_dvd(enc);
+        init_audio_dvd(enc);
+        break;
+    case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+        init_video_mpeg4(enc);
+        init_audio_mp3(enc);
+        break;
+    case FF_ENCODER_RESOLUTION_DV25_MOV:
+        init_video_dv25(enc, start_tc);
+        init_audio_pcm(enc);
+        break;
+    default:
+        break;
+    }
 
     /*
     * Set the output parameters - must be done even if no parameters 
