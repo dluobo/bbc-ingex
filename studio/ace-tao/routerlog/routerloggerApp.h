@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
+ * $Id: routerloggerApp.h,v 1.5 2008/11/06 11:08:37 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -47,6 +47,7 @@ public:
     unsigned int mix_dest;
     std::vector<RouterDestination *> destinations;
     std::string db_file;
+    std::string name_server;
     CosNaming::Name cosname;
 	SimplerouterloggerImpl * servant;
 	ProdAuto::Recorder_var ref;

@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
+ * $Id: quartzRouter.h,v 1.5 2008/11/06 11:08:37 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -25,12 +25,8 @@
 #ifndef quartzRouter_h
 #define quartzRouter_h
 
-#include "enums.h"
+#include "CommunicationPort.h"
 
-#include <ace/DEV_Addr.h>
-#include <ace/DEV_Connector.h>
-#include <ace/DEV_IO.h>
-#include <ace/TTY_IO.h>
 #include <ace/Task.h>
 
 #include <string>
@@ -39,7 +35,6 @@
 const int qbufsize = 128;
 
 class RouterObserver;
-class CommunicationPort;
 
 /**
 Interface to Quartz router
@@ -61,21 +56,13 @@ public:
 
     void QuerySrc(unsigned int dest);
 
-    //void setSource(int source);
-    std::string getSrc();
-
 private:
 // methods
     void ProcessMessage(const std::string & message);
-    char readByte();
     void readUpdate();
     bool readReply();
 
 // members
-    ACE_TTY_IO mSerialDevice;
-    ACE_DEV_Connector mDeviceConnector;
-    //ACE_Thread_Mutex routerMutex;
-
     char mBuffer[qbufsize];
     char * mWritePtr;
     char * mBufferEnd;

@@ -1,5 +1,5 @@
 /*
- * $Id: CutsDatabase.h,v 1.1 2008/02/06 16:59:00 john_f Exp $
+ * $Id: CutsDatabase.h,v 1.2 2008/11/06 11:08:37 john_f Exp $
  *
  * Simple file database for video switch events.
  *
@@ -44,6 +44,7 @@ public:
     void OpenAppend();
     void Close();
     void AppendEntry(const std::string & sourceId, const std::string & tc);
+    bool IsOpen();
 
 private:
     std::string mFilename;

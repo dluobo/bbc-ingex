@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.cpp,v 1.4 2008/10/10 16:50:49 john_f Exp $
+ * $Id: quartzRouter.cpp,v 1.5 2008/11/06 11:08:37 john_f Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -148,25 +148,6 @@ bool Router::Init(const std::string & port, Transport::EnumType transport)
     return result;
 }
 
-
-char Router::readByte()
-{
-    char charReceived;
-    ssize_t bytes_read;
-    //char * readPtr;
-    bool carryOn = true;
-    
-    while (carryOn)
-    {
-        bytes_read = mSerialDevice.recv ((void *) &charReceived, 1);
-        if (bytes_read == 1)
-        {
-            carryOn = false;
-        }
-    }
-    return charReceived;
-}
-
 /**
 Private method to read available data from serial port into a buffer.
 */
@@ -254,24 +235,6 @@ void Router::Stop()
     mRun = false;
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Stopping router thread\n") )); 
 }
-
-#if 0
-void Router::setSource(int source)
-{
-    char command[20];
-    SYSTEMTIME st1, st2;
-
-    sprintf(command, ".SV016,%03.3d\r", source);
-    //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Sending %s\n"), command ));
-    GetSystemTime(&st1);
-    mSerialDevice.send (command, 11);
-    GetSystemTime(&st2);
-
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("RC at %ds %d\n"), st1.wSecond, st1.wMilliseconds));
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Send finished at %ds %d\n"), st2.wSecond, st2.wMilliseconds));
-
-}
-#endif
 
 // read router reply from ".01#(cr)" (is router connected?) command. Should be ".A(cr)"
 bool Router::readReply()

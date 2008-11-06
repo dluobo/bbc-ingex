@@ -1,5 +1,5 @@
 /*
- * $Id: CutsDatabase.cpp,v 1.1 2008/02/06 16:59:00 john_f Exp $
+ * $Id: CutsDatabase.cpp,v 1.2 2008/11/06 11:08:37 john_f Exp $
  *
  * Simple file database for video switch events.
  *
@@ -64,6 +64,11 @@ void CutsDatabase::OpenAppend()
     {
         mFile.open(mFilename.c_str(), std::ios_base::app);
     }
+    if (! mFile.is_open())
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to open cuts database file \"%C\"\n"),
+            mFilename.c_str()));
+    }
 }
 
 void CutsDatabase::Close()
@@ -103,5 +108,9 @@ void CutsDatabase::AppendEntry(const std::string & sourceId, const std::string &
     }
 }
 
+bool CutsDatabase::IsOpen()
+{
+    return mFile.is_open();
+}
 
 

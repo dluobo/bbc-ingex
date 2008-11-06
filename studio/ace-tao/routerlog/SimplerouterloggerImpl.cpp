@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.6 2008/10/10 16:50:49 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.7 2008/11/06 11:08:37 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -113,6 +113,8 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     {
         RouterDestination * rd = *it;
         mVts.push_back( Vt(rd->output_number, rd->name) );
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C: dest %d \"%C\"\n"),
+            mName.c_str(), rd->output_number, rd->name.c_str()));
     }
 
     return ok;
@@ -150,7 +152,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Start()\n")));
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Start()\n"), mName.c_str()));
 
     FileUtils::CreatePath(RECORD_DIR);
 
@@ -185,7 +187,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Stop()\n")));
+    ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Stop()\n"), mName.c_str()));
 
     StopSavingFile();
 
@@ -232,7 +234,8 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
 #endif
 
     // Open file
-    mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
+    // No longer using this format
+    //mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
 
     if (mpFile == 0)
     {
@@ -284,6 +287,8 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
     // Get timestamp
     std::string tc = routerloggerApp::Instance()->Timecode();
 
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Observe: tc=%C\n"), tc.c_str()));
+
     // Update our routing records for the recorders
     for (std::vector<Vt>::iterator it = mVts.begin(); it != mVts.end(); ++it)
     {
@@ -296,8 +301,6 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
     // Process changes to mixer-out destination
     if (dest == mMixDestination)
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("%C: matched mix_dest\n"), mName.c_str()));
-
         // Are we recording the source just selected?
         // Avoid VT1 if possible as that may be recording mixer out
         // so we take highest number match.
@@ -309,21 +312,31 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
                 src_name = it->name;
             }
         }
-
-        // Remember last cut for when we start a new recording
-        mLastSrc = src_name;
-        mLastTc = tc;
-
-        //save if file is open
-        if (mpFile != 0)
+        if (src_name.empty())
         {
-            ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
+            ACE_DEBUG((LM_INFO, ACE_TEXT ("%C: mix_dest src %d not being recorded\n"),
+                mName.c_str(), src));
         }
-
-        // update database file
-        if (mpCutsDatabase)
+        else
         {
-            mpCutsDatabase->AppendEntry(src_name, tc);
+            ACE_DEBUG((LM_INFO, ACE_TEXT ("%C: mix_dest src %d being recorded on %C\n"),
+                mName.c_str(), src, src_name.c_str()));
+
+            // Remember last cut for when we start a new recording
+            mLastSrc = src_name;
+            mLastTc = tc;
+
+            //save if file is open
+            if (mpFile != 0)
+            {
+                ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
+            }
+
+            // update database file
+            if (mpCutsDatabase)
+            {
+                mpCutsDatabase->AppendEntry(src_name, tc);
+            }
         }
     }
 }
