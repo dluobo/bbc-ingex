@@ -3,11 +3,14 @@
 #ifndef EasyReader_h
 #define EasyReader_h
 
-#include <ace/DEV_Addr.h>
-#include <ace/DEV_Connector.h>
-#include <ace/DEV_IO.h>
-#include <ace/TTY_IO.h>
+#include "CommunicationPort.h"
+
+//#include <ace/DEV_Addr.h>
+//#include <ace/DEV_Connector.h>
+//#include <ace/DEV_IO.h>
+//#include <ace/TTY_IO.h>
 #include <ace/Thread_Mutex.h>
+#include <string>
 
 #include "TimecodeReader.h"
 
@@ -23,7 +26,7 @@ public:
 // methods
 	EasyReader();
 	~EasyReader();
-    bool Init(const std::string & port);
+    bool Init(const std::string & port, Transport::EnumType transport);
     void Stop();
     std::string Timecode();
 
@@ -32,8 +35,9 @@ private:
 	void ReadData();
 // members
 	//SerialPort mSerialPort;
-	ACE_TTY_IO mSerialDevice;
-	ACE_DEV_Connector mDeviceConnector;
+	//ACE_TTY_IO mSerialDevice;
+	//ACE_DEV_Connector mDeviceConnector;
+    CommunicationPort * mpCommunicationPort;
 
 	char mBuffer[bufsize];
     ACE_Thread_Mutex mBufferMutex;

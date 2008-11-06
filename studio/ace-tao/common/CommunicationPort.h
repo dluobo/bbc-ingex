@@ -1,5 +1,5 @@
 /*
- * $Id: CommunicationPort.h,v 1.1 2008/04/18 16:03:27 john_f Exp $
+ * $Id: CommunicationPort.h,v 1.2 2008/11/06 11:02:54 john_f Exp $
  *
  * Abstract base for communication port.
  *
@@ -27,6 +27,12 @@
 
 #include <string>
 #include "ace/Time_Value.h"
+
+namespace Transport
+{
+    enum EnumType { SERIAL, TCP };
+}
+
 
 class CommunicationPort
 {

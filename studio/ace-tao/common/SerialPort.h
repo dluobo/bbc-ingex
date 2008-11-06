@@ -1,5 +1,5 @@
 /*
- * $Id: SerialPort.h,v 1.1 2008/04/18 16:03:30 john_f Exp $
+ * $Id: SerialPort.h,v 1.2 2008/11/06 11:02:54 john_f Exp $
  *
  * Serial communication port.
  *
@@ -35,7 +35,7 @@ class SerialPort : public CommunicationPort
 public:
     bool Connect(const std::string &);
     int Send(const void * buf, size_t n, const ACE_Time_Value * timeout = 0);
-    int Recv(void * buf, size_t n, const ACE_Time_Value * timeout=0);
+    int Recv(void * buf, size_t n, const ACE_Time_Value * timeout = 0);
 
     void BaudRate(int baud_rate);
 

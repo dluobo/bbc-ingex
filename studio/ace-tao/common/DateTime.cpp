@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.3 2008/10/08 10:16:06 john_f Exp $
+ * $Id: DateTime.cpp,v 1.4 2008/11/06 11:02:54 john_f Exp $
  *
  * Date/time to text functions.
  *
@@ -96,7 +96,7 @@ std::string DateTime::Timecode()
 }
 
 /*
-Returns a string in format HH:MM:SS.ff (25 fps)
+Returns a string in format HH:MM:SS:ff (25 fps)
 */
 std::string DateTime::Timecode25()
 {
@@ -107,7 +107,7 @@ std::string DateTime::Timecode25()
     tm * ptm = ACE_OS::localtime_r(&t_secs, &my_tm);
 
     char s [13];
-    ACE_OS::sprintf(s,"%02d:%02d:%02d.%02d",
+    ACE_OS::sprintf(s,"%02d:%02d:%02d:%02d",
 		ptm->tm_hour,
 		ptm->tm_min,
 		ptm->tm_sec,

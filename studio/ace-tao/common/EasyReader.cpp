@@ -3,9 +3,11 @@
 #include <ace/Thread.h>
 #include <ace/Guard_T.h>
 #include <ace/Time_Value.h>
-#include <ace/OS_NS_unistd.h>
+//#include <ace/OS_NS_unistd.h>
 
 #include "EasyReader.h"
+#include "SerialPort.h"
+#include "TcpPort.h"
 
 ACE_THR_FUNC_RETURN read_data(void * p)
 {
@@ -25,7 +27,7 @@ ACE_THR_FUNC_RETURN read_data(void * p)
 Constructor
 */
 EasyReader::EasyReader()
-: mActivated(false), mThreadId(0)
+: mpCommunicationPort(0), mActivated(false), mThreadId(0)
 {
 }
 
@@ -34,17 +36,31 @@ Destructor
 */
 EasyReader::~EasyReader()
 {
-	//mSerialPort.Close();  // SerialPort destructor will do this
+	delete mpCommunicationPort;
 }
 
 /**
 Open serial port and send set-up string to EasyReader
 */
-bool EasyReader::Init(const std::string & port)
+bool EasyReader::Init(const std::string & port, Transport::EnumType transport)
 {
     // NB. Should allow for re-init
     bool ok = true;
 
+    if (mpCommunicationPort)
+    {
+        delete mpCommunicationPort;
+        mpCommunicationPort = 0;
+    }
+    if (transport == Transport::TCP)
+    {
+        mpCommunicationPort = new TcpPort;
+    }
+    else
+    {
+        mpCommunicationPort = new SerialPort;
+    }
+#if 0
     // Open the serial port
     if (-1 == mDeviceConnector.connect(mSerialDevice, ACE_DEV_Addr(ACE_TEXT(port.c_str()))))
     {
@@ -65,9 +81,23 @@ bool EasyReader::Init(const std::string & port)
 	myparams.ctsenb = 0;
 	myparams.rcvenb = true;
 	mSerialDevice.control(ACE_TTY_IO::SETPARAMS, &myparams);
+#endif
 
+    if (mpCommunicationPort->Connect(port))
+    {
+        SerialPort * p_serial = dynamic_cast<SerialPort *> (mpCommunicationPort);
+        if (p_serial)
+        {
+            p_serial->BaudRate(19200);
+        }
+
+        mpCommunicationPort->Send ((const void *)"L1V1U0", 6);
+    }
+
+#if 0
     // Initialise EasyReader
     mSerialDevice.send((const void *)"L1V1U0", 6);  // select LTC and VITC
+#endif
 
     // Initialise local data structures
 	mTimecode = "00:00:00:00";
@@ -153,6 +183,8 @@ Private method to read available data from serial port into a buffer.
 */
 void EasyReader::ReadData()
 {
+    const ACE_Time_Value READ_TIMEOUT(0, 10000);
+
 	int bytes_read;
     ACE_Guard<ACE_Thread_Mutex> guard(mBufferMutex);
 	do
@@ -160,13 +192,14 @@ void EasyReader::ReadData()
 		// shift data down in the buffer if getting near the end
 		if(mBuffer + bufsize < mWritePtr + chunksize)
 		{
-			memmove(mBuffer, mWritePtr - chunksize, chunksize);
+            ACE_OS::memmove(mBuffer, mWritePtr - chunksize, chunksize);
 			mWritePtr = mBuffer + chunksize;
 		}
 
 		// read available data into buffer
 		//bytes_read = mSerialPort.Read(mWritePtr, chunksize);
-		bytes_read = mSerialDevice.recv(mWritePtr, chunksize);
+		//bytes_read = mSerialDevice.recv(mWritePtr, chunksize);
+		bytes_read = mpCommunicationPort->Recv(mWritePtr, chunksize, &READ_TIMEOUT);
         if (bytes_read > 0)
         {
 		    mWritePtr += bytes_read;
