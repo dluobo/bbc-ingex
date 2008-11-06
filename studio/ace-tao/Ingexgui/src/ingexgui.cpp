@@ -105,6 +105,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_MENU( MENU_RelativeTimecode, IngexguiFrame::OnPlayerOSDChange )
 	EVT_MENU( MENU_NoOSD, IngexguiFrame::OnPlayerOSDChange )
 	EVT_MENU( MENU_DisablePlayerSDIOSD, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_AudioFollowsVideo, IngexguiFrame::OnAudioFollowsVideo )
 	EVT_MENU( MENU_ExtOutput, IngexguiFrame::OnPlayerOutputTypeChange )
 	EVT_MENU( MENU_AccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
 	EVT_MENU( MENU_ExtAccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
@@ -210,7 +211,7 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 /// @param argc Command line argument count.
 /// @param argv Command line argument vector.
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
-	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cusor keys being lost, as hoped */), mStatus(STOPPED), mEndEvent(-1), mCurrentTakeInfo(0), mDescriptionControlHasFocus(false) //, mPreroll.undefined(true), mPostroll.undefined(true)/*, mRecording(false), mRecordEnable(false)*/
+	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mEndEvent(-1), mCurrentTakeInfo(0), mDescriptionControlHasFocus(false), mFileModeSelectedTrack(0)
 {
 //	SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
 
@@ -244,21 +245,24 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	menuPlayer->Append(MENU_PlayMXF, wxT("Play MXF file(s)..."));
 	wxMenu * menuPlayerType = new wxMenu;
 	wxMenu * menuPlayerOSD = new wxMenu;
-	menuPlayerType->AppendRadioItem(MENU_AccelOutput, wxT("On-screen (accelerated if possible)")); //first item is selected by default
 #ifdef HAVE_DVS
-	wxMenuItem * extAccelOutput = menuPlayerType->AppendRadioItem(MENU_ExtAccelOutput, wxT("External monitor and On-screen (accelerated if possible)"));
-	wxMenuItem * extOutput = menuPlayerType->AppendRadioItem(MENU_ExtOutput, wxT("External monitor"));
-	wxMenuItem * extUnaccelOutput = menuPlayerType->AppendRadioItem(MENU_ExtUnaccelOutput, wxT("External monitor and On-screen unaccelerated (use if accelerated fails)"));
+	menuPlayerType->AppendRadioItem(MENU_ExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)")); //first item is selected by default
 #endif
-	menuPlayerType->AppendRadioItem(MENU_UnaccelOutput, wxT("On-screen unaccelerated (use if accelerated fails)"));
+	menuPlayerType->AppendRadioItem(MENU_AccelOutput, wxT("Computer screen (accelerated if possible)")); //selected by default if no DVS card
+#ifdef HAVE_DVS
+	menuPlayerType->AppendRadioItem(MENU_ExtOutput, wxT("External monitor"));
+	menuPlayerType->AppendRadioItem(MENU_ExtUnaccelOutput, wxT("External monitor and computer screen unaccelerated (use if accelerated fails)"));
+#endif
+	menuPlayerType->AppendRadioItem(MENU_UnaccelOutput, wxT("Computer screen unaccelerated (use if accelerated fails)"));
+
 	menuPlayerOSD->AppendRadioItem(MENU_AbsoluteTimecode, wxT("&Absolute timecode")); //first item is selected by default
-	mPlayer = new prodauto::Player(this, true, prodauto::X11_AUTO_OUTPUT, prodauto::SOURCE_TIMECODE); //must delete this explicitly on app exit
 	menuPlayerOSD->AppendRadioItem(MENU_RelativeTimecode, wxT("&Relative timecode"));
 	menuPlayerOSD->AppendRadioItem(MENU_NoOSD, wxT("&OSD Off"));
 	menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
-	menuPlayer->Append(MENU_PlayerOSD, wxT("Player On Screen Display"), menuPlayerOSD);
+	menuPlayer->Append(MENU_PlayerOSD, wxT("Player On-Screen Display"), menuPlayerOSD);
+	menuPlayer->AppendCheckItem(MENU_AudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
 #ifdef HAVE_DVS
-	menuPlayer->AppendCheckItem(MENU_DisablePlayerSDIOSD, wxT("Disable player SDI On Screen Display"));
+	menuPlayer->AppendCheckItem(MENU_DisablePlayerSDIOSD, wxT("Disable external monitor On-screen Display"));
 #endif
 	menuBar->Append(menuPlayer, wxT("&Player"));
 
@@ -272,7 +276,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	wxMenu *menuShortcuts = new wxMenu;
 	menuShortcuts->Append(MENU_Record, wxT("Record\tF1"));
 	menuShortcuts->Append(MENU_MarkCue, wxT("Mark Cue\tF2")); //NB this must correspond to the "insert blank cue" key in CuePointsDlg
-	menuShortcuts->Append(MENU_Stop, wxT("Stop\tF5"));
+	menuShortcuts->Append(MENU_Stop, wxT("Stop\tShift+F5"));
 	menuShortcuts->Append(MENU_PrevTrack, wxT("Select previous playback track\tF7"));
 	menuShortcuts->Append(MENU_NextTrack, wxT("Select next playback track\tF8"));
 	menuShortcuts->Append(MENU_Up, wxT("Move up cue point list\tUP"));
@@ -290,15 +294,19 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	menuHelp->Append(-1, wxT("Shortcuts"), menuShortcuts); //add this after adding menu items to it
 
 	SetMenuBar(menuBar);
-	//disable SDI playback ability if card not available
 #ifdef HAVE_DVS
+	mPlayer = new prodauto::Player(this, true, prodauto::DUAL_DVS_AUTO_OUTPUT, prodauto::SOURCE_TIMECODE); //must delete this explicitly on app exit
 	if (!mPlayer->ExtOutputIsAvailable()) {
-		extOutput->Enable(false);
-		extAccelOutput->Enable(false);
-		extUnaccelOutput->Enable(false);
+		GetMenuBar()->FindItem(MENU_ExtAccelOutput)->Enable(false);
+		GetMenuBar()->FindItem(MENU_ExtOutput)->Enable(false);
+		GetMenuBar()->FindItem(MENU_ExtUnaccelOutput)->Enable(false);
+		mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
+		GetMenuBar()->FindItem(MENU_AccelOutput)->Check();
 	}
+#else
+	mPlayer = new prodauto::Player(this, true, prodauto::X11_AUTO_OUTPUT, prodauto::SOURCE_TIMECODE); //must delete this explicitly on app exit
 #endif
-
+	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_AudioFollowsVideo)->IsChecked());
 	CreateStatusBar();
 
 	//saved state
@@ -653,6 +661,13 @@ void IngexguiFrame::OnPlayerOutputTypeChange(wxCommandEvent& WXUNUSED(event))
 	}
 }
 
+/// Responds to player audio follows video menu request
+/// @param event The command event.
+void IngexguiFrame::OnAudioFollowsVideo(wxCommandEvent& WXUNUSED(event))
+{
+	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_AudioFollowsVideo)->IsChecked());
+}
+
 /// Responds to a menu quit event by attempting to close the app.
 /// @param event The command event.
 void IngexguiFrame::OnQuit( wxCommandEvent& WXUNUSED( event ) )
@@ -960,6 +975,8 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 			wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED);
 			menuEvent.SetId(wxID_ANY);
 			//menu events are not blocked even if the menu is disabled
+//std::cerr << "key: " << event.GetInt() << std::endl;
+//std::cerr << "modifier: " << event.GetExtraLong() << std::endl;
 			switch (event.GetInt()) {
 				case 65470: //F1
 					//Record
@@ -969,7 +986,7 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 					//Mark cue
 					menuEvent.SetId(MENU_MarkCue);
 					break;
-				case 65474: //F5
+				case 65474: //F5 (NB shift is detected below)
 					//Stop
 					menuEvent.SetId(MENU_Stop);
 					break;
@@ -1030,6 +1047,10 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 					menuEvent.SetId(MENU_4);
 					break;
 			}
+			if ((MENU_Stop == menuEvent.GetId() && event.GetExtraLong() != 1) || (MENU_Stop != menuEvent.GetId() && event.GetExtraLong())) {
+				//stop has been pressed without shift (only), or any other keypress has a modifier
+				menuEvent.SetId(wxID_ANY); //ignore
+			}
 			if (wxID_ANY != menuEvent.GetId() && GetMenuBar()->FindItem(menuEvent.GetId())->IsEnabled()) { //recognised the keypress and the shortcut is enabled
 				AddPendingEvent(menuEvent);
 			}
@@ -1045,8 +1066,13 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 /// @param event The command event.
 void IngexguiFrame::OnPlaybackTrackSelect(wxCommandEvent & event)
 {
-//wxMessageBox(wxString::Format(wxT("src %d"), event.GetId()));
-	mPlayer->SelectTrack(event.GetId());
+	if (mPlayFileButton->GetValue()) { //File Mode
+		mFileModeSelectedTrack = event.GetId();
+		mPlayer->SelectTrack(event.GetId(), false); //don't remember the selection
+	}
+	else {
+		mPlayer->SelectTrack(event.GetId(), true); //remember the selection
+	}
 	GetMenuBar()->FindItem(MENU_PrevTrack)->Enable(mPlaybackTrackSelector->EarlierTrack(false));
 	GetMenuBar()->FindItem(MENU_NextTrack)->Enable(mPlaybackTrackSelector->LaterTrack(false));
 }
@@ -1076,6 +1102,7 @@ void IngexguiFrame::OnStop( wxCommandEvent& WXUNUSED( event ) )
 		}
 		mRecorderGroup->Stop(now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), locators);
 		SetStatus(RUNNING_DOWN);
+		UpdatePlayerAndEventControls(true); //force reloading of the player if in file mode
 	}
 	else if (PLAYING == mStatus || PLAYING_BACKWARDS == mStatus || PAUSED == mStatus) {
 		SetStatus(STOPPED);
@@ -1515,6 +1542,9 @@ void IngexguiFrame::OnDisablePlayer(wxCommandEvent& WXUNUSED( event ))
 {
 	bool enabled = !GetMenuBar()->FindItem(MENU_DisablePlayer)->IsChecked();
 	mPlayer->Enable(enabled);
+	if (enabled && mPlayFileButton->GetValue()) {
+		mPlayer->SelectTrack(mFileModeSelectedTrack, false);
+	}
 	GetMenuBar()->FindItem(MENU_PlayerType)->Enable(enabled);
 	GetMenuBar()->FindItem(MENU_PlayerOSD)->Enable(enabled);
 	mPlayFileButton->Enable(enabled && mFileModeFiles.GetCount());
@@ -1875,18 +1905,21 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 			std::vector<std::string> trackNames;
 			if (mFileModeMovFile.IsEmpty()) { //MXF files
 				ProdAuto::MxfTimecode editRate;
+				mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Project"));
 				mPlayProjectNameCtrl->SetLabel(mPlaybackTrackSelector->SetMXFFiles(mFileModeFiles, fileNames, trackNames, editRate));
 				mTimepos->SetDefaultEditRate(editRate); //allows position display to work in case we haven't got it from anywhere else
 				mPlayer->Load(&fileNames, &trackNames, prodauto::MXF_INPUT, mFileModeFrameOffset);
-				mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Project"));
 			}
 			else { //MOV file
 				fileNames.push_back((const char*)mFileModeMovFile.mb_str(*wxConvCurrent));
 				trackNames.push_back((const char*)mFileModeMovFile.mb_str(*wxConvCurrent));
-				mPlayProjectNameCtrl->SetLabel(mFileModeMovFile);
-				mPlayer->Load(&fileNames, &trackNames, prodauto::FFMPEG_INPUT, mFileModeFrameOffset);
 				mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Filename"));
+				mPlayProjectNameCtrl->SetLabel(mFileModeMovFile);
+				mPlaybackTrackSelector->Clear();
+				mPlayer->Load(&fileNames, &trackNames, prodauto::FFMPEG_INPUT, mFileModeFrameOffset);
+				mFileModeSelectedTrack = 1; //first source rather than quad split
 			}
+			mPlayer->SelectTrack(mFileModeSelectedTrack, false);
 			mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
 		}
 		mPrevTakeButton->Disable();

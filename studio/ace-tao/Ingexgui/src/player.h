@@ -80,8 +80,8 @@ class Listener : public IngexPlayerListener
 		virtual void startOfSourceEvent(const FrameInfo* lastReadFrameInfo);
 		virtual void playerClosed();
 		virtual void playerCloseRequested();
-		virtual void keyPressed(int);
-		virtual void keyReleased(int);
+		virtual void keyPressed(int, int);
+		virtual void keyReleased(int, int);
 		virtual void progressBarPositionSet(float);
 		virtual void mouseClicked(int, int, int, int);
 	private:
@@ -102,7 +102,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		bool IsOK();
 		void Enable(bool);
 		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
-		void SelectTrack(const int);
+		void SelectTrack(const int, const bool);
 		void SetOSD(const OSDtype);
 		void EnableSDIOSD(bool = true);
 		void SetOutputType(const PlayerOutputType);
@@ -117,6 +117,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		bool ExtOutputIsAvailable();
 		bool AtMaxForwardSpeed();
 		bool AtMaxReverseSpeed();
+		void AudioFollowsVideo(const bool);
 //		std::vector<bool> GetFilesStatus();
 	private:
 		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);

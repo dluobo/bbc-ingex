@@ -172,6 +172,7 @@ class IngexguiFrame : public wxFrame
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
+		MENU_AudioFollowsVideo,
 	};
 	private:
 	enum EventType
@@ -207,6 +208,7 @@ class IngexguiFrame : public wxFrame
 		void OnClearLog(wxCommandEvent&);
 		void OnPlayerOSDChange(wxCommandEvent&);
 		void OnPlayerOutputTypeChange(wxCommandEvent&);
+		void OnAudioFollowsVideo(wxCommandEvent& WXUNUSED(event));
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
 		void OnEventActivated(wxListEvent&);
@@ -286,6 +288,7 @@ class IngexguiFrame : public wxFrame
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
 		wxArrayString mFileModeFiles;
+		unsigned int mFileModeSelectedTrack;
 		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
 		int64_t mTakeModeFrameOffset;

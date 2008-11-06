@@ -41,26 +41,8 @@ END_EVENT_TABLE()
 /// @param enabled True to enable player.
 /// @param outputType The output type - accelerated or unaccelerated; SDI or not.
 /// @param displayType The on screen display type.
-Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType)
-/*: LocalIngexPlayer(
-	outputType,
-	true,
-	4,
-	false,
-	true,
-	true,
-	0,
-	false,
-	false,
-	Zero,
-	Zero,
-	Aspect,
-	(float) 1.0,
-	false,
-	0),*/
-: 
-LocalIngexPlayer(outputType), 
- mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0) //simple LocalIngexPlayer constructor with defaults
+Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType) :
+LocalIngexPlayer(outputType), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0) //simple LocalIngexPlayer constructor with defaults
 {
 	mListener = new Listener(this); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
@@ -197,7 +179,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			input.type = mInputType;
 			inputs.push_back(input);
 		}
-		mOK = start(inputs, mOpened, PAUSE == mMode || STOP == mMode); //play forwards or paused
+		mOK = start(inputs, mOpened, PAUSE == mMode || STOP == mMode, mLastFrameDisplayed); //play forwards or paused
 		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
 			//(re)loading stored cue points
@@ -208,15 +190,10 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 				playSpeed(-1);
 			}
 			SetOSD(mOSDtype);
-			if (mLastFrameDisplayed) {
-				//player was already some way into a clip and has been reloaded
-				seek(mLastFrameDisplayed, SEEK_SET, FRAME_PLAY_UNIT); //restore position
-			}
-			else {
+			if (!mLastFrameDisplayed) {
 				//if mLastRequestedCuePoint isn't zero (start), player was requested to go to a cue point in this clip while no files were available
 				JumpToCue(mLastRequestedCuePoint);
 			}
-
 			// work out which track to select
 			unsigned int nFilesOpen = 0;
 			int aWorkingTrack = 0; //initialisation prevents compiler warning
@@ -239,7 +216,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 					trackToSelect = aWorkingTrack;
 				}
 			}
-			SelectTrack(trackToSelect);
+			SelectTrack(trackToSelect, false);
 			allFilesOpen = mOpened.size() == nFilesOpen;
 		}
 		else {
@@ -256,18 +233,23 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 
 /// Displays the file corresponding to the given track (which is assumed to have been loaded) and titles the window appropriately.
 /// @param id The track ID - 0 for quad split.
-void Player::SelectTrack(const int id)
+/// @param remember Save the track name (or that fact that it's a quad split) in order to try to select it when new filesets are loaded
+void Player::SelectTrack(const int id, const bool remember)
 {
 //std::cerr << "Player Select Track" << std::endl;
 	if (mOK) {
 		std::string title;
 		switchVideo(id);
 		if (id) { //individual track
-			mDesiredTrackName = mTrackNames[id - 1]; // -1 to offset for quad split
+			if (remember) {
+				mDesiredTrackName = mTrackNames[id - 1]; // -1 to offset for quad split
+			}
 			title = mTrackNames[id - 1];
 		}
 		else { //quad split
-			mDesiredTrackName = "";
+			if (remember) {
+				mDesiredTrackName = "";
+			}
 			unsigned int nTracks = 0;
 			for (size_t i = 0; i < mTrackNames.size(); i++) { //only go through video files
 				if (mOpened[i]) {
@@ -532,6 +514,13 @@ bool Player::AtEnd()
 	return mOK && mAtEnd;
 }
 
+/// Sets audio to follow video or stick to the first audio files
+/// @param state true to follow video
+void Player::AudioFollowsVideo(const bool state)
+{
+	switchAudioGroup(state ? 0 : 1);
+}
+
 /// @param player The player associated with this listener.
 Listener::Listener(Player * player) : IngexPlayerListener((IngexPlayerListenerRegistry *) player), mPlayer(player), mStartIndex(0)
 {
@@ -689,18 +678,19 @@ void Listener::playerCloseRequested()
 /// @param code The X11 key code
 /// NB Called in another thread context.
 //NB Called in another thread context
-void Listener::keyPressed(int code)
+void Listener::keyPressed(int code, int modifier)
 {
 //std::cerr << "key pressed" << std::endl;
 	wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, KEYPRESS);
 	guiEvent.SetInt(code);
+	guiEvent.SetExtraLong(modifier);
 	mPlayer->AddPendingEvent(guiEvent);
 }
 
 /// Callback for the user releasing a key when the player window has focus.
 /// Does nothing.
 /// NB Called in another thread context.
-void Listener::keyReleased(int)
+void Listener::keyReleased(int, int)
 {
 //std::cerr << "key released" << std::endl;
 }
