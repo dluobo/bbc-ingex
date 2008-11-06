@@ -51,7 +51,14 @@ ingex> make install
 
 Set AAFSDKINSTALL environment variable
 
+On 32-bit systems:
+
 ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFi686LinuxSDK/g++
+(and add same setting to your ~/.bashrc file)
+
+On 64-bit systems:
+
+ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFx86_64LinuxSDK/g++
 (and add same setting to your ~/.bashrc file)
 
 Now make create_aaf and install
