@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2008/10/29 17:29:38 john_f Exp $
+# $Id: Makefile,v 1.2 2008/11/06 11:32:41 john_f Exp $
 #
 # Makefile for building the Ingex database library
 #
@@ -25,3 +25,8 @@
 all:
 	$(MAKE) -C src
 	$(MAKE) -C test
+
+.PHONY: clean
+clean:
+	$(MAKE) -C src $@
+	$(MAKE) -C test $@

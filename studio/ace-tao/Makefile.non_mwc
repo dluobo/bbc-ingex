@@ -1,5 +1,5 @@
 #
-# $Id: Makefile.non_mwc,v 1.1 2008/10/29 17:32:22 john_f Exp $
+# $Id: Makefile.non_mwc,v 1.2 2008/11/06 11:32:41 john_f Exp $
 #
 # Makefile for setting up ace-tao build by running mwc.pl and for building non-mwc directories
 #
@@ -40,3 +40,8 @@ Ingexgui/configure:
 
 Ingexgui/Makefile:
 	(cd Ingexgui && ./configure)
+
+.PHONY: clean
+clean:
+	$(MAKE) -C Ingexgui $@
+	$(MAKE) -f GNUmakefile $@
