@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.6 2008/10/29 17:54:26 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.7 2008/11/06 11:45:01 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -360,7 +360,6 @@ struct TranscodeAvidMXF
     
     prodauto::MXFWriter* mxfWriter;
 };
-
 
 
 static inline bool user_quit()
@@ -913,12 +912,7 @@ static bool check_file_exists(string filename)
 static bool check_directory_exists(string directory)
 {
     struct stat statBuf;
-    
-    if (stat(directory.c_str(), &statBuf) == 0 && S_ISDIR(statBuf.st_mode))
-    {
-        return true;
-    }
-    return false;
+    return stat(directory.c_str(), &statBuf) == 0 && S_ISDIR(statBuf.st_mode);
 }
 
 // a date is assumed to be a sequence of 8 digits in the filename
@@ -1143,6 +1137,26 @@ int main(int argc, const char* argv[])
             return 1;
         }
     }
+    
+    // check the source, creating and failures directories exist
+    // the destination directory is created later on if it does not exist
+    if (sourceDirectory.size() > 0 && !check_directory_exists(sourceDirectory))
+    {
+        fprintf(stderr, "Source directory '%s' does not exist\n", sourceDirectory.c_str());
+        return 1;
+    }
+    if (creatingDirectory.size() > 0 && !check_directory_exists(creatingDirectory))
+    {
+        fprintf(stderr, "Creating directory '%s' does not exist\n", creatingDirectory.c_str());
+        return 1;
+    }
+    if (failureDirectory.size() > 0 && !check_directory_exists(failureDirectory))
+    {
+        fprintf(stderr, "Failure directory '%s' does not exist\n", failureDirectory.c_str());
+        return 1;
+    }
+    
+    
 
     printf("Press 'q' followed by <ENTER> to quit\n");
     
@@ -1577,7 +1591,7 @@ int main(int argc, const char* argv[])
                 CHECK_USER_QUIT(quit, break);
                 
                 printf("."); fflush(stdout);
-                sleep(3);
+                sleep(10);
             }
         }
         catch (...)
