@@ -1,1 +1,1 @@
-./transcode_avid_mxf --source-dir /video2/mxf_online_lot/ --dest-dir /video2/mxf_online/ --create-dir /video2/mxf_offline/Creating --fail-dir /video2/mxf_offline/Failures --input-mjpeg-21 --output-mjpeg-201 --loop
+./transcode_avid_mxf --source-dir /video2/mxf_online_lot/ --dest-dir /video2/mxf_offline/ --create-dir /video2/mxf_offline/Creating --fail-dir /video2/mxf_offline/Failures --input-mjpeg-21 --output-mjpeg-201 --loop
