@@ -28,9 +28,7 @@ INGEX_MONITOR=0
 SYSTEM_MONITOR=0
 QUAD_SPLIT=0
 RECORDERS=
-NAMESERVER="192.168.1.181:8888"
-# set corba options for recorder command
-CORBA_OPTIONS=" -ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses 1"
+NAMESERVER=":8888"
 
 ROUTER_LOGGER=0
 ROUTER_TTY="/dev/ttyS0"
@@ -95,6 +93,9 @@ then
         # Read in ingex mode configuration
         . /etc/ingex.conf
 fi
+
+# set corba options for recorder command
+CORBA_OPTIONS=" -ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses 1"
 
 # get the pids of exisiting windows
 PIDS=`pidof konsole`
@@ -252,3 +253,4 @@ if [ -n "$RECORDERS" ] ; then
   done
 
 fi
+
