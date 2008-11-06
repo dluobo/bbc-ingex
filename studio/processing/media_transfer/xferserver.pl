@@ -26,8 +26,8 @@
 # Parameters are as follows:
 # <recorder name> <recording identifier> [<source path> <destination path>] ... (each terminated with a newline)
 # The recorder name and recording identifier combination identify a recording, and must be unique so that the script can determine unambiguously if any recordings are taking place, even when a recorder starts a recording before finishing the previous one (due to postroll).
-# If no other parameters are supplied, this indicates the start of a recording.  The recording's identifier is added to a recording list, and traffic control is switched on at rate LIMIT.
-# If additional pair(s) of paths are supplied, this indicates the end of a recording, or a recorder being started.  This will result in the recording's identifier being removed from the recording list (if present), and if the list is empty, traffic control is switched off.
+# If no other parameters are supplied, this indicates the start of a recording.  The recording's identifier is added to a recording list, and traffic control is switched on at rate SLOW_LIMIT.
+# If additional pair(s) of paths are supplied, this indicates the end of a recording, or a recorder being started.  This will result in the recording's identifier being removed from the recording list (if present), and if the list is empty, traffic control is switched off (reverting to copying at FAST_LIMIT, which is unlimited if 0).
 # Recording identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all recordings being made by the associated recorder.  This value should be sent when a recorder is started, so that the recording list is cleared of any previous recordings by this recorder.  This ensures that traffic control does not remain on permanently due to a recorder crashing and hence not indicating the end of a recording.
 # The supplied pairs of paths are treated in descending order of priority, so that the script will attempt to copy all the files in all the first pairs before moving on to the second pairs, and so on.  (Offline files would normally be given higher priority than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  Paths are saved in configuration file PATHS_FILE to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 # In each source directory, every file whose name begins with 8 digits* and ends in ".mxf" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable, into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING directories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
@@ -58,7 +58,8 @@ use constant KEEP_PERIOD => 24 * 60 * 60 * 7; #a week (in seconds)
 use constant PERMISSIONS => '0775'; #for directory creation
 #use constant COPY => '/home/ingex/bin/cpfs'; #for copying at different speeds
 use constant COPY => './cpfs'; #for copying at different speeds
-use constant LIMIT => 20000; #bandwidth limit as supplied to COPY
+use constant SLOW_LIMIT => 20000; #bandwidth limit as supplied to COPY
+use constant FAST_LIMIT => 0; #bandwidth limit as supplied to COPY (0 = unlimited)
 use constant RECHECK_INTERVAL => 10; #time (seconds) between rechecks if something failed
 use constant EXTRA_DEST => ''; #an extra destination to copy priority 1 files to (from all sources) - e.g. a portable drive.  Ignored if empty.
 use constant PATHS_FILE => 'paths';
@@ -619,7 +620,7 @@ sub childLoop {
 				local $SIG{TERM} = sub { kill 'TERM', $cpPid; };
 				# (doing the above with the USR signals doesn't seem to work properly when using a forking open rather than a fork)
 				# run copy program with a forking open so that we can get its stdout
-				if (!defined ($cpPid = open(CHILD, '-|'))) {
+				if (!defined ($cpPid = open(COPYCHILD, '-|'))) {
 					die "failed to fork: $!";
 				}
 				elsif ($cpPid == 0) { # child
@@ -627,12 +628,14 @@ sub childLoop {
 					# exec to maintain PID so we can send signals to the copy program
 					exec COPY,
 						1, # always start bandwidth-limited because traffic control might be switched on between now and when the program starts, causing it to miss the signal
-						LIMIT, # the bandwidth limit
+						FAST_LIMIT, # the bandwidth limit at high speed
+						SLOW_LIMIT, # the bandwidth limit at slow speed
 						$essenceFile->{fullsource}, #source file
 						"$incomingPath/" . $essenceFile->{fname} #dest file
 					or print "failed to exec copy command: $!";
 					exit 1;
 				}
+				STDOUT->autoflush(1);
 				# note the PID so that the foreground process can signal the copy program
 				$share->lock(LOCK_EX);
 				$transfers = thaw($share->fetch);
@@ -642,7 +645,7 @@ sub childLoop {
 				# get progress from the copy whilw waiting for it to finish
 				my $buf;
 				my $signalled = 0;
-				while (sysread(CHILD, $buf, 100)) { # can't use <> because there aren't any newlines
+				while (sysread(COPYCHILD, $buf, 100)) { # can't use <> because there aren't any newlines
 					if (!$signalled) { # first time the copy prog has printed anything so it's just come alive
 						$signalled = 1; # only need to do this once
 						kill 'USR2', $cpPid unless $transfers->{limit}; #switch to fast copying
@@ -664,7 +667,7 @@ sub childLoop {
 				$transfers->{pid} = 0;
 				$share->store(freeze $transfers);
 				$share->unlock;
-				close CHILD;
+				close COPYCHILD;
 			}
 			# check result
  			if ($? & 127) { #child has received terminate signal so terminate
@@ -686,7 +689,7 @@ sub childLoop {
 				$priOK = 0;
 				last; # have to abandon the whole priority or it would break the ctime order
 			}
-			print "\n";
+			print " Done\n";
 			# update stats
 			$share->lock(LOCK_EX);
 			$transfers = thaw($share->fetch);

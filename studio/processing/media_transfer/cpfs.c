@@ -18,7 +18,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-/* cpfs.c - "Copy Fast and Slow".  Copies one file to another at full speed or at an approximate limited speed, switchable with signals.  See the usage_exit function. */
+/* cpfs.c - "Copy Fast and Slow".  Copies one file to another at "high" (or unlimited) or "low" (or zero) approximate speeds, switchable with signals.  See the usage_exit function. */
 
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
@@ -29,7 +29,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 
-#define BUFSIZE 1024 * 100
+#define BUFSIZE 1024 * 1024 /* if this is too big then the buffer will have to be created on the heap or the program will segfault immediately */
 #define ONE_SEC	1000000LL /* # of microseconds in a second */
 
 void display();
@@ -41,46 +41,51 @@ void usage_exit(const char *);
 int slow;
 unsigned long long total_written, written_since_sleep, written_this_mode, written_since_display = 0;
 struct stat src_st;
-struct timeval start_time, sleep_time, mode_change_time, display_time, now;
+struct timeval start_time, sleep_time, mode_change_time, display_time;
 
 int main(int argc, char ** argv) {
 	signal(SIGUSR1, sigslow);
 	signal(SIGUSR2, sigfast);
-	if (5 != argc) {
+	if (6 != argc) {
 		usage_exit(argv[0]);
 	}
 	slow = atoi(argv[1]);
-	unsigned long rate = atol(argv[2]);
-	if (!rate) {
-		printf("Invalid rate '%s'.\n", argv[2]);
-		usage_exit(argv[0]);
-	}
-	rate *= 1024;
+	unsigned long fast_rate = atol(argv[2]);
+	fast_rate *= 1024;
+	unsigned long slow_rate = atol(argv[3]);
+	slow_rate *= 1024;
 	int src;
-	if (-1 == (src = open(argv[3], O_RDONLY, 0))) {
-		printf("Couldn't open source file '%s' for reading.\n", argv[3]);
+	if (-1 == (src = open(argv[4], O_RDONLY, 0))) {
+		printf("Couldn't open source file '%s' for reading.\n", argv[4]);
 		exit(1);
 	}
 	if (-1 == fstat(src, &src_st)) {
-		printf("Couldn't stat source file '%s'.\n", argv[3]);
+		printf("Couldn't stat source file '%s'.\n", argv[4]);
 		exit(1);
 	}
 	int dest;
-	if (-1 == (dest = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC))) { /* setting the mode doesn't seem to work */
-		printf("Couldn't open destination file '%s' for writing.\n", argv[4]);
+	if (-1 == (dest = open(argv[5], O_WRONLY | O_CREAT | O_TRUNC))) { /* setting the mode doesn't seem to work */
+		printf("Couldn't open destination file '%s' for writing.\n", argv[5]);
 		exit(1);
 	}
 	if (-1 == fchmod(dest, src_st.st_mode)) {
-		printf("Couldn't change mode of destination file '%s'.\n", argv[4]);
+		printf("Couldn't change mode of destination file '%s'.\n", argv[5]);
 		exit(1);
 	}
 	char buffer[BUFSIZE];
-	unsigned long long bytes_read;
+	unsigned long long bytes_read = 0;
 	long long elapsed;
 	gettimeofday(&start_time, NULL);
 	mode_change_time = start_time;
 	display_time = start_time;
-	while (bytes_read = read(src, &buffer, BUFSIZE)) {
+	display();
+	struct timeval now;
+	do {
+		while (slow && !slow_rate) { /* copying is stopped */
+			/* wait for a signal */
+			sleep(1);
+			display();
+		}
 		/* write the buffer */
 		if (write(dest, buffer, bytes_read) != bytes_read) {
 			printf("Couldn't write to destination file '%s'.\n", argv[4]);
@@ -93,23 +98,25 @@ int main(int argc, char ** argv) {
 		gettimeofday(&now, NULL);
 		elapsed = timediff(&now, &display_time);
 		/* display progress */
-		if (elapsed > ONE_SEC || !total_written || total_written == src_st.st_size) {
-			/* time to update display: start, end or regular intervals */
+		if (elapsed > ONE_SEC || total_written == src_st.st_size) {
+			/* time to update display: end or at regular intervals */
 			display();
-			fflush(stdout);
-			display_time = now;
-			written_since_display = 0;
 		}
 		/* bandwidth limit */
-		if (slow) {
+		if ((slow && slow_rate) || fast_rate) { /* copying at a limited speed */
 			written_since_sleep += bytes_read;
 			elapsed = timediff(&now, &sleep_time);
-			unsigned long min_time = (long) written_since_sleep * ONE_SEC / rate; /* how long (in microseconds) it should take to write what has been written, at the given rate */
+			unsigned long min_time = (long) written_since_sleep * ONE_SEC / (slow ? slow_rate : fast_rate); /* how long (in microseconds) it should take to write what has been written, at the given rate */
 			if (min_time - elapsed > 100000) { /* more than 0.1s ahead (to avoid inaccurate small waits) */
 				/* sleep and reset measurements */
-				usleep(min_time - elapsed);
 				sleep_time = now;
 				written_since_sleep = 0;
+				while (min_time - elapsed > ONE_SEC + 100000) { /* keep display updating during long waits */
+					usleep(ONE_SEC);
+					display();
+					min_time -= ONE_SEC;
+				}
+				usleep(min_time - elapsed);
 			}
 			else if (elapsed > min_time) { /* copying more slowly than the bandwidth limit */
 				/* reset measurements to prevent a bandwidth spike being allowed through after a long period of slow transfer */
@@ -117,14 +124,16 @@ int main(int argc, char ** argv) {
 				written_since_sleep = 0;
 			}
 		}
-	}
+	} while (bytes_read = read(src, &buffer, BUFSIZE));
 	close(src);
 	close(dest);
-/*	printf("\n"); */
+	printf("\n");
 	return 0;
 }
 
 void display() {
+	struct timeval now;
+	gettimeofday(&now, NULL);
 	char speed[9] = "----- ";
 	long long elapsed = timediff(&now, &display_time);
 	if (elapsed) {
@@ -143,6 +152,9 @@ void display() {
 		speed,
 		ave_speed
 	);
+	fflush(stdout);
+	display_time = now;
+	written_since_display = 0;
 }
 
 void sigslow() {
@@ -153,7 +165,7 @@ void sigslow() {
 		gettimeofday(&mode_change_time, NULL);
 		written_this_mode = 0;
 		/* start measuring for bandwidth limit */
-		sleep_time = now;
+		sleep_time = mode_change_time;
 		written_since_sleep = 0;
 	}
 }
@@ -165,6 +177,9 @@ void sigfast() {
 		slow = 0;
 		gettimeofday(&mode_change_time, NULL);
 		written_this_mode = 0;
+		/* start measuring for bandwidth limit */
+		sleep_time = mode_change_time;
+		written_since_sleep = 0;
 	}
 }
 
@@ -176,8 +191,9 @@ long long timediff(struct timeval *time2, struct timeval *time1) {
 }
 
 void usage_exit(const char * name) {
-	printf("Usage: %s <mode> <rate> <source file> <dest file>\n", name);
-	printf("<mode> is numerical and non-zero to start copying no faster than <rate> (kbytes/sec) rather than full speed.\n");
-	printf("Send SIGUSR1 to slow down to <rate> and SIGUSR2 to copy at full speed again.\n");
+	printf("Usage: %s <mode> <fast rate> <slow rate> <source file> <dest file>\n", name);
+	printf("<mode> is numerical and non-zero to start copying no faster than <slow rate> (kbytes/sec) rather than <fast rate>.\n");
+	printf("Set <fast rate> to zero to place no restriction on copying speed.\n");
+	printf("Send SIGUSR1 to slow down to <slow rate> and SIGUSR2 to copy at <fast rate> again.\n");
 	exit(1);
 }

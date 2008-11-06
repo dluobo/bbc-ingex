@@ -26,7 +26,7 @@ PROGS=cpfs
 all: $(PROGS)
 
 cpfs: cpfs.c
-	cc -o cpfs cpfs.c
+	gcc -o cpfs cpfs.c
 
 clean:
 	rm -f core $(PROGS)
