@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2008/10/29 17:28:50 john_f Exp $
+# $Id: Makefile,v 1.2 2008/11/06 11:16:09 john_f Exp $
 #
 # Makefile for building the Ingex studio
 #
@@ -29,3 +29,12 @@ all:
 	$(MAKE) -C database
 	$(MAKE) -C ace-tao -f Makefile.non_mwc
 	$(MAKE) -C processing
+
+.PHONY: clean
+clean:
+	$(MAKE) -C capture $@
+	$(MAKE) -C common $@
+	$(MAKE) -C mxfwriter $@
+	$(MAKE) -C database $@
+	$(MAKE) -C ace-tao -f Makefile.non_mwc $@
+	$(MAKE) -C processing $@
