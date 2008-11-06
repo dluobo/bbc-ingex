@@ -1,5 +1,5 @@
 /*
- * $Id: tc_overlay.h,v 1.2 2008/05/06 11:40:41 john_f Exp $
+ * $Id: tc_overlay.h,v 1.3 2008/11/06 11:09:43 john_f Exp $
  *
  * Create burnt-in timecode.
  *
@@ -37,14 +37,6 @@ extern "C" {
 extern tc_overlay_t * tc_overlay_init();
 extern void tc_overlay_close(tc_overlay_t * in_tco);
 extern void tc_overlay_setup(tc_overlay_t * in_tco, int frame_number);
-extern void tc_overlay_apply420(tc_overlay_t * in_tco,
-                                uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
-                                unsigned int width, unsigned int height,
-                                int tc_xoffset, unsigned int tc_yoffset);
-extern void tc_overlay_apply422(tc_overlay_t * in_tco,
-                                uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
-                                unsigned int width, unsigned int height,
-                                int tc_xoffset, unsigned int tc_yoffset);
 extern void tc_overlay_apply(tc_overlay_t * in_tco,
                                 uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
                                 unsigned int width, unsigned int height,

@@ -1,5 +1,5 @@
 /*
- * $Id: tc_overlay.c,v 1.2 2008/05/06 11:40:14 john_f Exp $
+ * $Id: tc_overlay.c,v 1.3 2008/11/06 11:09:43 john_f Exp $
  *
  * Create burnt-in timecode.
  *
@@ -355,7 +355,7 @@ const unsigned int tc_height = 24;
 
 typedef struct 
 {
-	uint8_t * tc_mask;
+    uint8_t * tc_mask;
 } internal_tc_overlay_t;
 
 typedef struct {
@@ -370,7 +370,7 @@ static TimeCode framesToTC(int frames)
 {
     TimeCode result;
 
-	frames = frames % (24*60*60*25); // avoid overflow
+    frames = frames % (24*60*60*25); // avoid overflow
 
     result.Frames = frames % 25;
     result.Hours = (int) (frames / (60 * 60 * 25));
@@ -414,7 +414,7 @@ static void setup_colon(int x_pos, unsigned char *p)
 
 extern tc_overlay_t * tc_overlay_init()
 {
-	internal_tc_overlay_t * tco = malloc(sizeof(internal_tc_overlay_t));
+    internal_tc_overlay_t * tco = malloc(sizeof(internal_tc_overlay_t));
 
     tco->tc_mask = malloc(tc_width * tc_height);
     if (tco->tc_mask)
@@ -422,12 +422,12 @@ extern tc_overlay_t * tc_overlay_init()
         memset(tco->tc_mask, 0, tc_width * tc_height);
     }
 
-	return (tc_overlay_t *)tco;
+    return (tc_overlay_t *)tco;
 }
 
 extern void tc_overlay_close(tc_overlay_t * in_tco)
 {
-	internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
+    internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
     if (tco)
     {
         free(tco->tc_mask);
@@ -437,9 +437,9 @@ extern void tc_overlay_close(tc_overlay_t * in_tco)
 
 extern void tc_overlay_setup(tc_overlay_t * in_tco, int frame_number)
 {
-	TimeCode timecode = framesToTC(frame_number);
+    TimeCode timecode = framesToTC(frame_number);
 
-	internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
+    internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
     if (!tco || !tco->tc_mask)
     {
         return;
@@ -458,281 +458,14 @@ extern void tc_overlay_setup(tc_overlay_t * in_tco, int frame_number)
     setup_tc_digit(179, timecode.Frames % 10, tco->tc_mask);
 }
 
-// example offsets: tc_xoffset = 460, tc_y_offset = 30
+// example offsets: tc_xoffset = 460, tc_yoffset = 30
 
-#if 0
-// now a single function for 420 and 422
-
-extern void tc_overlay_apply420(tc_overlay_t * in_tco, uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
-                                unsigned int width, unsigned int height, int tc_xoffset, unsigned int tc_yoffset)
-{
-	internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
-
-    unsigned int i, j;
-
-    if (!tco || !tco->tc_mask)
-    {
-        return;
-    }
-
-    y_comp += tc_yoffset * width;
-    u_comp += tc_yoffset * width / 4;
-    v_comp += tc_yoffset * width / 4;
-
-    // Two lines of black above
-    for (j = 0; j < 2; j++)
-    {
-        for (i = 0; i < tc_width+2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            int u_idx = i/2 + tc_xoffset/2-1;
-            int v_idx = i/2 + tc_xoffset/2-1;
-            y_comp[y_idx] = blackY;
-            if (i%2==0)
-            {
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        if (j%2 == 0)
-        {
-            u_comp += (width/2);
-            v_comp += (width/2);
-        }
-    }
-
-    // The timecode
-    for (j = 0; j < tc_height; j++)
-    {
-        // LH border
-        for (i = 0; i < 2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            int u_idx = i/2 + tc_xoffset/2-1;
-            int v_idx = i/2 + tc_xoffset/2-1;
-            y_comp[y_idx] = blackY;
-            if (i%2==0)
-            {
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        // Timecode
-        for (i = 0; i < tc_width; i++)
-        {
-            unsigned char m1 = tco->tc_mask[j*tc_width+ i];
-            double      r1 = m1 / 255.0;
-            int y_idx = i + tc_xoffset;
-            int u_idx = i/2 + tc_xoffset/2;
-            int v_idx = i/2 + tc_xoffset/2;
-
-            // make mask 'background' dark
-            // if mask value is low (0x00 - 0x20) reduce Y value
-            if (m1 <= 0x20)
-            {
-                y_comp[y_idx] = y_comp[y_idx] / 8;
-
-                if ((i % 2 == 0) && (j % 2 == 0))
-                {
-                    // Set chroma values to neutral (i.e. no colour)
-                    u_comp[u_idx] = blackU;
-                    v_comp[v_idx] = blackV;
-                }
-            }
-            else
-            {
-                // apply mask by scaling the pixel according to the mask value
-                // Y
-                y_comp[y_idx] = r1 * (whiteY - y_comp[y_idx]) + y_comp[y_idx];
-
-                if ((i % 2 == 0) && (j % 2 == 0))
-                {
-                    // U V
-                    u_comp[u_idx] = r1 * (whiteU - u_comp[u_idx]) + u_comp[u_idx];
-                    v_comp[v_idx] = r1 * (whiteV - v_comp[v_idx]) + v_comp[v_idx];
-                }
-            }
-        }
-        // RH border
-        for (i = tc_width; i < tc_width+2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            int u_idx = i/2 + tc_xoffset/2-1;
-            int v_idx = i/2 + tc_xoffset/2-1;
-            y_comp[y_idx] = blackY;
-            if (i%2==0)
-            {
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        if (j%2 == 0)
-        {
-            u_comp += (width/2);
-            v_comp += (width/2);
-        }
-    }
-
-    // Two lines of black below
-    for (j = 0; j < 2; j++)
-    {
-        for (i = 0; i < tc_width+2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            int u_idx = i/2 + tc_xoffset/2-1;
-            int v_idx = i/2 + tc_xoffset/2-1;
-            y_comp[y_idx] = blackY;
-            if (i%2==0)
-            {
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        if (j%2 == 0)
-        {
-            u_comp += (width/2);
-            v_comp += (width/2);
-        }
-    }
-}
-
-
-extern void tc_overlay_apply422(tc_overlay_t * in_tco, uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
-                                unsigned int width, unsigned int height, int tc_xoffset, unsigned int tc_yoffset)
-{
-	internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
-
-    unsigned int i, j;
-
-    if (!tco || !tco->tc_mask)
-    {
-        return;
-    }
-
-    y_comp += tc_yoffset * width;
-    u_comp += tc_yoffset * width / 2;
-    v_comp += tc_yoffset * width / 2;
-
-    // Two lines of black above
-    for (j = 0; j < 2; j++)
-    {
-        for (i = 0; i < tc_width + 2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            y_comp[y_idx] = blackY;
-            if (i % 2 == 0)
-            {
-                int u_idx = y_idx / 2;
-                int v_idx = y_idx / 2;
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        u_comp += (width/2);
-        v_comp += (width/2);
-    }
-
-    // The timecode
-    for (j = 0; j < tc_height; j++)
-    {
-        // LH border
-        for (i = 0; i < 2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            y_comp[y_idx] = blackY;
-            if (i % 2 == 0)
-            {
-                int u_idx = y_idx / 2;
-                int v_idx = y_idx / 2;
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        // Timecode
-        for (i = 0; i < tc_width; i++)
-        {
-            unsigned char m1 = tco->tc_mask[j*tc_width+ i];
-            double      r1 = m1 / 255.0;
-            int y_idx = i + tc_xoffset;
-            int u_idx = i/2 + tc_xoffset/2;
-            int v_idx = i/2 + tc_xoffset/2;
-
-            // make mask 'background' dark
-            // if mask value is low (0x00 - 0x20) reduce Y value
-            if (m1 <= 0x20)
-            {
-                y_comp[y_idx] = y_comp[y_idx] / 8;
-
-                if (i % 2 == 0)
-                {
-                    // Set chroma values to neutral (i.e. no colour)
-                    u_comp[u_idx] = 0x80;
-                    v_comp[v_idx] = 0x80;
-                }
-            }
-            else
-            {
-                // apply mask by scaling the pixel according to the mask value
-                // Y
-                y_comp[y_idx] = r1 * (whiteY - y_comp[y_idx]) + y_comp[y_idx];
-
-                if (i % 2 == 0)
-                {
-                    // U V
-                    u_comp[u_idx] = r1 * (whiteU - u_comp[u_idx]) + u_comp[u_idx];
-                    v_comp[v_idx] = r1 * (whiteV - v_comp[v_idx]) + v_comp[v_idx];
-                }
-            }
-        }
-        // RH border
-        for (i = tc_width; i < tc_width + 2; i++)
-        {
-            int y_idx = i + tc_xoffset-2;
-            y_comp[y_idx] = blackY;
-            if (i % 2 == 0)
-            {
-                int u_idx = y_idx / 2;
-                int v_idx = y_idx / 2;
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        u_comp += (width/2);
-        v_comp += (width/2);
-    }
-
-    // Two lines of black below
-    for (j = 0; j < 2; j++)
-    {
-        for (i = 0; i < tc_width + 2; i++)
-        {
-            int y_idx = i + tc_xoffset - 2;
-            y_comp[y_idx] = blackY;
-            if (i % 2 == 0)
-            {
-                int u_idx = y_idx / 2;
-                int v_idx = y_idx / 2;
-                u_comp[u_idx] = blackU;
-                v_comp[v_idx] = blackV;
-            }
-        }
-        y_comp += width;
-        u_comp += (width/2);
-        v_comp += (width/2);
-    }
-}
-#endif
 
 extern void tc_overlay_apply(tc_overlay_t * in_tco, uint8_t * y_comp, uint8_t * u_comp, uint8_t * v_comp,
                                 unsigned int width, unsigned int height, int tc_xoffset, unsigned int tc_yoffset,
                                 tc_pix_fmt_t pix_fmt)
 {
-	internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
+    internal_tc_overlay_t * tco = (internal_tc_overlay_t *)in_tco;
 
     unsigned int i, j;
     unsigned int hor_chrom_factor, vert_chrom_factor;
