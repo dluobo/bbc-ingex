@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.12 2008/11/06 11:30:09 john_f Exp $
+ * $Id: player.c,v 1.13 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -901,7 +901,7 @@ int main(int argc, const char **argv)
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
     int swScale = 1;
-    X11PluginWindowInfo pluginInfo = {NULL, 0};
+    X11WindowInfo windowInfo = {NULL, 0, 0, 0};
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
     int extraSDIVITCSource = 0; 
@@ -1150,9 +1150,9 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &pluginInfo.pluginWindow) != 1)
+            if (sscanf(argv[cmdlnIndex + 1], "0x%lx", &windowInfo.window) != 1)
             {
-                if (sscanf(argv[cmdlnIndex + 1], "%lu", &pluginInfo.pluginWindow) != 1)
+                if (sscanf(argv[cmdlnIndex + 1], "%lu", &windowInfo.window) != 1)
                 {
                     usage(argv[0]);
                     fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -2374,7 +2374,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &pluginInfo, &g_player.x11XVDisplaySink))
+                scale, swScale, &windowInfo, &g_player.x11XVDisplaySink))
             {
                 ml_log_error("Failed to open x11 xv display sink\n");
                 goto fail;
@@ -2396,7 +2396,7 @@ int main(int argc, const char **argv)
             g_player.x11WindowListener.close_request = x11_window_close_request;
             
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, &pluginInfo, &g_player.x11DisplaySink))
+                scale, swScale, &windowInfo, &g_player.x11DisplaySink))
             {
                 ml_log_error("Failed to open x11 display sink\n");
                 goto fail;
@@ -2429,7 +2429,7 @@ int main(int argc, const char **argv)
             
             if (!dusk_open(reviewDuration, dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
-                scale, swScale, fitVideo, &pluginInfo, &g_player.dualSink))
+                scale, swScale, fitVideo, &windowInfo, &g_player.dualSink))
             {
                 ml_log_error("Failed to open dual X11 and DVS sink\n");
                 goto fail;

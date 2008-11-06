@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: on_screen_display.c,v 1.8 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -638,11 +638,20 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             osdd->playStateTick = osdd->halfSecTickCount + 4;
             set_ticker_user(osdd, PLAY_STATE_TICKER_USER, 1);
         }
+        else if (osdd->halfSecTickCount > osdd->playStateTick ||
+            frameInfo->position + 1 >= frameInfo->sourceLength)
+        {
+            /* hide play state symbol if the 4 half seconds are over when the state
+            hasn't changed or when the player is at eof */
+            set_ticker_user(osdd, PLAY_STATE_TICKER_USER, 0);
+            osdd->playStateTick = osdd->halfSecTickCount;
+        }
     }
     else
     {
         if (osdd->playStateTick > osdd->halfSecTickCount)
         {
+            /* no need for refreshed when paused because pause symbol stays active */
             set_ticker_user(osdd, PLAY_STATE_TICKER_USER, 0);
         }
     }

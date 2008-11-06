@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: keyboard_input.h,v 1.3 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -31,12 +31,16 @@ extern "C"
 #endif
 
 
+#define SHIFT_KEY_MODIFIER           0x01
+#define CONTROL_KEY_MODIFIER         0x02
+
+
 typedef struct
 {
     void* data; /* passed to functions */
     
-    void (*key_pressed)(void* data, int key);
-    void (*key_released)(void* data, int key);
+    void (*key_pressed)(void* data, int key, int modifier);
+    void (*key_released)(void* data, int key, int modifier);
 } KeyboardInputListener;
 
 typedef struct
@@ -51,8 +55,8 @@ typedef struct
 
 /* utility functions for calling KeyboardInputListener functions */
 
-void kil_key_pressed(KeyboardInputListener* listener, int key);
-void kil_key_released(KeyboardInputListener* listener, int key);
+void kil_key_pressed(KeyboardInputListener* listener, int key, int modifier);
+void kil_key_released(KeyboardInputListener* listener, int key, int modifier);
 
 
 /* utility functions for calling KeyboardInput functions */

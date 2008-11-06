@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.7 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -389,13 +389,12 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
         sink->yuvFormat = I420;
     }
     
-    CHK_OFAIL(x11c_open_display(&sink->x11Common));
+    CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
 
     /* check if we can use shared memory */
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
     
-    CHK_OFAIL(x11c_create_window(&sink->x11Common, sink->displayWidth, sink->displayHeight,
-        sink->width, sink->height));
+    CHK_OFAIL(x11c_init_window(&sink->x11Common, sink->displayWidth, sink->displayHeight, sink->width, sink->height));
 
     sink->displayInitialised = 1;
     sink->displayInitFailed = 0;
@@ -470,7 +469,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         
         if (sink->useSharedMemory)
         {
-            XShmPutImage(sink->x11Common.display, sink->x11Common.window, sink->x11Common.gc, 
+            XShmPutImage(sink->x11Common.windowInfo.display, sink->x11Common.windowInfo.window, sink->x11Common.windowInfo.gc, 
                 frame->xImage,
                 0, 0, 0, 0,
                 sink->width, sink->height,
@@ -478,7 +477,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         }
         else
         {
-            XPutImage(sink->x11Common.display, sink->x11Common.window, sink->x11Common.gc, 
+            XPutImage(sink->x11Common.windowInfo.display, sink->x11Common.windowInfo.window, sink->x11Common.windowInfo.gc, 
                 frame->xImage,
                 0, 0, 0, 0,
                 sink->width, sink->height);
@@ -528,8 +527,8 @@ static int init_frame(X11DisplayFrame* frame)
 {
     X11DisplaySink* sink = (X11DisplaySink*)frame->sink;
     
-    sink->depth = DefaultDepth(sink->x11Common.display, DefaultScreen(sink->x11Common.display));
-    sink->visual = DefaultVisual(sink->x11Common.display, DefaultScreen(sink->x11Common.display));
+    sink->depth = DefaultDepth(sink->x11Common.windowInfo.display, DefaultScreen(sink->x11Common.windowInfo.display));
+    sink->visual = DefaultVisual(sink->x11Common.windowInfo.display, DefaultScreen(sink->x11Common.windowInfo.display));
 
     if (sink->depth < 15) 
     {
@@ -571,7 +570,7 @@ static int init_frame(X11DisplayFrame* frame)
     if (sink->useSharedMemory)
     {
         CHK_OFAIL((frame->xImage = 
-            XShmCreateImage(sink->x11Common.display, 
+            XShmCreateImage(sink->x11Common.windowInfo.display, 
                 CopyFromParent,
                 sink->depth, 
                 ZPixmap, 
@@ -607,9 +606,9 @@ static int init_frame(X11DisplayFrame* frame)
         frame->shminfo.shmaddr = frame->xImage->data;
         frame->shminfo.readOnly = False;
     
-        if (XShmAttach(sink->x11Common.display, &frame->shminfo))
+        if (XShmAttach(sink->x11Common.windowInfo.display, &frame->shminfo))
         {
-            XSync(sink->x11Common.display, False);
+            XSync(sink->x11Common.windowInfo.display, False);
             shmctl(frame->shminfo.shmid, IPC_RMID, 0);
         }
         else
@@ -629,7 +628,7 @@ static int init_frame(X11DisplayFrame* frame)
         if (sink->depth >= 24) 
         {
             CHK_OFAIL((frame->xImage = 
-                XCreateImage(sink->x11Common.display, 
+                XCreateImage(sink->x11Common.windowInfo.display, 
                     CopyFromParent,
                     sink->depth, 
                     ZPixmap, 
@@ -643,7 +642,7 @@ static int init_frame(X11DisplayFrame* frame)
         else /* sink->depth >= 15 */ 
         {
             CHK_OFAIL((frame->xImage = 
-                XCreateImage(sink->x11Common.display, 
+                XCreateImage(sink->x11Common.windowInfo.display, 
                     CopyFromParent,
                     sink->depth, 
                     ZPixmap, 
@@ -832,7 +831,7 @@ static void xskf_free(void* data)
     {
         if (frame->xImage)
         {
-            XShmDetach(frame->sink->x11Common.display, &frame->shminfo);
+            XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->shminfo);
             shmdt(frame->shminfo.shmaddr);
             XFree(frame->xImage);
         }
@@ -1117,7 +1116,7 @@ static void xsk_osd_screen_changed(void* data, OSDScreen screen)
 
 
 int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, X11PluginWindowInfo *pluginInfo, X11DisplaySink** sink)
+    const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11DisplaySink** sink)
 {
     X11DisplaySink* newSink;
     
@@ -1163,7 +1162,7 @@ int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRati
         osd_set_listener(newSink->osd, &newSink->osdListener);
     }
 
-    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, pluginInfo));
+    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, windowInfo));
     
     
     init_lookup_tables(newSink);

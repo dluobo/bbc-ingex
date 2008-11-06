@@ -1,5 +1,5 @@
 /*
- * $Id: term_keyboard_input.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: term_keyboard_input.c,v 1.3 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -174,64 +174,64 @@ void tki_start_term_keyboard(TermKeyboardInput* termInput)
             {
                 if (buf[0] == 10) /* return */
                 {
-                    kil_key_pressed(termInput->listener, XK_Return);
-                    kil_key_released(termInput->listener, XK_Return);
+                    kil_key_pressed(termInput->listener, XK_Return, 0);
+                    kil_key_released(termInput->listener, XK_Return, 0);
                 }
                 else
                 {
-                    kil_key_pressed(termInput->listener, buf[0]);
-                    kil_key_released(termInput->listener, buf[0]);
+                    kil_key_pressed(termInput->listener, buf[0], 0);
+                    kil_key_released(termInput->listener, buf[0], 0);
                 }
             }
             else if (numRead == 3)
             {
                 if (buf[0] == 27 && buf[1] == 91 && buf[2] == 67) /* right */
                 {
-                    kil_key_pressed(termInput->listener, XK_Right);
-                    kil_key_released(termInput->listener, XK_Right);
+                    kil_key_pressed(termInput->listener, XK_Right, 0);
+                    kil_key_released(termInput->listener, XK_Right, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 68) /* left */
                 {
-                    kil_key_pressed(termInput->listener, XK_Left);
-                    kil_key_released(termInput->listener, XK_Left);
+                    kil_key_pressed(termInput->listener, XK_Left, 0);
+                    kil_key_released(termInput->listener, XK_Left, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 65) /* up */
                 {
-                    kil_key_pressed(termInput->listener, XK_Up);
-                    kil_key_released(termInput->listener, XK_Up);
+                    kil_key_pressed(termInput->listener, XK_Up, 0);
+                    kil_key_released(termInput->listener, XK_Up, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 66) /* down */
                 {
-                    kil_key_pressed(termInput->listener, XK_Down);
-                    kil_key_released(termInput->listener, XK_Down);
+                    kil_key_pressed(termInput->listener, XK_Down, 0);
+                    kil_key_released(termInput->listener, XK_Down, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 72) /* home */
                 {
-                    kil_key_pressed(termInput->listener, XK_Home);
-                    kil_key_released(termInput->listener, XK_Home);
+                    kil_key_pressed(termInput->listener, XK_Home, 0);
+                    kil_key_released(termInput->listener, XK_Home, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 70) /* end */
                 {
-                    kil_key_pressed(termInput->listener, XK_End);
-                    kil_key_released(termInput->listener, XK_End);
+                    kil_key_pressed(termInput->listener, XK_End, 0);
+                    kil_key_released(termInput->listener, XK_End, 0);
                 }
             }
             else if (numRead == 4)
             {
                 if (buf[0] == 27 && buf[1] == 91 && buf[2] == 51 && buf[3] == 126) /* delete */
                 {
-                    kil_key_pressed(termInput->listener, XK_Delete);
-                    kil_key_released(termInput->listener, XK_Delete);
+                    kil_key_pressed(termInput->listener, XK_Delete, 0);
+                    kil_key_released(termInput->listener, XK_Delete, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 53 && buf[3] == 126) /* page up */
                 {
-                    kil_key_pressed(termInput->listener, XK_Page_Up);
-                    kil_key_released(termInput->listener, XK_Page_Up);
+                    kil_key_pressed(termInput->listener, XK_Page_Up, 0);
+                    kil_key_released(termInput->listener, XK_Page_Up, 0);
                 }
                 else if (buf[0] == 27 && buf[1] == 91 && buf[2] == 54 && buf[3] == 126) /* page down */
                 {
-                    kil_key_pressed(termInput->listener, XK_Page_Down);
-                    kil_key_released(termInput->listener, XK_Page_Down);
+                    kil_key_pressed(termInput->listener, XK_Page_Down, 0);
+                    kil_key_released(termInput->listener, XK_Page_Down, 0);
                 }
             }
             PTHREAD_MUTEX_UNLOCK(&termInput->listenerMutex);

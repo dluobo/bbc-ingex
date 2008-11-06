@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.c,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: x11_common.c,v 1.6 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -160,7 +160,7 @@ void x11wl_close_request(X11WindowListener* listener)
 }
 
 
-int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11PluginWindowInfo *pluginInfo)
+int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11WindowInfo* windowInfo)
 {
     memset(x11Common, 0, sizeof(x11Common));
     
@@ -182,15 +182,9 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* o
     x11Common->mouseInput.unset_listener = x11c_unset_mouse_listener;
     x11Common->mouseInput.close = x11c_close_mouse;
 
-    if (pluginInfo)
+    if (windowInfo)
     {
-        x11Common->pluginInfo.pluginDisplay = pluginInfo->pluginDisplay;
-        x11Common->pluginInfo.pluginWindow = pluginInfo->pluginWindow;
-    }
-    else
-    {
-        x11Common->pluginInfo.pluginDisplay = NULL;
-        x11Common->pluginInfo.pluginWindow = 0;
+        x11Common->windowInfo = *windowInfo;
     }
 
     CHK_ORET(init_mutex(&x11Common->eventMutex));
@@ -212,14 +206,10 @@ void x11c_clear(X11Common* x11Common)
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
     mic_free_mouse_connect(&x11Common->mouseConnect);
 
-    if (x11Common->display != NULL)
+    if (x11Common->createdWindowInfo)
     {
-        if (x11Common->gc != None)
-        {
-            XFreeGC(x11Common->display, x11Common->gc);
-        }
-        XCloseDisplay(x11Common->display);
-        x11Common->display = NULL; /* this will stop any attempts to process events */
+        x11c_close_window(&x11Common->windowInfo);
+        x11Common->createdWindowInfo = 0;
     }
     
     SAFE_FREE(&x11Common->windowName);
@@ -315,54 +305,39 @@ void x11c_unregister_mouse_listener(X11Common* x11Common, MouseInputListener* li
 
 
 
-int x11c_open_display(X11Common* x11Common)
+int x11c_prepare_display(X11Common* x11Common)
 {
-    if (x11Common->display != NULL)
+    if (x11Common->windowInfo.display != NULL)
     {
         return 1;
     }
-
-    if (x11Common->pluginInfo.pluginDisplay != NULL)
-    {
-        x11Common->display = x11Common->pluginInfo.pluginDisplay;
-    }
-    else
-    {
-        if ((x11Common->display = XOpenDisplay(NULL)) == NULL)
-        {
-            ml_log_error("Cannot open Display.\n");
-            return 0;
-        }
-    }
-    return 1;
+    
+    return x11c_open_display(&x11Common->windowInfo.display);
 }
 
 int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height)
 {
-    if (x11Common->display == NULL)
+    if (x11Common->windowInfo.display == NULL)
     {
         ml_log_error("Can't get screen dimensions because display has not been opened\n");
         return 0;
     }
     
-    *width = XWidthOfScreen(XDefaultScreenOfDisplay(x11Common->display));
-    *height = XHeightOfScreen(XDefaultScreenOfDisplay(x11Common->display));
+    *width = XWidthOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
+    *height = XHeightOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
     
     return 1;
 }
 
-int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
+int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned int displayHeight,
     unsigned int imageWidth, unsigned int imageHeight)
 {
-    XSetWindowAttributes x_attr;
-    XEvent event;
-    
     if (x11Common->haveWindow)
     {
         return 1;
     }
     
-    if (x11Common->display == NULL)
+    if (x11Common->windowInfo.display == NULL)
     {
         ml_log_error("Can't create X11 window because display has not been opened\n");
         return 0;
@@ -378,69 +353,18 @@ int x11c_create_window(X11Common* x11Common, unsigned int displayWidth, unsigned
         x11c_set_window_name(x11Common, NULL);
     }
 
-    x_attr.border_pixel = BlackPixel(x11Common->display, DefaultScreen(x11Common->display));
-    x_attr.background_pixel = BlackPixel(x11Common->display, DefaultScreen(x11Common->display));
-    x_attr.backing_store = Always;
-    x_attr.event_mask = ExposureMask | StructureNotifyMask;
-
-    Window embedWindowId = 0;
-    if (x11Common->pluginInfo.pluginWindow != 0)
+    if (x11Common->windowInfo.window == 0)
     {
-        embedWindowId = x11Common->pluginInfo.pluginWindow;
-    }
-
-    if (embedWindowId)
-    {
-        /* embedded window should already exist so just use it */
-        x11Common->window = embedWindowId;
+        x11c_create_window(&x11Common->windowInfo, displayWidth, displayHeight, x11Common->windowName);
+        x11Common->createdWindowInfo = 1;
     }
     else
     {
-        /* create a new X11 window  */
-        x11Common->window = XCreateWindow(
-            x11Common->display, 
-            DefaultRootWindow(x11Common->display),
-            0, 0, 
-            displayWidth, displayHeight,
-            0, 
-            DefaultDepth(x11Common->display, DefaultScreen(x11Common->display)), 
-            InputOutput, 
-            CopyFromParent,
-            CWBackingStore | CWBackPixel | CWBorderPixel | CWEventMask, &x_attr);
+        x11c_update_window(&x11Common->windowInfo, displayWidth, displayHeight, x11Common->windowName);
     }
 
-    XStoreName(x11Common->display, x11Common->window, x11Common->windowName);
-
-    /* XSelectInput will fail with BadAccess is more than one client
-     * is trying to get ButtonPressMask and a few other event types */
-    XSelectInput(x11Common->display, x11Common->window, 
-        ExposureMask | StructureNotifyMask | FocusChangeMask | 
-        KeyPressMask | KeyReleaseMask |
-        ButtonPressMask | Button1MotionMask);
-
-    /* we want to known when the window is deleted */
-    x11Common->deleteAtom = XInternAtom(x11Common->display, "WM_DELETE_WINDOW", True);
-    if (x11Common->deleteAtom == None ||
-        XSetWMProtocols(x11Common->display, x11Common->window, &x11Common->deleteAtom, 1) == 0)
-    {
-        ml_log_warn("Failed to register interest in X11 window closing event\n");
-    }
-
-    if (embedWindowId == 0)    /* not using embedded window */
-    {
-        XMapWindow(x11Common->display, x11Common->window);
-        /* Wait until window is mapped */
-        do 
-        {
-            XNextEvent(x11Common->display, &event);
-        } 
-        while (event.type != MapNotify || event.xmap.event != x11Common->window);
-    }
-
-    x11Common->gc = XCreateGC(x11Common->display, x11Common->window, 0, 0);
-    
     XWindowAttributes attrs;
-    XGetWindowAttributes(x11Common->display, x11Common->window, &attrs);
+    XGetWindowAttributes(x11Common->windowInfo.display, x11Common->windowInfo.window, &attrs);
     x11Common->windowWidth = attrs.width;
     x11Common->windowHeight = attrs.height;
     
@@ -452,7 +376,7 @@ void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoS
 {
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
     
-    if (x11Common->display != NULL)
+    if (x11Common->windowInfo.display != NULL)
     {
        if (!kic_create_keyboard_connect(x11Common->reviewDuration, control, 
            &x11Common->keyboardInput, mapping, &x11Common->keyboardConnect))
@@ -493,13 +417,14 @@ int x11c_process_events(X11Common* x11Common, int sync)
     XEvent event;
     int processedEvent = 0;
     float progressBarPosition = -1.0;
+    int modifier;
 
     
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex)
 
     /* NOTE: if there isn't a window (haveWindow == 1), then a sync problem could
     occur. Using valgrind exposes te problem */
-    if (x11Common->display == NULL || !x11Common->haveWindow)
+    if (x11Common->windowInfo.display == NULL || !x11Common->haveWindow)
     {
         goto fail;
     }
@@ -507,12 +432,12 @@ int x11c_process_events(X11Common* x11Common, int sync)
     
     gettimeofday(&x11Common->processEventTime, NULL);
     
-    if (!XPending(x11Common->display))
+    if (!XPending(x11Common->windowInfo.display))
     {
         if (sync)
         {
             /* wait until image has been processed by the X server */
-            XSync(x11Common->display, False);
+            XSync(x11Common->windowInfo.display, False);
         }
         
         processedEvent = 0;
@@ -521,7 +446,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
     {
         do
         {
-            XNextEvent(x11Common->display, &event);
+            XNextEvent(x11Common->windowInfo.display, &event);
             
             if (event.type == FocusOut || event.type == FocusIn || event.type == Expose)
             {
@@ -529,13 +454,31 @@ int x11c_process_events(X11Common* x11Common, int sync)
             }
             else if (event.type == KeyPress)
             {
-                kil_key_pressed(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0));
-                kil_key_pressed(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0));
+                modifier = 0;
+                if (((XKeyEvent*)&event)->state & ShiftMask)
+                {
+                    modifier |= SHIFT_KEY_MODIFIER;
+                }
+                if (((XKeyEvent*)&event)->state & ControlMask)
+                {
+                    modifier |= CONTROL_KEY_MODIFIER;
+                }
+                kil_key_pressed(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
+                kil_key_pressed(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
             }
             else if (event.type == KeyRelease)
             {
-                kil_key_released(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0));
-                kil_key_released(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0));
+                modifier = 0;
+                if (((XKeyEvent*)&event)->state & ShiftMask)
+                {
+                    modifier |= SHIFT_KEY_MODIFIER;
+                }
+                if (((XKeyEvent*)&event)->state & ControlMask)
+                {
+                    modifier |= CONTROL_KEY_MODIFIER;
+                }
+                kil_key_released(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
+                kil_key_released(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
             }
             else if (event.type == ButtonPress)
             {
@@ -576,7 +519,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
             }
             else if (event.type == ClientMessage)
             {
-                if ((Atom)event.xclient.data.l[0] == x11Common->deleteAtom)
+                if ((Atom)event.xclient.data.l[0] == x11Common->windowInfo.deleteAtom)
                 {
                     x11wl_close_request(x11Common->windowListener);
                 }
@@ -587,12 +530,12 @@ int x11c_process_events(X11Common* x11Common, int sync)
                 x11Common->windowHeight = ((XConfigureEvent*)&event)->height;
             }
         }
-        while (XPending(x11Common->display));
+        while (XPending(x11Common->windowInfo.display));
         
         if (sync)
         {
             /* wait until image has been processed by the X server */
-            XSync(x11Common->display, False);
+            XSync(x11Common->windowInfo.display, False);
         }
         
         processedEvent = 1;
@@ -633,9 +576,9 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
     SAFE_FREE(&oldWindowName);
     
     /* set name if we have a window */
-    if (x11Common->display != NULL && x11Common->haveWindow)
+    if (x11Common->windowInfo.display != NULL && x11Common->haveWindow)
     {
-        XStoreName(x11Common->display, x11Common->window, x11Common->windowName);
+        XStoreName(x11Common->windowInfo.display, x11Common->windowInfo.window, x11Common->windowName);
     }
     
     return 1;
@@ -645,12 +588,12 @@ int x11c_shared_memory_available(X11Common* common)
 {
     char* displayName;
     
-    if (common == NULL || common->display == NULL)
+    if (common == NULL || common->windowInfo.display == NULL)
     {
         return 0;
     }
     
-    if (!XShmQueryExtension(common->display))
+    if (!XShmQueryExtension(common->windowInfo.display))
     {
         return 0;
     }
@@ -671,5 +614,148 @@ int x11c_shared_memory_available(X11Common* common)
     }
     
     return 0;
+}
+
+
+int x11c_open_display(Display** display)
+{
+    Display* newDisplay = NULL;
+    
+    if (*display != NULL)
+    {
+        return 1;
+    }
+    
+    newDisplay = XOpenDisplay(NULL);
+    if (newDisplay == NULL)
+    {
+        ml_log_error("Cannot open Display.\n");
+        return 0;
+    }
+
+    *display = newDisplay;
+    return 1;
+}
+
+int x11c_create_window(X11WindowInfo* windowInfo, int displayWidth, int displayHeight, const char* windowName)
+{
+    XSetWindowAttributes x_attr;
+    XEvent event;
+    
+    if (windowInfo->display == NULL)
+    {
+        ml_log_error("Can't create X11 window because display has not been opened\n");
+        return 0;
+    }
+    if (windowInfo->window != 0)
+    {
+        ml_log_error("Can't create X11 window when one is already opened\n");
+        return 0;
+    }
+    
+    x_attr.border_pixel = BlackPixel(windowInfo->display, DefaultScreen(windowInfo->display));
+    x_attr.background_pixel = BlackPixel(windowInfo->display, DefaultScreen(windowInfo->display));
+    x_attr.backing_store = Always;
+    x_attr.event_mask = ExposureMask | StructureNotifyMask;
+
+    windowInfo->window = XCreateWindow(
+        windowInfo->display, 
+        DefaultRootWindow(windowInfo->display),
+        0, 0, 
+        displayWidth, displayHeight,
+        0, 
+        DefaultDepth(windowInfo->display, DefaultScreen(windowInfo->display)), 
+        InputOutput, 
+        CopyFromParent,
+        CWBackingStore | CWBackPixel | CWBorderPixel | CWEventMask, &x_attr);
+
+    XStoreName(windowInfo->display, windowInfo->window, windowName);
+
+    /* XSelectInput will fail with BadAccess if more than one client
+     * is trying to get ButtonPressMask and a few other event types */
+    XSelectInput(windowInfo->display, windowInfo->window, 
+        ExposureMask | StructureNotifyMask | FocusChangeMask | 
+        KeyPressMask | KeyReleaseMask |
+        ButtonPressMask | Button1MotionMask);
+
+    /* we want to known when the window is deleted */
+    windowInfo->deleteAtom = XInternAtom(windowInfo->display, "WM_DELETE_WINDOW", True);
+    if (windowInfo->deleteAtom == 0 ||
+        XSetWMProtocols(windowInfo->display, windowInfo->window, &windowInfo->deleteAtom, 1) == 0)
+    {
+        ml_log_warn("Failed to register interest in X11 window closing event\n");
+    }
+
+    XMapWindow(windowInfo->display, windowInfo->window);
+    /* Wait until window is mapped */
+    do 
+    {
+        XNextEvent(windowInfo->display, &event);
+    } 
+    while (event.type != MapNotify || event.xmap.event != windowInfo->window);
+
+
+    windowInfo->gc = XCreateGC(windowInfo->display, windowInfo->window, 0, 0);
+    
+    
+    return 1;
+}
+
+void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int displayHeight, const char* windowName)
+{
+    if (windowInfo->display == NULL)
+    {
+        ml_log_error("Can't update X11 window because display has not been opened\n");
+        return;
+    }
+    if (windowInfo->window == 0)
+    {
+        ml_log_error("Can't update X11 window because the window does not exist\n");
+        return;
+    }
+
+    if (windowInfo->gc == 0)
+    {
+        windowInfo->gc = XCreateGC(windowInfo->display, windowInfo->window, 0, 0);
+    }
+
+    /* XSelectInput will fail with BadAccess if more than one client
+     * is trying to get ButtonPressMask and a few other event types */
+    XSelectInput(windowInfo->display, windowInfo->window, 
+        ExposureMask | StructureNotifyMask | FocusChangeMask | 
+        KeyPressMask | KeyReleaseMask |
+        ButtonPressMask | Button1MotionMask);
+
+    if (windowInfo->deleteAtom == 0)
+    {
+        /* we want to known when the window is deleted */
+        windowInfo->deleteAtom = XInternAtom(windowInfo->display, "WM_DELETE_WINDOW", True);
+        if (windowInfo->deleteAtom == 0 ||
+            XSetWMProtocols(windowInfo->display, windowInfo->window, &windowInfo->deleteAtom, 1) == 0)
+        {
+            ml_log_warn("Failed to register interest in X11 window closing event\n");
+        }
+    }
+    
+    XStoreName(windowInfo->display, windowInfo->window, windowName);
+
+    XResizeWindow(windowInfo->display, windowInfo->window, displayWidth, displayHeight);
+}
+
+void x11c_close_window(X11WindowInfo* windowInfo)
+{
+    if (windowInfo->display != NULL)
+    {
+        if (windowInfo->gc != 0)
+        {
+            XFreeGC(windowInfo->display, windowInfo->gc);
+            windowInfo->gc = 0;
+        }
+        XCloseDisplay(windowInfo->display);
+        windowInfo->display = NULL;
+    }
+    windowInfo->window = 0;
+    windowInfo->deleteAtom = 0;
+    windowInfo->gc = 0;
 }
 

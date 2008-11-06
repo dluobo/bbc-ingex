@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.8 2008/11/06 11:30:09 john_f Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.9 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -102,9 +102,9 @@ public:
         printf("Player has closed\n");
     }
     
-    virtual void keyPressed(int key)
+    virtual void keyPressed(int key, int modifier)
     {
-        printf("Key pressed %d\n", key);
+        printf("Key pressed %d (modifier=%d)\n", key, modifier);
         if (key == 'q')
         {
             printf("'q' for quit was pressed\n");
@@ -112,9 +112,9 @@ public:
         }
     }
     
-    virtual void keyReleased(int key)
+    virtual void keyReleased(int key, int modifier)
     {
-        printf("Key released %d\n", key);
+        printf("Key released %d (modifier=%d)\n", key, modifier);
     }
 
     virtual void progressBarPositionSet(float position)
@@ -212,7 +212,7 @@ int main (int argc, const char** argv)
             input.type = MXF_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--raw") == 0)
@@ -226,7 +226,7 @@ int main (int argc, const char** argv)
             input.type = RAW_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--dv") == 0)
@@ -240,7 +240,7 @@ int main (int argc, const char** argv)
             input.type = DV_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--ffmpeg") == 0)
@@ -254,7 +254,7 @@ int main (int argc, const char** argv)
             input.type = FFMPEG_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--shm") == 0)
@@ -268,7 +268,7 @@ int main (int argc, const char** argv)
             input.type = SHM_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--udp") == 0)
@@ -282,7 +282,7 @@ int main (int argc, const char** argv)
             input.type = UDP_INPUT;
             input.name = argv[cmdlnIndex + 1];
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
@@ -290,7 +290,7 @@ int main (int argc, const char** argv)
             input.type = BALLS_INPUT;
             input.name = "";
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--blank") == 0)
@@ -298,7 +298,7 @@ int main (int argc, const char** argv)
             input.type = BLANK_INPUT;
             input.name = "";
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--clapper") == 0)
@@ -306,7 +306,7 @@ int main (int argc, const char** argv)
             input.type = CLAPPER_INPUT;
             input.name = "";
             inputs.push_back(input);
-            input.options = map<string, string>();
+            input.options.clear();
             cmdlnIndex += 1;
         }
         else
@@ -326,9 +326,9 @@ int main (int argc, const char** argv)
 
     input.type = MXF_INPUT;
     input.name = "filenoexist.mxf";
-    input.options = map<string, string>();
+    input.options.clear();
     inputs.push_back(input);
-    input.options = map<string, string>();
+    input.options.clear();
     
     
     
@@ -339,14 +339,15 @@ int main (int argc, const char** argv)
         player->getBuildTimestamp().c_str());
 
     // Set plugin window info if any
-    X11PluginWindowInfo pluginInfo = {NULL, 0};
-    if (windowId) {
-        pluginInfo.pluginWindow = windowId;
-        player->setPluginInfo(&pluginInfo);
+    X11WindowInfo windowInfo = {NULL, 0, 0, 0};
+    if (windowId) 
+    {
+        windowInfo.window = windowId;
+        player->setWindowInfo(&windowInfo);
     }
 
     CHECK(player->setX11WindowName("test 0"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     vector<PlayerInput>::const_iterator iterInputs;
     vector<bool>::const_iterator iterOpened;
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
@@ -363,33 +364,50 @@ int main (int argc, const char** argv)
         }
     }
     
-    CHECK(player->start(inputs, opened, true));
-    printf("Start paused\n");
+    sleep(2);
+    printf("REOPEN\n");
+    input.options.insert(pair<string, string>("stream_format", "uyvy"));
+    input.options.insert(pair<string, string>("width", "100"));
+    input.options.insert(pair<string, string>("height", "100"));
+    input.type = BALLS_INPUT;
+    input.name = "";
+    inputs.insert(inputs.begin(), input);
+    CHECK(player->start(inputs, opened, true, 0));
     sleep(5);
+    
+    inputs.erase(inputs.begin());
+    
+    
+    CHECK(player->start(inputs, opened, true, 0));
+    printf("Start paused\n");
+    sleep(2);
+    
+    CHECK(player->start(inputs, opened, true, 25));
+    printf("Start paused at frame 25\n");
+    sleep(2);
     
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
-    CHECK(player->start(inputs, opened, true));
+    CHECK(player->start(inputs, opened, true, 0));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
     
-    CHECK(player->start(inputs, opened, true));
+    CHECK(player->start(inputs, opened, true, 0));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
     player->setVideoSplit(NONA_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     sleep(2);
     
     player->setVideoSplit(QUAD_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     sleep(2);
     
     CHECK(player->close());
     printf("Closed player\n");
     sleep(2);
-    
     
     dvsCardIsAvailable = player->dvsCardIsAvailable();
     if (dvsCardIsAvailable)
@@ -403,7 +421,7 @@ int main (int argc, const char** argv)
     }
     
     CHECK(player->setX11WindowName("test 1"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -435,7 +453,7 @@ int main (int argc, const char** argv)
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 3"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -648,7 +666,7 @@ int main (int argc, const char** argv)
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 4"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -684,7 +702,7 @@ int main (int argc, const char** argv)
 
     opened.clear();
     CHECK(player->setX11WindowName("test 5"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -723,7 +741,7 @@ int main (int argc, const char** argv)
     
     opened.clear();
     CHECK(player->setX11WindowName("test 6"));
-    CHECK(player->start(inputs, opened, false));
+    CHECK(player->start(inputs, opened, false, 0));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)

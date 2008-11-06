@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: keyboard_input.c,v 1.3 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -28,19 +28,19 @@
 #include "keyboard_input.h"
 
 
-void kil_key_pressed(KeyboardInputListener* listener, int key)
+void kil_key_pressed(KeyboardInputListener* listener, int key, int modifier)
 {
     if (listener && listener->key_pressed)
     {
-        listener->key_pressed(listener->data, key);
+        listener->key_pressed(listener->data, key, modifier);
     }
 }
 
-void kil_key_released(KeyboardInputListener* listener, int key)
+void kil_key_released(KeyboardInputListener* listener, int key, int modifier)
 {
     if (listener && listener->key_released)
     {
-        listener->key_released(listener->data, key);
+        listener->key_released(listener->data, key, modifier);
     }
 }
 

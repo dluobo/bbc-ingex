@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.9 2008/11/06 11:30:09 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.10 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -141,8 +141,8 @@ public:
     bool dvsCardIsAvailable(int card, int channel);
     
     
-    /* set the window-id when used as a browser plugin */
-    void setPluginInfo(X11PluginWindowInfo *pluginInfo);
+    /* e.g. set the window-id when used as a browser plugin */
+    void setWindowInfo(const X11WindowInfo* windowInfo);
     
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
@@ -171,7 +171,7 @@ public:
     
     /* opens the files/sources and start playing. The opened parameter indicates for each file/source whether
     it was successfully opened or not */
-    virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused);
+    virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition);
     
     /* functions inherited from IngexPlayerListenerRegistry */
     virtual bool registerListener(IngexPlayerListener* listener);
@@ -219,6 +219,9 @@ private:
 
     /* returns true if a X11 XV output is available */
     bool x11XVIsAvailable();
+
+    bool setOrCreateX11Window();
+    void closeLocalX11Window();
     
 
     PlayerOutputType _nextOutputType;
@@ -236,7 +239,9 @@ private:
     bool _disableSDIOSD;
     bool _nextDisableSDIOSD;
     bool _disableX11OSD;
-    X11PluginWindowInfo *_pluginInfo;
+    X11WindowInfo _externalWindowInfo;
+    X11WindowInfo _localWindowInfo;
+    X11WindowInfo _windowInfo;
     std::string _x11WindowName;
     Rational _sourceAspectRatio;
     Rational _pixelAspectRatio;

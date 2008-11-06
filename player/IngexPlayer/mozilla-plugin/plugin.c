@@ -98,19 +98,83 @@ public:
         printf("Player has closed\n");
     }
     
-    virtual void keyPressed(int key)
+    virtual void keyPressed(int key, int modifier)
     {
-        printf("Key pressed %d\n", key);
-        if (key == 'q')
+        printf("Key pressed %d (modifier=%d)\n", key, modifier);
+        switch (key)
         {
-            printf("'q' for quit was pressed\n");
-            exit(1);
+            case 'q':
+                _player->stop();
+                break;
+            case XK_space:
+                _player->togglePlayPause();
+                break;
+            case XK_Right:
+                _player->step(true);
+                break;
+            case XK_Left:
+                _player->step(false);
+                break;
+            case XK_Up:
+                /* 10 frames speed up forwards */
+                _player->playSpeed(10);
+                break;
+            case XK_Down:
+                /* 10 frames speed up backwards */
+                _player->playSpeed(-10);
+                break;
+            case XK_Page_Up:
+                /* step 1 minute backwards */
+                _player->seek(-1500, SEEK_CUR, FRAME_PLAY_UNIT);
+                break;
+            case XK_Page_Down:
+                /* step 1 minute forwards */
+                _player->seek(1500, SEEK_CUR, FRAME_PLAY_UNIT);
+                break;
+            case XK_Home:
+                _player->seek(0, SEEK_SET, FRAME_PLAY_UNIT);
+                break;
+            case XK_End:
+                _player->seek(0, SEEK_END, FRAME_PLAY_UNIT);
+                break;
+            case 'o':
+                _player->nextOSDScreen();
+                break;
+            case 't':
+                _player->nextOSDTimecode();
+                break;
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                _player->switchVideo(key - '0');
+                break;
+            case 'e':
+                _player->switchPrevAudioGroup();
+                break;
+            case 'p':
+                _player->snapAudioToVideo();
+                break;
+            case 'r':
+                _player->switchNextAudioGroup();
+                break;
+            case 'v':
+                _player->muteAudio(-1 /* toggle */);
+                break;
+            default:
+                break;
         }
     }
     
-    virtual void keyReleased(int key)
+    virtual void keyReleased(int key, int modifier)
     {
-        printf("Key released %d\n", key);
+        printf("Key released %d (modifier=%d)\n", key, modifier);
     }
 
     virtual void progressBarPositionSet(float position)
@@ -119,6 +183,10 @@ public:
         _player->seek((int64_t)(position * 1000), SEEK_SET, PERCENTAGE_PLAY_UNIT);
     }
 
+    virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos)
+    {
+        printf("Mouse clicked (x,y)=(%d,%d), (w,h)=(%d,%d)\n", xPos, yPos, imageWidth, imageHeight);
+    }
     
 private:
     LocalIngexPlayer* _player;
@@ -137,10 +205,10 @@ typedef struct {
 
   char                mrl[FILENAME_MAX];
 
-  X11PluginWindowInfo pluginInfo;
+  X11WindowInfo pluginInfo;
   auto_ptr<LocalIngexPlayer> player;
   auto_ptr<TestIngexPlayerListener> listener;
-  vector<string> filenames;
+  vector<PlayerInput> inputs;
   vector<bool> opened;
 
   pthread_mutex_t     mutex;
@@ -398,6 +466,7 @@ NPError NPP_New (NPMIMEType mimetype, NPP instance, uint16 mode,
   ingex_plugin_t       *priv;
   pthread_mutexattr_t  attr;
   int                  i;
+  PlayerInput          input;
 
   log ("NPP_New( mimetype=%s, instance=%p, mode=%d, saved=%p )",
        mimetype, instance, mode, saved);
@@ -425,7 +494,10 @@ NPError NPP_New (NPMIMEType mimetype, NPP instance, uint16 mode,
 		if (! *argv[i])
 			return NPERR_INVALID_PARAM;
         strncpy(priv->mrl, argv[i], sizeof(priv->mrl));
-		priv->filenames.push_back(priv->mrl);
+        input.type = MXF_INPUT;
+        input.name = priv->mrl;
+        input.options.clear(); 
+		priv->inputs.push_back(input);
     }
   }
 
@@ -476,11 +548,13 @@ NPError NPP_SetWindow (NPP instance, NPWindow *window)
 
 	  // Set Display to NULL to make ingex_player open new connection with XOpenDisplay.
 	  // The separate connection will avoid having to use XLockDisplay, XUnlockDisplay.
-	  priv->pluginInfo.pluginDisplay = NULL;
-	  priv->pluginInfo.pluginWindow = priv->window;
-	  priv->player->setPluginInfo(&priv->pluginInfo);
+	  priv->pluginInfo.display = NULL;
+	  priv->pluginInfo.window = priv->window;
+	  priv->pluginInfo.gc = 0;
+	  priv->pluginInfo.deleteAtom = 0;
+	  priv->player->setWindowInfo(&priv->pluginInfo);
 
-	  priv->player->start(priv->filenames, priv->opened);
+	  priv->player->start(priv->inputs, priv->opened, false, 0);
     }
     else if (priv->w != window->width || priv->h != window->height) {
       log ("  window resized: %dx%d -> %dx%d.",

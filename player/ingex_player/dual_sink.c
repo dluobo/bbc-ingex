@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: dual_sink.c,v 1.8 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -796,7 +796,7 @@ fail:
 
 int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
     int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11PluginWindowInfo *pluginInfo, DualSink** dualSink)
+    const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
     
@@ -816,14 +816,14 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     {
         /* open buffered X11 XV display sink */    
         CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, pluginInfo, &newDualSink->x11XVDisplaySink));
+            scale, swScale, windowInfo, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
         /* open buffered X11 display sink */    
         CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
-            scale, swScale, pluginInfo, &newDualSink->x11DisplaySink));
+            scale, swScale, windowInfo, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 

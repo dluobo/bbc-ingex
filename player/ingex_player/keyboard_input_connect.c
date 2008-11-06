@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: keyboard_input_connect.c,v 1.8 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -159,7 +159,7 @@ static long get_elapsed_time(struct timeval* from)
 }
 
 
-static void default_key_pressed(void* data, int key)
+static void default_key_pressed(void* data, int key, int modifier)
 {
     KeyboardConnect* connect = (KeyboardConnect*)data;
     long elapsedTime;
@@ -384,7 +384,7 @@ static void default_key_pressed(void* data, int key)
     }
 }
 
-static void default_key_released(void* data, int key)
+static void default_key_released(void* data, int key, int modifier)
 {
     KeyboardConnect* connect = (KeyboardConnect*)data;
     MediaControlMode mode = mc_get_mode(connect->control);
@@ -411,7 +411,7 @@ static void default_key_released(void* data, int key)
     }
 }
 
-static void qc_key_pressed(void* data, int key)
+static void qc_key_pressed(void* data, int key, int modifier)
 {
     KeyboardConnect* connect = (KeyboardConnect*)data;
     long elapsedTime;
@@ -651,7 +651,7 @@ static void qc_key_pressed(void* data, int key)
     }
 }
 
-void qc_key_released(void* data, int key)
+void qc_key_released(void* data, int key, int modifier)
 {
     KeyboardConnect* connect = (KeyboardConnect*)data;
     MediaControlMode mode = mc_get_mode(connect->control);

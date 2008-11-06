@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayerListener.h,v 1.3 2008/10/29 17:49:55 john_f Exp $
+ * $Id: IngexPlayerListener.h,v 1.4 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -86,8 +86,8 @@ public:
     virtual void startOfSourceEvent(const FrameInfo* firstReadFrameInfo) = 0;
     virtual void playerCloseRequested() = 0;
     virtual void playerClosed() = 0;
-    virtual void keyPressed(int key) = 0;
-    virtual void keyReleased(int key) = 0;
+    virtual void keyPressed(int key, int modifier) = 0;
+    virtual void keyReleased(int key, int modifier) = 0;
     virtual void progressBarPositionSet(float position) = 0;
     virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos) = 0;
     

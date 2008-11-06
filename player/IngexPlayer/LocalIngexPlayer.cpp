@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.11 2008/11/06 11:30:09 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.12 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -481,7 +481,7 @@ static void player_closed(void* data)
     }
 }
 
-static void x11_key_pressed(void* data, int key)
+static void x11_key_pressed(void* data, int key, int modifier)
 {
     LocalIngexPlayer* player = (LocalIngexPlayer*)data;
     
@@ -490,11 +490,11 @@ static void x11_key_pressed(void* data, int key)
     vector<IngexPlayerListener*>::const_iterator iter;
     for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
     {
-        (*iter)->keyPressed(key);
+        (*iter)->keyPressed(key, modifier);
     }
 }
 
-static void x11_key_released(void* data, int key)
+static void x11_key_released(void* data, int key, int modifier)
 {
     LocalIngexPlayer* player = (LocalIngexPlayer*)data;
     
@@ -503,7 +503,7 @@ static void x11_key_released(void* data, int key)
     vector<IngexPlayerListener*>::const_iterator iter;
     for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
     {
-        (*iter)->keyReleased(key);
+        (*iter)->keyReleased(key, modifier);
     }
 }
 
@@ -545,7 +545,8 @@ _nextVideoSplit(videoSplit), _videoSplit(videoSplit),
 _numFFMPEGThreads(numFFMPEGThreads),
 _initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
 _applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize), 
-_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), _x11WindowName("Ingex Player"), 
+_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), 
+_x11WindowName("Ingex Player"), 
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
 _disablePCAudio(disablePCAudio), _audioDevice(audioDevice), 
@@ -560,8 +561,9 @@ LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
 _nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
 _numFFMPEGThreads(4),
 _initiallyLocked(false), _useWorkerThreads(true), 
-_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false), _pluginInfo(NULL),
-_x11WindowName("Ingex Player"), _scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
+_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false), 
+_x11WindowName("Ingex Player"), 
+_scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
 _numAudioLevelMonitors(2), _audioLineupLevel(-18.0), 
 _enableAudioSwitch(true)
 {
@@ -608,6 +610,10 @@ void LocalIngexPlayer::initialise()
     _x11MouseListener.click = x11_mouse_clicked;
     
     memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
+    
+    memset(&_windowInfo, 0, sizeof(_windowInfo));
+    memset(&_localWindowInfo, 0, sizeof(_localWindowInfo));
+    memset(&_externalWindowInfo, 0, sizeof(_externalWindowInfo));
     
     pthread_rwlock_init(&_listenersRWLock, NULL);
     pthread_rwlock_init(&_playStateRWLock, NULL);
@@ -669,9 +675,9 @@ bool LocalIngexPlayer::x11XVIsAvailable()
     return xvsk_check_is_available() == 1;
 }
 
-void LocalIngexPlayer::setPluginInfo(X11PluginWindowInfo *pluginInfo)
+void LocalIngexPlayer::setWindowInfo(const X11WindowInfo* windowInfo)
 {
-    _pluginInfo = pluginInfo;
+    _externalWindowInfo = *windowInfo;
 }
 
 void LocalIngexPlayer::setOutputType(PlayerOutputType outputType, float scale)
@@ -739,6 +745,8 @@ bool LocalIngexPlayer::close()
         }
         
         SAFE_DELETE(&currentPlayState);
+
+        x11c_close_window(&_localWindowInfo);
     }
     catch (...)
     {
@@ -747,7 +755,7 @@ bool LocalIngexPlayer::close()
     return true;
 }
 
-bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, bool startPaused)
+bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, bool startPaused, int64_t startPosition)
 {
     auto_ptr<LocalIngexPlayerState> newPlayState;
     MultipleMediaSources* multipleSource = 0;
@@ -1089,6 +1097,15 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 resetPlayer = false;
             }
+            else if (_actualOutputType != DVS_OUTPUT && 
+                _externalWindowInfo.window != 0 &&
+                memcmp(&_windowInfo, &_externalWindowInfo, sizeof(_windowInfo)) != 0)
+            {
+                // external window info has changed - stop the player
+                SAFE_DELETE(&currentPlayState);
+                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                resetPlayer = false;
+            }
             
             if (resetPlayer)
             {
@@ -1160,13 +1177,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             
             
             _disableSDIOSD = _nextDisableSDIOSD;
-        
 
+            
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
+                    CHK_OTHROW(setOrCreateX11Window());
                     CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, _pluginInfo, &x11Sink),
+                        _scale, swScale, &_windowInfo, &x11Sink),
                         ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
@@ -1180,8 +1198,9 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     break;
         
                 case X11_XV_OUTPUT:
+                    CHK_OTHROW(setOrCreateX11Window());
                     CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
-                        _scale, swScale, _pluginInfo, &x11XVSink),
+                        _scale, swScale, &_windowInfo, &x11XVSink),
                         ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
@@ -1195,15 +1214,17 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     break;
         
                 case DVS_OUTPUT:
+                    closeLocalX11Window();
                     CHK_OTHROW_MSG(dvs_open(_dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
                         ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
                     
                 case DUAL_DVS_X11_OUTPUT:
+                    CHK_OTHROW(setOrCreateX11Window());
                     CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -1214,9 +1235,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     break;
                     
                 case DUAL_DVS_X11_XV_OUTPUT:
+                    CHK_OTHROW(setOrCreateX11Window());
                     CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
                         _disableX11OSD, &_pixelAspectRatio, 
-                        &_monitorAspectRatio, _scale, swScale, 1, _pluginInfo, &dualSink),
+                        &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
@@ -1301,6 +1323,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         // start with player state screen
         mc_set_osd_screen(ply_get_media_control(newPlayState->mediaPlayer), OSD_PLAY_STATE_SCREEN);
 
+        
+        // seek to the start position
+        if (startPosition > 0)
+        {
+            mc_seek(ply_get_media_control(newPlayState->mediaPlayer), startPosition, SEEK_SET, FRAME_PLAY_UNIT);
+        }
+        
         
         // start play thread 
     
@@ -2145,4 +2174,49 @@ bool LocalIngexPlayer::review(int64_t duration)
     }
     return true;
 }
+
+
+bool LocalIngexPlayer::setOrCreateX11Window()
+{
+    if (_externalWindowInfo.window != 0)
+    {
+        closeLocalX11Window();
+        
+        /* use the externally provided window */
+        _windowInfo = _externalWindowInfo;
+    }
+    else
+    {
+        if (_localWindowInfo.window == 0)
+        {
+            /* create a locally provided window */
+            if (x11c_open_display(&_localWindowInfo.display))
+            {
+                if (!x11c_create_window(&_localWindowInfo, 720, 576, _x11WindowName.c_str()))
+                {
+                    ml_log_error("Failed to create X11 window\n");
+                    return false;
+                }
+            }
+            else
+            {
+                ml_log_error("Failed to open X11 display\n");
+                return false;
+            }
+        }
+
+        _windowInfo = _localWindowInfo;
+    }
+    
+    return true;
+}
+
+void LocalIngexPlayer::closeLocalX11Window()
+{
+    if (_localWindowInfo.window != 0)
+    {
+        x11c_close_window(&_localWindowInfo);
+    }
+}
+
 

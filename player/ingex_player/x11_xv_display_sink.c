@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.7 2008/11/06 19:56:56 john_f Exp $
  *
  *
  *
@@ -346,7 +346,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         return 1;
     }
     
-    CHK_OFAIL(x11c_open_display(&sink->x11Common));
+    CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
 
     sink->inputWidth = streamInfo->width;   
     sink->inputHeight = streamInfo->height;
@@ -470,7 +470,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     
     /* Check that we have access to an XVideo port providing this chroma    */
     /* Commonly supported chromas: YV12, I420, YUY2, YUY2                   */
-    sink->xvport = XVideoGetPort(sink->x11Common.display, sink->frameFormat, -1);
+    sink->xvport = XVideoGetPort(sink->x11Common.windowInfo.display, sink->frameFormat, -1);
     if (sink->xvport < 0)
     {
         ml_log_error("Cannot find an xv port for requested video format\n");
@@ -480,8 +480,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     /* check if we can use shared memory */
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
     
-    CHK_OFAIL(x11c_create_window(&sink->x11Common, sink->initialDisplayWidth, sink->initialDisplayHeight, 
-        sink->width, sink->height));
+    CHK_OFAIL(x11c_init_window(&sink->x11Common, sink->initialDisplayWidth, sink->initialDisplayHeight, sink->width, sink->height));
 
     sink->displayInitialised = 1;
     sink->displayInitFailed = 0;
@@ -600,16 +599,16 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
         
         if (sink->useSharedMemory)
         {
-            XvShmPutImage(sink->x11Common.display, sink->xvport, sink->x11Common.window, 
-                sink->x11Common.gc, frame->yuv_image,
+            XvShmPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window, 
+                sink->x11Common.windowInfo.gc, frame->yuv_image,
                 0, 0, frame->yuv_image->width, frame->yuv_image->height,
                 0, 0, sink->x11Common.displayWidth, sink->x11Common.displayHeight,
                 False);
         }
         else
         {
-            XvPutImage(sink->x11Common.display, sink->xvport, sink->x11Common.window, 
-                sink->x11Common.gc, frame->yuv_image,
+            XvPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window, 
+                sink->x11Common.windowInfo.gc, frame->yuv_image,
                 0, 0, frame->yuv_image->width, frame->yuv_image->height,
                 0, 0, sink->x11Common.displayWidth, sink->x11Common.displayHeight);
         }
@@ -707,7 +706,7 @@ static int init_frame(X11DisplayFrame* frame)
 
     if (sink->useSharedMemory)
     {
-        frame->yuv_image = XvShmCreateImage(sink->x11Common.display, sink->xvport,
+        frame->yuv_image = XvShmCreateImage(sink->x11Common.windowInfo.display, sink->xvport,
             sink->frameFormat, NULL, sink->width, sink->height, &frame->yuv_shminfo);
         if (frame->yuv_image->data_size != sink->frameSize)
         {
@@ -723,10 +722,10 @@ static int init_frame(X11DisplayFrame* frame)
             frame->yuv_shminfo.shmaddr = frame->yuv_image->data;
             frame->yuv_shminfo.readOnly = False;
         
-            result = XShmAttach(sink->x11Common.display, &frame->yuv_shminfo);
+            result = XShmAttach(sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
             if (result)
             {
-                XSync(sink->x11Common.display, False);
+                XSync(sink->x11Common.windowInfo.display, False);
                 shmctl(frame->yuv_shminfo.shmid, IPC_RMID, 0);
             }
             else
@@ -737,7 +736,7 @@ static int init_frame(X11DisplayFrame* frame)
     }
     else
     {
-        frame->yuv_image = XvCreateImage(sink->x11Common.display, sink->xvport, sink->frameFormat, 
+        frame->yuv_image = XvCreateImage(sink->x11Common.windowInfo.display, sink->xvport, sink->frameFormat, 
             NULL, sink->width, sink->height);
         if (frame->yuv_image->data_size != sink->frameSize)
         {
@@ -923,7 +922,7 @@ static void xvskf_free(void* data)
         return;
     }
 
-    if (frame->sink != NULL && frame->sink->x11Common.display != NULL)
+    if (frame->sink != NULL && frame->sink->x11Common.windowInfo.display != NULL)
     {
         if (frame->yuv_image != NULL)
         {
@@ -937,7 +936,7 @@ static void xvskf_free(void* data)
             
             if (frame->sink->useSharedMemory)
             {
-                XShmDetach(frame->sink->x11Common.display, &frame->yuv_shminfo);
+                XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
                 shmdt(frame->yuv_shminfo.shmaddr);
             }
             else
@@ -1129,9 +1128,9 @@ static void xvsk_close(void* data)
         sink->osd = NULL;
     }
     
-    if (sink->xvport >= 0 && sink->x11Common.display != NULL)
+    if (sink->xvport >= 0 && sink->x11Common.windowInfo.display != NULL)
     {
-        XVideoReleasePort(sink->x11Common.display, sink->xvport);
+        XVideoReleasePort(sink->x11Common.windowInfo.display, sink->xvport);
     }
     x11c_clear(&sink->x11Common);
     
@@ -1256,7 +1255,7 @@ int xvsk_check_is_available()
 
 
 int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
-    const Rational* monitorAspectRatio, float scale, int swScale, X11PluginWindowInfo *pluginInfo, X11XVDisplaySink** sink)
+    const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11XVDisplaySink** sink)
 {
     X11XVDisplaySink* newSink;
     
@@ -1302,7 +1301,7 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
         osd_set_listener(newSink->osd, &newSink->osdListener);
     }
     
-    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, pluginInfo));
+    CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, windowInfo));
 
     gettimeofday(&newSink->lastFrameTime, NULL);
     
