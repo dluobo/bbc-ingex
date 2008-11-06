@@ -101,9 +101,10 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_MENU( MENU_DisablePlayer, IngexguiFrame::OnDisablePlayer )
 	EVT_MENU( MENU_PlayMOV, IngexguiFrame::OnPlayerOpenFile )
 	EVT_MENU( MENU_PlayMXF, IngexguiFrame::OnPlayerOpenFile )
-	EVT_MENU( MENU_AbsoluteTimecode, IngexguiFrame::OnPlayerOSDTypeChange )
-	EVT_MENU( MENU_RelativeTimecode, IngexguiFrame::OnPlayerOSDTypeChange )
-	EVT_MENU( MENU_NoOSD, IngexguiFrame::OnPlayerOSDTypeChange )
+	EVT_MENU( MENU_AbsoluteTimecode, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_RelativeTimecode, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_NoOSD, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_DisablePlayerSDIOSD, IngexguiFrame::OnPlayerOSDChange )
 	EVT_MENU( MENU_ExtOutput, IngexguiFrame::OnPlayerOutputTypeChange )
 	EVT_MENU( MENU_AccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
 	EVT_MENU( MENU_ExtAccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
@@ -256,6 +257,9 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	menuPlayerOSD->AppendRadioItem(MENU_NoOSD, wxT("&OSD Off"));
 	menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
 	menuPlayer->Append(MENU_PlayerOSD, wxT("Player On Screen Display"), menuPlayerOSD);
+#ifdef HAVE_DVS
+	menuPlayer->AppendCheckItem(MENU_DisablePlayerSDIOSD, wxT("Disable player SDI On Screen Display"));
+#endif
 	menuBar->Append(menuPlayer, wxT("&Player"));
 
 	//Help menu
@@ -396,7 +400,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	recordPage->SetSizer(recordPageSizer);
 	wxStaticBoxSizer * recProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Project"));
 	recordPageSizer->Add(recProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-	mRecProjectNameCtrl = new wxStaticText(recordPage, -1, mRecorderGroup->GetCurrentProjectName());
+	mRecProjectNameCtrl = new wxStaticText(recordPage, wxID_ANY, mRecorderGroup->GetCurrentProjectName());
 	recProjectNameBox->Add(mRecProjectNameCtrl, 1, wxEXPAND);
 	wxStaticBoxSizer * descriptionBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Description"));
 	recordPageSizer->Add(descriptionBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
@@ -417,10 +421,10 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	mNotebook->AddPage(playbackPage, wxT("Playback"));
 	wxBoxSizer * playbackPageSizer = new wxBoxSizer(wxVERTICAL);
 	playbackPage->SetSizer(playbackPageSizer);
-	wxStaticBoxSizer * playProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Project"));
-	playbackPageSizer->Add(playProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-	mPlayProjectNameCtrl = new wxStaticText(playbackPage, -1, wxT(""));
-	playProjectNameBox->Add(mPlayProjectNameCtrl, 1, wxEXPAND);
+	mPlayProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Project"));
+	playbackPageSizer->Add(mPlayProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mPlayProjectNameCtrl = new wxStaticText(playbackPage, wxID_ANY, wxT(""));
+	mPlayProjectNameBox->Add(mPlayProjectNameCtrl, 1, wxEXPAND);
 	wxStaticBoxSizer * playbackTracksBox = new wxStaticBoxSizer(wxHORIZONTAL, playbackPage, wxT("Tracks"));
 	playbackPageSizer->Add(playbackTracksBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
 	mPlaybackTrackSelector = new DragButtonList(playbackPage);
@@ -442,7 +446,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	sizer2dH->Add(mNextTakeButton, 0, wxALL, CONTROL_BORDER);
 //	mJumpToTimecodeButton = new wxButton(eventPanel, BUTTON_JumpToTimecode, wxT("Jump to Timecode"));
 //	sizer2dH->Add(mJumpToTimecodeButton, 0, wxALL, CONTROL_BORDER);
-	mPlayFileButton = new wxToggleButton(eventPanel, BUTTON_PlayFile, wxT("Play file"));
+	mPlayFileButton = new wxToggleButton(eventPanel, BUTTON_PlayFile, wxT("Play files"));
 	sizer2dH->Add(mPlayFileButton, 0, wxALL, CONTROL_BORDER);
 	sizer2dH->AddStretchSpacer();
 	mDeleteCueButton = new wxButton(eventPanel, BUTTON_DeleteCue, wxT("Delete Cue Point"));
@@ -598,21 +602,31 @@ void IngexguiFrame::OnClearLog( wxCommandEvent& WXUNUSED(event) )
 	ClearLog();
 }
 
-/// Responds to OSD type menu requests by communicating the OSD type to the player.
+/// Responds to OSD-related menu requests by communicating with the player.
 /// @param event The command event.
-void IngexguiFrame::OnPlayerOSDTypeChange( wxCommandEvent& event )
+void IngexguiFrame::OnPlayerOSDChange( wxCommandEvent& WXUNUSED(event) )
 {
-	switch (event.GetId()) {
-		case MENU_AbsoluteTimecode :
-			mPlayer->SetOSD(prodauto::SOURCE_TIMECODE);
-			break;
-		case MENU_RelativeTimecode :
-			mPlayer->SetOSD(prodauto::CONTROL_TIMECODE);
-			break;
-		default :
-			mPlayer->SetOSD(prodauto::OSD_OFF);
-			break;
+	if (GetMenuBar()->FindItem(MENU_AbsoluteTimecode)->IsChecked()) {
+		mPlayer->SetOSD(prodauto::SOURCE_TIMECODE);
+#ifdef HAVE_DVS
+		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable();
+#endif
 	}
+	else if (GetMenuBar()->FindItem(MENU_RelativeTimecode)->IsChecked()) {
+		mPlayer->SetOSD(prodauto::CONTROL_TIMECODE);
+#ifdef HAVE_DVS
+		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable();
+#endif
+	}
+	else { //OSD off
+		mPlayer->SetOSD(prodauto::OSD_OFF);
+#ifdef HAVE_DVS
+		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable(false);
+#endif
+	}
+#ifdef HAVE_DVS
+	mPlayer->EnableSDIOSD(!GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->IsChecked());
+#endif
 }
 
 /// Responds to a player type/size menu requests by communicating with the player and enabling/disabling other menu items as appropriate.
@@ -1513,13 +1527,19 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 	if (MENU_PlayMOV == event.GetId()) {
 		wxFileDialog dlg(this, wxT("Choose a MOV file"), wxT(""), wxT(""), wxT("MOV files |*.mov;*.MOV|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR); //select single file only
 		if (wxID_OK == dlg.ShowModal()) {
+			mFileModeMovFile = dlg.GetPath();
+			mFileModeFiles.Clear();
+			mFileModeFrameOffset = 0; //remembers offset when toggling between file and event views
+			mPlayFileButton->SetValue(true); //go into file mode if not already in that mode
+			UpdatePlayerAndEventControls(true); //reload player
 		}
 	}
 	else { //MXF
 		wxFileDialog dlg(this, wxT("Choose one or more MXF files"), wxT(""), wxT(""), wxT("MXF files|*.mxf;*.MXF|All files|*.*"), wxFD_FILE_MUST_EXIST | wxFD_CHANGE_DIR | wxFD_MULTIPLE); //select multiple files
 		if (wxID_OK == dlg.ShowModal()) { //at least one file has been chosen
 			dlg.GetPaths(mFileModeFiles);
-			mFileModeFrameOffset = 0;
+			mFileModeMovFile.Clear();
+			mFileModeFrameOffset = 0; //remembers offset when toggling between file and event views
 			mPlayFileButton->SetValue(true); //go into file mode if not already in that mode
 			UpdatePlayerAndEventControls(true); //reload player
 		}
@@ -1707,7 +1727,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
-			mPlayFileButton->Enable(mFileModeFiles.GetCount());
+			mPlayFileButton->Enable(mFileModeFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 		case RUNNING_UP:
 			if (changed) {
@@ -1797,7 +1817,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
-			mPlayFileButton->Enable(mFileModeFiles.GetCount());
+			mPlayFileButton->Enable(mFileModeFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 		case PLAYING_BACKWARDS:
 			if (changed) {
@@ -1816,7 +1836,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStopButton->SetToolTip(wxT(""));
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
-			mPlayFileButton->Enable(mFileModeFiles.GetCount());
+			mPlayFileButton->Enable(mFileModeFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 		case PAUSED:
 			if (changed) {
@@ -1835,7 +1855,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
-			mPlayFileButton->Enable(mFileModeFiles.GetCount());
+			mPlayFileButton->Enable(mFileModeFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 	}
 	UpdatePlayerAndEventControls();
@@ -1853,10 +1873,20 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 			//load player with file mode data
 			std::vector<std::string> fileNames;
 			std::vector<std::string> trackNames;
-			ProdAuto::MxfTimecode editRate;
-			mPlayProjectNameCtrl->SetLabel(mPlaybackTrackSelector->SetMXFFiles(mFileModeFiles, fileNames, trackNames, editRate));
-			mTimepos->SetDefaultEditRate(editRate); //allows position display to work in case we haven't got it from anywhere else
-			mPlayer->Load(&fileNames, &trackNames, mFileModeFrameOffset);
+			if (mFileModeMovFile.IsEmpty()) { //MXF files
+				ProdAuto::MxfTimecode editRate;
+				mPlayProjectNameCtrl->SetLabel(mPlaybackTrackSelector->SetMXFFiles(mFileModeFiles, fileNames, trackNames, editRate));
+				mTimepos->SetDefaultEditRate(editRate); //allows position display to work in case we haven't got it from anywhere else
+				mPlayer->Load(&fileNames, &trackNames, prodauto::MXF_INPUT, mFileModeFrameOffset);
+				mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Project"));
+			}
+			else { //MOV file
+				fileNames.push_back((const char*)mFileModeMovFile.mb_str(*wxConvCurrent));
+				trackNames.push_back((const char*)mFileModeMovFile.mb_str(*wxConvCurrent));
+				mPlayProjectNameCtrl->SetLabel(mFileModeMovFile);
+				mPlayer->Load(&fileNames, &trackNames, prodauto::FFMPEG_INPUT, mFileModeFrameOffset);
+				mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Filename"));
+			}
 			mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
 		}
 		mPrevTakeButton->Disable();
@@ -1895,7 +1925,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 					std::vector<std::string> trackNames;
 					mPlaybackTrackSelector->SetTracks(*currentTakeInfo, fileNames, trackNames);
 					//load files and jump to current position
-					mPlayer->Load(&fileNames, &trackNames, mTakeModeFrameOffset, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
+					mPlayer->Load(&fileNames, &trackNames, prodauto::MXF_INPUT, mTakeModeFrameOffset, mCurrentTakeInfo->GetCuePointFrames(), mCurrentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - mCurrentTakeInfo->GetStartIndex());
 					mLastPlayingBackwards = false; //no point continuing the default play direction of the previous take
 				}
 				else if ((unsigned long) mEventList->GetFirstSelected() != mCurrentSelectedEvent || forceNewCuePoint) { //only the selected event has changed
@@ -1962,7 +1992,10 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 			mPlayProjectNameCtrl->SetLabel(wxT(""));
 			mCurrentTakeInfo = 0; //no takes
 			mCurrentSelectedEvent = 0;
+			mPlayer->Reset();
+			mPlaybackTrackSelector->Clear();
 		}
+		mPlayProjectNameBox->GetStaticBox()->SetLabel(wxT("Project"));
 	} //not file mode
 	//player shortcuts
 	UpdateTextShortcutStates();

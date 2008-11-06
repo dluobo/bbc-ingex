@@ -1,3 +1,5 @@
+    # $Id: configure.in,v 1.9 2008/11/06 11:05:30 john_f Exp $
+#
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
 
@@ -46,7 +48,7 @@ else
 fi
 
 # WORKSPACE is set to the ingex top-level directory
-WORKSPACE=`pwd | xargs dirname | xargs dirname | xargs dirname`
+WORKSPACE=`pwd | sed 's/\(.*\/Ingexgui\/\).*/\1/' | xargs dirname | xargs dirname | xargs dirname`
 
 AC_DEFUN([PLAYERTEST],
 [

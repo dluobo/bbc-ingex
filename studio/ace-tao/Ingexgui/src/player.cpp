@@ -117,11 +117,12 @@ void Player::Enable(bool state)
 /// If player is disabled, stores the given filenames for later.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param trackNames List of track names corresponding to fileNames, for display as the player window title.
+/// @param inputType The type of the files
 /// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
-void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Load" << std::endl;
 	std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
@@ -138,7 +139,7 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 			}
 		}
 		//load the player (this will merely store the parameters if the player is not enabled
-		if (!Start(fileNames, trackNames, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
+		if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
 			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
 			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
 		}
@@ -151,24 +152,26 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 /// This method is the same as Load() except that it does not manipulate the polling timer.
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param trackNames Corresponding list of track names, for display as the player window title.
+/// @param inputType The type of the files
 /// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
 /// @return True if all files were opened.
-bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
 {
 //std::cerr << "Player Start" << std::endl;
 	if (fileNames) {
 		//a new set of files
 		mFileNames.clear();
-		mTrackNames.clear();
 		for (size_t i = 0; i < fileNames->size(); i++) {
 			mFileNames.push_back((*fileNames)[i]);
 		}
+		mTrackNames.clear();
 		for (size_t i = 0; i < trackNames->size(); i++) {
 			mTrackNames.push_back((*trackNames)[i]);
 		}
+		mInputType = inputType;
 		mCuePoints.clear();
 		mListener->ClearCuePoints();
 		mStartIndex = startIndex;
@@ -187,18 +190,21 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 	if (mEnabled) {
 		mOpened.clear();
 		mAtEnd = false;
-		mOK = start(mFileNames, mOpened);
+		std::vector<PlayerInput> inputs;
+		for (size_t i = 0; i < mFileNames.size(); i++) {
+			PlayerInput input;
+			input.name = mFileNames[i];
+			input.type = mInputType;
+			inputs.push_back(input);
+		}
+		mOK = start(inputs, mOpened, PAUSE == mMode || STOP == mMode); //play forwards or paused
 		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
 			//(re)loading stored cue points
 			for (size_t i = 0; i < mCuePoints.size(); i++) {
 				markPosition(mCuePoints[i], 0); //so that an event is generated at each cue point
 			}
-			//player starts off in play forwards mode
-			if (PAUSE == mMode || STOP == mMode) {
-				pause();
-			}
-			else if (PLAY_BACKWARDS == mMode) {
+			if (PLAY_BACKWARDS == mMode) {
 				playSpeed(-1);
 			}
 			SetOSD(mOSDtype);
@@ -351,7 +357,7 @@ void Player::Reset()
 {
 //std::cerr << "Player Reset" << std::endl;
 	mFilePollTimer->Stop();
-	mFileNames.clear(); //to indicate that nothing's loaded if player is disabled
+//	mFileNames.clear(); //to indicate that nothing's loaded if player is disabled
 	if (mOK) {
 		reset();
 		setX11WindowName("Ingex Player - no files");
@@ -409,6 +415,13 @@ void Player::SetOSD(const OSDtype type)
 	}
 }
 
+/// Enable/disable OSD on the SDI output
+/// @param enabled True to enable.
+void Player::EnableSDIOSD(bool enabled)
+{
+	setSDIOSDEnable(enabled);
+}
+
 /// Sets how the player appears.
 /// @param outputType Whether external, on-screen or both, and whether on-screen is accelerated.
 void Player::SetOutputType(const PlayerOutputType outputType)
@@ -436,7 +449,7 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 			AddPendingEvent(guiFrameEvent);
 		}
 		mLastFrameDisplayed = event.GetExtraLong();
-		mAtEnd = (int) event.GetClientData();
+		mAtEnd = (bool) event.GetClientData();
 	}
 	//tell the gui so it can update the position display
 	event.Skip();

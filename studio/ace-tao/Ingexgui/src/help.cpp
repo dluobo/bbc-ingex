@@ -85,7 +85,12 @@ HelpDlg::HelpDlg(wxWindow * parent)
 #ifdef HAVE_DVS
 	message += wxT("  Note that due to inadequacies in the current versions of the SDI card firmware, if SDI playback is enabled, the player consumes CPU power even during recording when the screen is blank.");
 #endif
-	message += wxT("\n\nThe #Player# menu also contains options to show burnt-in position instead of timecode, or no burnt-in display at all.  Another option allows an \"unaccelerated\" player to be used, if the computer screen display is garbled due to a hardware incompatibility.  Normally, the controller tries to use an \"accelerated\" player, because this takes less processing power, has the correct aspect ratio, and can be re-sized.  Only one accelerated player can be in operation at a time, so a second controller will produce an unaccelerated player (indicated in the player's window header).  If the first controller is subsequently stopped, or its player closed, the second player will revert to accelerated when it loads a different recording.");
+	message += wxT("\n\nIt is possible to use the player to open arbitrary MXF and MOV files.  To do this, select the appropriate option from the #Player# menu and pick the files to play.  In the case of MXF, you can make a multiple selection, whereas you can only select one MOV file.  When you have chosen file(s) to play, the #Play files# button is enabled, which allows you to toggle between playing the file(s) and the list of takes.");
+	message += wxT("\n\nThe #Player# menu also contains options to show burnt-in position instead of timecode, or no burnt-in display at all");
+#ifdef HAVE_DVS
+	message += wxT(", or no burnt-in display on the SDI output");
+#endif
+	message += wxT(".  Another option allows an \"unaccelerated\" player to be used, if the computer screen display is garbled due to a hardware incompatibility.  Normally, the controller tries to use an \"accelerated\" player, because this takes less processing power, has the correct aspect ratio, and can be re-sized.  Only one accelerated player can be in operation at a time, so a second controller will produce an unaccelerated player (indicated in the player's window header).  If the first controller is subsequently stopped, or its player closed, the second player will revert to accelerated when it loads a different recording.");
 	StyleAndWrite(player, message);
 	notebook->AddPage(player, wxT("Video player and playback tab"));
 
@@ -133,6 +138,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifndef HAVE_DVS
 	message += wxT("not ");
 #endif
-	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.6 2008/10/08 10:16:06 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2008 - All rights reserved.\n\n$Date: 2008/10/08 10:16:06 $.");
+	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.7 2008/11/06 11:05:30 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2008 - All rights reserved.\n\n$Date: 2008/11/06 11:05:30 $.");
 	textBox->SetValue(message);
 };

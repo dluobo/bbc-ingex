@@ -101,9 +101,10 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		~Player();
 		bool IsOK();
 		void Enable(bool);
-		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void SelectTrack(const int);
 		void SetOSD(const OSDtype);
+		void EnableSDIOSD(bool = true);
 		void SetOutputType(const PlayerOutputType);
 		void Play();
 		void PlayBackwards();
@@ -118,7 +119,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		bool AtMaxReverseSpeed();
 //		std::vector<bool> GetFilesStatus();
 	private:
-		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void OnFrameDisplayed(wxCommandEvent&);
 //		void OnPlayerClosing(wxCommandEvent&);
 		void OnFilePollTimer(wxTimerEvent&);
@@ -135,6 +136,7 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		unsigned int mNFilesExisting;
 		std::vector<std::string> mFileNames;
 		std::vector<std::string> mTrackNames;
+		PlayerInputType mInputType;
 		std::vector<bool> mOpened;
 		std::vector<int64_t> mCuePoints;
 		long mLastFrameDisplayed;

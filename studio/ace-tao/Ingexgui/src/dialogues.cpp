@@ -161,7 +161,7 @@ SetProjectDlg::SetProjectDlg(wxWindow * parent, const wxSortedArrayString & proj
 	SetSizer(mainSizer);
 	wxStaticBoxSizer * mListSizer = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Project name for new recordings"));
 	mainSizer->Add(mListSizer, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-	mProjectList = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL); //ListBox is nicer but can't scroll it to show a new project name
+	mProjectList = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize); //ListBox is nicer but can't scroll it to show a new project name
 	mListSizer->Add(mProjectList, 1, wxEXPAND | wxALL, CONTROL_BORDER);
 	wxBoxSizer * buttonSizer1 = new wxBoxSizer(wxHORIZONTAL);
 	mainSizer->Add(buttonSizer1, 0, wxEXPAND);

@@ -154,6 +154,7 @@ class IngexguiFrame : public wxFrame
 		MENU_AbsoluteTimecode,
 		MENU_RelativeTimecode,
 		MENU_NoOSD,
+		MENU_DisablePlayerSDIOSD,
 		MENU_TestMode,
 		BUTTON_Record,
 		BUTTON_Stop,
@@ -204,7 +205,7 @@ class IngexguiFrame : public wxFrame
 		void OnStop(wxCommandEvent&);
 		void OnCue(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
-		void OnPlayerOSDTypeChange(wxCommandEvent&);
+		void OnPlayerOSDChange(wxCommandEvent&);
 		void OnPlayerOutputTypeChange(wxCommandEvent&);
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
@@ -258,6 +259,7 @@ class IngexguiFrame : public wxFrame
 		wxButton * mDescClearButton;
 		TickTreeCtrl * mTree;
 		wxStaticText * mRecProjectNameCtrl;
+		wxStaticBoxSizer * mPlayProjectNameBox;
 		wxStaticText * mPlayProjectNameCtrl;
 		wxTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
@@ -284,6 +286,7 @@ class IngexguiFrame : public wxFrame
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
 		wxArrayString mFileModeFiles;
+		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
 		int64_t mTakeModeFrameOffset;
 		DECLARE_EVENT_TABLE()
