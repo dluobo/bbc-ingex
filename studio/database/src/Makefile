@@ -14,7 +14,7 @@ DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
 
 libprodautodb.a: $(OBJECTS)
 	$(AR) $@ $(OBJECTS)
-	
+
 
 %.d : %.cpp
 	@echo Generating dependency file for $<; \
@@ -23,15 +23,14 @@ libprodautodb.a: $(OBJECTS)
 	rm -f $@.$$$$
 
 %.o: %.cpp
-	$(COMPILE) -c $< -o $@	
-	
+	$(COMPILE) -c $< -o $@
+
 
 .PHONY: clean
 clean:
 	@rm -f *.d *.o *.a *~
-	
-	
+
 
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(DEPENDENCIES)
-endif	
+endif
