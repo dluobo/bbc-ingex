@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.7 2008/10/29 17:49:55 john_f Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.8 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -346,7 +346,7 @@ int main (int argc, const char** argv)
     }
 
     CHECK(player->setX11WindowName("test 0"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     vector<PlayerInput>::const_iterator iterInputs;
     vector<bool>::const_iterator iterOpened;
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
@@ -363,23 +363,27 @@ int main (int argc, const char** argv)
         }
     }
     
+    CHECK(player->start(inputs, opened, true));
+    printf("Start paused\n");
+    sleep(5);
+    
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, true));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
     
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, true));
     printf("Actual output type = %d\n", player->getActualOutputType());
     sleep(2);
 
     player->setVideoSplit(NONA_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     sleep(2);
     
     player->setVideoSplit(QUAD_SPLIT_VIDEO_SWITCH);
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     sleep(2);
     
     CHECK(player->close());
@@ -399,7 +403,7 @@ int main (int argc, const char** argv)
     }
     
     CHECK(player->setX11WindowName("test 1"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -427,20 +431,11 @@ int main (int argc, const char** argv)
     sleep(1);
     CHECK(player->setX11WindowName("A new name"));
 
-    sleep(3);
-    printf("\nRestarting with non-existing files...\n\n");
-    opened.clear();
-    vector<string> badFilenames;
-    badFilenames.push_back("filenotexist.mxf");
-    CHECK(player->setX11WindowName("test 2"));
-    CHECK(player->start(badFilenames, opened) != 1);
-    
-    
     sleep(2);
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 3"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -486,6 +481,15 @@ int main (int argc, const char** argv)
     
     sleep(1);
     CHECK(player->togglePlayPause());
+    
+    
+    sleep(1);
+    printf("Audio muted\n");
+    CHECK(player->muteAudio(1));
+
+    sleep(3);
+    printf("Audio unmuted\n");
+    CHECK(player->muteAudio(0));
     
     sleep(1);
     CHECK(player->mark(0));
@@ -644,7 +648,7 @@ int main (int argc, const char** argv)
     printf("\nRestarting...\n\n");
     opened.clear();
     CHECK(player->setX11WindowName("test 4"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -680,7 +684,7 @@ int main (int argc, const char** argv)
 
     opened.clear();
     CHECK(player->setX11WindowName("test 5"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)
@@ -719,7 +723,7 @@ int main (int argc, const char** argv)
     
     opened.clear();
     CHECK(player->setX11WindowName("test 6"));
-    CHECK(player->start_2(inputs, opened));
+    CHECK(player->start(inputs, opened, false));
     for (iterInputs = inputs.begin(), iterOpened = opened.begin();
         iterInputs != inputs.end() && iterOpened != opened.end();
         iterInputs++, iterOpened++)

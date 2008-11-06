@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.6 2008/10/29 17:47:41 john_f Exp $
+ * $Id: dual_sink.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -730,6 +730,19 @@ static OnScreenDisplay* dusk_get_osd(void* data)
     return &dualSink->dualOSD;
 }
 
+static int dusk_mute_audio(void* data, int mute)
+{
+    DualSink* dualSink = (DualSink*)data;
+    int result;
+
+    CHK_ORET(check_dvs_is_open(dualSink));
+    
+    result = msk_mute_audio(dualSink->dvsSink, mute);
+    msk_mute_audio(dualSink->x11Sink, mute);
+
+    return result;
+}
+
 static void dusk_close(void* data)
 {
     DualSink* dualSink = (DualSink*)data;
@@ -838,6 +851,7 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->mediaSink.cancel_frame = dusk_cancel_frame;
     newDualSink->mediaSink.get_buffer_state = dusk_get_buffer_state;
     newDualSink->mediaSink.get_osd = dusk_get_osd;
+    newDualSink->mediaSink.mute_audio = dusk_mute_audio;
     newDualSink->mediaSink.reset_or_close = dusk_reset_or_close;
     newDualSink->mediaSink.close = dusk_close;
 

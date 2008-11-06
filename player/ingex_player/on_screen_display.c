@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: on_screen_display.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -1175,7 +1175,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     {
         for (i = 0; i < osdd->state->numAudioLevels; i++)
         {
-            if (osdd->state->audioStreamLevels[i].level >= osdd->state->minimumAudioLevel)
+            if (osdd->state->audioStreamLevels[i].level != osdd->state->nullAudioLevel)
             {
                 hideAudioLevels = 0;
                 break;
@@ -3305,6 +3305,7 @@ static void osds_set_minimum_audio_stream_level(void* data, double level)
     OnScreenDisplayState* state = (OnScreenDisplayState*)data;
     
     state->minimumAudioLevel = level;
+    state->nullAudioLevel = state->minimumAudioLevel - 10;
 }
 
 static void osds_set_audio_lineup_level(void* data, float level)
@@ -3321,7 +3322,7 @@ static void osds_reset_audio_stream_levels(void* data)
     
     for (i = 0; i < state->numAudioLevels; i++)
     {
-        state->audioStreamLevels[i].level = state->minimumAudioLevel - 1;
+        state->audioStreamLevels[i].level = state->nullAudioLevel;
     }
 }
 
@@ -3342,7 +3343,7 @@ static int osds_register_audio_stream(void* data, int streamId)
     {
         /* add new stream */
         state->audioStreamLevels[state->numAudioLevels].streamId = streamId;
-        state->audioStreamLevels[state->numAudioLevels].level = state->minimumAudioLevel - 1;
+        state->audioStreamLevels[state->numAudioLevels].level = state->nullAudioLevel;
         state->numAudioLevels++;
         return 1;
     }
@@ -3473,6 +3474,7 @@ int osds_create(OnScreenDisplayState** state)
     CALLOC_ORET(newState, OnScreenDisplayState, 1);
     
     newState->minimumAudioLevel = -96;
+    newState->nullAudioLevel = newState->minimumAudioLevel - 10;
     newState->audioLineupLevel = -18;
     
     /* only implement functions that are for changing the state - we don't expect the other funcs to be called */
@@ -3618,7 +3620,7 @@ void osds_reset(OnScreenDisplayState* state)
 
     for (i = 0; i < state->numAudioLevels; i++)
     {
-        state->audioStreamLevels[i].level = state->minimumAudioLevel - 1; 
+        state->audioStreamLevels[i].level = state->nullAudioLevel; 
     }
 }
 

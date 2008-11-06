@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.6 2008/10/29 17:47:41 john_f Exp $
+ * $Id: frame_info.h,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -194,6 +194,8 @@ typedef struct
     int reversePlay; /* true if the player is playing in reverse */
     
     int isRepeat; /* true if frame is a repeat of the last frame */
+    
+    int muteAudio; /* true for the first frame when the player starts in paused mode */
     
     int locked; /* true if player controls are locked */
     

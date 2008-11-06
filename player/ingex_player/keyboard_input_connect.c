@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: keyboard_input_connect.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -81,6 +81,7 @@ static const ControlInputHelp g_defaultKeyboardInputHelp[] =
     {"'f'", "Toggle show half split as black line"},
     {"'g'", "Move half split in left/upwards direction"},
     {"'h'", "Move half split in right/downwards direction"},
+    {"'v'", "Toggle audio mute"},
     {"1..9", "Switch to video #"},
     {"0", "Switch to quad-split video"},
     {"e", "Switch to previous audio group"},
@@ -353,7 +354,9 @@ static void default_key_pressed(void* data, int key)
             }
             mc_move_half_split(connect->control, 1 /* right or up */, connect->halfSplitSpeed);
             break;
-            
+        case 'v':
+            mc_mute_audio(connect->control, -1 /* toggle */);
+            break;
         case XK_Return:
             if (mode == MENU_MODE)
             {

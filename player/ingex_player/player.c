@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.11 2008/10/29 17:47:42 john_f Exp $
+ * $Id: player.c,v 1.12 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -764,7 +764,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --lock                   Start with lock on\n");
     fprintf(stderr, "  --fthreads <num>         Number if FFMPEG threads to use when decoding (default = 4)\n");
     fprintf(stderr, "  --wthreads               Use worker threads for decoding essence\n");
-    fprintf(stderr, "  --qc-control             Use the QC media control mappings\n");
+    fprintf(stderr, "  --qc-control             Use the QC media control mappings and start with the player paused\n");
     fprintf(stderr, "  --qc-session <prefix>        Log quality control session to file with filename <prefix>_qclog_yyyymmdd_hhmmss.txt\n");
     fprintf(stderr, "  --exit-at-end            Close the player when the end of stream is reached\n");
     fprintf(stderr, "  --src-buf  <size>        Size of the media source buffer (default is 0)\n");
@@ -816,6 +816,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --clip-duration <dur>    Set the clip duration (hh:mm:ss:ff or frame count)\n");
     fprintf(stderr, "  --start <frame>          Start playing at frame (hh:mm:ss:ff or frame count)\n");
     fprintf(stderr, "  [--pb-mark-mask <val>]*  32-bit mask for marks to show on the (next) progress bar (decimal or 0x hex)\n");
+    fprintf(stderr, "  --start-paused           Start with the player paused\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
@@ -943,6 +944,7 @@ int main(int argc, const char **argv)
     char sessionComments[MAX_SESSION_COMMENTS_SIZE];
     int dvsCard = -1;
     int dvsChannel = -1;
+    int startPaused = 0;
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -1692,6 +1694,11 @@ int main(int argc, const char **argv)
             }
             numMarkSelections++;
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--start-paused") == 0)
+        {
+            startPaused = 1;
+            cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "-m") == 0 ||
             strcmp(argv[cmdlnIndex], "--mxf") == 0)
@@ -2741,7 +2748,7 @@ int main(int argc, const char **argv)
     gettimeofday(&startTime, NULL);
     ml_log_file_flush();
 
-    if (!ply_start_player(g_player.mediaPlayer))
+    if (!ply_start_player(g_player.mediaPlayer, (startPaused || qcControl)))
     {
         ml_log_error("Media player failed to play\n");
         goto fail;

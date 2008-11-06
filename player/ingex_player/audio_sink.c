@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: audio_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -68,6 +68,8 @@ typedef struct
 struct AudioSink
 {
     int audioDevice;
+    
+    int muteAudio;
     
     MediaSink* nextSink;
     MediaSink sink;
@@ -587,7 +589,7 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
 
     if (sink->numAudioStreams > 0)
     {
-        if (!frameInfo->isRepeat)
+        if (!(frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio))
         {
             if (frameInfo->reversePlay)
             {
@@ -615,7 +617,7 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
             
             sink->writeBuffer = (sink->writeBuffer + 1) % 2;
         }
-        /* else the frame is a repeat and we don't send any audio */
+        /* else don't send any audio */
     }
     
     return msk_complete_frame(sink->nextSink, frameInfo);
@@ -672,6 +674,22 @@ static int aus_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(sink->nextSink, numBuffers, numBuffersFilled);
 }
 
+static int aus_mute_audio(void* data, int mute)
+{
+    AudioSink* sink = (AudioSink*)data;
+
+    if (mute < 0)
+    {
+        sink->muteAudio = !sink->muteAudio;
+    }
+    else
+    {
+        sink->muteAudio = mute;
+    }
+    
+    return 1;
+}
+    
 static void aus_close(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
@@ -834,6 +852,7 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
     newSink->sink.get_half_split = aus_get_half_split;
     newSink->sink.get_frame_sequence = aus_get_frame_sequence;
     newSink->sink.get_buffer_state = aus_get_buffer_state;
+    newSink->sink.mute_audio = aus_mute_audio;
     newSink->sink.reset_or_close = aus_reset_or_close;
     newSink->sink.close = aus_close;
     

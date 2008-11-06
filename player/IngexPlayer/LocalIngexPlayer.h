@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.8 2008/10/29 17:49:04 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.9 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -57,7 +57,7 @@ typedef enum PlayerOutputType
 
 typedef enum
 {
-    MXF_INPUT,
+    MXF_INPUT = 1,
     RAW_INPUT,
     DV_INPUT,
     FFMPEG_INPUT,
@@ -169,13 +169,9 @@ public:
     bool close();
     
     
-    /* opens the MXF files and start playing. The opened parameter indicates for each file whether
-    it was successfully opened or not */
-    virtual bool start(std::vector<std::string> mxfFilenames, std::vector<bool>& opened);
-
     /* opens the files/sources and start playing. The opened parameter indicates for each file/source whether
     it was successfully opened or not */
-    virtual bool start_2(std::vector<PlayerInput> inputs, std::vector<bool>& opened);
+    virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused);
     
     /* functions inherited from IngexPlayerListenerRegistry */
     virtual bool registerListener(IngexPlayerListener* listener);
@@ -191,6 +187,7 @@ public:
     virtual bool seek(int64_t offset, int whence, PlayUnit unit);
     virtual bool playSpeed(int speed);
     virtual bool step(bool forward);
+    virtual bool muteAudio(int mute);
     virtual bool mark(int type);
     virtual bool markPosition(int64_t position, int type);
     virtual bool clearMark();

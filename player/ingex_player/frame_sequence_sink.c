@@ -1,5 +1,5 @@
 /*
- * $Id: frame_sequence_sink.c,v 1.5 2008/10/29 17:47:41 john_f Exp $
+ * $Id: frame_sequence_sink.c,v 1.6 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -461,6 +461,13 @@ static int fss_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(sequence->targetSink, numBuffers, numBuffersFilled);
 }
     
+static int fss_mute_audio(void* data, int mute)
+{
+    FrameSequenceSink* sequence = (FrameSequenceSink*)data;
+
+    return msk_mute_audio(sequence->targetSink, mute);
+}
+
 static void fss_close(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
@@ -582,6 +589,7 @@ int fss_create_frame_sequence(MediaSink* sink, FrameSequenceSink** sequence)
     newSequence->sink.get_half_split = fss_get_half_split;
     newSequence->sink.get_frame_sequence = fss_get_frame_sequence;
     newSequence->sink.get_buffer_state = fss_get_buffer_state;
+    newSequence->sink.mute_audio = fss_mute_audio;
     newSequence->sink.reset_or_close = fss_reset_or_close;
     newSequence->sink.close = fss_close;
     

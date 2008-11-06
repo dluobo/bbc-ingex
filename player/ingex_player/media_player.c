@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.7 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_player.c,v 1.8 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -1254,6 +1254,22 @@ static void ply_step(void* data, int forward, PlayUnit unit)
             }
         }
         player->state.nextPosition = player->state.nextPosition + offset; 
+
+        switch_source_info_screen(player);
+    }
+    
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+    
+static void ply_mute_audio(void* data, int mute)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    
+    if (!player->state.locked)
+    {
+        msk_mute_audio(player->mediaSink, mute);
 
         switch_source_info_screen(player);
     }
@@ -2528,6 +2544,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.play_speed = ply_play_speed;
     newPlayer->control.play_speed_factor = ply_play_speed_factor;
     newPlayer->control.step = ply_step;
+    newPlayer->control.mute_audio = ply_mute_audio;
     newPlayer->control.mark = ply_mark;
     newPlayer->control.mark_position = ply_mark_position;
     newPlayer->control.clear_mark = ply_clear_mark;
@@ -2669,7 +2686,7 @@ MediaControl* ply_get_media_control(MediaPlayer* player)
     return &player->control;
 }
 
-int ply_start_player(MediaPlayer* player)
+int ply_start_player(MediaPlayer* player, int startPaused)
 {
     MediaPlayerState currentState;
     int64_t oldNextPosition;
@@ -2696,6 +2713,8 @@ int ply_start_player(MediaPlayer* player)
     int isRepeat;
     int sourceProcessingCompleted = 0;
     int currentMarkType;
+    int doStartPause = startPaused;
+    int muteAudio = 0;
 
     
     /* play frames from media source to media sink */
@@ -2708,6 +2727,7 @@ int ply_start_player(MediaPlayer* player)
         haveSeeked = 0;
         seekOK = 0;
         moveBeyondLimits = 0;
+        muteAudio = 0;
 
         
         /* get the available source length, which will be < source length if the file is still being written to */
@@ -2735,7 +2755,17 @@ int ply_start_player(MediaPlayer* player)
             sourceProcessingCompleted = msc_post_complete(player->mediaSource, player->mediaSource, &player->control);
         }
         
+        
+        /* execute paused start */
+        
+        if (doStartPause)
+        {
+            _ply_pause(player);
+            doStartPause = 0;
+            muteAudio = 1;
+        }
 
+        
         /* update the sink OSD */
         
         PTHREAD_MUTEX_LOCK(&player->stateMutex)
@@ -2958,6 +2988,7 @@ int ply_start_player(MediaPlayer* player)
                 }
                 PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
                 player->frameInfo.isRepeat = isRepeat;
+                player->frameInfo.muteAudio = muteAudio;
                 player->frameInfo.locked = currentState.locked;
                 player->frameInfo.droppedFrame = currentState.droppedFrame;
                 

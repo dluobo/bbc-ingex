@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.9 2008/10/29 17:47:16 john_f Exp $
+ * $Id: dvs_sink.c,v 1.10 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -223,6 +223,8 @@ struct DVSSink
     
     /* reverse play */
     int reversePlay;
+    
+    int muteAudio;
 };
 
 
@@ -1166,9 +1168,9 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
         }
     }
     
-    /* if the frame is a repeat then mute the audio */
-    if (frameInfo->isRepeat)
+    if (frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio)
     {
+        /* mute the audio */
         for (i = 0; i < sink->numAudioStreams; i += 2)
         {
             memset(&fifoBuffer->buffer[sink->audioPairOffset[i / 2]], 0, sink->audioDataSize);
@@ -1333,6 +1335,22 @@ static int dvs_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return 1;
 }
 
+static int dvs_mute_audio(void* data, int mute)
+{
+    DVSSink* sink = (DVSSink*)data;
+    
+    if (mute < 0)
+    {
+        sink->muteAudio = !sink->muteAudio;
+    }
+    else
+    {
+        sink->muteAudio = mute;
+    }
+    
+    return 1;
+}
+
 static void dvs_close(void* data)
 {
     DVSSink* sink = (DVSSink*)data;
@@ -1477,6 +1495,7 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extra
     newSink->mediaSink.cancel_frame = dvs_cancel_frame;
     newSink->mediaSink.get_osd = dvs_get_osd;
     newSink->mediaSink.get_buffer_state = dvs_get_buffer_state;
+    newSink->mediaSink.mute_audio = dvs_mute_audio;
     newSink->mediaSink.reset_or_close = dvs_reset_or_close;
     newSink->mediaSink.close = dvs_close;
 

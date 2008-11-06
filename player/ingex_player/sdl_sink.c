@@ -1,5 +1,5 @@
 /*
- * $Id: sdl_sink.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: sdl_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -104,6 +104,8 @@ struct SDLSink
     pthread_t eventThread;
     pthread_mutex_t eventMutex;
     int stopped;
+    
+    int muteAudio;
 };
 
 
@@ -442,6 +444,22 @@ static void sdls_cancel_frame(void* data)
     reset_streams(sink);
 }
 
+static int sdls_mute_audio(void* data, int mute)
+{
+    SDLSink* sink = (SDLSink*)data;
+
+    if (mute < 0)
+    {
+        sink->muteAudio = !sink->muteAudio;
+    }
+    else
+    {
+        sink->muteAudio = mute;
+    }
+    
+    return 1;
+}
+
 static void sdls_close(void* data)
 {
     SDLSink* sink = (SDLSink*)data;
@@ -499,6 +517,7 @@ int sdls_open(SDLSink** sink)
     newSink->mediaSink.accept_stream_frame = sdls_accept_stream_frame;
     newSink->mediaSink.get_stream_buffer = sdls_get_stream_buffer;
     newSink->mediaSink.receive_stream_frame = sdls_receive_stream_frame;
+    newSink->mediaSink.mute_audio = sdls_mute_audio;
     newSink->mediaSink.complete_frame = sdls_complete_frame;
     newSink->mediaSink.cancel_frame = sdls_cancel_frame;
     newSink->mediaSink.close = sdls_close;

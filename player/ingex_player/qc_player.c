@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.8 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_player.c,v 1.9 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -702,7 +702,7 @@ static int play_balls(QCPlayer* player, Options* options)
     /* start playing... */
     
     mc_set_osd_screen(ply_get_media_control(player->mediaPlayer), OSD_MENU_SCREEN);
-    if (!ply_start_player(player->mediaPlayer))
+    if (!ply_start_player(player->mediaPlayer, 0))
     {
         ml_log_error("Media player failed to play\n");
         goto fail;
@@ -954,9 +954,8 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     ml_log_file_flush();
     qcs_flush(player->qcSession);
     
-    mc_pause(ply_get_media_control(player->mediaPlayer));
     mc_set_osd_screen(ply_get_media_control(player->mediaPlayer), OSD_SOURCE_INFO_SCREEN);
-    if (!ply_start_player(player->mediaPlayer))
+    if (!ply_start_player(player->mediaPlayer, 1))
     {
         ml_log_error("Media player failed to play\n");
         goto fail;

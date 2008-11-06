@@ -1,5 +1,5 @@
 /*
- * $Id: null_sink.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: null_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -251,6 +251,11 @@ static OnScreenDisplay* nms_get_osd(void* data)
     return sink->osd;
 }
 
+static int nms_mute_audio(void* data, int mute)
+{
+    return 1;
+}
+
 static void nms_close(void* data)
 {
     NullSink* sink = (NullSink*)data;
@@ -323,6 +328,7 @@ int nms_open(MediaSink** sink)
     newSink->mediaSink.complete_frame = nms_complete_frame;
     newSink->mediaSink.cancel_frame = nms_cancel_frame;
     newSink->mediaSink.get_osd = nms_get_osd;
+    newSink->mediaSink.mute_audio = nms_mute_audio;
     newSink->mediaSink.reset_or_close = nms_reset_or_close;
     newSink->mediaSink.close = nms_close;
     

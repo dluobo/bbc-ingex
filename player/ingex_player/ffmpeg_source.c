@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ * $Id: ffmpeg_source.c,v 1.4 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -431,7 +431,7 @@ static void release_video_buffer(struct AVCodecContext* c, AVFrame* pic)
     avcodec_default_release_buffer(c, pic);
 }
 
-static int open_video_stream(FFMPEGSource* source, int avStreamIndex, int* outputStreamIndex)
+static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamIndex, int* outputStreamIndex)
 {
     AVStream* stream = source->formatContext->streams[avStreamIndex];
     AVCodecContext* codecContext = stream->codec;
@@ -505,7 +505,7 @@ static int open_video_stream(FFMPEGSource* source, int avStreamIndex, int* outpu
     videoStream->outputStream.streamIndex = (*outputStreamIndex)++;
     
     videoStream->outputStream.streamInfo.type = PICTURE_STREAM_TYPE;
-    videoStream->outputStream.streamInfo.sourceId = msc_create_id();
+    videoStream->outputStream.streamInfo.sourceId = sourceId;
 
     videoStream->outputStream.streamInfo.width = codecContext->width;
     videoStream->outputStream.streamInfo.height = codecContext->height;
@@ -688,7 +688,7 @@ static int allocate_audio_output_buffers(FFMPEGSource* source)
     return 1;
 }
 
-static int open_audio_stream(FFMPEGSource* source, int avStreamIndex, int* outputStreamIndex)
+static int open_audio_stream(FFMPEGSource* source, int sourceId, int avStreamIndex, int* outputStreamIndex)
 {
     AVStream* stream = source->formatContext->streams[avStreamIndex];
     AVCodecContext* codecContext = stream->codec;
@@ -750,7 +750,7 @@ static int open_audio_stream(FFMPEGSource* source, int avStreamIndex, int* outpu
     audioStream->avStreamIndex = avStreamIndex;
     
     /* the player doesn't (yet) support multi-channel audio and therefore each channel
-    becomes is a separate output stream */
+    becomes a separate output stream */
     
     audioStream->numOutputStreams = codecContext->channels;
     if (audioStream->numOutputStreams > (int)(sizeof(audioStream->outputStreams) / sizeof(OutputStreamData)))
@@ -765,7 +765,7 @@ static int open_audio_stream(FFMPEGSource* source, int avStreamIndex, int* outpu
     
         audioStream->outputStreams[j].streamInfo.type = SOUND_STREAM_TYPE;
         audioStream->outputStreams[j].streamInfo.format = PCM_FORMAT;
-        audioStream->outputStreams[j].streamInfo.sourceId = msc_create_id();
+        audioStream->outputStreams[j].streamInfo.sourceId = sourceId;
     
         audioStream->outputStreams[j].streamInfo.samplingRate = (Rational){48000, 1};;
         audioStream->outputStreams[j].streamInfo.numChannels = 1;
@@ -817,12 +817,12 @@ static void close_audio_stream(FFMPEGSource* source, AudioStream* audioStream)
     avcodec_close(codecContext);
 }
 
-static int open_timecode_stream(FFMPEGSource* source, int* outputStreamIndex)
+static int open_timecode_stream(FFMPEGSource* source, int sourceId, int* outputStreamIndex)
 {
     source->timecodeStream.outputStream.streamIndex = (*outputStreamIndex)++;
     
     source->timecodeStream.outputStream.streamInfo.type = TIMECODE_STREAM_TYPE;
-    source->timecodeStream.outputStream.streamInfo.sourceId = msc_create_id();
+    source->timecodeStream.outputStream.streamInfo.sourceId = sourceId;
     source->timecodeStream.outputStream.streamInfo.format = TIMECODE_FORMAT;
     source->timecodeStream.outputStream.streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     source->timecodeStream.outputStream.streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
@@ -934,8 +934,8 @@ static int process_video_packets(FFMPEGSource* source, VideoStream* videoStream)
     
     DEBUG("Video pts=%"PFi64", audio pts=%"PFi64", packet pos=%"PFi64", source pos=%"PFi64", file pos=%"PFi64" (%"PFi64")\n", 
         packetPosition, (int64_t)(pts * 48000 + 0.5), packetPosition, source->position, packet.pos, url_ftell(source->formatContext->pb));
+    DEBUG("Video search index = %d\n", av_index_search_timestamp(stream, pts, AVSEEK_FLAG_BACKWARD));
     
-        
     if (packetPosition < source->position)
     {
         /* not there yet - keep decoding */
@@ -1369,7 +1369,7 @@ static int fms_seek(void* data, int64_t position)
     {
         timestamp += source->formatContext->start_time;
     }
-    
+
     /* the AVSEEK_FLAG_BACKWARD flag means we end up at or before the target position */
     result = av_seek_frame(source->formatContext, -1, timestamp, AVSEEK_FLAG_BACKWARD);
     if (result < 0) 
@@ -1580,6 +1580,7 @@ static int fms_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             }
             else
             {
+                DEBUG("Freeing unknown packet type\n");
                 av_free_packet(&packet);
             }
         }
@@ -1815,6 +1816,7 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
     int i;
     int j;
     int outputStreamIndex = 0;
+    int sourceId;
     
     memset(&formatParams, 0, sizeof(formatParams));
 
@@ -1882,6 +1884,8 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
     
     /* open the audio, video and timecode streams */
     
+    sourceId = msc_create_id();
+    
     for (i = 0; i < (int)newSource->formatContext->nb_streams; i++) 
     {
         codecContext = newSource->formatContext->streams[i]->codec;
@@ -1889,18 +1893,20 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
         switch (codecContext->codec_type) 
         {
             case CODEC_TYPE_AUDIO:
-                CHK_OFAIL(open_audio_stream(newSource, i, &outputStreamIndex));
+                DEBUG("AV stream %d is audio\n", i);
+                CHK_OFAIL(open_audio_stream(newSource, sourceId, i, &outputStreamIndex));
                 break;
                 
             case CODEC_TYPE_VIDEO:
-                CHK_OFAIL(open_video_stream(newSource, i, &outputStreamIndex));
+                DEBUG("AV stream %d is video\n", i);
+                CHK_OFAIL(open_video_stream(newSource, sourceId, i, &outputStreamIndex));
                 break;
                 
             default:
                 break;
         }
     }
-    CHK_OFAIL(open_timecode_stream(newSource, &outputStreamIndex));
+    CHK_OFAIL(open_timecode_stream(newSource, sourceId, &outputStreamIndex));
     
     /* allocate the audio buffers now that we know what the video frame rate it */
     
@@ -1913,6 +1919,8 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
         newSource->frameRate.num / (double)(newSource->frameRate.den) + 0.5);
     DEBUG("Duration = %"PFi64"\n", newSource->length);
     /* TODO: found that FFMPEG sometimes rounds the length up rather than down */
+
+    DEBUG("Default stream index for seeking is %d\n", av_find_default_stream_index(newSource->formatContext));
 
     
     /* add source infos */

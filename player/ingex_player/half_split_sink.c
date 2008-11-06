@@ -1,5 +1,5 @@
 /*
- * $Id: half_split_sink.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: half_split_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -1092,6 +1092,13 @@ static int hss_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(split->targetSink, numBuffers, numBuffersFilled);
 }
     
+static int hss_mute_audio(void* data, int mute)
+{
+    HalfSplitSink* split = (HalfSplitSink*)data;
+
+    return msk_mute_audio(split->targetSink, mute);
+}
+    
 static void hss_close(void* data)
 {
     HalfSplitSink* split = (HalfSplitSink*)data;
@@ -1306,6 +1313,7 @@ int hss_create_half_split(MediaSink* sink, int verticalSplit, HalfSplitType type
     newSplit->sink.get_audio_switch = hss_get_audio_switch;
     newSplit->sink.get_half_split = hss_get_half_split;
     newSplit->sink.get_buffer_state = hss_get_buffer_state;
+    newSplit->sink.mute_audio = hss_mute_audio;
     newSplit->sink.reset_or_close = hss_reset_or_close;
     newSplit->sink.close = hss_close;
     

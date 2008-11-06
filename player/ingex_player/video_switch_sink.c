@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: video_switch_sink.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -1435,6 +1435,13 @@ static int qvs_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(swtch->targetSink, numBuffers, numBuffersFilled);
 }
     
+static int qvs_mute_audio(void* data, int mute)
+{
+    DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
+
+    return msk_mute_audio(swtch->targetSink, mute);
+}
+    
 static void qvs_close(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
@@ -1824,6 +1831,7 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->sink.get_half_split = qvs_get_half_split;
     newSwitch->sink.get_frame_sequence = qvs_get_frame_sequence;
     newSwitch->sink.get_buffer_state = qvs_get_buffer_state;
+    newSwitch->sink.mute_audio = qvs_mute_audio;
     newSwitch->sink.reset_or_close = qvs_reset_or_close;
     newSwitch->sink.close = qvs_close;
     

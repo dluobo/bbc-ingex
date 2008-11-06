@@ -1,5 +1,5 @@
 /*
- * $Id: IngexPlayer.h,v 1.3 2008/10/29 17:49:55 john_f Exp $
+ * $Id: IngexPlayer.h,v 1.4 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -71,6 +71,7 @@ public:
     virtual bool seek(int64_t offset, int whence, PlayUnit unit) = 0; 
     virtual bool playSpeed(int speed) = 0; /* -1 <= speed >=1 */
     virtual bool step(bool forward) = 0;
+    virtual bool muteAudio(int mute /* -1=toggle, 0=not mute, 1=mute */) = 0;
     
     
     /* mark-in and mark-out controls */

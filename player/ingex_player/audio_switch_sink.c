@@ -1,5 +1,5 @@
 /*
- * $Id: audio_switch_sink.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: audio_switch_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -436,7 +436,7 @@ static int qas_register_stream(void* data, int streamId, const StreamInfo* strea
     {
         if (is_new_output_stream(swtch, streamInfo))
         {
-            if (!msk_accept_stream(swtch->targetSink, streamInfo) ||
+            if (msk_accept_stream(swtch->targetSink, streamInfo) &&
                 msk_register_stream(swtch->targetSink, nextOutputStreamId, streamInfo))
             {
                 newElement.streamId = nextOutputStreamId;
@@ -674,6 +674,13 @@ static int qas_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(swtch->targetSink, numBuffers, numBuffersFilled);
 }
     
+static int qas_mute_audio(void* data, int mute)
+{
+    DefaultAudioSwitch* swtch = (DefaultAudioSwitch*)data;
+
+    return msk_mute_audio(swtch->targetSink, mute);
+}
+
 static void qas_close(void* data)
 {
     DefaultAudioSwitch* swtch = (DefaultAudioSwitch*)data;
@@ -875,6 +882,7 @@ int qas_create_audio_switch(MediaSink* sink,  AudioSwitchSink** swtch)
     newSwitch->sink.get_half_split = qas_get_half_split;
     newSwitch->sink.get_frame_sequence = qas_get_frame_sequence;
     newSwitch->sink.get_buffer_state = qas_get_buffer_state;
+    newSwitch->sink.mute_audio = qas_mute_audio;
     newSwitch->sink.reset_or_close = qas_reset_or_close;
     newSwitch->sink.close = qas_close;
     

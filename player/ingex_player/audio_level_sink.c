@@ -1,5 +1,5 @@
 /*
- * $Id: audio_level_sink.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: audio_level_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -328,6 +328,13 @@ static int als_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     return msk_get_buffer_state(sink->targetSink, numBuffers, numBuffersFilled);
 }
 
+static int als_mute_audio(void* data, int mute)
+{
+    AudioLevelSink* sink = (AudioLevelSink*)data;
+
+    return msk_mute_audio(sink->targetSink, mute);
+}
+
 static void als_close(void* data)
 {
     AudioLevelSink* sink = (AudioLevelSink*)data;
@@ -408,6 +415,7 @@ int als_create_audio_level_sink(MediaSink* targetSink, int numAudioStreams,  flo
     newSink->sink.get_half_split = als_get_half_split;
     newSink->sink.get_frame_sequence = als_get_frame_sequence;
     newSink->sink.get_buffer_state = als_get_buffer_state;
+    newSink->sink.mute_audio = als_mute_audio;
     newSink->sink.reset_or_close = als_reset_or_close;
     newSink->sink.close = als_close;
     
@@ -417,7 +425,7 @@ int als_create_audio_level_sink(MediaSink* targetSink, int numAudioStreams,  flo
     osd_set_minimum_audio_stream_level(msk_get_osd(targetSink), newSink->minAudioLevel);
     osd_set_audio_lineup_level(msk_get_osd(targetSink), newSink->audioLineupLevel);
     
-    newSink->nullAudioLevel = -100.0; /* any invalid audio level */
+    newSink->nullAudioLevel = newSink->minAudioLevel - 10; /* any invalid audio level will do */
     reset_audio_levels(newSink);
     
     

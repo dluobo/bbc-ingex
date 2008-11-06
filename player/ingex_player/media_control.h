@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.h,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_control.h,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -77,6 +77,7 @@ typedef struct
     void (*play_speed)(void* data, int speed, PlayUnit unit);
     void (*play_speed_factor)(void* data, float factor);
     void (*step)(void* data, int forward /* else backward */, PlayUnit unit);
+    void (*mute_audio)(void* data, int mute /* -1=toggle, 0=not mute, 1=mute */);
     
     
     /* mark-in and mark-out controls */
@@ -160,6 +161,7 @@ void mc_seek(MediaControl* control, int64_t offset, int whence, PlayUnit unit);
 void mc_play_speed(MediaControl* control, int speed, PlayUnit unit);
 void mc_play_speed_factor(MediaControl* control, float factor);
 void mc_step(MediaControl* control, int forward, PlayUnit unit);
+void mc_mute_audio(MediaControl* control, int mute);
 
 void mc_mark(MediaControl* control, int type, int toggle);
 void mc_mark_position(MediaControl* control, int64_t position, int type, int toggle);

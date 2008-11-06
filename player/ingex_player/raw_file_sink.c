@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: raw_file_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 
 #include "raw_file_sink.h"
@@ -40,6 +41,7 @@ typedef struct
     unsigned char* buffer;
     unsigned int bufferSize; 
     int isPresent;
+    StreamType streamType;
     FILE* outputFile;
 } RawStream;
 
@@ -57,6 +59,8 @@ typedef struct
     /* streams */
     RawStream streams[MAX_OUTPUT_FILES];
     int numStreams;
+    
+    int muteAudio;
 } RawFileSink;
 
 
@@ -142,6 +146,7 @@ static int rms_register_stream(void* data, int streamId, const StreamInfo* strea
         return 0;
     }
     
+    sink->streams[sink->numStreams].streamType = streamInfo->type;
     sink->streams[sink->numStreams].streamId = streamId;
     if (snprintf(filename, FILENAME_MAX, sink->filenameTemplate, streamId) < 0)
     {
@@ -219,10 +224,14 @@ static int rms_complete_frame(void* data, const FrameInfo* frameInfo)
     {
         if (sink->streams[i].isPresent)
         {
+            if (sink->streams[i].streamType == SOUND_STREAM_TYPE && (frameInfo->muteAudio || sink->muteAudio))
+            {
+                memset(sink->streams[i].buffer, 0, sink->streams[i].bufferSize);
+            }
+            
             if (fwrite(sink->streams[i].buffer, sink->streams[i].bufferSize, 1, sink->streams[i].outputFile) != 1)
             {
-                perror("fwrite");
-                ml_log_error("Failed to write raw data to file\n");
+                ml_log_error("Failed to write raw data to file: %s\n", strerror(errno));
             }
         }
     }
@@ -239,6 +248,22 @@ static void rms_cancel_frame(void* data)
     RawFileSink* sink = (RawFileSink*)data;
 
     reset_streams(sink);
+}
+
+static int rms_mute_audio(void* data, int mute)
+{
+    RawFileSink* sink = (RawFileSink*)data;
+
+    if (mute < 0)
+    {
+        sink->muteAudio = !sink->muteAudio;
+    }
+    else
+    {
+        sink->muteAudio = mute;
+    }
+    
+    return 1;
 }
 
 static void rms_close(void* data)
@@ -289,6 +314,7 @@ int rms_open(const char* filenameTemplate, MediaSink** sink)
     newSink->mediaSink.accept_stream_frame = rms_accept_stream_frame;
     newSink->mediaSink.get_stream_buffer = rms_get_stream_buffer;
     newSink->mediaSink.receive_stream_frame = rms_receive_stream_frame;
+    newSink->mediaSink.mute_audio = rms_mute_audio;
     newSink->mediaSink.complete_frame = rms_complete_frame;
     newSink->mediaSink.cancel_frame = rms_cancel_frame;
     newSink->mediaSink.close = rms_close;

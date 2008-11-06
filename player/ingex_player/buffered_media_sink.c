@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_sink.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: buffered_media_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -331,6 +331,13 @@ static OnScreenDisplay* bms_get_osd(void* data)
     }
     
     return &bufSink->bufOSD;
+}
+
+static int bms_mute_audio(void* data, int mute)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    return msk_mute_audio(bufSink->targetSink, mute);
 }
 
 static void bms_close(void* data)
@@ -724,6 +731,7 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->mediaSink.complete_sink_frame = bms_complete_sink_frame;
     newBufSink->mediaSink.get_osd = bms_get_osd;
     newBufSink->mediaSink.get_buffer_state = bms_get_buffer_state;
+    newBufSink->mediaSink.mute_audio = bms_mute_audio;
     newBufSink->mediaSink.reset_or_close = bms_reset_or_close;
     newBufSink->mediaSink.close = bms_close;
 

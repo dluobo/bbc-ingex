@@ -1,3 +1,26 @@
+#
+# $Id: Makefile,v 1.10 2008/11/06 11:30:09 john_f Exp $
+#
+# Makefile for building IngexPlayer library
+#
+# Copyright (C) 2008  BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+#
+
 C_INGEX_PLAYER_DIR = ../ingex_player
 COMMON_DIR = ../../common
 LIBMXF_DIR = ../../libMXF
@@ -79,7 +102,7 @@ ifdef FFMPEG_INCLUDE_PATH
 	ifeq "$(FFMPEG_SWSCALE_INCLUDE_PATH)" "YES"
 		CFLAGS += -DHAVE_FFMPEG_SWSCALE
 
-		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib; do test -e $$f/libswscale.a && echo YES && break; done)
+		FFMPEG_SWSCALE_LIB := $(shell for f in /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64; do test -e $$f/libswscale.a && echo YES && break; done)
 		ifeq "$(FFMPEG_SWSCALE_LIB)" "YES"
 			LIBS += -lswscale
 		endif

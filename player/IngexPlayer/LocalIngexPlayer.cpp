@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.10 2008/10/29 17:49:04 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.11 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -148,6 +148,7 @@ private:
 
 typedef struct
 {
+    bool startPaused;
     LocalIngexPlayerState* playState;
 } PlayerThreadArgs;
 
@@ -377,9 +378,9 @@ static void init_sound_streaminfo(StreamInfo* streamInfo)
 
 static void* player_thread(void* arg)
 {
-    LocalIngexPlayerState* playState = ((PlayerThreadArgs*)arg)->playState;
-    
-    if (!ply_start_player(playState->mediaPlayer))
+    PlayerThreadArgs* threadArg = (PlayerThreadArgs*)arg;
+
+    if (!ply_start_player(threadArg->playState->mediaPlayer, threadArg->startPaused))
     {
         ml_log_error("Media player failed to play\n");
     }
@@ -746,25 +747,7 @@ bool LocalIngexPlayer::close()
     return true;
 }
 
-bool LocalIngexPlayer::start(vector<string> mxfFilenames, vector<bool>& opened)
-{
-    vector<PlayerInput> inputs;
-    PlayerInput input;
-    
-    vector<string>::const_iterator iter;
-    for (iter = mxfFilenames.begin(); iter != mxfFilenames.end(); iter++)
-    {
-        input.type = MXF_INPUT;
-        input.name = (*iter);
-        input.options.clear();
-        
-        inputs.push_back(input);
-    }
-    
-    return start_2(inputs, opened);
-}
-
-bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
+bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, bool startPaused)
 {
     auto_ptr<LocalIngexPlayerState> newPlayState;
     MultipleMediaSources* multipleSource = 0;
@@ -1041,8 +1024,11 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
             CHK_OTHROW(bks_create(&_videoStreamInfo, 120 * 60 * 60 * 25, &mediaSource));
             CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
             
-            CHK_OTHROW(mls_finalise_blank_sources(multipleSource));
         }
+
+        // finalise blank sources
+        
+        CHK_OTHROW(mls_finalise_blank_sources(multipleSource));
         
         
         // open the buffered media source 
@@ -1235,6 +1221,7 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
+                    dusk_register_mouse_listener(dualSink, &_x11MouseListener);
                     newPlayState->mediaSink = dusk_get_media_sink(dualSink);
                     newPlayState->dualSink = dualSink;
                     break;
@@ -1317,6 +1304,7 @@ bool LocalIngexPlayer::start_2(vector<PlayerInput> inputs, vector<bool>& opened)
         
         // start play thread 
     
+        newPlayState->playThreadArgs.startPaused = startPaused;
         newPlayState->playThreadArgs.playState = newPlayState.get();
         CHK_OTHROW(create_joinable_thread(&newPlayState->playThreadId, player_thread, &newPlayState->playThreadArgs));
 
@@ -1612,6 +1600,30 @@ bool LocalIngexPlayer::step(bool forward)
         }
     
         mc_step(ply_get_media_control(_playState->mediaPlayer), forward, FRAME_PLAY_UNIT);
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::muteAudio(int mute)
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+        
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+    
+        mc_mute_audio(ply_get_media_control(_playState->mediaPlayer), mute);
     }
     catch (...)
     {

@@ -1,5 +1,5 @@
 /*
- * $Id: media_sink.h,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_sink.h,v 1.4 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -124,6 +124,9 @@ struct MediaSink
     /* frame sequence */
     FrameSequenceSink* (*get_frame_sequence)(void* data);
     
+    
+    /* audio output sinks */
+    int (*mute_audio)(void* data, int mute);
 };
 
 
@@ -174,6 +177,7 @@ HalfSplitSink* msk_get_half_split(MediaSink* sink);
 
 FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink);    
 
+int msk_mute_audio(MediaSink* sink, int mute);    
 
 
 #ifdef __cplusplus

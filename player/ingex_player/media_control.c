@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_control.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -111,6 +111,14 @@ void mc_step(MediaControl* control, int forward, PlayUnit unit)
     if (control && control->step)
     {
         control->step(control->data, forward, unit);
+    }
+}
+
+void mc_mute_audio(MediaControl* control, int mute)
+{
+    if (control && control->mute_audio)
+    {
+        control->mute_audio(control->data, mute);
     }
 }
 

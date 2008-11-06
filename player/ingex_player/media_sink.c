@@ -1,5 +1,5 @@
 /*
- * $Id: media_sink.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -252,4 +252,11 @@ int msk_get_buffer_state(MediaSink* sink, int* numBuffers, int* numBuffersFilled
     return 0;
 }
 
-
+int msk_mute_audio(MediaSink* sink, int mute)
+{
+    if (sink && sink->mute_audio)
+    {
+        return sink->mute_audio(sink->data, mute);
+    }
+    return 0;
+}

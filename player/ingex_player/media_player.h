@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.h,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_player.h,v 1.6 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -130,7 +130,7 @@ int ply_create_player(MediaSource* source, MediaSink* sink, int initialLock,
     FILE* bufferStateLogFile, int* markSelectionTypeMasks, int numMarkSelections, MediaPlayer** player);
 int ply_register_player_listener(MediaPlayer* player, MediaPlayerListener* playerListener);
 MediaControl* ply_get_media_control(MediaPlayer* player);
-int ply_start_player(MediaPlayer* player);
+int ply_start_player(MediaPlayer* player, int startPaused);
 void ply_close_player(MediaPlayer** player);
 int ply_get_marks(MediaPlayer* player, Mark** marks);
 MediaSink* ply_get_media_sink(MediaPlayer* player);

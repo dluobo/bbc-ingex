@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.h,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: on_screen_display.h,v 1.5 2008/11/06 11:30:09 john_f Exp $
  *
  *
  *
@@ -306,6 +306,7 @@ struct OnScreenDisplayState
     AudioStreamLevel audioStreamLevels[MAX_AUDIO_LEVELS];
     int numAudioLevels;
     double minimumAudioLevel;
+    double nullAudioLevel;
     float audioLineupLevel;
     MarkConfigs markConfigs;
     OSDLabel labels[MAX_OSD_LABELS];
