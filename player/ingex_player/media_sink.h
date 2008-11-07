@@ -1,5 +1,5 @@
 /*
- * $Id: media_sink.h,v 1.4 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_sink.h,v 1.5 2008/11/07 14:26:03 philipn Exp $
  *
  *
  *
@@ -81,6 +81,7 @@ struct MediaSink
     
     /* return buffer for writing stream data to */
     /* note: this function can be called multiple times prior to receive_frame... */
+    /* this function is not called when receive_stream_frame_const() is called below */
     int (*get_stream_buffer)(void* data, int streamId, unsigned int bufferSize, unsigned char** buffer);
     /* signal that stream data is ready */
     int (*receive_stream_frame)(void* data, int streamId, unsigned char* buffer, unsigned int bufferSize);
