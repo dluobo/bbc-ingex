@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.12 2008/11/06 19:56:56 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.13 2008/11/07 14:28:36 philipn Exp $
  *
  *
  *
@@ -1259,7 +1259,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             {
                 if (_actualOutputType == X11_OUTPUT ||
                     _actualOutputType == X11_XV_OUTPUT)
-                    // TODO* || _actualOutputType == DUAL_OUTPUT)
+                    // TODO: DVS drops frames when pc audio is enabled _actualOutputType != DVS_OUTPUT)
                 {
                     AudioSink* audioSink;
                     if (!aus_create_audio_sink(newPlayState->mediaSink, _audioDevice, &audioSink))

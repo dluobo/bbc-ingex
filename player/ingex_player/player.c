@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.13 2008/11/06 19:56:56 john_f Exp $
+ * $Id: player.c,v 1.14 2008/11/07 14:28:36 philipn Exp $
  *
  *
  *
@@ -2478,7 +2478,7 @@ int main(int argc, const char **argv)
     {
         if (outputType == X11_XV_DISPLAY_OUTPUT ||
             outputType == X11_DISPLAY_OUTPUT)
-            /* || outputType == DUAL_OUTPUT) */
+            // TODO: DVS drops frames when pc audio is enabled outputType != DVS_OUTPUT)
         {
             AudioSink* audioSink;
             if (!aus_create_audio_sink(g_player.mediaSink, audioDevice, &audioSink))

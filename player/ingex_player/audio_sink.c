@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
+ * $Id: audio_sink.c,v 1.6 2008/11/07 14:28:36 philipn Exp $
  *
  *
  *
@@ -61,8 +61,11 @@ typedef struct
     
     unsigned char* buffer[2];
     unsigned int bufferSize;
-    
     int bufferIsReady[2];
+    
+    unsigned char* nextSinkBuffer;
+    unsigned int nextSinkBufferSize;
+    int nextSinkAcceptedFrame;
 } AudioStream;
 
 struct AudioSink
@@ -362,6 +365,11 @@ static int aus_accept_stream(void* data, const StreamInfo* streamInfo)
 static int aus_register_stream(void* data, int streamId, const StreamInfo* streamInfo)
 {
     AudioSink* sink = (AudioSink*)data;
+    int nextSinkResult;
+
+
+    nextSinkResult = msk_register_stream(sink->nextSink, streamId, streamInfo);
+
 
     if (streamInfo->type == SOUND_STREAM_TYPE && 
         streamInfo->format == PCM_FORMAT &&
@@ -377,7 +385,7 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
                     streamInfo->numChannels != sink->numChannels ||
                     streamInfo->bitsPerSample != sink->bitsPerSample)
                 {
-                    return 0;
+                    return nextSinkResult;
                 }
             }
             
@@ -416,11 +424,9 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
             
             return 1;
         }
-        
-        return 0;
     }
 
-    return msk_register_stream(sink->nextSink, streamId, streamInfo);
+    return nextSinkResult;
 }
 
 static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* frameInfo)
@@ -432,6 +438,9 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
+            sink->audioStreams[i].nextSinkAcceptedFrame = msk_accept_stream_frame(sink->nextSink, streamId, frameInfo);
+            
+            
             if (sink->sinkDisabled)
             {
                 /* some error occurred which has disabled the stream */
@@ -531,6 +540,14 @@ static int aus_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
+            if (sink->audioStreams[i].nextSinkAcceptedFrame)
+            {
+                if (msk_get_stream_buffer(sink->nextSink, streamId, bufferSize, &sink->audioStreams[i].nextSinkBuffer))
+                {
+                    sink->audioStreams[i].nextSinkBufferSize = bufferSize;
+                }
+            }
+            
             if (bufferSize != sink->audioStreams[i].bufferSize)
             {
                 ml_log_error("Buffer size (%d) != audio data size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
@@ -554,6 +571,17 @@ static int aus_receive_stream_frame(void* data, int streamId, unsigned char* buf
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
+            if (sink->audioStreams[i].nextSinkAcceptedFrame && sink->audioStreams[i].nextSinkBuffer != NULL)
+            {
+                if (bufferSize > sink->audioStreams[i].nextSinkBufferSize)
+                {
+                    ml_log_error("Buffer size (%d) > audio sink's next sink buffer size (%d)\n", bufferSize, sink->audioStreams[i].nextSinkBufferSize);
+                    return 0;
+                }
+                memcpy(sink->audioStreams[i].nextSinkBuffer, buffer, bufferSize);
+                msk_receive_stream_frame(sink->nextSink, streamId, sink->audioStreams[i].nextSinkBuffer, bufferSize);
+            }
+            
             return 1;
         }
     }
@@ -570,6 +598,11 @@ static int aus_receive_stream_frame_const(void* data, int streamId, const unsign
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
+            if (sink->audioStreams[i].nextSinkAcceptedFrame)
+            {
+                msk_receive_stream_frame_const(sink->nextSink, streamId, buffer, bufferSize);
+            }
+            
             memcpy(sink->audioStreams[i].buffer[sink->writeBuffer], buffer, bufferSize);
             return 1;
         }
@@ -587,6 +620,13 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
     unsigned char* front;
     unsigned char* back;
 
+    for (i = 0; i < sink->numAudioStreams; i++)
+    {
+        sink->audioStreams[i].nextSinkBuffer = NULL;
+        sink->audioStreams[i].nextSinkBufferSize = 0;
+        sink->audioStreams[i].nextSinkAcceptedFrame = 0;
+    }
+    
     if (sink->numAudioStreams > 0)
     {
         if (!(frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio))
@@ -620,14 +660,22 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
         /* else don't send any audio */
     }
     
+    
     return msk_complete_frame(sink->nextSink, frameInfo);
 }
 
 static void aus_cancel_frame(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
+    int i;
+
+    for (i = 0; i < sink->numAudioStreams; i++)
+    {
+        sink->audioStreams[i].nextSinkBuffer = NULL;
+        sink->audioStreams[i].nextSinkBufferSize = 0;
+        sink->audioStreams[i].nextSinkAcceptedFrame = 0;
+    }
     
-    // TODO
 
     msk_cancel_frame(sink->nextSink);
 }
