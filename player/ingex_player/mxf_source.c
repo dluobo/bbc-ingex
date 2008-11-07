@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.5 2008/10/29 17:45:44 john_f Exp $
+ * $Id: mxf_source.c,v 1.6 2008/11/07 14:24:08 philipn Exp $
  *
  *
  *
@@ -51,8 +51,23 @@ struct _MXFReaderListenerData
 typedef struct
 {
     StreamInfo streamInfo;
+    int streamId;
     int isDisabled;
-} StreamData;
+    
+    int frameAccepted;
+    int frameAllocated;
+    uint8_t* buffer;
+    uint32_t bufferSize;
+} OutputStreamData;
+
+typedef struct
+{
+    OutputStreamData* streamData;
+    int numOutputStreams;
+
+    uint8_t* audioBuffer;
+    uint32_t audioBufferSize;
+} InputTrackData;
 
 struct MXFFileSource
 {
@@ -65,10 +80,10 @@ struct MXFFileSource
     MXFReader* mxfReader;
     MXFReaderListener mxfListener;
     MXFReaderListenerData mxfListenerData;
+    InputTrackData* trackData;
+    int numInputTracks;
+    int numTimecodeTracks;
     int eof;
-    StreamData* streamData;
-    int numStreams;
-    int numTracks;
     int isD3MXF;
     
     struct timeval lastPostCompleteTry;
@@ -147,72 +162,252 @@ static void read_clip_umid_string(MXFReader* reader, char* clipId)
         umid.octet28, umid.octet29, umid.octet30, umid.octet31);
 }
 
+static int deinterleave_audio(uint8_t* input, uint32_t inputSize, int numChannels, int bitsPerSample,
+    int channelIndex, uint8_t* output, uint32_t outputSize)
+{
+    uint32_t i;
+    int j;
+    int blockAlign;
+    int channelOffset;
+    uint32_t numSamples;
+    int bytesPerSample;
+    
+    blockAlign = (bitsPerSample + 7) / 8;
+    channelOffset = channelIndex * blockAlign;
+    bytesPerSample = blockAlign * numChannels;
+    numSamples = inputSize / bytesPerSample;
+
+    CHK_ORET(outputSize >= numSamples * blockAlign);
+    
+    for (i = 0; i < numSamples; i++)
+    {
+        for (j = 0; j < blockAlign; j++)
+        {
+            output[i * blockAlign + j] = input[i * bytesPerSample + channelOffset + j];
+        }
+    }
+    
+    return 1;
+}
+
+
+static int create_output_streams(InputTrackData* trackData, int numOutputStreams, const StreamInfo* commonStreamInfo, int* nextOutputStreamId)
+{
+    int j;
+    
+    CALLOC_ORET(trackData->streamData, OutputStreamData, numOutputStreams);
+    trackData->numOutputStreams = numOutputStreams;
+
+    for (j = 0; j < trackData->numOutputStreams; j++)
+    {
+        trackData->streamData[j].streamId = *nextOutputStreamId + j;
+
+        CHK_ORET(initialise_stream_info(&trackData->streamData[j].streamInfo));
+        CHK_ORET(duplicate_stream_info(commonStreamInfo, &trackData->streamData[j].streamInfo));
+    }
+    
+    *nextOutputStreamId += trackData->numOutputStreams;
+    return 1;
+}
+
+static int get_output_stream(MXFFileSource* source, int streamId, InputTrackData** inputTrack, OutputStreamData** outputStream)
+{
+    int i;
+    int j;
+    
+    for (i = 0; i < source->numInputTracks; i++)
+    {
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
+        {
+            if (source->trackData[i].streamData[j].streamId == streamId)
+            {
+                *inputTrack = &source->trackData[i];
+                *outputStream = &source->trackData[i].streamData[j];
+                return 1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
+
+
 
 static int map_accept_frame(MXFReaderListener* mxfListener, int trackIndex)
 {
-    if (trackIndex >= mxfListener->data->mxfSource->numTracks)
-    {
-        return 0;
-    }
-    if (mxfListener->data->mxfSource->streamData[trackIndex].isDisabled)
+    MXFFileSource* source = mxfListener->data->mxfSource;
+    int i;
+    int result;
+    OutputStreamData* outputStream;
+    
+    if (trackIndex >= (source->numInputTracks - source->numTimecodeTracks))
     {
         return 0;
     }
     
-    return sdl_accept_frame(mxfListener->data->streamListener, trackIndex, &mxfListener->data->frameInfo);
+    result = 0;
+    for (i = 0; i < source->trackData[trackIndex].numOutputStreams; i++)
+    {
+        outputStream = &source->trackData[trackIndex].streamData[i];
+        
+        if (!outputStream->isDisabled)
+        {
+            if (sdl_accept_frame(mxfListener->data->streamListener, outputStream->streamId, 
+                &mxfListener->data->frameInfo))
+            {
+                outputStream->frameAccepted = 1;
+                result = 1;
+            }
+        }
+    }
+    
+    return result;
 }
 
 static int map_allocate_buffer(MXFReaderListener* mxfListener, int trackIndex, uint8_t** buffer, uint32_t bufferSize)
 {
-    if (trackIndex >= mxfListener->data->mxfSource->numTracks)
-    {
-        return 0;
-    }
-    if (mxfListener->data->mxfSource->streamData[trackIndex].isDisabled)
+    MXFFileSource* source = mxfListener->data->mxfSource;
+    int i;
+    int result;
+    OutputStreamData* outputStream;
+    uint32_t outputBufferSize;
+    
+    if (trackIndex >= (source->numInputTracks - source->numTimecodeTracks))
     {
         return 0;
     }
     
-    return sdl_allocate_buffer(mxfListener->data->streamListener, trackIndex, buffer, bufferSize);
+
+    if (source->trackData[trackIndex].numOutputStreams > 1)
+    {
+        CHK_ORET(source->trackData[trackIndex].streamData[0].streamInfo.type == SOUND_STREAM_TYPE);
+        
+        /* multi-channel audio will divide up the data equally */
+        outputBufferSize = bufferSize / source->trackData[trackIndex].numOutputStreams;
+
+        /* allocate the input buffer */        
+        if (source->trackData[trackIndex].audioBufferSize <= outputBufferSize)
+        {
+            SAFE_FREE(&source->trackData[trackIndex].audioBuffer);
+            source->trackData[trackIndex].audioBufferSize = 0;
+            
+            MALLOC_ORET(source->trackData[trackIndex].audioBuffer, uint8_t, bufferSize);
+            source->trackData[trackIndex].audioBufferSize = bufferSize;
+        }
+    }
+    else
+    {
+        outputBufferSize = bufferSize;
+    }
+    
+    result = 0;
+    for (i = 0; i < source->trackData[trackIndex].numOutputStreams; i++)
+    {
+        outputStream = &source->trackData[trackIndex].streamData[i];
+        
+        if (!outputStream->isDisabled && outputStream->frameAccepted)
+        {
+            if (sdl_allocate_buffer(mxfListener->data->streamListener, outputStream->streamId, &outputStream->buffer, outputBufferSize))
+            {
+                outputStream->frameAllocated = 1;
+                outputStream->bufferSize = outputBufferSize;
+                result = 1;
+            }
+        }
+    }
+    
+    if (result)
+    {
+        if (source->trackData[trackIndex].numOutputStreams > 1)
+        {
+            *buffer = source->trackData[trackIndex].audioBuffer;
+        }
+        else
+        {
+            *buffer = source->trackData[trackIndex].streamData[0].buffer;
+        }
+    }
+    
+    return result;
 }
 
 static void map_deallocate_buffer(MXFReaderListener* mxfListener, int trackIndex, uint8_t** buffer)
 {
-    if (trackIndex >= mxfListener->data->mxfSource->numTracks)
-    {
-        return;
-    }
-    if (mxfListener->data->mxfSource->streamData[trackIndex].isDisabled)
+    MXFFileSource* source = mxfListener->data->mxfSource;
+    int i;
+    OutputStreamData* outputStream;
+    
+    if (trackIndex >= (source->numInputTracks - source->numTimecodeTracks))
     {
         return;
     }
     
-    sdl_deallocate_buffer(mxfListener->data->streamListener, trackIndex, buffer);
+    for (i = 0; i < source->trackData[trackIndex].numOutputStreams; i++)
+    {
+        outputStream = &source->trackData[trackIndex].streamData[i];
+        
+        if (!outputStream->isDisabled && outputStream->frameAllocated)
+        {
+            sdl_deallocate_buffer(mxfListener->data->streamListener, outputStream->streamId, &outputStream->buffer);
+        }
+        
+        outputStream->frameAllocated = 0;
+        outputStream->buffer = NULL;
+        outputStream->bufferSize = 0;
+    }
+    
+    /* the audio buffer is not deallocated */
 }
 
 static int map_receive_frame(MXFReaderListener* mxfListener, int trackIndex, uint8_t* buffer, uint32_t bufferSize)
 {
-    if (trackIndex >= mxfListener->data->mxfSource->numTracks)
-    {
-        return 0;
-    }
-    if (mxfListener->data->mxfSource->streamData[trackIndex].isDisabled)
+    MXFFileSource* source = mxfListener->data->mxfSource;
+    int i;
+    int result;
+    OutputStreamData* outputStream;
+    
+    if (trackIndex >= (source->numInputTracks - source->numTimecodeTracks))
     {
         return 0;
     }
     
-    return sdl_receive_frame(mxfListener->data->streamListener, trackIndex, buffer, bufferSize);
+    result = 0;
+    for (i = 0; i < source->trackData[trackIndex].numOutputStreams; i++)
+    {
+        outputStream = &source->trackData[trackIndex].streamData[i];
+        
+        if (!outputStream->isDisabled && outputStream->frameAllocated)
+        {
+            if (source->trackData[trackIndex].numOutputStreams > 1)
+            {
+                CHK_ORET(outputStream->streamInfo.type == SOUND_STREAM_TYPE);
+                
+                CHK_ORET(deinterleave_audio(buffer, bufferSize, source->trackData[trackIndex].numOutputStreams, 
+                    outputStream->streamInfo.bitsPerSample, i, outputStream->buffer, outputStream->bufferSize));
+            }
+            
+            if (sdl_receive_frame(mxfListener->data->streamListener, outputStream->streamId, outputStream->buffer, outputStream->bufferSize))
+            {
+                result = 1;
+            }
+        }
+        
+        outputStream->frameAccepted = 0;
+    }
+    
+    return result;
 }
 
 
-static int send_timecode(MediaSourceListener* listener, int streamIndex, const FrameInfo* frameInfo, MXFTimecode* mxfTimecode)
+static int send_timecode(MediaSourceListener* listener, OutputStreamData* outputStream, const FrameInfo* frameInfo, MXFTimecode* mxfTimecode)
 {
     Timecode* timecodeEvent;
     unsigned char* timecodeBuffer;
     
-    if (sdl_accept_frame(listener, streamIndex, frameInfo))
+    if (sdl_accept_frame(listener, outputStream->streamId, frameInfo))
     {
-        CHK_ORET(sdl_allocate_buffer(listener, streamIndex, &timecodeBuffer, sizeof(Timecode)));
+        CHK_ORET(sdl_allocate_buffer(listener, outputStream->streamId, &timecodeBuffer, sizeof(Timecode)));
         
         timecodeEvent = (Timecode*)timecodeBuffer;
         timecodeEvent->isDropFrame = 0;
@@ -221,7 +416,7 @@ static int send_timecode(MediaSourceListener* listener, int streamIndex, const F
         timecodeEvent->sec = mxfTimecode->sec;
         timecodeEvent->frame = mxfTimecode->frame;
         
-        CHK_ORET(sdl_receive_frame(listener, streamIndex, timecodeBuffer, sizeof(Timecode)));
+        CHK_ORET(sdl_receive_frame(listener, outputStream->streamId, timecodeBuffer, sizeof(Timecode)));
     }
 
     return 1;
@@ -230,46 +425,64 @@ static int send_timecode(MediaSourceListener* listener, int streamIndex, const F
 static int mxfs_get_num_streams(void* data)
 {
     MXFFileSource* source = (MXFFileSource*)data;
+    int numOutputStreams = 0;
+    int i;
     
-    return source->numStreams;
+    for (i = 0; i < source->numInputTracks; i++)
+    {
+        numOutputStreams += source->trackData[i].numOutputStreams;
+    }
+
+    return numOutputStreams;
 }
 
 static int mxfs_get_stream_info(void* data, int streamIndex, const StreamInfo** streamInfo)
 {
     MXFFileSource* source = (MXFFileSource*)data;
-
-    if (streamIndex >= source->numStreams)
+    InputTrackData* inputTrack = NULL;
+    OutputStreamData* outputStream = NULL;
+    
+    if (!get_output_stream(source, streamIndex, &inputTrack, &outputStream))
     {
         return 0;
     }
     
-    *streamInfo = &source->streamData[streamIndex].streamInfo;
+    *streamInfo = &outputStream->streamInfo;
     return 1;
 }
 
 static int mxfs_disable_stream(void* data, int streamIndex)
 {
     MXFFileSource* source = (MXFFileSource*)data;
+    InputTrackData* inputTrack = NULL;
+    OutputStreamData* outputStream = NULL;
     
-    if (streamIndex >= source->numStreams)
+    if (!get_output_stream(source, streamIndex, &inputTrack, &outputStream))
     {
         return 0;
     }
     
-    source->streamData[streamIndex].isDisabled = 1;
+    outputStream->isDisabled = 1;
     return 1;
 }
 
 static void mxfs_disable_audio(void* data)
 {
     MXFFileSource* source = (MXFFileSource*)data;
+    OutputStreamData* outputStream;
     int i;
+    int j;
     
-    for (i = 0; i < source->numStreams; i++)
+    for (i = 0; i < source->numInputTracks; i++)
     {
-        if (source->streamData[i].streamInfo.type == SOUND_STREAM_TYPE)
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
         {
-            source->streamData[i].isDisabled = 1;
+            outputStream = &source->trackData[i].streamData[j];
+            
+            if (outputStream->streamInfo.type == SOUND_STREAM_TYPE)
+            {
+                outputStream->isDisabled = 1;
+            }
         }
     }
 }
@@ -277,13 +490,15 @@ static void mxfs_disable_audio(void* data)
 static int mxfs_stream_is_disabled(void* data, int streamIndex)
 {
     MXFFileSource* source = (MXFFileSource*)data;
+    InputTrackData* inputTrack = NULL;
+    OutputStreamData* outputStream = NULL;
     
-    if (streamIndex >= source->numStreams)
+    if (!get_output_stream(source, streamIndex, &inputTrack, &outputStream))
     {
         return 0;
     }
     
-    return source->streamData[streamIndex].isDisabled;
+    return outputStream->isDisabled;
 }
 
 static int mxfs_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceListener* listener)
@@ -291,11 +506,12 @@ static int mxfs_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLi
     MXFFileSource* source = (MXFFileSource*)data;
     int result;
     MXFTimecode mxfTimecode;
-    int streamIndex;
+    int trackIndex;
     int i;
     int numSourceTimecodes;
     int mxfTimecodeType;
     int count;
+    OutputStreamData* outputStream;
     
     if (source->eof)
     {
@@ -318,32 +534,35 @@ static int mxfs_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLi
     }
     
     /* timecodes */
-    if (source->numTracks < source->numStreams)
+    if (source->numTimecodeTracks > 0)
     {
-        streamIndex = source->numTracks;
+        trackIndex = source->numInputTracks - source->numTimecodeTracks;
+        
         /* playout timecode */
-        if (!source->streamData[streamIndex].isDisabled)
+        outputStream = &source->trackData[trackIndex].streamData[0];
+        if (!outputStream->isDisabled)
         {
             if (get_playout_timecode(source->mxfReader, &mxfTimecode))
             {
-                send_timecode(listener, streamIndex, frameInfo, &mxfTimecode);
+                send_timecode(listener, outputStream, frameInfo, &mxfTimecode);
             }
         }
-        streamIndex++;
+        trackIndex++;
 
         /* source timecodes */
         numSourceTimecodes = get_num_source_timecodes(source->mxfReader);
         for (i = 0; i < numSourceTimecodes; i++)
         {
-            if (!source->streamData[streamIndex].isDisabled)
+            outputStream = &source->trackData[trackIndex].streamData[0];
+            if (!outputStream->isDisabled)
             {
                 if (get_source_timecode(source->mxfReader, i, &mxfTimecode, &mxfTimecodeType, &count) == 1)
                 {
-                    send_timecode(listener, streamIndex, frameInfo, &mxfTimecode);
+                    send_timecode(listener, outputStream, frameInfo, &mxfTimecode);
                 }
             }
             
-            streamIndex++;
+            trackIndex++;
         }
     }
 
@@ -595,22 +814,30 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 static void mxfs_set_source_name(void* data, const char* name)
 {
     MXFFileSource* source = (MXFFileSource*)data;
-
     int i;
-    for (i = 0; i < source->numStreams; i++)
+    int j;
+    
+    for (i = 0; i < source->numInputTracks; i++)
     {
-        add_known_source_info(&source->streamData[i].streamInfo, SRC_INFO_NAME, name);    
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
+        {
+            add_known_source_info(&source->trackData[i].streamData[j].streamInfo, SRC_INFO_NAME, name);
+        }
     }
 }
 
 static void mxfs_set_clip_id(void* data, const char* id)
 {
     MXFFileSource* source = (MXFFileSource*)data;
-
     int i;
-    for (i = 0; i < source->numStreams; i++)
+    int j;
+    
+    for (i = 0; i < source->numInputTracks; i++)
     {
-        set_stream_clip_id(&source->streamData[i].streamInfo, id);    
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
+        {
+            set_stream_clip_id(&source->trackData[i].streamData[j].streamInfo, id);
+        }
     }
 }
 
@@ -618,16 +845,28 @@ static void mxfs_close(void* data)
 {
     MXFFileSource* source = (MXFFileSource*)data;
     int i;
+    int j;
     
     if (data == NULL)
     {
         return;
     }
 
-    for (i = 0; i < source->numStreams; i++)
+    for (i = 0; i < source->numInputTracks; i++)
     {
-        clear_stream_info(&source->streamData[i].streamInfo);
+        for (j = 0; j < source->trackData[i].numOutputStreams; j++)
+        {
+            clear_stream_info(&source->trackData[i].streamData[j].streamInfo);
+        }
+
+        SAFE_FREE(&source->trackData[i].audioBuffer);
+        source->trackData[i].audioBufferSize = 0;
+        
+        SAFE_FREE(&source->trackData[i].streamData);
+        source->trackData[i].numOutputStreams = 0;
     }
+    SAFE_FREE(&source->trackData);
+    source->numInputTracks = 0;
     
     if (source->mxfReader != NULL)
     {
@@ -635,7 +874,6 @@ static void mxfs_close(void* data)
     }
     
     mxf_free_data_model(&source->dataModel);
-    SAFE_FREE(&source->streamData);
     SAFE_FREE(&source->filename);    
     
     SAFE_FREE(&source);
@@ -649,6 +887,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     MXFFile* mxfFile = NULL;
     MXFPageFile* mxfPageFile = NULL;
     int i;
+    int j;
     D3MXFInfo d3MXFInfo;
     int haveD3Info = 0;
     char stringBuf[128];
@@ -658,12 +897,16 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int haveD3LTC = 0;
     int64_t duration = -1;
     char progNo[16];
-    int sourceId;
     char clipUMIDStr[65] = {0};
+    int nextOutputStreamId;
+    OutputStreamData* outputStream;
+    StreamInfo commonStreamInfo;
+    int numTracks;
     
     assert(MAX_SOURCE_INFO_VALUE_LEN <= 128);
     assert(sizeof(uint8_t) == sizeof(unsigned char));
     assert(sizeof(uint32_t) <= sizeof(unsigned int));
+    
     
     /* connect the MXF logging */
     mxf_log = mxf_log_connect;
@@ -758,111 +1001,120 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mxfListener.deallocate_buffer = map_deallocate_buffer;
     newSource->mxfListener.receive_frame = map_receive_frame;
 
-    newSource->numTracks = get_num_tracks(newSource->mxfReader);
+    
+    numTracks = get_num_tracks(newSource->mxfReader);
     numSourceTimecodes = get_num_source_timecodes(newSource->mxfReader);
-    newSource->numStreams = newSource->numTracks + 1 + numSourceTimecodes;
-    
-    CALLOC_OFAIL(newSource->streamData, StreamData, newSource->numStreams);
+    newSource->numTimecodeTracks = 1 + numSourceTimecodes;
+    newSource->numInputTracks = numTracks + newSource->numTimecodeTracks;
 
-    sourceId = msc_create_id();
+    CALLOC_OFAIL(newSource->trackData, InputTrackData, newSource->numInputTracks);
+
     
-    for (i = 0; i < newSource->numTracks; i++)
+    /* create the common source information */
+    
+    CHK_ORET(initialise_stream_info(&commonStreamInfo));
+    commonStreamInfo.sourceId = msc_create_id();
+    set_stream_clip_id(&commonStreamInfo, clipUMIDStr);
+    
+    CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_FILE_NAME, filename));
+    if (newSource->isD3MXF)
     {
-        MXFTrack* track = get_mxf_track(newSource->mxfReader, i);
-        
-        CHK_OFAIL(initialise_stream_info(&newSource->streamData[i].streamInfo));
-        
-        newSource->streamData[i].streamInfo.sourceId = sourceId;
-        set_stream_clip_id(&newSource->streamData[i].streamInfo, clipUMIDStr);
-        
-        CHK_OFAIL(add_filename_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_NAME, filename));
-        if (newSource->isD3MXF)
+        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "D3-MXF"));
+    }
+    else
+    {
+        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "MXF"));
+    }
+    CHK_OFAIL(add_timecode_source_info(&commonStreamInfo, SRC_INFO_FILE_DURATION, duration, 25)); 
+
+    if (newSource->isD3MXF)
+    {
+        if (haveD3Info)
         {
-            CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_TYPE, "D3-MXF"));
+            CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_D3MXF_ORIG_FILENAME, 
+                d3MXFInfo.filename));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_CREATION_DATE, 
+                convert_date(&d3MXFInfo.creationDate, stringBuf)));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_LTO_SPOOL_NO, 
+                d3MXFInfo.ltoInfaxData.spoolNo));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_D3_SPOOL_NO, 
+                d3MXFInfo.d3InfaxData.spoolNo));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_D3_ITEM_NO, 
+                convert_uint32(d3MXFInfo.d3InfaxData.itemNo, stringBuf)));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_TITLE, 
+                d3MXFInfo.d3InfaxData.progTitle));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_EPISODE_TITLE, 
+                d3MXFInfo.d3InfaxData.epTitle));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_TX_DATE, 
+                convert_date(&d3MXFInfo.d3InfaxData.txDate, stringBuf)));
+            progNo[0] = '\0';
+            if (strlen(d3MXFInfo.d3InfaxData.magPrefix) > 0)
+            {
+                strcat(progNo, d3MXFInfo.d3InfaxData.magPrefix);
+                strcat(progNo, ":");
+            }
+            strcat(progNo, d3MXFInfo.d3InfaxData.progNo);
+            if (strlen(d3MXFInfo.d3InfaxData.prodCode) > 0)
+            {
+                strcat(progNo, "/");
+                if (strlen(d3MXFInfo.d3InfaxData.prodCode) == 1 && 
+                    d3MXFInfo.d3InfaxData.prodCode[0] >= '0' && d3MXFInfo.d3InfaxData.prodCode[0] <= '9')
+                {
+                    strcat(progNo, "0");
+                }
+                strcat(progNo, d3MXFInfo.d3InfaxData.prodCode);
+            }
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_NUMBER, 
+                progNo));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_DURATION, 
+                convert_prog_duration(d3MXFInfo.d3InfaxData.duration, stringBuf)));
         }
         else
         {
-            CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_TYPE, "MXF"));
+            CHK_OFAIL(add_source_info(&commonStreamInfo, "D3 info", "not available"));
         }
-        CHK_OFAIL(add_timecode_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_FILE_DURATION, duration, 25)); 
+    }
 
-        if (newSource->isD3MXF)
-        {
-            if (haveD3Info)
-            {
-                CHK_OFAIL(add_filename_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_ORIG_FILENAME, 
-                    d3MXFInfo.filename));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_CREATION_DATE, 
-                    convert_date(&d3MXFInfo.creationDate, stringBuf)));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_LTO_SPOOL_NO, 
-                    d3MXFInfo.ltoInfaxData.spoolNo));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_D3_SPOOL_NO, 
-                    d3MXFInfo.d3InfaxData.spoolNo));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_D3_ITEM_NO, 
-                    convert_uint32(d3MXFInfo.d3InfaxData.itemNo, stringBuf)));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_PROGRAMME_TITLE, 
-                    d3MXFInfo.d3InfaxData.progTitle));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_EPISODE_TITLE, 
-                    d3MXFInfo.d3InfaxData.epTitle));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_TX_DATE, 
-                    convert_date(&d3MXFInfo.d3InfaxData.txDate, stringBuf)));
-                progNo[0] = '\0';
-                if (strlen(d3MXFInfo.d3InfaxData.magPrefix) > 0)
-                {
-                    strcat(progNo, d3MXFInfo.d3InfaxData.magPrefix);
-                    strcat(progNo, ":");
-                }
-                strcat(progNo, d3MXFInfo.d3InfaxData.progNo);
-                if (strlen(d3MXFInfo.d3InfaxData.prodCode) > 0)
-                {
-                    strcat(progNo, "/");
-                    if (strlen(d3MXFInfo.d3InfaxData.prodCode) == 1 && 
-                        d3MXFInfo.d3InfaxData.prodCode[0] >= '0' && d3MXFInfo.d3InfaxData.prodCode[0] <= '9')
-                    {
-                        strcat(progNo, "0");
-                    }
-                    strcat(progNo, d3MXFInfo.d3InfaxData.prodCode);
-                }
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_PROGRAMME_NUMBER, 
-                    progNo));
-                CHK_OFAIL(add_known_source_info(&newSource->streamData[i].streamInfo, SRC_INFO_D3MXF_PROGRAMME_DURATION, 
-                    convert_prog_duration(d3MXFInfo.d3InfaxData.duration, stringBuf)));
-            }
-            else
-            {
-                CHK_OFAIL(add_source_info(&newSource->streamData[i].streamInfo, "D3 info", "not available"));
-            }
-        }
+    
+    /* complete the input track data and output stream info */
+    
+    nextOutputStreamId = 0;
+    for (i = 0; i < numTracks; i++)
+    {
+        MXFTrack* track = get_mxf_track(newSource->mxfReader, i);
         
         if (track->isVideo)
         {
-            newSource->streamData[i].streamInfo.type = PICTURE_STREAM_TYPE;
-            newSource->streamData[i].streamInfo.frameRate.num = track->video.frameRate.numerator;
-            newSource->streamData[i].streamInfo.frameRate.den = track->video.frameRate.denominator;
-            newSource->streamData[i].streamInfo.width = track->video.frameWidth;
-            newSource->streamData[i].streamInfo.height = track->video.frameHeight;
-            newSource->streamData[i].streamInfo.aspectRatio.num = track->video.aspectRatio.numerator;
-            newSource->streamData[i].streamInfo.aspectRatio.den = track->video.aspectRatio.denominator;
+            CHK_OFAIL(create_output_streams(&newSource->trackData[i], 1, &commonStreamInfo, &nextOutputStreamId));
+            outputStream = &newSource->trackData[i].streamData[0];
+
+            outputStream->streamInfo.type = PICTURE_STREAM_TYPE;
+            outputStream->streamInfo.frameRate.num = track->video.frameRate.numerator;
+            outputStream->streamInfo.frameRate.den = track->video.frameRate.denominator;
+            outputStream->streamInfo.width = track->video.frameWidth;
+            outputStream->streamInfo.height = track->video.frameHeight;
+            outputStream->streamInfo.aspectRatio.num = track->video.aspectRatio.numerator;
+            outputStream->streamInfo.aspectRatio.den = track->video.aspectRatio.denominator;
             if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped))) 
             {
-                newSource->streamData[i].streamInfo.format = UYVY_FORMAT;
+                outputStream->streamInfo.format = UYVY_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(IECDV_25_625_50_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)))
             {
-                newSource->streamData[i].streamInfo.format = DV25_YUV420_FORMAT;
+                outputStream->streamInfo.format = DV25_YUV420_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_25_625_50_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_25_625_50_FrameWrapped)))
             {
-                newSource->streamData[i].streamInfo.format = DV25_YUV411_FORMAT;
+                outputStream->streamInfo.format = DV25_YUV411_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_50_625_50_ClipWrapped)) || 
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_50_625_50_FrameWrapped)))
             {
-                newSource->streamData[i].streamInfo.format = DV50_FORMAT;
+                outputStream->streamInfo.format = DV50_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_defined_template)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(D10_50_625_50_extended_template)) ||
@@ -877,50 +1129,62 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX40)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidIMX30)))
             {
-                newSource->streamData[i].streamInfo.format = D10_PICTURE_FORMAT;
+                outputStream->streamInfo.format = D10_PICTURE_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(AvidMJPEGClipWrapped)))
             {
-                newSource->streamData[i].streamInfo.format = AVID_MJPEG_FORMAT;
-                newSource->streamData[i].streamInfo.singleField = 1;
+                outputStream->streamInfo.format = AVID_MJPEG_FORMAT;
+                outputStream->streamInfo.singleField = 1;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)))
             {
-                newSource->streamData[i].streamInfo.format = AVID_DNxHD_FORMAT;
+                outputStream->streamInfo.format = AVID_DNxHD_FORMAT;
             }
             else
             {
-                newSource->streamData[i].streamInfo.format = UNKNOWN_FORMAT;
+                outputStream->streamInfo.format = UNKNOWN_FORMAT;
             }
         }
         else /* audio */
         {
+            CHK_OFAIL(create_output_streams(&newSource->trackData[i], track->audio.channelCount, &commonStreamInfo, &nextOutputStreamId));
+
             /* TODO: don't assume PCM */
-            newSource->streamData[i].streamInfo.type = SOUND_STREAM_TYPE;
-            newSource->streamData[i].streamInfo.format = PCM_FORMAT;
-            newSource->streamData[i].streamInfo.samplingRate.num = track->audio.samplingRate.numerator;
-            newSource->streamData[i].streamInfo.samplingRate.den = track->audio.samplingRate.denominator;
-            newSource->streamData[i].streamInfo.numChannels = track->audio.channelCount;
-            newSource->streamData[i].streamInfo.bitsPerSample = track->audio.bitsPerSample;
+            for (j = 0; j < (int)track->audio.channelCount; j++)
+            {
+                outputStream = &newSource->trackData[i].streamData[j];
+                
+                outputStream->streamInfo.type = SOUND_STREAM_TYPE;
+                outputStream->streamInfo.format = PCM_FORMAT;
+                outputStream->streamInfo.samplingRate.num = track->audio.samplingRate.numerator;
+                outputStream->streamInfo.samplingRate.den = track->audio.samplingRate.denominator;
+                outputStream->streamInfo.numChannels = 1;
+                outputStream->streamInfo.bitsPerSample = track->audio.bitsPerSample;
+            }
         }
     }
 
     /* control/playout timecode streams */
-    newSource->streamData[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
-    newSource->streamData[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
-    newSource->streamData[newSource->numTracks].streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
-    newSource->streamData[newSource->numTracks].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
-    newSource->streamData[newSource->numTracks].streamInfo.sourceId = sourceId;
+    CHK_OFAIL(create_output_streams(&newSource->trackData[numTracks], 1, &commonStreamInfo, &nextOutputStreamId));
+    outputStream = &newSource->trackData[numTracks].streamData[0];
+    
+    outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
+    outputStream->streamInfo.format = TIMECODE_FORMAT;
+    outputStream->streamInfo.timecodeType = CONTROL_TIMECODE_TYPE;
+    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+    
     
     /* source timecodes */
     for (i = 0; i < numSourceTimecodes; i++)
     {
+        CHK_OFAIL(create_output_streams(&newSource->trackData[numTracks + 1 + i], 1, &commonStreamInfo, &nextOutputStreamId));
+        outputStream = &newSource->trackData[numTracks + 1 + i].streamData[0];
+        
         timecodeType = get_source_timecode_type(newSource->mxfReader, i);
 
-        newSource->streamData[newSource->numTracks + 1 + i].streamInfo.type = TIMECODE_STREAM_TYPE;
-        newSource->streamData[newSource->numTracks + 1 + i].streamInfo.format = TIMECODE_FORMAT;
-        newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
-        newSource->streamData[newSource->numTracks + 1 + i].streamInfo.sourceId = sourceId;
+        outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
+        outputStream->streamInfo.format = TIMECODE_FORMAT;
+        outputStream->streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
         if (newSource->isD3MXF)
         {
             /* we are only interested in the VITC and LTC source timecodes */
@@ -928,12 +1192,12 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             {
                 if (!haveD3VITC)
                 {
-                    newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
+                    outputStream->streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
                     haveD3VITC = 1;
                 }
                 else if (!haveD3LTC)
                 {
-                    newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+                    outputStream->streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
                     haveD3LTC = 1;
                 }
                 else
@@ -941,30 +1205,34 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                     /* this is unexpected because a D3 MXF file should only have a VITC and LTC timecode */
                     ml_log_warn("Found more than 2 system item timecodes for D3 MXF file\n");
                     
-                    newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+                    outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
 
                     /* we disable it because it doesn't apply for D3 MXF files */
-                    newSource->streamData[newSource->numTracks + 1 + i].isDisabled = 1;
+                    outputStream->isDisabled = 1;
                 }
             }
             else
             {
-                newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+                outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
 
                 /* we disable it because it doesn't apply for D3 MXF files */
-                newSource->streamData[newSource->numTracks + 1 + i].isDisabled = 1;
+                outputStream->isDisabled = 1;
             }
         }
         else
         {
-            newSource->streamData[newSource->numTracks + 1 + i].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+            outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
         }
     }
+    
+    
+    clear_stream_info(&commonStreamInfo);
     
     *source = newSource;
     return 1;
     
 fail:
+    clear_stream_info(&commonStreamInfo);
     if (newSource == NULL || newSource->mxfReader == NULL)
     {
         mxf_file_close(&mxfFile);
