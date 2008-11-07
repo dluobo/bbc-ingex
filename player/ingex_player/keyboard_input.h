@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input.h,v 1.3 2008/11/06 19:56:56 john_f Exp $
+ * $Id: keyboard_input.h,v 1.4 2008/11/07 14:25:25 philipn Exp $
  *
  *
  *
@@ -33,6 +33,7 @@ extern "C"
 
 #define SHIFT_KEY_MODIFIER           0x01
 #define CONTROL_KEY_MODIFIER         0x02
+#define ALT_KEY_MODIFIER             0x04
 
 
 typedef struct

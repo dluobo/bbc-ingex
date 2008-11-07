@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.c,v 1.6 2008/11/06 19:56:56 john_f Exp $
+ * $Id: x11_common.c,v 1.7 2008/11/07 14:24:55 philipn Exp $
  *
  *
  *
@@ -463,6 +463,10 @@ int x11c_process_events(X11Common* x11Common, int sync)
                 {
                     modifier |= CONTROL_KEY_MODIFIER;
                 }
+                if (((XKeyEvent*)&event)->state & Mod1Mask)
+                {
+                    modifier |= ALT_KEY_MODIFIER;
+                }
                 kil_key_pressed(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
                 kil_key_pressed(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
             }
@@ -476,6 +480,10 @@ int x11c_process_events(X11Common* x11Common, int sync)
                 if (((XKeyEvent*)&event)->state & ControlMask)
                 {
                     modifier |= CONTROL_KEY_MODIFIER;
+                }
+                if (((XKeyEvent*)&event)->state & Mod1Mask)
+                {
+                    modifier |= ALT_KEY_MODIFIER;
                 }
                 kil_key_released(x11Common->keyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
                 kil_key_released(x11Common->separateKeyboardListener, XLookupKeysym((XKeyEvent*)&event, 0), modifier);
