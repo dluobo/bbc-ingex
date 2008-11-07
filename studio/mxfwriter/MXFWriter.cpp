@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.5 2008/10/29 17:54:26 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.6 2008/11/07 16:55:09 philipn Exp $
  *
  * Writes essence data to MXF files
  *
@@ -699,7 +699,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG21_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res21;
+                            essenceInfo.mjpegResolution = Res21;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -710,7 +710,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG31_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res31;
+                            essenceInfo.mjpegResolution = Res31;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -721,7 +721,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG101_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res101;
+                            essenceInfo.mjpegResolution = Res101;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -732,7 +732,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG151S_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res151s;
+                            essenceInfo.mjpegResolution = Res151s;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -743,7 +743,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG201_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res201;
+                            essenceInfo.mjpegResolution = Res201;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -754,7 +754,7 @@ void MXFWriter::Construct(int resolutionID,
                         case MJPEG101M_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            essenceInfo.avidMJPEGInfo.resolution = Res101m;
+                            essenceInfo.mjpegResolution = Res101m;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -765,6 +765,7 @@ void MXFWriter::Construct(int resolutionID,
                         case IMX30_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            essenceInfo.imxFrameSize = 150000;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -775,6 +776,7 @@ void MXFWriter::Construct(int resolutionID,
                         case IMX40_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            essenceInfo.imxFrameSize = 200000;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -785,6 +787,7 @@ void MXFWriter::Construct(int resolutionID,
                         case IMX50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            essenceInfo.imxFrameSize = 250000;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -850,7 +853,7 @@ void MXFWriter::Construct(int resolutionID,
                 else
                 {
                     EssenceInfo essenceInfo;
-                    essenceInfo.pcmInfo.bitsPerSample = audioQuantizationBits;
+                    essenceInfo.pcmBitsPerSample = audioQuantizationBits;
                     CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(), 
                         &timestamp, fileDesc->fileLocation.c_str(), 
                         PCM, &essenceInfo, &mxfFilePackage));
