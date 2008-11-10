@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPServer.cpp,v 1.1 2008/07/08 16:24:40 philipn Exp $
+ * $Id: HTTPServer.cpp,v 1.2 2008/11/10 14:51:43 philipn Exp $
  *
  * Wraps the shttpd embedded web server
  *
@@ -425,25 +425,29 @@ void HTTPConnection::sendJSON(JSONObject* json)
 
 void HTTPConnection::sendOk()
 {
-    _buffer << "HTTP/1.1 200 OK\r\n\r\n";
+    _buffer << "HTTP/1.1 200 OK\r\n";
+    _buffer << "Content-Type: text/plain\r\n\r\n";
     setResponseDataIsReady();
 }
 
 void HTTPConnection::sendBadRequest(string description)
 {
-    _buffer << "HTTP/1.1 400 " << description << "\r\n\r\n";
+    _buffer << "HTTP/1.1 400 " << description << "\r\n";
+    _buffer << "Content-Type: text/plain\r\n\r\n";
     setResponseDataIsReady();
 }
 
 void HTTPConnection::sendServerBusy(string description)
 {
-    _buffer << "HTTP/1.1 503 " << description << "\r\n\r\n";
+    _buffer << "HTTP/1.1 503 " << description << "\r\n";
+    _buffer << "Content-Type: text/plain\r\n\r\n";
     setResponseDataIsReady();
 }
 
 void HTTPConnection::sendServerError(string description)
 {
-    _buffer << "HTTP/1.1 500 " << description << "\r\n\r\n";
+    _buffer << "HTTP/1.1 500 " << description << "\r\n";
+    _buffer << "Content-Type: text/plain\r\n\r\n";
     setResponseDataIsReady();
 }
     
