@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
+ * $Id: raw_file_sink.c,v 1.4 2008/11/11 10:40:59 philipn Exp $
  *
  *
  *
@@ -38,8 +38,9 @@
 typedef struct
 {
     int streamId;
+    unsigned int bufferSize;
     unsigned char* buffer;
-    unsigned int bufferSize; 
+    unsigned int allocatedBufferSize;
     int isPresent;
     StreamType streamType;
     FILE* outputFile;
@@ -179,14 +180,14 @@ static int rms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
         return 0;
     }
     
-    if (rawStream->bufferSize != bufferSize)
+    if (rawStream->allocatedBufferSize != bufferSize)
     {
         if ((rawStream->buffer = realloc(rawStream->buffer, bufferSize)) == NULL)
         {
             ml_log_error("Failed to realloc memory for raw stream buffer\n");
             return 0;
         }
-        rawStream->bufferSize = bufferSize;
+        rawStream->allocatedBufferSize = bufferSize;
     }
     
     *buffer = rawStream->buffer;
@@ -204,11 +205,12 @@ static int rms_receive_stream_frame(void* data, int streamId, unsigned char* buf
         ml_log_error("Unknown stream %d for raw file output\n", streamId);
         return 0;
     }
-    if (rawStream->bufferSize != bufferSize)
+    if (bufferSize > rawStream->allocatedBufferSize)
     {
-        ml_log_error("Buffer size (%d) != raw stream buffer size (%d)\n", bufferSize, rawStream->bufferSize);
+        ml_log_error("Buffer size (%d) > raw stream buffer size (%d)\n", bufferSize, rawStream->allocatedBufferSize);
         return 0;
     }
+    rawStream->bufferSize = bufferSize;
         
     rawStream->isPresent = 1;
 

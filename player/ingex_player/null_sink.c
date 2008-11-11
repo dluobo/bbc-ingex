@@ -1,5 +1,5 @@
 /*
- * $Id: null_sink.c,v 1.3 2008/11/06 11:30:09 john_f Exp $
+ * $Id: null_sink.c,v 1.4 2008/11/11 10:40:59 philipn Exp $
  *
  *
  *
@@ -38,8 +38,9 @@
 typedef struct
 {
     int streamId;
-    unsigned char* buffer;
     unsigned int bufferSize; 
+    unsigned char* buffer;
+    unsigned int allocatedBufferSize; 
     int isPresent;
 } NullStream;
 
@@ -172,14 +173,14 @@ static int nms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
         return 0;
     }
     
-    if (nullStream->bufferSize != bufferSize)
+    if (nullStream->allocatedBufferSize != bufferSize)
     {
         if ((nullStream->buffer = realloc(nullStream->buffer, bufferSize)) == NULL)
         {
             ml_log_error("Failed to realloc memory for raw stream buffer\n");
             return 0;
         }
-        nullStream->bufferSize = bufferSize;
+        nullStream->allocatedBufferSize = bufferSize;
     }
     
     *buffer = nullStream->buffer;
@@ -197,11 +198,12 @@ static int nms_receive_stream_frame(void* data, int streamId, unsigned char* buf
         ml_log_error("Unknown stream %d for null output\n", streamId);
         return 0;
     }
-    if (nullStream->bufferSize != bufferSize)
+    if (bufferSize > nullStream->allocatedBufferSize)
     {
-        ml_log_error("Buffer size (%d) != raw stream buffer size (%d)\n", bufferSize, nullStream->bufferSize);
+        ml_log_error("Buffer size (%d) > raw stream buffer size (%d)\n", bufferSize, nullStream->allocatedBufferSize);
         return 0;
     }
+    nullStream->bufferSize = bufferSize;
         
     nullStream->isPresent = 1;
 

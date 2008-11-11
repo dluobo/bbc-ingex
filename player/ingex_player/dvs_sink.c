@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.10 2008/11/06 11:30:09 john_f Exp $
+ * $Id: dvs_sink.c,v 1.11 2008/11/11 10:40:59 philipn Exp $
  *
  *
  *
@@ -136,8 +136,9 @@ typedef struct
     StreamInfo streamInfo;
 
     int ownData; /* delete here if data is not a reference into the buffer */
-    unsigned char* data[2];
     unsigned int dataSize;
+    unsigned char* data[2];
+    unsigned int allocatedDataSize[2];
     
     int requireFit; /* true if the stream dimensions != dvs frame dimensions */
     
@@ -917,6 +918,8 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
                 dvsStream->data[0] = &sink->fifoBuffer[0].buffer[0];
                 dvsStream->data[1] = &sink->fifoBuffer[1].buffer[0];
             }
+            dvsStream->allocatedDataSize[0] = 0;
+            dvsStream->allocatedDataSize[1] = 0;
             dvsStream->ownData = 0;
             dvsStream->requireFit = 0;
         }
@@ -926,7 +929,9 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             transformations (image format or fitting) are required */
             
             CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize);
+            dvsStream->allocatedDataSize[0] = dvsStream->dataSize;
             CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
+            dvsStream->allocatedDataSize[1] = dvsStream->dataSize;
 
             dvsStream->ownData = 1;
             
@@ -954,7 +959,9 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
 
         dvsStream->dataSize = 1920 * ((streamInfo->bitsPerSample + 7) / 8);
         CALLOC_ORET(dvsStream->data[0], unsigned char, dvsStream->dataSize);
+        dvsStream->allocatedDataSize[0] = dvsStream->dataSize;
         CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
+        dvsStream->allocatedDataSize[1] = dvsStream->dataSize;
 
         dvsStream->ownData = 1;
         
@@ -1012,7 +1019,20 @@ static int dvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
     }
     else if ((dvsStream = get_dvs_stream(sink, streamId)) != NULL)
     {
-        if (dvsStream->dataSize != bufferSize)
+        if (dvsStream->ownData)
+        {
+            if (dvsStream->allocatedDataSize[sink->currentFifoBuffer] < bufferSize)
+            {
+                /* reallocate a larger work buffer */
+                
+                SAFE_FREE(&dvsStream->data[sink->currentFifoBuffer]);
+                dvsStream->allocatedDataSize[sink->currentFifoBuffer] = 0;
+                
+                CALLOC_ORET(dvsStream->data[sink->currentFifoBuffer], unsigned char, bufferSize);
+                dvsStream->allocatedDataSize[sink->currentFifoBuffer] = bufferSize;
+            }
+        }
+        else if (dvsStream->dataSize != bufferSize)
         {
             fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize);
             return 0;
@@ -1047,9 +1067,14 @@ static int dvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
     }
     else if ((dvsStream = get_dvs_stream(sink, streamId)) != NULL)
     {
-        if (buffer != dvsStream->data[sink->currentFifoBuffer] || bufferSize != dvsStream->dataSize)
+        if (buffer != dvsStream->data[sink->currentFifoBuffer])
         {
             fprintf(stderr, "Frame buffer does not correspond to data\n");
+            return 0;
+        }
+        else if (bufferSize != dvsStream->dataSize)
+        {
+            fprintf(stderr, "Buffer size (%d) != data size (%d)\n", bufferSize, dvsStream->dataSize);
             return 0;
         }
     
