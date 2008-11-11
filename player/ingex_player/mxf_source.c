@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.6 2008/11/07 14:24:08 philipn Exp $
+ * $Id: mxf_source.c,v 1.7 2008/11/11 10:40:27 philipn Exp $
  *
  *
  *
@@ -278,7 +278,6 @@ static int map_allocate_buffer(MXFReaderListener* mxfListener, int trackIndex, u
         return 0;
     }
     
-
     if (source->trackData[trackIndex].numOutputStreams > 1)
     {
         CHK_ORET(source->trackData[trackIndex].streamData[0].streamInfo.type == SOUND_STREAM_TYPE);
@@ -366,6 +365,7 @@ static int map_receive_frame(MXFReaderListener* mxfListener, int trackIndex, uin
     int i;
     int result;
     OutputStreamData* outputStream;
+    uint32_t outputBufferSize;
     
     if (trackIndex >= (source->numInputTracks - source->numTimecodeTracks))
     {
@@ -381,13 +381,20 @@ static int map_receive_frame(MXFReaderListener* mxfListener, int trackIndex, uin
         {
             if (source->trackData[trackIndex].numOutputStreams > 1)
             {
+                /* multi-channel audio will divide up the data equally */
+                outputBufferSize = bufferSize / source->trackData[trackIndex].numOutputStreams;
+        
                 CHK_ORET(outputStream->streamInfo.type == SOUND_STREAM_TYPE);
                 
                 CHK_ORET(deinterleave_audio(buffer, bufferSize, source->trackData[trackIndex].numOutputStreams, 
-                    outputStream->streamInfo.bitsPerSample, i, outputStream->buffer, outputStream->bufferSize));
+                    outputStream->streamInfo.bitsPerSample, i, outputStream->buffer, outputBufferSize));
+            }
+            else
+            {
+                outputBufferSize = bufferSize;
             }
             
-            if (sdl_receive_frame(mxfListener->data->streamListener, outputStream->streamId, outputStream->buffer, outputStream->bufferSize))
+            if (sdl_receive_frame(mxfListener->data->streamListener, outputStream->streamId, outputStream->buffer, outputBufferSize))
             {
                 result = 1;
             }
