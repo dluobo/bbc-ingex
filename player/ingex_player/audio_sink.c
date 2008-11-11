@@ -1,5 +1,5 @@
 /*
- * $Id: audio_sink.c,v 1.6 2008/11/07 14:28:36 philipn Exp $
+ * $Id: audio_sink.c,v 1.7 2008/11/11 10:39:35 philipn Exp $
  *
  *
  *
@@ -59,8 +59,9 @@ typedef struct
 {
     int streamId;
     
-    unsigned char* buffer[2];
     unsigned int bufferSize;
+    unsigned char* buffer[2];
+    unsigned int allocatedBufferSize[2];
     int bufferIsReady[2];
     
     unsigned char* nextSinkBuffer;
@@ -368,7 +369,14 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
     int nextSinkResult;
 
 
-    nextSinkResult = msk_register_stream(sink->nextSink, streamId, streamInfo);
+    if (msk_accept_stream(sink->nextSink, streamInfo))
+    {
+        nextSinkResult = msk_register_stream(sink->nextSink, streamId, streamInfo);
+    }
+    else
+    {
+        nextSinkResult = 0;
+    }
 
 
     if (streamInfo->type == SOUND_STREAM_TYPE && 
@@ -416,10 +424,14 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
             sink->audioStreams[sink->numAudioStreams].streamId = streamId;
             sink->audioStreams[sink->numAudioStreams].bufferSize = streamInfo->numChannels *
                 sink->paFramesPerBuffer * sink->byteAlignment;   
+            sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[0] = 
+                sink->audioStreams[sink->numAudioStreams].bufferSize;   
             CALLOC_ORET(sink->audioStreams[sink->numAudioStreams].buffer[0], unsigned char, 
-                sink->audioStreams[sink->numAudioStreams].bufferSize);
+                sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[0]);
+            sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[1] = 
+                sink->audioStreams[sink->numAudioStreams].bufferSize;   
             CALLOC_ORET(sink->audioStreams[sink->numAudioStreams].buffer[1], unsigned char, 
-                sink->audioStreams[sink->numAudioStreams].bufferSize);
+                sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[1]);
             sink->numAudioStreams++;
             
             return 1;
@@ -548,10 +560,15 @@ static int aus_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                 }
             }
             
-            if (bufferSize != sink->audioStreams[i].bufferSize)
+            if (bufferSize > sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer])
             {
-                ml_log_error("Buffer size (%d) != audio data size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
-                return 0;
+                /* the source required more work space - reallocate the buffer */
+                
+                SAFE_FREE(&sink->audioStreams[i].buffer[sink->writeBuffer]);
+                sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = 0;
+                
+                CALLOC_ORET(sink->audioStreams[i].buffer[sink->writeBuffer], unsigned char, bufferSize); 
+                sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = bufferSize;
             }
             
             *buffer = sink->audioStreams[i].buffer[sink->writeBuffer];
@@ -581,6 +598,13 @@ static int aus_receive_stream_frame(void* data, int streamId, unsigned char* buf
                 memcpy(sink->audioStreams[i].nextSinkBuffer, buffer, bufferSize);
                 msk_receive_stream_frame(sink->nextSink, streamId, sink->audioStreams[i].nextSinkBuffer, bufferSize);
             }
+
+            /* the buffer size should now equal what we expect to receive */            
+            if (bufferSize != sink->audioStreams[i].bufferSize)
+            {
+                ml_log_error("Buffer size (%d) != audio sink buffer size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
+                return 0;
+            }
             
             return 1;
         }
@@ -601,6 +625,13 @@ static int aus_receive_stream_frame_const(void* data, int streamId, const unsign
             if (sink->audioStreams[i].nextSinkAcceptedFrame)
             {
                 msk_receive_stream_frame_const(sink->nextSink, streamId, buffer, bufferSize);
+            }
+            
+            /* the buffer size should now equal what we expect to receive */            
+            if (bufferSize != sink->audioStreams[i].bufferSize)
+            {
+                ml_log_error("Buffer size (%d) != audio sink buffer size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
+                return 0;
             }
             
             memcpy(sink->audioStreams[i].buffer[sink->writeBuffer], buffer, bufferSize);
