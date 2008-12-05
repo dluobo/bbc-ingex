@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.14 2008/11/07 14:28:36 philipn Exp $
+ * $Id: player.c,v 1.15 2008/12/05 16:49:00 philipn Exp $
  *
  *
  *
@@ -716,6 +716,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -h, --help               Display this usage message plus keyboard and shuttle input help\n");
     fprintf(stderr, "  --help-control           Display keyboard and jog-shuttle control help\n");
     fprintf(stderr, "  -v, --version            Display the player version\n");
+    fprintf(stderr, "  --src-info               Display the source information\n");
     fprintf(stderr, "  --log-file <name>        Output log messages to file\n");
     fprintf(stderr, "  --log-level <level>      Output log level; 0=debug, 1=info, 2=warning, 3=error (default %d)\n", DEBUG_LOG_LEVEL);
     fprintf(stderr, "  --log-buf <name>         Log source and sink buffer state to file\n");
@@ -945,6 +946,7 @@ int main(int argc, const char **argv)
     int dvsCard = -1;
     int dvsChannel = -1;
     int startPaused = 0;
+    int printSourceInfo = 0;
     
     
     memset(inputs, 0, sizeof(inputs));
@@ -974,6 +976,11 @@ int main(int argc, const char **argv)
                 /* exit if this was the only parameter */
                 return 0;
             }
+        }
+        else if (strcmp(argv[cmdlnIndex], "--src-info") == 0)
+        {
+            printSourceInfo = 1;
+            cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--log-file") == 0)
         {
@@ -2251,7 +2258,6 @@ int main(int argc, const char **argv)
             }
             
             msc_set_source_name(mediaSource, inputs[i].sourceName);
-            
         }
 
         /* set the clip id */
@@ -2742,6 +2748,14 @@ int main(int argc, const char **argv)
     }
 
 
+    /* print source info */
+    
+    if (printSourceInfo)
+    {
+        ply_print_source_info(g_player.mediaPlayer);
+    }
+    
+    
 
     /* start playing... */
     
