@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: video_switch_sink.c,v 1.8 2008/12/05 16:47:09 philipn Exp $
  *
  *
  *
@@ -565,6 +565,8 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
     associate_event_stream(swtch, newEle);
     if (swtch->videoSwitchSplit != NO_SPLIT_VIDEO_SWITCH && swtch->splitStream == NULL)
     {
+        /* initialise the split stream */
+        
         /* TODO: allow for different size inputs */
         
         /* allocate the quad split input buffer and initialise the YUV_lib frame for the input */
@@ -1553,7 +1555,7 @@ static int qvs_switch_next_video(void* data)
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
     if (swtch->nextCurrentStream->next != NULL && 
         (!(swtch->splitSelect && swtch->showSplitSelect) || 
-            swtch->nextCurrentStream->next->index < swtch->splitCount))
+            swtch->nextCurrentStream->next->index <= swtch->splitCount))
     {
         swtch->nextCurrentStream = swtch->nextCurrentStream->next;
         swtch->nextShowSplitSelect = swtch->showSplitSelect;
@@ -1580,9 +1582,8 @@ static int qvs_switch_prev_video(void* data)
     }
     
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
-    if (swtch->nextCurrentStream->prev != NULL && 
-        (!(swtch->splitSelect && swtch->showSplitSelect) || 
-            swtch->nextCurrentStream != swtch->firstInputStream))
+    if (swtch->nextCurrentStream->prev != NULL &&
+        swtch->nextCurrentStream != swtch->firstInputStream)
     {
         swtch->nextCurrentStream = swtch->nextCurrentStream->prev;
         swtch->nextShowSplitSelect = swtch->showSplitSelect;
@@ -1604,12 +1605,13 @@ static int qvs_switch_video(void* data, int index)
     VideoStreamElement* ele;
     int haveSwitched = 0;
     
-    if (swtch->nextCurrentStream == NULL)
+    if (swtch->nextCurrentStream == NULL || index < 0)
     {
         return 0;
     }
-    if (index < 0 || index > swtch->splitCount)
+    if (swtch->splitSelect && swtch->showSplitSelect && index > swtch->splitCount)
     {
+        /* currently showing the split select and the stream is beyond the streams shown in the split select */
         return 0;
     }
     
@@ -1618,18 +1620,26 @@ static int qvs_switch_video(void* data, int index)
     {
         /* toggle show split */
         swtch->nextShowSplitSelect = !swtch->showSplitSelect;
+        if (swtch->nextShowSplitSelect && swtch->nextCurrentStream->index > swtch->splitCount)
+        {
+            /* switch to the last split select stream if the current stream is beyond the split count */
+            while (swtch->nextCurrentStream->index > swtch->splitCount)
+            {
+                swtch->nextCurrentStream = swtch->nextCurrentStream->prev;
+            }
+        }
         haveSwitched = 1;
     }
     else
     {
-        /* show stream with index */
+        /* show stream with given index */
         ele = &swtch->streams;
         while (ele != NULL)
         {
             if (index == ele->index)
             {
                 swtch->nextCurrentStream = ele;
-                swtch->nextShowSplitSelect = swtch->showSplitSelect; /* no change */
+                swtch->nextShowSplitSelect = swtch->showSplitSelect;
                 haveSwitched = 1;
                 break;
             }
