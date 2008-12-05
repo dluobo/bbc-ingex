@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.10 2008/11/06 11:30:09 john_f Exp $
+# $Id: Makefile,v 1.11 2008/12/05 16:50:22 philipn Exp $
 #
 # Makefile for building IngexPlayer library
 #
@@ -166,13 +166,6 @@ libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 	@mkdir -p .objs
 	$(CC) -c $(INCLUDEDIRS) $< -o $@
 
-
-.deps/test_IngexPlayer.d : test_IngexPlayer.cpp
-	@echo Generating dependency file for $<; \
-	mkdir -p .deps; \
-	$(CC) $(INCLUDEDIRS) -MM $< > $@.$$$$; \
-	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
-	rm -f $@.$$$$
 
 test_IngexPlayer: .objs/test_IngexPlayer.o libIngexPlayer.a
 	$(CC) $(LIBDIRS) .objs/test_IngexPlayer.o libIngexPlayer.a $(LIBS) -o $@
