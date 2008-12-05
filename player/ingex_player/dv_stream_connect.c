@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: dv_stream_connect.c,v 1.5 2008/12/05 16:46:11 philipn Exp $
  *
  *
  *
@@ -242,11 +242,13 @@ static int create_dv_decoder(StreamFormat format, int width, int height, int num
     
     
     avcodec_set_dimensions(newDecoder->dec, width, height);
-    if (format == DV25_YUV420_FORMAT || format == DV25_YUV411_FORMAT)
+    if (format == DV25_YUV420_FORMAT)
     {
-        /* YUV411 is converted to YUV420 */
-        /* TODO: need to test YUV411 */
         newDecoder->dec->pix_fmt = PIX_FMT_YUV420P;
+    }
+    else if (format == DV25_YUV411_FORMAT)
+    {
+        newDecoder->dec->pix_fmt = PIX_FMT_YUV411P;
     }
     else
     {
@@ -309,7 +311,7 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
     }
 
     /* reformat decoded frame */
-    if (connect->streamInfo.format == DV25_YUV420_FORMAT || connect->streamInfo.format == DV25_YUV411_FORMAT)
+    if (connect->streamInfo.format == DV25_YUV420_FORMAT)
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
@@ -317,6 +319,19 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
                 connect->decoder->decFrame, connect->sinkBuffer);
         }
         else /* YUV420 */
+        {
+            yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, 1,
+                connect->decoder->decFrame, connect->sinkBuffer);
+        }
+    }
+    else if (connect->streamInfo.format == DV25_YUV411_FORMAT)
+    {
+        if (connect->decodedFormat == UYVY_FORMAT)
+        {
+            yuv4xx_to_uyvy(connect->streamInfo.width, connect->streamInfo.height, 1,
+                connect->decoder->decFrame, connect->sinkBuffer);
+        }
+        else /* YUV411 */
         {
             yuv4xx_to_yuv4xx(connect->streamInfo.width, connect->streamInfo.height, 1,
                 connect->decoder->decFrame, connect->sinkBuffer);
@@ -713,10 +728,17 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
         return 0;
     }
     
-    if (streamInfo->format == DV25_YUV420_FORMAT || streamInfo->format == DV25_YUV411_FORMAT)
+    if (streamInfo->format == DV25_YUV420_FORMAT)
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV420_FORMAT;
+
+        result = msk_accept_stream(sink, &decodedStreamInfo);
+    }
+    else if (streamInfo->format == DV25_YUV411_FORMAT)
+    {
+        decodedStreamInfo = *streamInfo;
+        decodedStreamInfo.format = YUV411_FORMAT;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -728,6 +750,7 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
     
+    /* try UYVY if default format is not accepted */ 
     if (!result)
     {
         decodedStreamInfo = *streamInfo;
@@ -747,10 +770,17 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     int result;
 
     /* register stream with sink */    
-    if (streamInfo->format == DV25_YUV420_FORMAT || streamInfo->format == DV25_YUV411_FORMAT)
+    if (streamInfo->format == DV25_YUV420_FORMAT)
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV420_FORMAT;
+
+        result = msk_accept_stream(sink, &decodedStreamInfo);
+    }
+    else if (streamInfo->format == DV25_YUV411_FORMAT)
+    {
+        decodedStreamInfo = *streamInfo;
+        decodedStreamInfo.format = YUV411_FORMAT;
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
@@ -761,6 +791,8 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
+
+    /* try UYVY if default format is not accepted */ 
     if (!result)
     {
         decodedStreamInfo = *streamInfo;
@@ -768,6 +800,14 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
+
+    if (!result)
+    {
+        /* shouldn't be here because a call to dv_connect_accept() should've returned false already */
+        ml_log_error("Failed to create DV connector because format is not accepted\n");
+        return 0;
+    }
+
     
     if (!msk_register_stream(sink, sinkStreamId, &decodedStreamInfo))
     {
