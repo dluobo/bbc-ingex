@@ -605,7 +605,21 @@ connected
 
 
 
-12. Software authors
+12. Implementation notes
+
+* The HTTP interface classes, e.g. HTTPRecorder and HTTPTapeExport use 'agent'
+threads to handle requests which may take some time. This approach does not work
+as intended because the while loop in HTTPServerThreadWorker::start() will 
+loop without pause (the socket is ready to receive data) and this may cause the 
+CPU usage to move towards the maximum and result in degraded performance for 
+other threads. This issue probably hasn't caused problems because the requests 
+handed out to 'agents' don't take a long time to process. The solution will be 
+to use the approach illustrated in the shttpd/examples/scalable.c example where 
+each connection is handled in a separate thread.
+
+
+
+13. Software authors
 
 Philip de Nier <philipn@users.sourceforge.net>
 Stuart Cunningham <stuart_hc@users.sourceforge.net>
