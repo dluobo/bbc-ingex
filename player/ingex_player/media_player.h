@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.h,v 1.6 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_player.h,v 1.7 2008/12/05 16:48:24 philipn Exp $
  *
  *
  *
@@ -137,6 +137,7 @@ MediaSink* ply_get_media_sink(MediaPlayer* player);
 void ply_set_menu_handler(MediaPlayer* player, MenuHandler* handler);
 void ply_enable_clip_marks(MediaPlayer* player, int markType);
 void ply_set_start_offset(MediaPlayer* player, int64_t offset);
+void ply_print_source_info(MediaPlayer* player);
 
 
 /* quality checking */

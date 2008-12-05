@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.8 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_player.c,v 1.9 2008/12/05 16:48:24 philipn Exp $
  *
  *
  *
@@ -187,6 +187,66 @@ struct MediaPlayer
     int qcValidateMark;
 };
 
+
+typedef struct
+{
+    int sourceId;
+    int streamId;
+    int isDisabled;
+    const StreamInfo* streamInfo;
+} SourceInfoMap;
+
+
+
+static void add_source_info_to_map(SourceInfoMap* sources, int streamId, int isDisabled, const StreamInfo* streamInfo)
+{
+    SourceInfoMap* source;
+    SourceInfoMap prevSource;
+    SourceInfoMap nextSource;
+    
+    source = &sources[0];
+    while (source->streamInfo != NULL)
+    {
+        if (source->sourceId == streamInfo->sourceId &&
+            source->streamId > streamId)
+        {
+            /* insert */
+            break;
+        }
+        else if (source->sourceId > streamInfo->sourceId)
+        {
+            /* insert */
+            break;
+        }
+        
+        source++;
+    }
+    
+    if (source->streamInfo == NULL)
+    {
+        /* append */
+        source->sourceId = streamInfo->sourceId;
+        source->streamId = streamId;
+        source->isDisabled = isDisabled;
+        source->streamInfo = streamInfo;
+    }
+    else
+    {
+        /* insert */
+        prevSource.sourceId = streamInfo->sourceId;
+        prevSource.streamId = streamId;
+        prevSource.isDisabled = isDisabled;
+        prevSource.streamInfo = streamInfo;
+        while (source->streamInfo != NULL)
+        {
+            nextSource = *source;
+            *source = prevSource;
+            prevSource = nextSource;
+            source++;
+        }
+        *source = prevSource;
+    }
+}
 
 /* caller must lock the user marks mutex */
 static void _set_current_clip_mark(MediaPlayer* player, UserMark* mark)
@@ -2171,6 +2231,42 @@ static void send_start_of_source_event(MediaPlayer* player, const FrameInfo* fir
     }
 }
 
+static void send_start_state_event(MediaPlayer* player)
+{
+    MediaPlayerListenerElement* ele = &player->listeners;
+    MediaPlayerStateEvent stateEvent;
+    MediaPlayerState currentState;
+    
+    if (!HAVE_PLAYER_LISTENER(player))
+    {
+        /* no listeners, no event to send */
+        return;
+    }
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+    currentState = player->state;
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+    
+    memset(&stateEvent, 0, sizeof(MediaPlayerStateEvent));
+    
+    stateEvent.displayedFrameInfo = currentState.lastFrameDisplayed;
+    stateEvent.displayedFrameInfo.position = -1; /* indicate to listener that a frame hasn't been displayed */
+    stateEvent.lockedChanged = 1;
+    stateEvent.locked = currentState.locked;
+    stateEvent.playChanged = 1;
+    stateEvent.play = currentState.play;
+    stateEvent.stopChanged = 1;
+    stateEvent.stop = currentState.stop;
+    stateEvent.speedChanged = 1;
+    stateEvent.speed = currentState.speed;
+
+    while (ele != NULL)
+    {
+        mpl_state_change_event(ele->listener, &stateEvent);
+        ele = ele->next;
+    }
+}
+
 static void send_state_change_event(MediaPlayer* player)
 {
     MediaPlayerListenerElement* ele = &player->listeners;
@@ -2715,6 +2811,11 @@ int ply_start_player(MediaPlayer* player, int startPaused)
     int currentMarkType;
     int doStartPause = startPaused;
     int muteAudio = 0;
+
+
+    /* send starting state to the listeners */
+
+    send_start_state_event(player);    
 
     
     /* play frames from media source to media sink */
@@ -3380,6 +3481,210 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType)
 void ply_set_start_offset(MediaPlayer* player, int64_t offset)
 {
     player->startOffset = offset;
+}
+
+void ply_print_source_info(MediaPlayer* player)
+{
+    int i;
+    int numStreams;
+    const StreamInfo* streamInfo;
+    SourceInfoMap* sources = NULL;
+    int sourceId = -1;
+    const char* sourceName;
+    
+    numStreams = msc_get_num_streams(player->mediaSource);
+    
+    CALLOC_OFAIL(sources, SourceInfoMap, numStreams);
+    
+    for (i = 0; i < numStreams; i++)
+    {
+        if (msc_get_stream_info(player->mediaSource, i, &streamInfo))
+        {
+            add_source_info_to_map(sources, i, msc_stream_is_disabled(player->mediaSource, i), streamInfo);
+        }
+    }
+    
+    printf("Source Information:\n");
+    for (i = 0; i < numStreams; i++)
+    {
+        if (sources[i].streamInfo == NULL)
+        {
+            break;
+        }
+        
+        sourceName = get_known_source_info_value(sources[i].streamInfo, SRC_INFO_FILE_NAME);
+        if (sourceName == NULL)
+        {
+            sourceName = get_known_source_info_value(sources[i].streamInfo, SRC_INFO_TITLE);
+        }
+
+        if (sources[i].sourceId != sourceId)
+        {
+            printf("  Source #%d: %s\n", sources[i].sourceId, (sourceName == NULL ? "" : sourceName));
+            sourceId = sources[i].sourceId;
+        }
+        
+        printf("     %d: ", sources[i].streamId);
+        if (sources[i].isDisabled)
+        {
+            printf("(disabled) ");
+        }
+        
+        switch (sources[i].streamInfo->type)
+        {
+            case PICTURE_STREAM_TYPE:
+                printf("Picture");
+                break;
+            case SOUND_STREAM_TYPE:
+                printf("Sound");
+                break;
+            case TIMECODE_STREAM_TYPE:
+                printf("Timecode");
+                break;
+            case EVENT_STREAM_TYPE:
+                printf("Event");
+                break;
+            case UNKNOWN_STREAM_TYPE:
+                printf("Unknown type");
+                break;
+        }
+        if (sources[i].streamInfo->format != TIMECODE_FORMAT)  /* see below for reason */
+        {
+            printf(", ");
+        }
+
+        switch (sources[i].streamInfo->format)
+        {
+            case UYVY_FORMAT:
+                printf("UYVY");
+                break;
+            case UYVY_10BIT_FORMAT:
+                printf("UYVY 10 bit");
+                break;
+            case YUV420_FORMAT:
+                printf("YUV420");
+                break;
+            case YUV411_FORMAT:
+                printf("YUV411");
+                break;
+            case YUV422_FORMAT:
+                printf("YUV422");
+                break;
+            case YUV444_FORMAT:
+                printf("YUV444");
+                break;
+            case DV25_YUV420_FORMAT:
+                printf("DV25 YUV420");
+                break;
+            case DV25_YUV411_FORMAT:
+                printf("DV25 YUV411");
+                break;
+            case DV50_FORMAT:
+                printf("DV50");
+                break;
+            case D10_PICTURE_FORMAT:
+                printf("D10 Picture");
+                break;
+            case AVID_MJPEG_FORMAT:
+                printf("AVID MJPEG");
+                break;
+            case AVID_DNxHD_FORMAT:
+                printf("AVID DNxHD");
+                break;
+            case PCM_FORMAT:
+                printf("PCM");
+                break;
+            case TIMECODE_FORMAT:
+                /* omitting "Timecode" because it duplicates the streamInfo->type */
+                /* printf("Timecode"); */
+                break;
+            case SOURCE_EVENT_FORMAT:
+                printf("Source Event");
+                break;
+            case UNKNOWN_FORMAT:
+                printf("Unknown format");
+                break;
+        }
+
+        switch (sources[i].streamInfo->type)
+        {
+            case PICTURE_STREAM_TYPE:
+                printf(", ");
+                printf("%d/%d fps, ", sources[i].streamInfo->frameRate.num, sources[i].streamInfo->frameRate.den);
+                printf("%dx%d, ", sources[i].streamInfo->width, sources[i].streamInfo->height);
+                printf("%d:%d", sources[i].streamInfo->aspectRatio.num, sources[i].streamInfo->aspectRatio.den);
+                break;
+            case SOUND_STREAM_TYPE:
+                printf(", ");
+                printf("%d/%d Hz, ", sources[i].streamInfo->samplingRate.num, sources[i].streamInfo->samplingRate.den);
+                printf("%d channel%s, ", sources[i].streamInfo->numChannels, (sources[i].streamInfo->numChannels > 1 ? "s" : ""));
+                printf("%d bits/sample", sources[i].streamInfo->bitsPerSample);
+                break;
+            case TIMECODE_STREAM_TYPE:
+                printf(", ");
+                if (sources[i].streamInfo->timecodeType == SOURCE_TIMECODE_TYPE)
+                {
+                    if (sources[i].streamInfo->timecodeSubType == VITC_SOURCE_TIMECODE_SUBTYPE)
+                    {
+                        printf("VITC");
+                    }
+                    else if (sources[i].streamInfo->timecodeSubType == LTC_SOURCE_TIMECODE_SUBTYPE)
+                    {
+                        printf("LTC");
+                    }
+                    else
+                    {
+                        printf("source");
+                    }
+                }
+                else
+                {
+                    switch (sources[i].streamInfo->timecodeType)
+                    {
+                        case SYSTEM_TIMECODE_TYPE:
+                            printf("system");
+                            break;
+                        case CONTROL_TIMECODE_TYPE:
+                            printf("control");
+                            break;
+                        case SOURCE_TIMECODE_TYPE:
+                            printf("source");
+                            break;
+                        case UNKNOWN_TIMECODE_TYPE:
+                            printf("unknown type");
+                            break;
+                    }
+                    if (sources[i].streamInfo->timecodeSubType != NO_TIMECODE_SUBTYPE)
+                    {
+                        printf(", ");
+                    }
+                    switch (sources[i].streamInfo->timecodeSubType)
+                    {
+                        case VITC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("VITC");
+                            break;
+                        case LTC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("LTC");
+                            break;
+                        case NO_TIMECODE_SUBTYPE:
+                            break;
+                    }
+                }
+                break;
+            case EVENT_STREAM_TYPE:
+                break;
+            case UNKNOWN_STREAM_TYPE:
+                break;
+        }
+        
+        printf("\n");
+    }
+
+    SAFE_FREE(&sources);
+    return;
+    
+fail:
+    SAFE_FREE(&sources);
 }
 
 void ply_set_qc_quit_validator(MediaPlayer* player, qc_quit_validator_func func, void* data)
