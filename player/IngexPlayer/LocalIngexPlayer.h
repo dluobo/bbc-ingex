@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.10 2008/11/06 19:56:56 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.11 2008/12/05 16:49:47 philipn Exp $
  *
  *
  *
@@ -40,7 +40,7 @@ class LocalIngexPlayerState;
 typedef enum PlayerOutputType
 {
     /* playout to SDI via DVS card */
-    DVS_OUTPUT,
+    DVS_OUTPUT = 1,
     /* auto-detect whether X11 X video extension is available, if not use plain X11 */
     X11_AUTO_OUTPUT,
     /* playout to X11 window using X video extension*/
