@@ -22,6 +22,7 @@ run_routerLogger="./routerlogger"
 # Set defaults for Ingex processes to start
 # These can be overidden by ./ingex.conf and /etc/ingex.conf
 CAPTURE=1
+HD_MODE=0
 MULTICAST=0
 TRANSFER=0
 INGEX_MONITOR=0
@@ -97,6 +98,12 @@ fi
 # set corba options for recorder command
 CORBA_OPTIONS=" -ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses 1"
 
+# check if HD mode selected
+MODE=
+if [ $HD_MODE -ge 1 ] ; then
+   MODE="-h"
+fi
+
 # get the pids of exisiting windows
 PIDS=`pidof konsole`
 
@@ -135,7 +142,7 @@ tab=$(dcop $capture_window konsole currentSession)
 if [ $CAPTURE -ge 1 ] ; then
   dcop $capture_window $tab renameSession Capture
   dcop $capture_window $tab sendSession "cd $capture_path"
-  dcop $capture_window $tab sendSession "./capture.sh"
+  dcop $capture_window $tab sendSession "./capture.sh $MODE"
   tab=
 fi
 
