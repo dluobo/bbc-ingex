@@ -219,7 +219,7 @@ sub _add_recorder_config_input
 
 sub create_multicam_config
 {
-    my ($name, $numVideoSelect, $numAudio) = @_;
+    my ($name, $numVideoSelect, $numAudio, $numAudioSelect) = @_;
 
     my $mccf = {
         config => 
@@ -231,10 +231,10 @@ sub create_multicam_config
     # video track with multiple source selector
     _add_multicam_track($mccf, 1, $numVideoSelect);
     
-    # audio tracks with single source selector
+    # audio tracks with multiple source selector
     foreach my $trackIndex (2..($numAudio + 1))
     {
-        _add_multicam_track($mccf, $trackIndex, 1);
+        _add_multicam_track($mccf, $trackIndex, $numAudioSelect);
     }
 
     return $mccf;

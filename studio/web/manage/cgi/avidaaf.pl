@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: avidaaf.pl,v 1.2 2008/02/06 16:59:14 john_f Exp $
+# $Id: avidaaf.pl,v 1.3 2009/01/23 20:04:55 john_f Exp $
 #
 # 
 #
@@ -189,6 +189,7 @@ elsif (defined param("Send1") || defined param("Send2"))
 
         my $includeDirectorsCut = defined param("directorscut");
         my $dcDb = get_directors_cut_db(param("dcsource"));
+        my $addAudioEdits = defined param("addaudioedits");
         
         
         # TODO: set when installing or hold in central location
@@ -208,7 +209,8 @@ elsif (defined param("Send1") || defined param("Send2"))
                 "-o", # group only
                 $addTSSuffix ? "" : "--no-ts-suffix",
                 "-m", # include multi-camera clips
-                $includeDirectorsCut && $dcDb ? "--mc-cuts \"$dcDb\"" : "", # directors cut database
+                $includeDirectorsCut && $dcDb ? "--mc-cuts \"$dcDb\"" : "", # director's cut database
+                $addAudioEdits ? "--audio-edits" : "", # add audio edits to the audio tracks in the director's cut sequence
                 $fromCreationDateStr ? 
                     "-c $fromCreationDateStr" : # from creation date (timestamp)
                     join(" ", "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode 
@@ -491,7 +493,7 @@ sub get_page_content
 
     push(@pageContent,
         p(
-            "Filename Prefix:",
+            "Filename prefix:",
             textfield({
                 name => "fprefix", 
                 value => $ingexConfig{"avid_aaf_prefix"},
@@ -534,7 +536,7 @@ sub get_page_content
                 name => 'directorscut',
                 checked => 1,
                 value => 'on',
-                label => 'Add Director\'s Cut'
+                label => 'Add director\'s cut'
             }),
         ),
     );
@@ -569,7 +571,18 @@ sub get_page_content
             }),
         ),
     );
+
     
+    push(@pageContent,
+        p(
+            checkbox({
+                name => 'addaudioedits',
+                checked => 0,
+                value => 'on',
+                label => 'Add audio edits to director\'s cut'
+            }),
+        ),
+    );
     
     push(@pageContent, h3("Select preset time period")); 
 

@@ -51,8 +51,13 @@ elsif (defined param("Create"))
     if (!($errorMessage = validate_params()))
     {
         my $numAudioTracks = param('numaudiotracks') || 0;
+        my $numAudioSelects = 0;
+        if ($numAudioTracks > 0)
+        {
+            $numAudioSelects = param('numaudioselects') || 1;
+        }
         my $mccf = create_multicam_config(trim(param("name")), param("numvideoselects"), 
-            $numAudioTracks);
+            $numAudioTracks, $numAudioSelects);
 
         my $mccfId = save_multicam_config($dbh, $mccf) 
             or return_create_page("failed to save multi-camera config to database: $prodautodb::errstr");
@@ -69,11 +74,20 @@ sub validate_params
 {
     return "Error: Empty name" if (!defined param("name") || param("name") =~ /^\s*$/);
     
-    return "Error: Invalid number of video selects" if (!param("numvideoselects") 
-        || param("numvideoselects") !~ /^\d+$/);
+    return "Error: Invalid number of video selects" 
+        if (!param("numvideoselects") 
+            || param("numvideoselects") !~ /^\d+$/
+            || param("numvideoselects") <= 0);
         
     return "Error: Invalid number of audio tracks" 
-        if (param("numaudiotracks") && param("numaudiotracks") !~ /^\d+$/);
+        if (param("numaudiotracks") 
+            && param("numaudiotracks") !~ /^\d+$/);
+
+    return "Error: Invalid number of audio selects" 
+        if (param("numaudiotracks")
+            && (!param("numaudioselects") 
+                || param("numaudioselects") !~ /^\d+$/
+                || param("numaudioselects") <= 0));
 
     return undef;
 }
@@ -113,6 +127,8 @@ sub get_create_content
     
     push(@pageContent, p("# Audio tracks", textfield("numaudiotracks")));
 
+    push(@pageContent, p("# Audio selects", textfield("numaudioselects")));
+    
     push(@pageContent, submit({-onclick=>"whichPressed=this.name", -name=>"Create"}), span(" "), submit({-onclick=>"whichPressed=this.name", -name=>"Cancel"}));
 
     push(@pageContent, end_form);
