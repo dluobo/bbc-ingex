@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_database.c,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: video_switch_database.c,v 1.4 2009/01/23 19:51:48 john_f Exp $
  *
  *
  *
@@ -146,8 +146,7 @@ void vsd_close(VideoSwitchDatabase** db)
     SAFE_FREE(db);
 }
 
-
-int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourceId, const Timecode* tc)
+int vsd_append_entry_with_date(VideoSwitchDatabase* db, int sourceIndex, const char* sourceId,  int year, int month, int day, const Timecode* tc)
 {
     if (fseeko(db->file, 0, SEEK_END) != 0)
     {
@@ -163,10 +162,8 @@ int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourc
     
     /* source id - string plus null terminator */
     strncpy(&buf[SOURCE_ID_OFFSET], sourceId, SOURCE_ID_LEN - 1);
-    
+
     /* date */
-    int year, month, day;
-    get_date(&year, &month, &day);
     snprintf(&buf[DATE_OFFSET], DATE_LEN + 1, "%04d-%02d-%02d", 
         (year > 9999) ? 0 : year,
         (month > 12) ? 0 : month,
@@ -189,6 +186,14 @@ int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourc
     fflush(db->file);
     
     return 1;
+}
+
+int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourceId, const Timecode* tc)
+{
+    int year, month, day;
+    get_date(&year, &month, &day);
+    
+    return vsd_append_entry_with_date(db, sourceIndex, sourceId, year, month, day, tc);
 }
 
 

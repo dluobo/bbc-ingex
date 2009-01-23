@@ -283,6 +283,10 @@ TESTAPPS += recorder_shuttle_emu
 recorder_shuttle_emu: .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o 
 	$(CC) $(INCLUDEDIRS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lX11 .objs/recorder_shuttle_emu.o .objs/emulate_key.o .objs/shuttle_input.o .objs/logging.o .objs/utils.o -lm -lXtst -lpthread -o recorder_shuttle_emu
 
+TESTAPPS += test_video_switch_database	
+test_video_switch_database: .objs/test_video_switch_database.o test_video_switch_database.c 
+	$(CC) $(INCLUDEDIRS) .objs/test_video_switch_database.o .objs/video_switch_database.o .objs/logging.o -o $@
+
 	
 
 .PHONY: install

@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_database.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: video_switch_database.h,v 1.3 2009/01/23 19:51:48 john_f Exp $
  *
  *
  *
@@ -46,6 +46,7 @@ void vsd_close(VideoSwitchDatabase** db);
 
 /* writer */
 
+int vsd_append_entry_with_date(VideoSwitchDatabase* db, int sourceIndex, const char* sourceId,  int year, int month, int day, const Timecode* tc);
 int vsd_append_entry(VideoSwitchDatabase* db, int sourceIndex, const char* sourceId, const Timecode* tc);
 
 
