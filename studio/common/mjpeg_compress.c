@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.1 2008/09/03 14:22:11 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.2 2009/01/23 19:57:18 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -427,7 +427,7 @@ static int resolution_id_to_quality(int resID)
         case MJPEG_2_1: quality = 98; break;        // 2:1
         case MJPEG_3_1: quality = 97; break;        // 3:1
         case MJPEG_10_1: quality = 84; break;       // 10:1
-        case MJPEG_20_1: quality = 40; break;       // 20:1     gives 8.16Mbps for elstree sample
+        case MJPEG_20_1: quality = 68; break;       // 20:1     gives 13.3Mbps for elstree sample
         case MJPEG_15_1s: quality = 55; break;      // 15:1s
         case MJPEG_10_1m: quality = 71; break;      // 10:1m
         case MJPEG_4_1m: quality = 94; break;       // 4:1m
