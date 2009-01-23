@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.5 2008/10/29 17:54:26 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.6 2009/01/23 20:08:20 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -63,7 +63,6 @@ using namespace prodauto;
 static const char* g_defaultRecorderName = "Ingex";
 static const char* g_defaultTapeNumberPrefix = "DPP";
 static const char* g_defaultStartTimecode = "10:00:00:00";
-static int64_t g_defaultStartPosition = 10 * 60 * 60 * 25;
 
 
 typedef struct
@@ -109,6 +108,7 @@ typedef struct
     int32_t inputIndex;
     vector<UserComment> userComments;
     ProjectName projectName;
+    bool isPALProject;
     string dv50Filename;
     string mjpeg21Filename;
 } RecordData;
@@ -261,7 +261,7 @@ void* start_record_routine(void* data)
     {
         // dv50 input
         resolutionId = DV50_MATERIAL_RESOLUTION;
-        videoFrame1Size = 288000;
+        videoFrame1Size = (recordData->isPALProject ? 288000 : 240000);
         FILE* file;
         if ((file = fopen(recordData->dv50Filename.c_str(), "r")) == NULL)
         {
@@ -342,15 +342,31 @@ void* start_record_routine(void* data)
     {
         // dummy essence data
         resolutionId = UNC_MATERIAL_RESOLUTION;
-        videoFrame1Size = 720 * 576 * 2;
+        videoFrame1Size = (recordData->isPALProject ? 720 * 576 * 2 : 720 * 480 * 2);
         memset(videoData1, 0, videoFrame1Size);
         videoFrame2Size = videoFrame1Size;
         memset(videoData2, 0, videoFrame2Size);
     }
     
     uint8_t pcmData[1920 * 2]; // 16-bit
-    uint32_t pcmFrameSize = 1920;
-    memset(pcmData, 1, pcmFrameSize * 2);
+    memset(pcmData, 1, 1920 * 2);
+    uint32_t pcmFrameSizeSeq[5];
+    int pcmFrameSizeSeqSize;
+    if (recordData->isPALProject)
+    {
+        pcmFrameSizeSeqSize = 1;
+        pcmFrameSizeSeq[0] = 1920;
+    }
+    else
+    {
+        pcmFrameSizeSeqSize = 5;
+        pcmFrameSizeSeq[0] = 1602;
+        pcmFrameSizeSeq[1] = 1601;
+        pcmFrameSizeSeq[2] = 1602;
+        pcmFrameSizeSeq[3] = 1601;
+        pcmFrameSizeSeq[4] = 1602;
+    }
+    int numPCMSamples = 0;
     
     printf("Starting... (%s)\n", recordData->filenamePrefix.c_str());
     
@@ -360,7 +376,7 @@ void* start_record_routine(void* data)
         Rational imageAspectRatio = {16, 9};
         auto_ptr<MXFWriter> writer(new MXFWriter(
             recordData->recorder->getConfig()->getInputConfig(recordData->inputIndex),
-            resolutionId, imageAspectRatio,
+            recordData->isPALProject, resolutionId, imageAspectRatio,
             16, 0xffffffff, recordData->startPosition, recordData->creatingFilePath,
             recordData->destinationFilePath, recordData->failuresFilePath,
             recordData->filenamePrefix, recordData->userComments, 
@@ -408,10 +424,11 @@ void* start_record_routine(void* data)
                     {
 #if defined(TEST_WRITE_SAMPLE_DATA)
                         // write pcm audio data
-                        writer->writeSampleData(trackIndex, pcmData, pcmFrameSize * 2);
+                        writer->writeSampleData(trackIndex, pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
 #else
-                        writer->writeSample(trackIndex, pcmFrameSize, pcmData, pcmFrameSize * 2);
+                        writer->writeSample(trackIndex, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize], pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
 #endif
+                        numPCMSamples += pcmFrameSizeSeq[i % pcmFrameSizeSeqSize];
                     }
                     else // PICTURE_DATA_DEFINITION
                     {
@@ -446,7 +463,7 @@ void* start_record_routine(void* data)
                 if (sourceTrackConfig->dataDef == SOUND_DATA_DEFINITION)
                 {
                     // end write pcm audio data
-                    writer->endSampleData(trackIndex, pcmFrameSize * NUM_FRAMES);
+                    writer->endSampleData(trackIndex, numPCMSamples);
                 }
             }
         }
@@ -494,6 +511,7 @@ static void usage(const char* prog)
     fprintf(stderr, "    --dv50 <filename>      DV50 essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --mjpeg21 <filename>   MJPEG 2:1 essence file to read and wrap in MXF (default is blank uncompressed)\n");
     fprintf(stderr, "    --old-session\n");
+    fprintf(stderr, "    --ntsc                 NTSC project (default is PAL)\n");
     fprintf(stderr, "    -r <recorder name>     Recorder name to use to connect to database (default '%s')\n", g_defaultRecorderName);
     fprintf(stderr, "    -t <prefix>            The tape number prefix (default '%s')\n", g_defaultTapeNumberPrefix);
     fprintf(stderr, "    -s <timecode>          The start timecode. Format is hh:mm:ss:ff (default '%s')\n", g_defaultStartTimecode);
@@ -510,9 +528,14 @@ int main(int argc, const char* argv[])
     const char* recorderName = g_defaultRecorderName;
     bool oldSession = false;
     string tapeNumberPrefix = g_defaultTapeNumberPrefix;
-    int64_t startPosition = g_defaultStartPosition;
+    int64_t startPosition = 0;
     int cmdlnIndex = 1;
-    int hour, min, sec, frame;
+    int startPosHour = 10;
+    int startPosMin = 0;
+    int startPosSec = 0;
+    int startPosFrame = 0;
+    bool isPALProject = true;
+
     
     if (argc < 2)
     {
@@ -571,6 +594,11 @@ int main(int argc, const char* argv[])
             oldSession = true;
             cmdlnIndex++;
         }
+        else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
+        {
+            isPALProject = false;
+            cmdlnIndex++;
+        }
         else if (strcmp(argv[cmdlnIndex], "-r") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -601,13 +629,12 @@ int main(int argc, const char* argv[])
                 fprintf(stderr, "Missing value for argument '%s'\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d:%d:%d:%d", &hour, &min, &sec, &frame) != 4)
+            if (sscanf(argv[cmdlnIndex + 1], "%d:%d:%d:%d", &startPosHour, &startPosMin, &startPosSec, &startPosFrame) != 4)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid value '%s' for argument '%s'\n", argv[cmdlnIndex + 1], argv[cmdlnIndex]);
                 return 1;
             }
-            startPosition = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
             cmdlnIndex += 2;
         }
         else
@@ -624,8 +651,18 @@ int main(int argc, const char* argv[])
         fprintf(stderr, "Missing filename prefix\n");
         return 1;
     }
-    
+
     filenamePrefix = argv[cmdlnIndex];    
+
+    // calculate the start position now we know the frame rate
+    if (isPALProject)
+    {
+        startPosition = startPosHour * 60 * 60 * 25 + startPosMin * 60 * 25 + startPosSec * 25 + startPosFrame;
+    }
+    else
+    {
+        startPosition = startPosHour * 60 * 60 * 30 + startPosMin * 60 * 30 + startPosSec * 30 + startPosFrame;
+    }
 
 
     // initialise the database
@@ -771,6 +808,7 @@ int main(int argc, const char* argv[])
                 recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
                     "event at position 10000", 10000, 3));
                 recordData[i].projectName = projectName;
+                recordData[i].isPALProject = isPALProject;
                 
                 if (dv50Filename != NULL)
                 {

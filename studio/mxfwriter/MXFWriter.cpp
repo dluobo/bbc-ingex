@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.6 2008/11/07 16:55:09 philipn Exp $
+ * $Id: MXFWriter.cpp,v 1.7 2009/01/23 20:08:20 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -113,7 +113,7 @@ static void moveFile(string from, string to)
     }
 }
 
-static string createClipName(string sourceName, int64_t startPosition)
+static string createClipName(string sourceName, bool isPALProject, int64_t startPosition)
 {
     if (startPosition < 0)
     {
@@ -121,11 +121,13 @@ static string createClipName(string sourceName, int64_t startPosition)
     }
     
     char buf[48];
+    int base = (isPALProject ? 25 : 30);
+    
     sprintf(buf, ".%02d%02d%02d%02d", 
-        (int)(startPosition / (60 * 60 * 25)),
-        (int)((startPosition % (60 * 60 * 25)) / (60 * 25)),
-        (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) / 25),
-        (int)(((startPosition % (60 * 60 * 25)) % (60 * 25)) % 25));
+        (int)(startPosition / (60 * 60 * base)),
+        (int)((startPosition % (60 * 60 * base)) / (60 * base)),
+        (int)(((startPosition % (60 * 60 * base)) % (60 * base)) / base),
+        (int)(((startPosition % (60 * 60 * base)) % (60 * base)) % base));
     
     return sourceName + buf;
 }
@@ -226,7 +228,7 @@ MXFTrackWriter::~MXFTrackWriter()
 MXFWriter::MXFWriter(MaterialPackage* materialPackage, 
     vector<SourcePackage*>& filePackages, 
     SourcePackage* tapeSourcePackage, bool ownPackages,
-    int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
+    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
     int64_t startPosition, 
     string creatingFilePath, string destinationFilePath, string failuresFilePath, 
     string filenamePrefix,
@@ -320,14 +322,13 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
         }
     }
     
-    this->Construct(resolutionID, imageAspectRatio, audioQuantizationBits,
-            userComments, projectName);
+    construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
     
 
 
 MXFWriter::MXFWriter(RecorderInputConfig* inputConfig, 
-    int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
+    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
     uint32_t inputMask, 
     int64_t startPosition, 
     string creatingFilePath, string destinationFilePath, string failuresFilePath, 
@@ -389,7 +390,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
                 outputPackage->materialPackage = new MaterialPackage();
                 trackCounts.insert(pair<MaterialPackage*, TrackCount>(outputPackage->materialPackage, startTrackCount));
                 outputPackage->materialPackage->uid = generateUMID();
-                outputPackage->materialPackage->name = createClipName(outputPackage->sourcePackage->name, startPosition);
+                outputPackage->materialPackage->name = createClipName(outputPackage->sourcePackage->name, isPALProject, startPosition);
                 outputPackage->materialPackage->creationDate = now;
                 outputPackage->materialPackage->projectName = projectName;
             }
@@ -435,7 +436,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             if (sourceTrack->dataDef == PICTURE_DATA_DEFINITION)
             {
                 fileTrack->name = "V1";
-                fileTrack->editRate = g_palEditRate;
+                fileTrack->editRate = (isPALProject ? g_palEditRate : g_ntscEditRate);
             }
             else
             {
@@ -447,14 +448,24 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             fileTrack->sourceClip->sourceTrackID = sourceTrack->id;
             // fileTrack->length is filled in when writing is completed
             fileTrack->sourceClip->length = 0;
-            if (fileTrack->editRate == g_palEditRate)
+            if (isPALProject && fileTrack->editRate == g_palEditRate ||
+                !isPALProject && fileTrack->editRate == g_ntscEditRate)
             {
                 fileTrack->sourceClip->position = startPosition;
             }
             else
             {
-                double factor = fileTrack->editRate.numerator * g_palEditRate.denominator /
-                    (double)(fileTrack->editRate.denominator * g_palEditRate.numerator);
+                double factor;
+                if (isPALProject)
+                {
+                    factor = fileTrack->editRate.numerator * g_palEditRate.denominator /
+                       (double)(fileTrack->editRate.denominator * g_palEditRate.numerator);
+                }
+                else
+                {
+                    factor = fileTrack->editRate.numerator * g_ntscEditRate.denominator /
+                       (double)(fileTrack->editRate.denominator * g_ntscEditRate.numerator);
+                }
                 fileTrack->sourceClip->position = (int64_t)(startPosition * factor + 0.5);
             }
             
@@ -497,11 +508,10 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             materialTrack->id = outputPackage->materialPackage->tracks.size();
             materialTrack->number = trackConfig->number;
             materialTrack->name = trackName.str();
-            materialTrack->editRate = sourceTrack->editRate;
             materialTrack->dataDef = sourceTrack->dataDef;
             if (sourceTrack->dataDef == PICTURE_DATA_DEFINITION)
             {
-                materialTrack->editRate = g_palEditRate;
+                materialTrack->editRate = (isPALProject ? g_palEditRate : g_ntscEditRate);
             }
             else
             {
@@ -525,11 +535,10 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
         }
     }
     
-    this->Construct(resolutionID, imageAspectRatio, audioQuantizationBits,
-            userComments, projectName);
+    construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
 
-void MXFWriter::Construct(int resolutionID,
+void MXFWriter::construct(bool isPALProject, int resolutionID,
         Rational imageAspectRatio, uint8_t audioQuantizationBits,
         const std::vector<UserComment> & userComments,
         const ProjectName & projectName)
@@ -552,13 +561,13 @@ void MXFWriter::Construct(int resolutionID,
             
             CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions));
             
-            // map the source package
+            // map the tape source package
             convertUMID(outputPackage->sourcePackage->uid, umid);
             convertTimestamp(outputPackage->sourcePackage->creationDate, timestamp);
             CHECK_SUCCESS(create_tape_source_package(outputPackage->packageDefinitions, &umid, 
                 outputPackage->sourcePackage->name.c_str(), &timestamp));
                 
-            // map the source package tracks
+            // map the tape source package tracks
             vector<prodauto::Track*>::const_iterator iterTrack;
             for (iterTrack = outputPackage->sourcePackage->tracks.begin();
                 iterTrack != outputPackage->sourcePackage->tracks.end();
@@ -634,27 +643,6 @@ void MXFWriter::Construct(int resolutionID,
                 
                 assert(filePackage->tracks.size() == 1);
                 prodauto::Track* fileTrack = filePackage->tracks.back();
-
-                /* materialTrackID  doesn't seem to be used
-                // get the material package track referencing this file package
-                uint32_t materialTrackID = 0;
-                for (iterTrack = outputPackage->materialPackage->tracks.begin();
-                    iterTrack != outputPackage->materialPackage->tracks.end();
-                    iterTrack++)
-                {
-                    prodauto::Track* track = *iterTrack;
-    
-                    if (track->sourceClip->sourceTrackID == fileTrack->id)
-                    {
-                        materialTrackID = track->sourceClip->sourceTrackID;
-                        break;
-                    }
-                }
-                if (materialTrackID == 0)
-                {
-                    PA_LOGTHROW(MXFWriterException, ("Failed to find material package track referencing the file package track"));
-                }
-                */
 
                 // map the file package
                 ::Package* mxfFilePackage;
@@ -764,8 +752,9 @@ void MXFWriter::Construct(int resolutionID,
                         
                         case IMX30_MATERIAL_RESOLUTION:
                         {
+                            assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
-                            essenceInfo.imxFrameSize = 150000;
+                            essenceInfo.imxFrameSize = 150000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -775,8 +764,9 @@ void MXFWriter::Construct(int resolutionID,
                         
                         case IMX40_MATERIAL_RESOLUTION:
                         {
+                            assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
-                            essenceInfo.imxFrameSize = 200000;
+                            essenceInfo.imxFrameSize = 200000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -786,8 +776,9 @@ void MXFWriter::Construct(int resolutionID,
                         
                         case IMX50_MATERIAL_RESOLUTION:
                         {
+                            assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
-                            essenceInfo.imxFrameSize = 250000;
+                            essenceInfo.imxFrameSize = 250000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
                                 filePackage->name.c_str(), 
                                 &timestamp, fileDesc->fileLocation.c_str(), 
@@ -873,12 +864,21 @@ void MXFWriter::Construct(int resolutionID,
             
     
             // create the clip writer
-            // TODO: don't hard code PAL_25i and drop frame flag
             mxfRational mxfAspectRatio;
             convertRational(imageAspectRatio, mxfAspectRatio); 
-            mxfRational mxfProjectEditRate = {25, 1};
-            if (!create_clip_writer(projectName.name.empty() ? 0 : projectName.name.c_str(), 
-                PAL_25i, mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
+            mxfRational mxfProjectEditRate;
+            if (isPALProject)
+            {
+                mxfProjectEditRate.numerator = 25;
+                mxfProjectEditRate.denominator = 1;
+            }
+            else
+            {
+                mxfProjectEditRate.numerator = 30000;
+                mxfProjectEditRate.denominator = 1001;
+            }
+            if (!create_clip_writer((projectName.name.empty() ? 0 : projectName.name.c_str()), 
+                (isPALProject ? PAL_25i : NTSC_30i), mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
                 outputPackage->packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));

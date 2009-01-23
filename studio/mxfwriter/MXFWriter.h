@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.h,v 1.4 2008/09/03 15:23:32 john_f Exp $
+ * $Id: MXFWriter.h,v 1.5 2009/01/23 20:08:20 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -77,14 +77,14 @@ public:
     MXFWriter(MaterialPackage* materialPackage, 
         std::vector<SourcePackage*>& filePackages, 
         SourcePackage* tapeSourcePackage, bool ownPackages,
-        int resolutionID, Rational imageAspectRatio, 
+        bool isPALProject, int resolutionID, Rational imageAspectRatio, 
         uint8_t audioQuantizationBits, int64_t startPosition, 
         std::string creatingFilePath, std::string destinationFilePath,
         std::string failuresFilePath, std::string filenamePrefix,
         std::vector<UserComment> userComments, ProjectName projectName);
         
     MXFWriter(RecorderInputConfig* inputConfig, 
-        int resolutionID, Rational imageAspectRatio, 
+        bool isPALProject, int resolutionID, Rational imageAspectRatio, 
         uint8_t audioQuantizationBits, uint32_t inputMask, int64_t startPosition, 
         std::string creatingFilePath, std::string destinationFilePath,
         std::string failuresFilePath, std::string filenamePrefix,
@@ -121,7 +121,7 @@ public:
     std::string getFailuresFilename(std::string filename);
     
 private:
-    void Construct( int resolutionID,
+    void construct(bool isPALProject, int resolutionID,
         Rational imageAspectRatio, uint8_t audioQuantizationBits,
         const std::vector<UserComment> & userComments,
         const ProjectName & projectName);
