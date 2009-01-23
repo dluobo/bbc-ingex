@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.4 2008/10/24 06:12:42 stuart_hc Exp $
+ * $Id: dvsoem_dummy.c,v 1.5 2009/01/23 20:10:51 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -226,6 +226,10 @@ int sv_version_status( sv_handle * sv, sv_version * version, int versionsize, in
 	return SV_OK;
 }
 int sv_videomode(sv_handle * sv, int videomode)
+{
+	return SV_OK;
+}
+int sv_sync(sv_handle * sv, int sync)
 {
 	return SV_OK;
 }

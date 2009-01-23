@@ -226,7 +226,21 @@ typedef struct {
 #define SV_MODE_SMPTE296_60P 0x23
 #define SV_MODE_COLOR_YUV422 0x00000000
 #define SV_MODE_STORAGE_FRAME 0x40000000
+#define SV_MODE_AUDIO_MASK 0x00e00000
 #define SV_MODE_AUDIO_4CHANNEL 0x00c00000
+
+#define SV_SYNC_INTERNAL 0
+#define SV_SYNC_EXTERNAL 1
+#define SV_SYNC_GENLOCK_ANALOG 2
+#define SV_SYNC_GENLOCK_DIGITAL 3
+#define SV_SYNC_SLAVE 4
+#define SV_SYNC_AUTO 5
+#define SV_SYNC_MODULE 6
+#define SV_SYNC_BILEVEL 7
+#define SV_SYNC_TRILEVEL 8
+#define SV_SYNC_HVTTL 9
+#define SV_SYNC_LTC 10
+#define SV_SYNC_MASK 0xffff
 
 #define SV_QUERY_TEMPERATURE 87
 #define SV_QUERY_AUDIOINERROR 94
@@ -262,6 +276,7 @@ int sv_option_get(sv_handle * sv, int code, int *val);
 int sv_currenttime(sv_handle * sv, int brecord, int *ptick, uint32 *pclockhigh, uint32 *pclocklow);
 int sv_version_status( sv_handle * sv, sv_version * version, int versionsize, int deviceid, int moduleid, int spare);
 int sv_videomode(sv_handle * sv, int videomode);
+int sv_sync(sv_handle * sv, int sync);
 int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int timeout, int spare);
 int sv_close(sv_handle * sv);
 char * sv_geterrortext(int code);
