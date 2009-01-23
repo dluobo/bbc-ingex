@@ -1,9 +1,9 @@
 /*
- * $Id: FCPFile.h,v 1.2 2008/10/22 09:32:19 john_f Exp $
+ * $Id: FCPFile.h,v 1.3 2009/01/23 19:42:44 john_f Exp $
  *
  * Final Cut Pro XML file for defining clips, multi-camera clips, etc
  *
- * Copyright (C) 2008  British Broadcasting Corporation
+ * Copyright (C) 2008, BBC, Nicholas Pinks <npinks@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,11 +25,7 @@
 
 
 
-#include <DataTypes.h>
-#include <Package.h>
-#include <MCClipDef.h>
-#include <SourceConfig.h>
-#include "CutsDatabase.h"
+#include "EditorsFile.h"
 
 
 #include <xercesc/dom/DOM.hpp>
@@ -38,46 +34,27 @@
 
 namespace prodauto
 {
-// utility class to clean-up Package pointers
-class MaterialHolder
-{
-public:
-    ~MaterialHolder()
-    {
-        PackageSet::iterator iter;
-        for (iter = packages.begin(); iter != packages.end(); iter++)
-        {
-            delete *iter;
-        }
-        
-        // topPackages only holds references so don't delete
-    }
-    
-    MaterialPackageSet topPackages; 
-    PackageSet packages;
-};   
 
-class FCPFile
+class FCPFile : public EditorsFile
 {
 public:
-    FCPFile(std::string filename);
-    ~FCPFile();
+    FCPFile(std::string filename, std::string fcpPath);
+    virtual ~FCPFile();
 
     // must call this to save the data to the file
-    void save();
+    virtual void save();
     
     // add a single clip corresponding to the material package
-    void addClip(MaterialPackage* materialPackage, PackageSet& packages, int totalClips, std::string fcppath);
+    virtual void addClip(MaterialPackage* materialPackage, PackageSet& packages);
 
-    // add a multi-camera clip
-    void addMCClip(MCClipDef* itmcP, MaterialHolder &material, int idname);
-
-    // add a multi-camera clip sequence from Directors Cut
-    void addMCSequence(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,std::vector<CutInfo> sequence);
-
+    // add a multi-camera clip and cut sequence
+    virtual bool addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+        std::vector<CutInfo> sequence);
     
     
 private:
+    bool addMCClipInternal(MCClipDef* itmcP, MaterialPackageSet& materialPackages, PackageSet& packages);
+    void addMCSequenceInternal(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,std::vector<CutInfo> sequence);
     bool getSource(Track* track, PackageSet& packages, SourcePackage** fileSourcePackage, SourcePackage** sourcePackage, Track** sourceTrack);
 
     std::string _filename;
@@ -86,7 +63,9 @@ private:
     xercesc::DOMDocument* _doc;
     
     xercesc::DOMElement* _rootElem;
-    // TODO: Put other elements you need to have beyond each call to addClip, addMCClip, etc.
+
+    std::string _fcpPath;
+    int _idName;
 };
 
 

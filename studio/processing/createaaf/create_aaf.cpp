@@ -1,9 +1,10 @@
 /*
- * $Id: create_aaf.cpp,v 1.6 2008/10/22 09:32:19 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.7 2009/01/23 19:42:44 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
- * Copyright (C) 2006  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2008, BBC, Nicholas Pinks <npinks@users.sourceforge.net>
+ * Copyright (C) 2008, BBC, Philip de Nier <philipn@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -29,16 +30,19 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sstream>
+
 #include "AAFFile.h"
 #include "FCPFile.h"
 #include "CreateAAFException.h"
 #include "CutsDatabase.h"
+
 #include <Database.h>
 #include <MCClipDef.h>
 #include <Utilities.h>
 #include <DBException.h>
-#include "Timecode.h"
-#include "XmlTools.h"
+#include <Timecode.h>
+#include <XmlTools.h>
+
 #include <xercesc/util/PlatformUtils.hpp>
 #include <xercesc/util/XMLString.hpp>
 #include <xercesc/dom/DOM.hpp>
@@ -54,253 +58,24 @@ static const char* g_databasePassword = "bamzooki";
 static const char* g_filenamePrefix = "ingex";
 static const char* g_resultsPrefix = "RESULTS:";
 
-
- 
-
-/*
-void makeMultiClip(MCClipDef* itmcP, int in, int out, int &totalMulticamGroups, MaterialHolder &material, DOMDocument * doc, int idname)
+// utility class to clean-up Package pointers
+class MaterialHolder
 {
-
-	    static const char * ntsc = "FALSE";
-	    static const char * tb ="25";
-
-
-	    // load multi-camera clip definitions- need MCClip defs    
-	    Database* database = Database::getInstance();
-	    VectorGuard<MCClipDef> mcClipDefs;
-	    mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
-
-            vector<MCClipDef*>::iterator itmc;
-	    DOMElement * rootElem = doc->getDocumentElement();
-
-            //for (itmc = mcClipDefs.get().begin(); itmc != mcClipDefs.get().end(); itmc++)
-	    {
-
-                MaterialPackageSet::const_iterator iter1 = material.topPackages.begin();
-		{
-
-	            //De-bugging info
-	            //printf("\n");
-	            //printf("--------- START OF MULTICLIP ---------\n");
-
-	            std::ostringstream idname_ss;
-                    idname_ss << idname;
-	            //printf("Multiclip \n");       
-  	            int c1 = 0;
-	            //DOM Details for Multiclip
-	            //TAGS
-	            //Rate Tag
-	            DOMElement * rateElem = doc->createElement(X("rate"));
-
-	            DOMElement * rate2Elem = doc->createElement(X("rate"));
-	            //Media Tag
-	            DOMElement * mediaElem = doc->createElement(X("media"));
-	            //Video Tag
-	            DOMElement * videoElem = doc->createElement(X("video"));
- 	            //rate
-	            DOMElement * ntscElem = doc->createElement(X("ntsc"));
-	            ntscElem->appendChild(doc->createTextNode(X(ntsc)));
-	            DOMElement * tbElem = doc->createElement(X("timebase"));
-	            tbElem->appendChild(doc->createTextNode(X(tb)));
-	            rateElem->appendChild(ntscElem);
-	            rateElem->appendChild(tbElem);
-
-	            DOMElement * ntscElem2 = doc->createElement(X("ntsc"));
-	            ntscElem2->appendChild(doc->createTextNode(X(ntsc)));
-	            DOMElement * tbElem2 = doc->createElement(X("timebase"));
-	            tbElem2->appendChild(doc->createTextNode(X(tb)));
-	            rate2Elem->appendChild(ntscElem2);
-	            rate2Elem->appendChild(tbElem2);
-	    
-                    //Mduration
-	            DOMElement * MdurElem = doc->createElement(X("duration"));
-	            DOMElement * Mdur2Elem = doc->createElement(X("duration"));
-	            //Mclipitem1
-	            DOMElement * Mclipitem1Elem = doc->createElement(X("clipitem"));
-	            //Multiclip id
-	            DOMElement * MclipidElem = doc->createElement(X("multiclip"));
-	            //Mcollapsed
-	            DOMElement * McollapsedElem = doc->createElement(X("collapsed"));
-	            //Msynctype
-	            DOMElement * MsyncElem = doc->createElement(X("synctype"));
-	            //Mclip
-	            DOMElement * MclipElem = doc->createElement(X("clip"));
-	            //Mname
-	            DOMElement * MnameElem = doc->createElement(X("name"));
-	            DOMElement * Mname1Elem = doc->createElement(X("name"));
-	            DOMElement * Mname2Elem = doc->createElement(X("name"));
-	            //Track Tag
-	            DOMElement * trackElem = doc->createElement(X("track"));
-
-	            DOMElement * inElem = doc->createElement(X("in"));
-	            std::ostringstream in_ss;
-                    in_ss << in;
-	            inElem->appendChild(doc->createTextNode(X(in_ss.str().c_str())));
-
-	            DOMElement * outElem = doc->createElement(X("out"));
-	            std::ostringstream out_ss;
-                    out_ss << out;
-	            outElem->appendChild(doc->createTextNode(X(out_ss.str().c_str())));
-
-	            DOMElement * ismasterElem = doc->createElement(X("ismasterclip"));
-	            ismasterElem->appendChild(doc->createTextNode(X("FALSE")));
-		  
-
-	            MaterialPackageSet donePackages;
-	            //Name
-                    MaterialPackage* topPackage1 = *iter1;
-                    MaterialPackageSet materialPackages;
-                    materialPackages.insert(topPackage1);
-
-                    //DOM Multicam 
-                    // add material to group that has same start time and creation date
-
-                    Rational palEditRate = {25, 1}; 
-
-
-                    for (MaterialPackageSet::const_iterator iter2 = iter1; iter2 != material.topPackages.end(); iter2++)
-                    {
-	               MaterialPackage* topPackage2 = *iter2;
-		       int64_t st_time;
-
-
-
-		       if (topPackage2->creationDate.year == topPackage1->creationDate.year && topPackage2->creationDate.month == topPackage1->creationDate.month && topPackage2->creationDate.day == topPackage1->creationDate.day && getStartTime(topPackage1, material.packages, palEditRate) ==  getStartTime(topPackage2, material.packages, palEditRate))
-		       {
-			  
-
-			   //looks in at Track Detail
-		          materialPackages.insert(topPackage2);
-			  donePackages.insert(topPackage2);
-
-			   for (std::vector<prodauto::Track*>::const_iterator iter6 = topPackage2->tracks.begin(); iter6 != topPackage2->tracks.end(); iter6++) 
-			   {
-
-			       c1++;
-			       prodauto::Track * track = *iter6;
-			       if (c1 == 1)
-			       {
-
-			           //MClip DOM Start
-				   rootElem->appendChild(MclipElem);
-
-				   MclipElem->setAttribute(X("id"), X(idname_ss.str().c_str()));
-				   //Name
-				   Mname2Elem->appendChild(doc->createTextNode(X("Multicam")));
-				   Mname2Elem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
-				   Mname1Elem->appendChild(doc->createTextNode(X("Multicam")));
-				   Mname1Elem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
-				   MnameElem->appendChild(doc->createTextNode(X("Multicam")));
-				   MnameElem->appendChild(doc->createTextNode(X(idname_ss.str().c_str())));
-				   //Duration
-
-				   std::ostringstream tMdurss;
-				   tMdurss << track->sourceClip->length;
-				   MdurElem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
-				   Mdur2Elem->appendChild(doc->createTextNode(X(tMdurss.str().c_str())));
-				   //Clip Items: name
-				   Mclipitem1Elem->setAttribute(X("id"), X(idname_ss.str().c_str()));
-				   //Collapsed
-				   McollapsedElem->appendChild(doc->createTextNode(X("FALSE")));
-				   //Sync Type
-				   //Append above to Tracks
-				   MclipElem->appendChild(Mname1Elem);
-				   MclipElem->appendChild(MdurElem);
-				   //Rate
-				   MclipElem->appendChild(rateElem);
-				   MclipElem->appendChild(inElem);
-				   MclipElem->appendChild(outElem);
-				   MclipElem->appendChild(ismasterElem);
-				   //Multiclip
-
-				   Mclipitem1Elem->appendChild(Mname2Elem);
-				   Mclipitem1Elem->appendChild(Mdur2Elem);
-				   Mclipitem1Elem->appendChild(rate2Elem);
-				   Mclipitem1Elem->setAttribute(X("id"), X(idname_ss.str().c_str()));
-				   MclipidElem->appendChild(MnameElem);
-				   MclipidElem->appendChild(McollapsedElem);
-				   MclipidElem->appendChild(MsyncElem);
-				   MclipidElem->setAttribute(X("id"), X(idname_ss.str().c_str()));
-	
-			        }
-			        //Material Package Name
-			        SourcePackage dummy;
-			        dummy.uid = track->sourceClip->sourcePackageUID;
-			        PackageSet::iterator result = material.packages.find(&dummy);
-			        vector<MCClipDef*>::iterator itmc1;
-				
-			        for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
-			        {
-
-			            MCClipDef * mcClipDef = itmcP;				
-				    if ((*itmc1)->name == itmcP->name)
-				    {
-				        for (std::vector<SourceConfig*>::const_iterator itmc2 = mcClipDef->sourceConfigs.begin(); itmc2 != mcClipDef->sourceConfigs.end(); itmc2++)
-				        {
-				            //SourceConfig * sourceConfigs = *itmc2;
-				            Package* package = *result;
-				            SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-				            if ((*itmc2)->name == sourcePackage->sourceConfigName)
-				            {
-				                //printf("\n  <-START OF TRACK DETAILS-> \n");
-				    	        //printf("Track file name=%s\n",topPackage2->name.c_str());
-				                st_time = getStartTime(topPackage2, material.packages, palEditRate);
-				                Timecode tc(st_time);
-				                //printf("Time code=%s\n",tc.Text());
-				                //printf("Source Config Name %s\n", sourcePackage->sourceConfigName.c_str());
-				    	        if (track->dataDef != PICTURE_DATA_DEFINITION) //audio
-				                {
-					            //printf("Audio Track Name=%s\n",track->name.c_str()); //track name
-					            //printf("Audio Source Clip Length=%lld\n",track->sourceClip->length); 
-				                }
-				                if (track->dataDef == PICTURE_DATA_DEFINITION) //VIDEO
-				                { 
-					            //Mclip
-					            DOMElement * Mclip2Elem = doc->createElement(X("clip"));
-					            //Mclip
-					            DOMElement * MfileElem = doc->createElement(X("file"));
-					            //Mangle1
-					            DOMElement * Mangle1Elem = doc->createElement(X("angle"));
-					            //printf("Video Track Name=%s\n",track->name.c_str()); //track name
-					            //printf("Video Source Clip Length=%lld\n",track->sourceClip->length);
-						    Mclip2Elem->setAttribute(X("id"), X(topPackage2->name.c_str()));	
-						    MfileElem->setAttribute(X("id"), X(topPackage2->name.c_str()));
-
-						    Mclip2Elem->appendChild(MfileElem);
-
-						    Mangle1Elem->appendChild(Mclip2Elem);
-
-						    MclipidElem->appendChild(Mangle1Elem);
-
-						    Mclipitem1Elem->appendChild(MclipidElem);
-
-						    trackElem->appendChild(Mclipitem1Elem);
-
-						    videoElem->appendChild(trackElem);
-
-						    mediaElem->appendChild(videoElem);
-
-						    MclipElem->appendChild(mediaElem);		
-				                }
-			    	                //printf("  <-END OF TRACK DETAILS-> \n\n");	
-				            }
-					}
-			            }
-			        }
-			    }
-		        }//if multicam
-		    }//for material package
-		}
-	    }
- ++ totalMulticamGroups;
-printf("total=%d\n",totalMulticamGroups);
-
-
-}	
-	    //printf("--------- END OF MULTICLIP ---------\n");
-
-
-*/
+public:
+    ~MaterialHolder()
+    {
+        PackageSet::iterator iter;
+        for (iter = packages.begin(); iter != packages.end(); iter++)
+        {
+            delete *iter;
+        }
+        
+        // topPackages only holds references so don't delete
+    }
+    
+    MaterialPackageSet topPackages; 
+    PackageSet packages;
+};   
 
 static void parseDateAndTimecode(string dateAndTimecodeStr, Date* date, int64_t* timecode)
 {
@@ -412,13 +187,13 @@ static string createSingleClipFilename(string prefix, string suffix, int index)
     return filename.str();
 }
 
-static string createSingleClipFilenameX(string prefix, string suffix)
+static string createXMLFilename(string prefix, string suffix)
 {
-    stringstream filenameX;
+    stringstream filename;
     
-    filenameX << prefix << "_" << suffix << "_" <<".xml";
+    filename << prefix << "_" << suffix << "_" <<".xml";
         
-    return filenameX.str();
+    return filename.str();
 }
 
 static string createMCClipFilename(string prefix, int64_t startTime, string suffix, int index)
@@ -430,7 +205,7 @@ static string createMCClipFilename(string prefix, int64_t startTime, string suff
     return filename.str();
 }
 
-static string createGroupSingleFilename(string prefix, string suffix)
+static string createAAFGroupSingleFilename(string prefix, string suffix)
 {
     stringstream filename;
     
@@ -439,7 +214,7 @@ static string createGroupSingleFilename(string prefix, string suffix)
     return filename.str();
 }
 
-static string createGroupMCFilename(string prefix, string suffix)
+static string createAAFGroupMCFilename(string prefix, string suffix)
 {
     stringstream filename;
     
@@ -483,52 +258,7 @@ static string createUniqueFilename(string prefix)
     
     return result;
 }
-/*
-static string createFilenameX(string prefix, int64_t startTime, string suffix, int index)
-{
-    stringstream filename;
-    
-    filename << prefix << "_xml_" << startTime << "_"  << suffix << "_" << index << ".xml";
-        
-    return filename.str();
-}
 
-static string createUniqueFilenameX(string prefix)
-{
-    string result;
-    int count = 0;
-    struct stat statBuf;
-    
-    while (count < 10000) // more than 10000 files with the same name - you must be joking!
-    {
-        stringstream filename;
-        
-        if (count == 0)
-        {
-            filename << prefix << ".xml";
-        }
-        else
-        {
-            filename << prefix << "_" << count << ".xml";
-        }
-        
-        if (stat(filename.str().c_str(), &statBuf) != 0)
-        {
-            // file does not exist - use it
-            result = filename.str();
-            break;
-        }
-        
-        count++;
-    }
-    if (result.size() == 0)
-    {
-        throw "Failed to create unique filename";
-    }
-    
-    return result;
-}
-*/
 static string addFilename(vector<string>& filenames, string filename)
 {
     filenames.push_back(filename);
@@ -658,7 +388,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h, --help                     Display this usage message\n");
     fprintf(stderr, "  -v, --verbose                  Print status messages\n");
-    fprintf(stderr, "  -p, --prefix <filepath>        Filename prefix used for AAF files (default '%s')\n", g_filenamePrefix);
+    fprintf(stderr, "  -p, --prefix <filepath>        Filename prefix used for output files (default '%s')\n", g_filenamePrefix);
     fprintf(stderr, "  -r --resolution <id>           Video resolution identifier as listed in the database\n"); 
     fprintf(stderr, "                                     (default is %d for DV-50)\n", DV50_MATERIAL_RESOLUTION);
     fprintf(stderr, "  -g, --group                    Create AAF file with all clips included\n");
@@ -670,11 +400,13 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -c, --from-cd <date>T<time>    Includes clips created >= CreationDate of clip\n");
     fprintf(stderr, "  --tag <name>=<value>           Includes clips with user comment tag <name> == <value>\n");
     fprintf(stderr, "  --mc-cuts <db name>            Includes sequence of multi-camera cuts from database\n");
+    fprintf(stderr, "  --aaf-xml                      Outputs AAF file using the XML stored format\n");
+    fprintf(stderr, "  --audio-edits                  Include edits in the audio tracks in the multi-camera cut sequence\n");
+    fprintf(stderr, "  --fcp-xml                      Prints Apple XML for Final Cut Pro- disables AAF\n");
+    fprintf(stderr, "  --fcp-path <string>            Sets the path for FCP to see Ingex generated media\n");
     fprintf(stderr, "  -d, --dns <string>             Database DNS (default '%s')\n", g_dns);
     fprintf(stderr, "  -u, --dbuser <string>          Database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
-    fprintf(stderr, "  --xml			      Prints Apple XML for Final Cut Pro- disables AAF\n");
-    fprintf(stderr, "  --fcp-path <string>	      Sets the path for FCP to see Ingex generated media\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
     fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff'\n");
@@ -689,10 +421,12 @@ int main(int argc, const char* argv[])
 {
     int cmdlnIndex = 1;
     string filenamePrefix = g_filenamePrefix;
-    bool createGroup = false;
-    bool createGroupOnly = false;
+    bool createAAFGroup = false;
+    bool createAAFGroupOnly = false;
     bool createMultiCam = false;
+    bool aafxml = false;
     bool fcpxml = false;
+    bool audioEdits = false;
     Date fromDate;
     Date toDate;
     int64_t fromTimecode = 0;
@@ -707,11 +441,11 @@ int main(int argc, const char* argv[])
     int videoResolutionID = DV50_MATERIAL_RESOLUTION;
     bool verbose = false;
     bool noTSSuffix = false;
-    std::string mcCutsFilename;
+    string mcCutsFilename;
     bool includeMCCutsSequence = false;
     CutsDatabase* mcCutsDatabase = 0;
     Timestamp fromCreationDate = g_nullTimestamp;
-    string fcppath;
+    string fcpPath;
     
     Timestamp t = generateTimestampStartToday();
     fromDate.year = t.year;
@@ -721,7 +455,6 @@ int main(int argc, const char* argv[])
     toDate.year = t.year;
     toDate.month = t.month;
     toDate.day = t.day;
-
 
 
     
@@ -773,14 +506,14 @@ int main(int argc, const char* argv[])
             else if (strcmp(argv[cmdlnIndex], "-g") == 0 ||
                 strcmp(argv[cmdlnIndex], "--group") == 0)
             {
-                createGroup = true;
+                createAAFGroup = true;
                 cmdlnIndex += 1;
             }
             else if (strcmp(argv[cmdlnIndex], "-o") == 0 ||
                 strcmp(argv[cmdlnIndex], "--grouponly") == 0)
             {
-                createGroupOnly = true;
-                createGroup = true;
+                createAAFGroupOnly = true;
+                createAAFGroup = true;
                 cmdlnIndex += 1;
             }
             else if (strcmp(argv[cmdlnIndex], "--no-ts-suffix") == 0)
@@ -888,11 +621,21 @@ int main(int argc, const char* argv[])
                 dbPassword = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
             }
-            else if (strcmp(argv[cmdlnIndex], "--xml") == 0)
+            else if (strcmp(argv[cmdlnIndex], "--audio-edits") == 0)
             {
-		fcpxml = true;
-		cmdlnIndex++;
-	    }
+                audioEdits = true;
+                cmdlnIndex++;
+            }
+            else if (strcmp(argv[cmdlnIndex], "--aaf-xml") == 0)
+            {
+                aafxml = true;
+                cmdlnIndex++;
+            }
+            else if (strcmp(argv[cmdlnIndex], "--fcp-xml") == 0)
+            {
+                fcpxml = true;
+                cmdlnIndex++;
+            }
             else if (strcmp(argv[cmdlnIndex], "--fcp-path") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
@@ -901,7 +644,7 @@ int main(int argc, const char* argv[])
                     fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-                fcppath = argv[cmdlnIndex + 1];
+                fcpPath = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
             }
             else
@@ -966,7 +709,7 @@ int main(int argc, const char* argv[])
 
     // load the material    
     Database* database = Database::getInstance();
-    auto_ptr<AAFFile> aafGroup;
+    auto_ptr<EditorsFile> editorsFile;
     MaterialHolder material;
     VectorGuard<MCClipDef> mcClipDefs;
     mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
@@ -1025,10 +768,10 @@ int main(int argc, const char* argv[])
 
 
             // remove all packages that are < fromTimecode (at fromDate) and > toTimecode (at toDate)
-            std::vector<prodauto::MaterialPackage *> packages_to_erase;
+            vector<prodauto::MaterialPackage *> packagesToErase;
             Rational palEditRate = {25, 1};
-            for (MaterialPackageSet::const_iterator
-                it = material.topPackages.begin(); it != material.topPackages.end(); ++it)
+            MaterialPackageSet::const_iterator it;
+            for (it = material.topPackages.begin(); it != material.topPackages.end(); ++it)
             {
                 MaterialPackage* topPackage = *it;
                 
@@ -1037,28 +780,27 @@ int main(int argc, const char* argv[])
                     topPackage->creationDate.day == fromDate.day &&
                     getStartTime(topPackage, material.packages, palEditRate) < fromTimecode)
                 {
-                    packages_to_erase.push_back(topPackage);
+                    packagesToErase.push_back(topPackage);
                 }
                 else if (topPackage->creationDate.year == toDate.year && 
                     topPackage->creationDate.month == toDate.month && 
                     topPackage->creationDate.day == toDate.day &&
                     getStartTime(topPackage, material.packages, palEditRate) >= toTimecode)
                 {
-                    packages_to_erase.push_back(topPackage);
+                    packagesToErase.push_back(topPackage);
                 }
             }
-            for (std::vector<prodauto::MaterialPackage *>::const_iterator
-                it = packages_to_erase.begin(); it != packages_to_erase.end(); ++it)
+            vector<prodauto::MaterialPackage*>::const_iterator it2;
+            for (it2 = packagesToErase.begin(); it2 != packagesToErase.end(); it2++)
             {
-                material.topPackages.erase(*it);
+                material.topPackages.erase(*it2);
             }
-            unsigned int removedCount = packages_to_erase.size();
 
             if (verbose)
             {
-                if (removedCount > 0)
+                if (packagesToErase.size() > 0)
                 {
-                    printf("Removed %d clips from those loaded that did not match the start timecode range\n", removedCount);
+                    printf("Removed %zd clips from those loaded that did not match the start timecode range\n", packagesToErase.size());
                 }
                 else
                 {
@@ -1086,27 +828,18 @@ int main(int argc, const char* argv[])
         return 1;
     }
     
-    // Additional debug code
-    if (0) //(verbose)
-    {
-        printf("\nWe now have the following material packages...\n\n");
-        for (MaterialPackageSet::iterator it = material.topPackages.begin(); it != material.topPackages.end(); ++it)
-        {
-            printf("%s\n", (*it)->toString().c_str());
-        }
-    }
     
     // go through the material package -> file package and remove any that reference
     // a file package with a non-zero videoResolutionID and !=  targetVideoResolutionID
-    std::vector<prodauto::MaterialPackage *> packages_to_erase;
-    for (MaterialPackageSet::const_iterator
-        iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
+    vector<prodauto::MaterialPackage *> packagesToErase;
+    MaterialPackageSet::const_iterator iter1;
+    for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
     {
         MaterialPackage* topPackage = *iter1;
         
         bool erase = false;
-        for (vector<Track*>::const_iterator
-            iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
+        vector<Track*>::const_iterator iter2;
+        for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
         {
             Track* track = *iter2;
             
@@ -1141,21 +874,20 @@ int main(int argc, const char* argv[])
         }
         if (erase)
         {
-            packages_to_erase.push_back(topPackage);
+            packagesToErase.push_back(topPackage);
         }
     }
-    for (std::vector<prodauto::MaterialPackage *>::const_iterator
-        it = packages_to_erase.begin(); it != packages_to_erase.end(); ++it)
+    vector<prodauto::MaterialPackage *>::const_iterator it;
+    for (it = packagesToErase.begin(); it != packagesToErase.end(); it++)
     {
         material.topPackages.erase(*it);
     }
-    unsigned int removedCount = packages_to_erase.size();
     
     if (verbose)
     {
-        if (removedCount > 0)
+        if (packagesToErase.size() > 0)
         {
-            printf("Removed %d clips from those loaded that did not match the video resolution\n", removedCount);
+            printf("Removed %zd clips from those loaded that did not match the video resolution\n", packagesToErase.size());
         }
         else
         {
@@ -1170,11 +902,6 @@ int main(int argc, const char* argv[])
     int totalClips = 0;
     int totalMulticamGroups = 0;
     int totalDirectorsCutsSequences = 0;
-    
-    if (!fcpxml)
-    {
-
-
 
     
     // create AAF file if there is material    
@@ -1189,42 +916,52 @@ int main(int argc, const char* argv[])
     {
         try
         {
-            // create single source clips
-            if (createGroup)
+            // create FCP or AAF group files
+            if (fcpxml)
             {
-                if (createGroupOnly && noTSSuffix)
+                editorsFile = auto_ptr<EditorsFile>(new FCPFile(addFilename(filenames, createXMLFilename(filenamePrefix, suffix)), fcpPath));
+            }
+            else
+            {
+                if (createAAFGroup)
                 {
-                    aafGroup = auto_ptr<AAFFile>(new AAFFile(
-                        addFilename(filenames, createUniqueFilename(filenamePrefix))));
-                }
-                else if (createMultiCam)
-                {
-                    aafGroup = auto_ptr<AAFFile>(new AAFFile(
-                        addFilename(filenames, createGroupMCFilename(filenamePrefix, suffix))));
-                }
-                else
-                {
-                    aafGroup = auto_ptr<AAFFile>(new AAFFile(
-                        addFilename(filenames, createGroupSingleFilename(filenamePrefix, suffix))));
+                    if (createAAFGroupOnly && noTSSuffix)
+                    {
+                        editorsFile = auto_ptr<EditorsFile>(new AAFFile(
+                        addFilename(filenames, createUniqueFilename(filenamePrefix)), aafxml, audioEdits));
+                    }
+                    else if (createMultiCam)
+                    {
+                        editorsFile = auto_ptr<EditorsFile>(new AAFFile(
+                        addFilename(filenames, createAAFGroupMCFilename(filenamePrefix, suffix)), aafxml, audioEdits));
+                    }
+                    else
+                    {
+                        editorsFile = auto_ptr<EditorsFile>(new AAFFile(
+                        addFilename(filenames, createAAFGroupSingleFilename(filenamePrefix, suffix)), aafxml, audioEdits));
+                    }
                 }
             }
+
+            
+            // create clips
+            
             MaterialPackageSet::iterator iter1;
             int index = 0;
             for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
             {
                 MaterialPackage* topPackage = *iter1;
                 
-                if (!createGroupOnly)
+                if (!fcpxml && !createAAFGroupOnly)
                 {
-                    AAFFile aafFile(
-                        addFilename(filenames, createSingleClipFilename(filenamePrefix, suffix, index++)));
+                    AAFFile aafFile(addFilename(filenames, createSingleClipFilename(filenamePrefix, suffix, index++)), aafxml, audioEdits);
                     aafFile.addClip(topPackage, material.packages);
                     aafFile.save();
                 }
     
-                if (createGroup)
+                if (createAAFGroup)
                 {
-                    aafGroup->addClip(topPackage, material.packages);
+                    editorsFile->addClip(topPackage, material.packages);                
                 }
 
                 totalClips++;
@@ -1235,11 +972,10 @@ int main(int argc, const char* argv[])
             // mult-camera clips group packages together which have the same start time and creation date
             
             if (createMultiCam)
-            {	       
+            {          
                 // load multi-camera clip definitions
-
-                
                 MaterialPackageSet donePackages;
+                
                 for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
                 {
                     MaterialPackage* topPackage1 = *iter1;
@@ -1272,48 +1008,47 @@ int main(int argc, const char* argv[])
                     }
 
                     // materialPackages now contains all MaterialPackages with same start time and creation date
-                    
+
                     vector<MCClipDef*>::iterator iter3;
                     int index = 0;
+            
                     for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
                     {
                         MCClipDef* mcClipDef = *iter3;
-                        
                         vector<CutInfo> sequence;
+                        
                         if (mcCutsDatabase != 0)
                         {
                             sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, 
-                                topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
+                            topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
                         }
-                        
-                        if (!createGroupOnly)
+
+                        if (!fcpxml && !createAAFGroupOnly)
                         {
-                            AAFFile aafFile(
-                                addFilename(filenames, createMCClipFilename(filenamePrefix, 
-                                    getStartTime(topPackage1, material.packages, palEditRate), suffix, index++)));
+                            AAFFile aafFile(addFilename(filenames, createMCClipFilename(filenamePrefix,  getStartTime(topPackage1, material.packages, palEditRate), suffix, index++)), aafxml, audioEdits); 
                             aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence);
                             aafFile.save();
                         }       
-                        
-                        if (createGroup)
-                        {
-                            aafGroup->addMCClip(mcClipDef, materialPackages, material.packages, sequence);
-                        }
 
-                        totalMulticamGroups++;
-                        totalDirectorsCutsSequences = sequence.empty() ? 
-                            totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
-                        printf("aaf directors cut sequence size = %d\n", sequence.size());
+                        if (fcpxml || createAAFGroup)
+                        {
+                            if (editorsFile->addMCClip(mcClipDef, materialPackages, material.packages, sequence))
+                            {
+                                totalMulticamGroups++;
+                            }
+                        }
+                        
+                        totalDirectorsCutsSequences = sequence.empty() ? totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
+                        printf("Directors cut sequence size = %zd\n", sequence.size());
                     }
                 } // iterate over material.topPackages
             }
             
-            if (createGroup)
+            if (createAAFGroup)
             {
-                aafGroup->save();
-                delete aafGroup.release();
+                editorsFile->save();
+                delete editorsFile.release();
             }
-            
             // Results
             
             printf("\n%s\n", g_resultsPrefix);
@@ -1342,426 +1077,10 @@ int main(int argc, const char* argv[])
             fprintf(stderr, "\nFailed to create:\nUnknown exception thrown\n");
             Database::close();
             return 1;
-    	}
+        }
     }
-    } //if not fcpxml
-
-    else //if fcpxml
-    {
-
-
-        FCPFile * fcpFile = 0;
-
-      
-	fcpFile = new FCPFile(createSingleClipFilenameX(filenamePrefix, suffix));
-    //printf("Making XML Doc...\n");
-
-	if (material.topPackages.size() == 0)
-	{
-            printf("\n%s\n", g_resultsPrefix);
-            printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
-	}
-	else
-	{
-	    for(MaterialPackageSet::iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
-	    {	
-		MaterialPackage * topPackage = *iter1;
-	        fcpFile->addClip(topPackage, material.packages, totalClips, fcppath);
-		++totalClips;
-	    }
-	    if (createMultiCam) //multi cam
-            {
-		int idname= 1;
-		MaterialPackageSet donePackages;
-                for (MaterialPackageSet::iterator iters1 = material.topPackages.begin(); iters1 != material.topPackages.end(); iters1++)
-                {
-                    MaterialPackage* topPackage1 = *iters1;
-        
-                    if (!donePackages.insert(topPackage1).second)
-                    {
-                        // already done this package
-                        continue;
-                    }
-                    
-                    MaterialPackageSet materialPackages;
-                    materialPackages.insert(topPackage1);
-                    
-                    // add material to group that has same start time and creation date
-                    Rational palEditRate = {25, 1}; // any rate will do
-                    MaterialPackageSet::iterator iter2;
-                    for (iter2 = iters1, iter2++; iter2 != material.topPackages.end(); iter2++)
-                    {
-                        MaterialPackage* topPackage2 = *iter2;
-                        
-                        if (topPackage2->creationDate.year == topPackage1->creationDate.year &&
-                            topPackage2->creationDate.month == topPackage1->creationDate.month &&
-                            topPackage2->creationDate.day == topPackage1->creationDate.day &&
-                            getStartTime(topPackage1, material.packages, palEditRate) == 
-                                getStartTime(topPackage2, material.packages, palEditRate))
-                        {
-                            materialPackages.insert(topPackage2);
-                            donePackages.insert(topPackage2);
-                        }
-                    }
-
-                    // materialPackages now contains all MaterialPackages with same start time and creation date
-
-                    vector<MCClipDef*>::iterator iter3;
-                    for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
-                    {
-                        MCClipDef* mcClipDef = *iter3;
-
-                        fcpFile->addMCClip(mcClipDef, material, idname);
-			idname++;
-			totalMulticamGroups++;
-
-                        vector<CutInfo> sequence;
-                        if (mcCutsDatabase != 0)
-                        {
-                            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
-                            if (includeMCCutsSequence)
-			    {
-				printf("xml directors cut sequence size = %d\n", sequence.size());
-    				printf("--------------------\n");
-    				
-			        fcpFile->addMCSequence(mcClipDef, materialPackages, material.packages, sequence);
-			    }
-			}
-
-                        totalDirectorsCutsSequences = sequence.empty() ? 
-                        totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
-                        //printf("aaf directors cut sequence size = %d\n", sequence.size());
-                    }
-                }//iterate over material.topPackages
-            }
-/*		Rational palEditRate = {25, 1};
-           	int idname= 1;
-                mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
-		vector<MCClipDef*>::iterator itmc1;
-		for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
-		{
-		    MCClipDef * itmcP = *itmc1;
-		    fcpFile->addMCClip(itmcP, material, idname);
-		    idname++;
-		    ++totalMulticamGroups;
-		}
-		if(includeMCCutsSequence) //sequence
-		{
-
-
-
-
-
-
-
-
-		    MaterialPackageSet donePackages;
-		    MaterialPackageSet::iterator iters1;
-               	    for (iters1 = material.topPackages.begin(); iters1 != material.topPackages.end(); iters1++)
-                    {
-                    	MaterialPackage* topPackageS1 = *iters1;
-                    	MaterialPackageSet materialPackages;
-                    	materialPackages.insert(topPackageS1);
-                    	// add material to group that has same start time and creation date
-                   	MaterialPackageSet::iterator iters2;
-                   	for (iters2 = iters1, iters2++; iters2 != material.topPackages.end(); iters2++)
-                   	{
-                            MaterialPackage* topPackageS2 = *iters2;
-                            if (topPackageS2->creationDate.year == topPackageS1->creationDate.year && topPackageS2->creationDate.month == topPackageS1->creationDate.month && topPackageS2->creationDate.day == topPackageS1->creationDate.day && getStartTime(topPackageS1, material.packages, palEditRate) == getStartTime(topPackageS2, material.packages, palEditRate))
-                            {
-                                materialPackages.insert(topPackageS2);
-                                donePackages.insert(topPackageS2);
-                            }
-			    // materialPackages now contains all MaterialPackages with same start time and creation date
-			    mcClipDefs.get() = database->loadAllMultiCameraClipDefs(); 
-			    vector<MCClipDef*>::iterator iterS3;
-                            for (iterS3 = mcClipDefs.get().begin(); iterS3 != mcClipDefs.get().end(); iterS3++)
-                            {
-                                MCClipDef* mcClipDef = *iterS3;
-                                vector<CutInfo> sequence;
-                                if (mcCutsDatabase != 0)
-                                {
-                                    sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackageS1->creationDate, getStartTime(topPackageS1, material.packages, palEditRate));
-				    totalDirectorsCutsSequences = sequence.empty() ? 
-                            	    totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1;
-				    if (sequence.empty() != true)
-				    {
-				        fcpFile->addMCSequence(mcClipDef, materialPackages, material.packages, sequence);
-				    }
-				}// end of if any sequences
-                            }// end of mcClipsDef
-			}// end of material package set 2!
-		    }
-
-
-		}// end of Sequences
-	    }// end of FCP M-Clips	*/
-	}	
-   
-				    
-        //printf("its out\n");
-        printf("\n%s\n", g_resultsPrefix);
-        printf("%d\n%d\n%d\n", totalClips, totalMulticamGroups, totalDirectorsCutsSequences);
-	//XmlTools::DomToFile(doc, (*filenamesIter2).c_str());
-        fcpFile->save();
-	delete fcpFile;
-	//doc->release();
-        //XmlTools::Terminate();
-        printf("%s\n", createSingleClipFilenameX(filenamePrefix, suffix).c_str());
-    }//CLOSES XML DOM
-
     Database::close();
     return 0;
 }
-
-/*                
-	if (createMultiCam)
-        {	
-
-		int in= -1;
-		int out= -1;
-           	int idname= 1;
-		
-                mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
-		vector<MCClipDef*>::iterator itmc1;
-		for (itmc1 = mcClipDefs.get().begin(); itmc1 != mcClipDefs.get().end(); itmc1++)
-		{
-		    
-		    MCClipDef * itmcP = *itmc1;
-		    makeMultiClip(itmcP, in, out, totalMulticamGroups, material, fcpFile.addMCClip, idname);
-		    idname++;
-		}
-	}// end of multicam  
-*/
-/*
-	if (includeMCCutsSequence)
-	{
-		// 1-load Cut Data
-	    vector<MCClipDef*>::iterator iter6;
-            MaterialPackageSet materialPackages;
-	    
-
-	    for (iter6 = mcClipDefs.get().begin(); iter6 != mcClipDefs.get().end(); iter6++)
-	    {
-		int palEditRate = 25;
-	        MCClipDef* mcClipDef = *iter6;
-	        vector<CutInfo> sequence;
-		for (MaterialPackageSet::iterator iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
-		{
-		    TopPackage* topPackages1 = *iter1;
-	            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
-		}
-	        printf("xml directors cut sequence size = %d\n", sequence.size());
-	    }
-	}
-*/
-	    //loads packages to comare in topPackages10
-	    
-		// 2-iterate through each cut
-		// 3-at each cut, find the active track details
-		// 4-print to DOM Multiclip info, including cut times.
-
-
-		    //SEQUENCES
-
-		    //use material packges set
-/*		    printf("here?!\n");
-
-	            MaterialPackageSet activeMaterialPackages;
-
-	
-        
-        
-	    
-*/
-
-/*		   //load sequence 
-	vector<MCClipDef*>::iterator iter6;
-	printf("im here1\n");
-        MaterialPackageSet materialPackages;
-	for (iter6 = mcClipDefs.get().begin(); iter6 != mcClipDefs.get().end(); iter6++)
-	{
-	    MCClipDef* mcClipDef = *iter6;
-	    vector<CutInfo> sequence;
-	    sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
-	    printf("xml directors cut sequence size = %d\n", sequence.size());
-	    printf("im here2\n");
-	    //loads packages to comare in topPackages10
-
-	    for (MaterialPackageSet::const_iterator iter10 = material.topPackages.begin(); iter10 != material.topPackages.end(); iter10++)
-            {
-		//vector<MaterialPackage*>::iterator iter10;
-                MaterialPackage* topPackage10 = *iter10;
-                materialPackages.insert(topPackage10);
-		    
-                Rational palEditRate = {25, 1}; 
-	printf("im here 3\n");
-		//loads packages to comare in topPackages11
-                for (MaterialPackageSet::const_iterator iter11 = material.topPackages.begin(); iter11 != material.topPackages.end(); iter11++)
-                {	
-		    MaterialPackage* topPackage11 = *iter11;
-		    materialPackages.insert(topPackage11);
-
-	printf("im here 4\n");
-                    if (mcCutsDatabase != 0)
-                    {
-	   		//compares multiclip times
-			if (topPackage11->creationDate.year == topPackage10->creationDate.year && topPackage11->creationDate.month == topPackage10->creationDate.month && topPackage11->creationDate.day == topPackage10->creationDate.day && getStartTime(topPackage10, material.packages, palEditRate) ==  getStartTime(topPackage11, material.packages, palEditRate))
-			{		
-			    //goes through SourceConfig-(Clips)
-			    for (std::vector<SourceConfig*>::const_iterator iter13 = mcClipDef->sourceConfigs.begin(); iter13 != mcClipDef->sourceConfigs.end(); iter13++)
-			    {
-	printf("im here 5\n");
-			        //goes through CutInfos.
-			        for (vector<CutInfo>::const_iterator it = sequence.begin(); it != sequence.end(); ++it)
-			        {
-	printf("im here 6\n");					
-				    if(it->source == (*iter13)->name)
-				    {
-				        int db_id = (*iter13)->getID();
-					printf("Source Config name %s\n",(*iter13)->name.c_str());
-				    	printf("position %lld\n",it->position);
-				    	printf("video source %s\n",it->source.c_str());
-					printf("databaseid (which is useless!) %d\n",db_id);
-					printf("type %d\n", (*iter13)->type);
-				   	printf("track configs %s\n" , (*iter13)->trackConfigs->name.c_str());
-					printf("____________\n");
-				    }
-				//printf("Seq details %s\n", sequence.source());
-				}		
-			    }
-			}
-			else
-	 	        {
-			    printf("now your confused\n");
-			}
-                    }
-		}
-            }
-        }            
-*/		/*
-		    for (std::vector<SourceConfig*>::const_iterator it6 = MCClipDef.sourceConfigs.begin(); it6 != MCClipDef.sourceConfigs.end(); it6++)
-		    {
-			printf("sourceConfigs name%s\n", it6->name.c_str());
-		    }
-
-			for (iter6 = mcClipDefs.get().begin(); iter6 != mcClipDefs.get().end(); iter6++)
-			{
-			    MCClipDef* mcClipDef = *iter6;
-			    vector<CutsDatabaseEntry> seq;
-                            vector<CutInfo> sequence;
-			    if (mcCutsDatabase == 0)
-			    {
-			        printf("No Details in mcCuts Database\n");
-			    }
-			    else //(mcCutsDatabase !=0)
-			    {
-				//seq= getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
-				printf("We're in action- bring it on!\n");
-				sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
-				printf("xml directors cut sequence size = %d\n", sequence.size());
-
-				//DOM SEQ START DETAILS
-				//MClip DOM Start
-
-			for (std::vector<SourceConfig*>::const_iterator it6 = MCClipDef.sourceConfigs.begin(); it6 != MCClipDef.sourceConfigs.end(); it6++)
-		  	   {
-			        printf("sourceConfigs name%s\n", it6->name.c_str());
-		    	   }
-
-				
-				rootElem->appendChild(doc->createTextNode(X(newline)));
-				rootElem->appendChild(seqElem);
-				seqElem->setAttribute(X("id"), X("Multicam Sequence"));
-				seqElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				seqNElem->appendChild(doc->createTextNode(X("Directors Cut")));
-				seqElem->appendChild(seqNElem);
-				seqElem->appendChild(doc->createTextNode(X(newline_indent1)));
-				seqRElem->appendChild(doc->createTextNode(X(newline_indent2)));
-				seqRElem->appendChild(seqTElem);
-				seqElem->appendChild(seqRElem);
-				//extra stuff goes here			
-
-
-	
-				for (vector<CutInfo>::const_iterator it = sequence.begin(); it != sequence.end(); ++it)
-				{
-				    printf("position %lld\n",it->position);
-				    printf("video source %s\n",it->source.c_str());
-				
-
-				for (std::vector<CutsDatabaseEntry>::const_iterator it2 = sequence.begin(); it2 != sequence.end(); ++it2)
-				{
-				    printf("source id %s\n",it2->sourceId.c_str());
-				} 
-				    
-                		    for (std::vector<prodauto::Track*>::const_iterator iter7 = topPackage1->tracks.begin(); iter7 != topPackage1->tracks.end(); iter7++) //looks in at Track Detail
-				    {
-					
-		                        prodauto::Track * track2 = *iter7;
-					if (track2->dataDef == PICTURE_DATA_DEFINITION) //video only
-					{
-
-
-		    			SourcePackage dummy;
-                   			dummy.uid = track2->sourceClip->sourcePackageUID;
-                    			PackageSet::iterator result = material.packages.find(&dummy);
-
-					if (result != material.packages.end())
-                    			{
-                      			     Package* package = *result;
-                
-                        		    if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
-						{
-			    			    continue;
-						}
-			  		    SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-					    if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
-						{
-			    			    continue;
-						}
-
-		    			    printf("Track Name=%s\n",track2->name.c_str());
-                    			    printf("Source Clip Length=%lld\n",track2->sourceClip->length); 
-		    		   	    printf("Picture Def=%d\n",track2->dataDef);
-
-					    FileEssenceDescriptor* fileDescriptor2 = dynamic_cast<FileEssenceDescriptor*>(sourcePackage->descriptor);
-					    printf("Location=%s\n",fileDescriptor2->fileLocation.c_str()); //file Location
-					    printf("File Format=%d\n",fileDescriptor2->fileFormat); // file Format
-					    printf("==================\n");
-					   //DOM- Clip details are here!
-					   //
-					}
-					}
-				    }
-				}
-			    }
-			    
-			if (!createGroupOnly)
-			{
-			//Make Seq Here
-			AAFFile aafFile(addFilename(filenames, createMCClipFilename(filenamePrefix, getStartTime(topPackage1, material.packages, palEditRate), suffix, index++)));
-			aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence);
-			aafFile.save();
-			}       
-			
-			if (createGroup)
-			{
-			//Make -- Don't know what this does!
-			aafGroup->addMCClip(mcClipDef, materialPackages, material.packages, sequence);
-			}
-
-			totalMulticamGroups++;
-			totalDirectorsCutsSequences = sequence.empty() ? 
-			totalDirectorsCutsSequences : totalDirectorsCutsSequences + 1; 
-			}                         
-		*/	
-		
-//DOM Print Details
-   
-
-
-
-
 
 

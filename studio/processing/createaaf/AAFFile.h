@@ -1,9 +1,9 @@
 /*
- * $Id: AAFFile.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
+ * $Id: AAFFile.h,v 1.2 2009/01/23 19:42:44 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
- * Copyright (C) 2006  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2006, BBC, Philip de Nier <philipn@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,12 +24,7 @@
 #define __PRODAUTO_AAFFILE_H__
 
 
-
-#include <DataTypes.h>
-#include <Package.h>
-#include <MCClipDef.h>
-#include <SourceConfig.h>
-#include "CutsDatabase.h"
+#include "EditorsFile.h"
 
 
 namespace prodauto
@@ -41,20 +36,20 @@ namespace prodauto
 #include <AAFTypes.h>
 
 
-class AAFFile
+class AAFFile : public EditorsFile
 {
 public:
-    AAFFile(std::string filename);
-    ~AAFFile();
+    AAFFile(std::string filename, bool aafxml, bool addAudioEdits);
+    virtual ~AAFFile();
 
     // must call this to save the data to the file
-    void save();
+    virtual void save();
     
     // add a single clip corresponding to the material package
-    void addClip(MaterialPackage* materialPackage, PackageSet& packages);
+    virtual void addClip(MaterialPackage* materialPackage, PackageSet& packages);
 
     // add a multi-camera clip and cut sequence
-    void addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
+    virtual bool addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
         std::vector<CutInfo> sequence);
     
     
@@ -81,6 +76,8 @@ private:
     void mapTapeSourceMob(SourcePackage* sourcePackage);
 
     
+    bool _addAudioEdits;
+    
     IAAFSmartPointer<IAAFFile> pFile;
     IAAFSmartPointer<IAAFHeader> pHeader;
     IAAFSmartPointer<IAAFDictionary> pDictionary;
@@ -102,17 +99,13 @@ private:
     IAAFSmartPointer<IAAFClassDef> pCDPCMDescriptor;
     IAAFSmartPointer<IAAFClassDef> pCDCommentMarker;
     IAAFSmartPointer<IAAFClassDef> pCDDescriptiveMarker;
+    IAAFSmartPointer<IAAFClassDef> pCDTimecode;
     IAAFSmartPointer<IAAFDataDef> pPictureDef;
     IAAFSmartPointer<IAAFDataDef> pSoundDef;
     IAAFSmartPointer<IAAFDataDef> pDescriptiveMetadataDef;
 };
 
 
-// get the startTime in the file SourcePackage referenced by the materialPackage
-int64_t getStartTime(MaterialPackage* materialPackage, PackageSet& packages, Rational editRate);
-
-
-    
 };
 
 

@@ -1,9 +1,9 @@
 /*
- * $Id: AAFFile.cpp,v 1.1 2008/10/08 10:16:06 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.2 2009/01/23 19:42:44 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
- * Copyright (C) 2006  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2006, BBC, Philip de Nier <philipn@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -277,7 +277,8 @@ static WStringReturn createExtendedClipName(string name, int64_t startPosition)
 
 
 
-AAFFile::AAFFile(string filename)
+AAFFile::AAFFile(string filename, bool aafxml, bool addAudioEdits)
+: _addAudioEdits(addAudioEdits)
 {
     IAAFSmartPointer<IAAFTypeDef> pTypeDef;
     IAAFSmartPointer<IAAFPropertyDef> pPropertyDef;
@@ -301,7 +302,14 @@ AAFFile::AAFFile(string filename)
     productInfo.productID = NIL_UID;
     productInfo.platform = NULL;
 
-    AAF_CHECK(AAFFileOpenNewModify(wFilename, 0, &productInfo, &pFile));
+    if (aafxml)
+    {
+        AAF_CHECK(AAFFileOpenNewModifyEx(wFilename, &kAAFFileKind_AafXmlText, 0, &productInfo, &pFile));
+    }
+    else
+    {
+        AAF_CHECK(AAFFileOpenNewModifyEx(wFilename, &kAAFFileKind_Aaf4KBinary, 0, &productInfo, &pFile));
+    }
 
     try
     {
@@ -325,6 +333,7 @@ AAFFile::AAFFile(string filename)
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFPCMDescriptor, &pCDPCMDescriptor));
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFCommentMarker, &pCDCommentMarker));
         AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFDescriptiveMarker, &pCDDescriptiveMarker));
+        AAF_CHECK(pDictionary->LookupClassDef(AUID_AAFTimecode, &pCDTimecode));
     
         // Lookup Picture and Sound DataDefinitions
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_LegacyPicture, &pPictureDef));
@@ -520,9 +529,9 @@ void AAFFile::addClip(MaterialPackage* materialPackage, PackageSet& packages)
     }
 }
 
-void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
-    vector<CutInfo> sequence)
+bool AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages, vector<CutInfo> sequence)
 {
+    bool mcClipWasAdded = false;
     try
     {
         MaterialPackageSet activeMaterialPackages;
@@ -584,6 +593,7 @@ void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
             // create composition mob collecting together all mob slots from all master mobs
             // and create a multi-camera clip composition mob
             createMCClip(mcClipDef, activeMaterialPackages, packages, sequence);
+            mcClipWasAdded = true;
         }
         
     }
@@ -595,6 +605,8 @@ void AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
     {
         PA_LOGTHROW(CreateAAFException, ("Failed to add multi-camera clip to AAF file: unknown exception thrown"));
     }
+    
+    return mcClipWasAdded;
 }
     
 
@@ -968,6 +980,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     IAAFSmartPointer<IAAFSegment> pSegment;
     IAAFSmartPointer<IAAFSelector> pSelector;
     IAAFSmartPointer<IAAFFiller> pFiller;
+    IAAFSmartPointer<IAAFTimecode> pTimecode;
     aafRational_t editRate;
     int collectionPictureSlotCount = 0;
     int collectionSoundSlotCount = 0;
@@ -986,7 +999,9 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     int seqPictureSlotCount = 0;
     int seqSoundSlotCount = 0;
     Rational editRateForName = {25, 1}; // TODO: don't hard code
+    aafRational_t palEditRate = {25, 1}; // TODO: don't hard code
     int64_t startPosition = 0;
+    aafTimecode_t timecode;
 
     // get the start time which we will use to set the multi-camera name and sequence name
     startPosition = getStartTime(*materialPackages.begin(), packages, editRateForName);
@@ -1102,7 +1117,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
         }
     }
     
-    
+
     // go through the multi-camera clip definition and add a multi-camera clip slot for tracks present
     // in one of the material packages
     for (iter1 = mcClipDef->trackDefs.begin(); iter1 != mcClipDef->trackDefs.end(); iter1++)
@@ -1170,6 +1185,14 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                             AAF_CHECK(pMobSlot->GetSegment(&pSegment));
                             AAF_CHECK(pSegment->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
                             AAF_CHECK(pComponent->GetLength(&length));
+                            if (isSound == kAAFTrue)
+                            {
+                                // the edit rate for the sound tracks is set to the picture edit rates
+                                
+                                // TODO: don't hard code 25 fps edit rate
+                                double factor = 25 * editRate.denominator / (double)(editRate.numerator);
+                                length = (aafLength_t)(length * factor + 0.5);
+                            }
                             AAF_CHECK(pMob->GetMobID(&sourceRef.sourceID));
                             AAF_CHECK(pMobSlot->GetSlotID(&sourceRef.sourceSlotID));
                             sourceRef.startTime = 0;
@@ -1185,37 +1208,19 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                             AAF_CHECK(pSequence->AppendComponent(pComponent));
                     
                             // append filler if the length < maximum length
-                            if (isPicture == kAAFTrue)
+                            if (maxPictureLength > length)
                             {
-                                if (maxPictureLength > length)
-                                {
-                                    // add filler
-                                    AAF_CHECK(pCDFiller->CreateInstance(IID_IAAFFiller, (IUnknown **)&pFiller));
-                                    AAF_CHECK(pFiller->Initialize(pDataDef, maxPictureLength - length));
-                                    AAF_CHECK(pFiller->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
-                                    AAF_CHECK(pSequence->AppendComponent(pComponent));
-                                }
-                            }
-                            else // isSound
-                            {
-                                // TODO: don't hard code 25 fps edit rate
-                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                aafLength_t soundMaxLength = (aafLength_t)(maxPictureLength * factor + 0.5);
-                                
-                                if (soundMaxLength > length)
-                                {
-                                    // add filler
-                                    AAF_CHECK(pCDFiller->CreateInstance(IID_IAAFFiller, (IUnknown **)&pFiller));
-                                    AAF_CHECK(pFiller->Initialize(pDataDef, soundMaxLength - length));
-                                    AAF_CHECK(pFiller->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
-                                    AAF_CHECK(pSequence->AppendComponent(pComponent));
-                                }
+                                // add filler
+                                AAF_CHECK(pCDFiller->CreateInstance(IID_IAAFFiller, (IUnknown **)&pFiller));
+                                AAF_CHECK(pFiller->Initialize(pDataDef, maxPictureLength - length));
+                                AAF_CHECK(pFiller->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
+                                AAF_CHECK(pSequence->AppendComponent(pComponent));
                             }
                             
                             // create TimelineMobSlot with Sequence 
                             AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
                             AAF_CHECK(pCollectionMob->AppendNewTimelineSlot(
-                                editRate, pSegment, collectionSlotID, 
+                                palEditRate, pSegment, collectionSlotID, 
                                 getSlotName(isPicture == kAAFTrue, false, trackNumber),
                                 0, &pCollectionTimelineMobSlot));
                             collectionSlotID++;
@@ -1224,16 +1229,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
 
                             // add slot or selection to multi-camera clip composition Mob
                             
-                            if (isPicture == kAAFTrue)
-                            {
-                                length = maxPictureLength;
-                            }
-                            else
-                            {
-                                // TODO: don't hard code 25 fps edit rate
-                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                length = (aafLength_t)(maxPictureLength * factor + 0.5);
-                            }
+                            length = maxPictureLength;
 
 
                             // create SourceClip referencing the collection MobSlot
@@ -1300,7 +1296,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                 // different from the trackDef->number
                                 AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
                                 AAF_CHECK(pMCMob->AppendNewTimelineSlot(
-                                    editRate, pSegment, mcSlotID, 
+                                    palEditRate, pSegment, mcSlotID, 
                                     getSlotName(isPicture == kAAFTrue, false, trackNumber),
                                     0, &pTimelineMobSlot));
                                 if (trackDef->number != 0)
@@ -1323,7 +1319,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                             
                             if (includeSequence)
                             {
-                                if (sequence.size() > 1)
+                                if (sequence.size() > 1 && (isPicture || _addAudioEdits))
                                 {
                                     if (trackDef->selectorDefs.size() > 1 &&
                                         AAFRESULT_SUCCEEDED(pSeqMob->LookupSlot(trackDef->index, &pSequenceMobSlot)))
@@ -1344,25 +1340,11 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             }
                                             
                                             current = sequence[i];
-                                            if (isPicture != kAAFTrue)
-                                            {
-                                                // convert position to audio samples
-                                                // TODO: don't hard code 25 fps edit rate
-                                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                                current.position = (aafLength_t)(current.position * factor + 0.5);
-                                            }
                                             if (i != sequence.size() - 1)
                                             {
                                                 // calculate length of segment using next cut in sequence
                                                 
                                                 next = sequence[i + 1];
-                                                if (isPicture != kAAFTrue)
-                                                {
-                                                    // convert position to audio samples
-                                                    // TODO: don't hard code 25 fps edit rate
-                                                    double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                                    next.position = (aafLength_t)(next.position * factor + 0.5);
-                                                }
                                                 
                                                 // calculate length of segment
                                                 if (next.position > length)
@@ -1413,7 +1395,8 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             AAF_CHECK(pSequence->GetComponentAt(i, &pComponent));
                                             AAF_CHECK(pComponent->QueryInterface(IID_IAAFSelector, (void **)&pSelector));
                                             
-                                            if (selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                            if (isPicture && // if sound then the first track became the SelectedSegment
+                                                selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
                                             {
                                                 // set selected segment
                                                 AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
@@ -1451,7 +1434,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                         // different from the trackDef->number
                                         AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
                                         AAF_CHECK(pSeqMob->AppendNewTimelineSlot(
-                                            editRate, pSegment, seqSlotID, 
+                                            palEditRate, pSegment, seqSlotID, 
                                             getSlotName(isPicture == kAAFTrue, false, trackNumber),
                                             0, &pTimelineMobSlot));
                                         if (trackDef->number != 0)
@@ -1476,25 +1459,11 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             }
                                             
                                             current = sequence[i];
-                                            if (isPicture != kAAFTrue)
-                                            {
-                                                // convert position to audio samples
-                                                // TODO: don't hard code 25 fps edit rate
-                                                double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                                current.position = (aafLength_t)(current.position * factor + 0.5);
-                                            }
                                             if (i != sequence.size() - 1)
                                             {
                                                 // calculate length of segment using next cut in sequence
                                                 
                                                 next = sequence[i + 1];
-                                                if (isPicture != kAAFTrue)
-                                                {
-                                                    // convert position to audio samples
-                                                    // TODO: don't hard code 25 fps edit rate
-                                                    double factor = editRate.numerator / (double)(25 * editRate.denominator);
-                                                    next.position = (aafLength_t)(next.position * factor + 0.5);
-                                                }
                                                 
                                                 // calculate length of segment
                                                 if (next.position > length)
@@ -1529,7 +1498,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             }
                                             totalSourceClipLength += sourceClipLength;
                                             
-                                            
+
                                             // create SourceClip referencing the collection MobSlot
                                             AAF_CHECK(pCollectionTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
                                             AAF_CHECK(pCollectionMob->GetMobID(&sourceRef.sourceID));
@@ -1546,7 +1515,8 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                                 AAF_CHECK(pComponent->SetDataDef(pDataDef));
                                                 AAF_CHECK(pComponent->SetLength(sourceClipLength));
                                             
-                                                if (selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
+                                                if (!isPicture || // the first sound track always becomes the SelectedSegment
+                                                    selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
                                                 {
                                                     // set selected segment
                                                     AAF_CHECK(pSourceClip->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
@@ -1637,7 +1607,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                         // different from the trackDef->number
                                         AAF_CHECK(pSequence->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
                                         AAF_CHECK(pSeqMob->AppendNewTimelineSlot(
-                                            editRate, pSegment, seqSlotID, 
+                                            palEditRate, pSegment, seqSlotID, 
                                             getSlotName(isPicture == kAAFTrue, false, trackNumber),
                                             0, &pTimelineMobSlot));
                                         if (trackDef->number != 0)
@@ -1657,6 +1627,22 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
         }
     }
 
+    // set start timecode for sequence by appending a timecode slot in sequence composition mob
+    if (includeSequence)
+    {
+        timecode.startFrame = startPosition;
+        timecode.drop = kAAFTcNonDrop; // TODO: don't hardcode
+        timecode.fps = 25; // TODO: don't hardcode
+        AAF_CHECK(pCDTimecode->CreateInstance(IID_IAAFTimecode, (IUnknown **)&pTimecode));
+        AAF_CHECK(pTimecode->Initialize(maxPictureLength, &timecode));
+        AAF_CHECK(pTimecode->QueryInterface(IID_IAAFSegment, (void **)&pSegment));
+        
+        AAF_CHECK(pSequenceCompositionMob->QueryInterface(IID_IAAFMob2, (void **)&pMob2));
+        AAF_CHECK(pMob2->AppendNewTimelineSlot(palEditRate, pSegment, seqSlotID, L"TC1", 0, &pTimelineMobSlot));
+        AAF_CHECK(pTimelineMobSlot->QueryInterface(IID_IAAFMobSlot, (void **)&pMobSlot));
+        AAF_CHECK(pMobSlot->SetPhysicalNum(1));
+        seqSlotID++;        
+    }
 
     // add user comments to the multi-camera composition mob
     vector<UserComment> userComments = mergeUserComments(materialPackages);
@@ -2312,49 +2298,5 @@ void AAFFile::mapTapeSourceMob(SourcePackage* sourcePackage)
     
 }
 
-
-
-int64_t prodauto::getStartTime(MaterialPackage* materialPackage, PackageSet& packages, Rational editRate)
-{
-    vector<Track*>::const_iterator iter;
-    for (iter = materialPackage->tracks.begin(); iter != materialPackage->tracks.end(); iter++)
-    {
-        Track* track = *iter;
-        
-        SourcePackage dummy;
-        dummy.uid = track->sourceClip->sourcePackageUID;
-        PackageSet::iterator result = packages.find(&dummy);
-        if (result != packages.end())
-        {
-            Package* package = *result;
-            
-            // were only interested in references to file SourcePackages
-            if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
-            {
-                continue;
-            }
-            SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-            if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
-            {
-                continue;
-            }
-            
-            // get the startPosition in editRate units
-            Track* sourceTrack = *sourcePackage->tracks.begin();
-            if (editRate == sourceTrack->editRate)
-            {
-                return sourceTrack->sourceClip->position;
-            }
-            else
-            {
-                double factor = editRate.numerator * sourceTrack->editRate.denominator / 
-                    (double)(editRate.denominator * sourceTrack->editRate.numerator);
-                return (int64_t)(sourceTrack->sourceClip->position * factor + 0.5);
-            }
-        }
-    }
-    
-    PA_LOGTHROW(CreateAAFException, ("Could not determine package start time"));
-}
 
 
