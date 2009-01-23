@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.7 2008/11/06 11:45:01 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.8 2009/01/23 20:07:10 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -123,16 +123,29 @@ public:
     
     bool initialise(int width, int height)
     {
+        // free existing compressor if the width or height has changed
+        if (_initialised && (width != _width || height != _height))
+        {
+            mjpeg_compress_free(p_mjpeg_compressor);
+            p_mjpeg_compressor = NULL;
+            _initialised = false;
+        }
+        
         if (!mjpeg_compress_init(MJPEG_20_1, width, height, &p_mjpeg_compressor))
         {
             return false;
         }
+
         _initialised = true;
+        _width = width;
+        _height = height;
         return true;
     }
     
 private:
     bool _initialised;
+    int _width;
+    int _height;
 };
 
 // helper class to initialise and close the database
@@ -336,6 +349,8 @@ typedef struct
     uint32_t materialTrackID;    
 
     int isVideo;
+    int width;
+    int height;
 
     int requireTranscode;
     int inputVideoResolutionID;
@@ -353,6 +368,10 @@ typedef struct
 
 struct TranscodeAvidMXF
 {
+    bool isPALProject;
+    
+    MJPEGCompressHolder mjpeg;
+    
     TranscodeStream streams[MAX_MXF_TRANSCODE_INPUTS];
     int numStreams;
     
@@ -408,7 +427,6 @@ static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* st
         return 0;
     }
     
-    // TODO: hardcoded WxH
     Decoder::DecoderType decoderType;
     switch (stream->inputVideoResolutionID)
     {
@@ -420,7 +438,12 @@ static int initialise_transcode(TranscodeAvidMXF* transcode, TranscodeStream* st
             decoderType = Decoder::MJPEG_DECODER;
             break;
     }
-    CHK_ORET(transcode->decoder->initialise(decoderType, numFFMPEGThreads, 720, 576));
+
+    // TODO: hardcoded WxH and assuming DV50 height
+    stream->width = 720;
+    stream->height = (transcode->isPALProject ? 576 : 480);
+
+    CHK_ORET(transcode->decoder->initialise(decoderType, numFFMPEGThreads, stream->width, stream->height));
     
     return 1;
 }
@@ -438,6 +461,7 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
     unsigned char* y;
     unsigned char* u;
     unsigned char* v;
+    int result;
 
     // check transcode is supported
     if (!stream->isVideo ||
@@ -459,45 +483,49 @@ static int transcode_stream(TranscodeStream* stream, uint8_t** buffer, uint32_t*
     AVFrame* decFrame = transcode->decoder->getFrame();
     
     
-    avcodec_decode_video(dec, decFrame, &finished, stream->inputBuffer, stream->inputBufferSize);
-    if (!finished) 
+    result = avcodec_decode_video(dec, decFrame, &finished, stream->inputBuffer, stream->inputBufferSize);
+    if (result < 0 || !finished) 
     {
         fprintf(stderr, "Error decoding DV video\n");
         return 0;
     }
     
     
-    // shift picture up one line
-    y = decFrame->data[0];
-    u = decFrame->data[1];
-    v = decFrame->data[2];
-    for (i = 1; i < 576; i++)
+    // shift DV material up one line because the field order is reversed
+    if (stream->inputVideoResolutionID == DV50_MATERIAL_RESOLUTION)
     {
+        // shift picture up one line
+        y = decFrame->data[0];
+        u = decFrame->data[1];
+        v = decFrame->data[2];
+        for (i = 1; i < stream->height; i++)
+        {
+            for (j = 0; j < decFrame->linesize[0]; j++)
+            {
+                *y = *(decFrame->data[0] + i * decFrame->linesize[0] + j);
+                if (j < decFrame->linesize[1])
+                {
+                    *u = *(decFrame->data[1] + i * decFrame->linesize[1] + j);
+                    *v = *(decFrame->data[2] + i * decFrame->linesize[2] + j);
+                    u++;
+                    v++;
+                }
+                y++;
+            }
+        }
+        // fill last line with black
         for (j = 0; j < decFrame->linesize[0]; j++)
         {
-            *y = *(decFrame->data[0] + i * decFrame->linesize[0] + j);
+            *y = 0x10;
             if (j < decFrame->linesize[1])
             {
-                *u = *(decFrame->data[1] + i * decFrame->linesize[1] + j);
-                *v = *(decFrame->data[2] + i * decFrame->linesize[2] + j);
+                *u = 0x80;
+                *v = 0x80;
                 u++;
                 v++;
             }
             y++;
         }
-    }
-    // fill last line with black
-    for (j = 0; j < decFrame->linesize[0]; j++)
-    {
-        *y = 0x10;
-        if (j < decFrame->linesize[1])
-        {
-            *u = 0x80;
-            *v = 0x80;
-            u++;
-            v++;
-        }
-        y++;
     }
     
     
@@ -585,8 +613,16 @@ static int receive_frame(mxfr::MXFReaderListener* listener, int trackIndex, uint
     }
     else
     {
-        // TODO: hardcoded num samples 
-        transcode->mxfWriter->writeSample(stream->materialTrackID, 48000/25, outputBuffer, outputBufferSize);    
+        // TODO: hardcoded num samples
+        if (transcode->isPALProject)
+        {
+            transcode->mxfWriter->writeSample(stream->materialTrackID, 48000/25, outputBuffer, outputBufferSize);
+        }
+        else
+        {
+            assert(false); // NTSC audio reading not yet supported in MXFReader
+            transcode->mxfWriter->writeSample(stream->materialTrackID, 48000/30, outputBuffer, outputBufferSize);
+        }
     }
     
     return 1;
@@ -640,6 +676,7 @@ int transcode_avid_mxf(Decoder* decoder,
 
     memset(&transcode, 0, sizeof(TranscodeAvidMXF));
     transcode.decoder = decoder;
+    transcode.isPALProject = true;
     
     // get material, file and tape source packages
     CHK_OFAIL(sourceMaterial.sourceMaterialPackage->getType() == prodauto::MATERIAL_PACKAGE);
@@ -670,7 +707,7 @@ int transcode_avid_mxf(Decoder* decoder,
     // modify package id and recuresively set objects as not loaded
     pa_materialPackage->cloneInPlace(prodauto::generateUMID(), true);
 
-    // modify the file source package UID and video resolution if appropriate    
+    // modify the file source package UID and video resolution if appropriate; also get info
     for (iter2 = pa_filePackages.begin(); iter2 != pa_filePackages.end(); iter2++)
     {
         prodauto::SourcePackage* filePackage = *iter2;
@@ -702,6 +739,15 @@ int transcode_avid_mxf(Decoder* decoder,
                 if (track->sourceClip != 0 && track->sourceClip->sourcePackageUID == pa_tapePackage->uid)
                 {
                     startPosition = track->sourceClip->position;
+                    if (track->editRate.numerator == 25 &&
+                        track->editRate.denominator == 1)
+                    {
+                        transcode.isPALProject = true;
+                    }
+                    else
+                    {
+                        transcode.isPALProject = false;
+                    }
                     break;
                 }
             }
@@ -742,6 +788,7 @@ int transcode_avid_mxf(Decoder* decoder,
             pa_filePackages,
             pa_tapePackage, 
             false, 
+            transcode.isPALProject,
             videoResolutionID,
             imageAspectRatio,
             audioQuantizationBits,
@@ -766,6 +813,12 @@ int transcode_avid_mxf(Decoder* decoder,
                 CHK_OFAIL(initialise_transcode(&transcode, stream, numFFMPEGThreads));
             }
         }
+
+        // initialise mjpeg library
+        // TODO: hardcoded WxH and assuming DV50 height
+        CHK_OFAIL(transcode.mjpeg.initialise(720, (transcode.isPALProject ? 576 : 480)));
+        
+        
         
         // open input files
         
@@ -1170,15 +1223,6 @@ int main(int argc, const char* argv[])
     
     // connect the MXF logging facility
     prodauto::connectLibMXFLogging();
-
-    
-    // initialise mjpeg
-    // TODO: hardcoded WxH
-    if (!mjpeg.initialise(720, 576))
-    {
-        prodauto::Logging::error("Failed to initialise mjpeg lib\n");
-        return 1;
-    }
 
     
     // initialise the database
