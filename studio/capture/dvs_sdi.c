@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.13 2008/10/24 05:43:08 stuart_hc Exp $
+ * $Id: dvs_sdi.c,v 1.14 2009/01/23 19:54:50 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -77,9 +77,9 @@ NexusControl	*p_control = NULL;
 uint8_t			*ring[MAX_CHANNELS] = {0};
 int				control_id, ring_id[MAX_CHANNELS];
 int				width = 0, height = 0;
-int     element_size = 0, dma_video_size = 0, dma_total_size = 0;
-static int     audio_offset = 0, audio_size = 0, audio_pair_size = 0;
-int     ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
+int				element_size = 0, dma_video_size = 0, dma_total_size = 0;
+static int		audio_offset = 0, audio_size = 0, audio_pair_size = 0;
+int				ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
 CaptureFormat	video_format = Format422PlanarYUV;
 CaptureFormat	video_secondary_format = FormatNone;
 static int verbose = 0;
@@ -117,13 +117,13 @@ static uint8_t *no_video_frame = NULL;	// captioned black frame saying "NO VIDEO
 
 // Define missing macros for older SDKs
 #ifndef SV_OPTION_MULTICHANNEL
-#define SV_OPTION_MULTICHANNEL          184
+#define SV_OPTION_MULTICHANNEL		184
 #endif
 #ifndef SV_OPTION_AUDIOAESROUTING
-#define SV_OPTION_AUDIOAESROUTING       198
+#define SV_OPTION_AUDIOAESROUTING	198
 #endif
 #ifndef SV_AUDIOAESROUTING_4_4
-#define SV_AUDIOAESROUTING_4_4          2
+#define SV_AUDIOAESROUTING_4_4		2
 #endif
 
 // Returns time-of-day as microseconds
@@ -253,10 +253,16 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
 					{
 						res = sv_videomode(a_sv[channel], opt_video_mode);
 						if (res != SV_OK) {
-							fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
-							sv_errorprint(a_sv[channel], res);
-							sv_close(a_sv[channel]);
-							return 0;
+							logTF("card %d: channel=1, sv_videomode(0x%08x) failed, trying without AUDIO\n", card, opt_video_mode);
+							opt_video_mode = opt_video_mode & (~SV_MODE_AUDIO_MASK);
+							res = sv_videomode(a_sv[channel], opt_video_mode);
+							if (res != SV_OK) {
+								fprintf(stderr, "sv_videomode(channel=%d, 0x%08x) failed: ", channel, opt_video_mode);
+								sv_errorprint(a_sv[channel], res);
+								sv_close(a_sv[channel]);
+								return 0;
+							}
+							logTF("card %d: channel=1, sv_videomode(0x%08x) succeeded without AUDIO\n", card, opt_video_mode);
 						}
 
 						sv_close(a_sv[channel]);
@@ -290,6 +296,33 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
 	return 1;
 }
 
+void set_aes_option(int channel, int enable_aes)
+{
+	if (! enable_aes)
+		return;
+
+	int res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU);
+	if (res != SV_OK) {
+		logTF("channel %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", channel, sv_geterrortext(res));
+	}
+}
+
+void set_sync_option(int channel, int sync_type, int width)
+{
+	if (sync_type == -1) {
+		// default to bilevel for SD or trilevel for HD
+		if (width <= 720)
+			sync_type = SV_SYNC_BILEVEL;
+		else
+			sync_type = SV_SYNC_TRILEVEL;
+	}
+
+	int res = sv_sync(a_sv[channel], sync_type);
+	if (res != SV_OK) {
+		logTF("channel %d: sv_sync(0x%08x) failed: %s\n", channel, sync_type, sv_geterrortext(res));
+	}
+}
+
 static void catch_sigusr1(int sig_number)
 {
 	// toggle a flag
@@ -305,11 +338,11 @@ static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, un
 {
 	int line_size = width*2;
 	int click1 = 0, click1_off = -1;
-    int click2 = 0, click2_off = -1;
-    int click3 = 0, click3_off = -1;
-    int click4 = 0, click4_off = -1;
+	int click2 = 0, click2_off = -1;
+	int click3 = 0, click3_off = -1;
+	int click4 = 0, click4_off = -1;
 
-	int flash = find_red_flash_uyvy(addr,  line_size);
+	int flash = find_red_flash_uyvy(addr, line_size);
 	find_audio_click_32bit_stereo(addr + audio12_offset,
 												&click1, &click1_off,
 												&click2, &click2_off);
@@ -524,15 +557,15 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
 	// Get sv memmory buffer
 	// Ignore problems with missing audio, and carry on with good video but zeroed audio
-    int flags = 0;
-    if (recover_from_video_loss)
-    {
-        flags |= SV_FIFO_FLAG_FLUSH;
-        logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
-    }
-    //logTF("chan %d: calling sv_fifo_getbuffer()...\n", chan);
+	int flags = 0;
+	if (recover_from_video_loss)
+	{
+		flags |= SV_FIFO_FLAG_FLUSH;
+		logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
+	}
+	//logTF("chan %d: calling sv_fifo_getbuffer()...\n", chan);
 	get_res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, flags);
-    //logTF("chan %d: sv_fifo_getbuffer() returned\n", chan);
+	//logTF("chan %d: sv_fifo_getbuffer() returned\n", chan);
 	if (get_res != SV_OK && get_res != SV_ERROR_INPUT_AUDIO_NOAIV
 			&& get_res != SV_ERROR_INPUT_AUDIO_NOAESEBU)
 	{
@@ -546,15 +579,15 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// 0x0000 audio ch. 2, 3 interleaved	offset= pbuffer->audio[0].addr[1]
 	//
 
-    // check audio offset
-    /*fprintf(stderr, "chan = %d, audio_offset = %d, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p\n",
-        chan,
-        audio_offset,
-        pbuffer->video[0].addr,
-        pbuffer->audio[0].addr[0],
-        pbuffer->audio[0].addr[1],
-        pbuffer->audio[0].addr[2],
-        pbuffer->audio[0].addr[3]);*/
+	// check audio offset
+	/*fprintf(stderr, "chan = %d, audio_offset = %d, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p\n",
+		chan,
+		audio_offset,
+		pbuffer->video[0].addr,
+		pbuffer->audio[0].addr[0],
+		pbuffer->audio[0].addr[1],
+		pbuffer->audio[0].addr[2],
+		pbuffer->audio[0].addr[3]);*/
 
 	uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
 	uint8_t *dma_dest = vid_dest;
@@ -568,22 +601,22 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// read frame from DVS chan
 	// reception of a SIGUSR1 can sometimes cause this to fail
 	// If it fails we should restart fifo.
-    //logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
+	//logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
 	if (sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo) != SV_OK)
 	{
 		fprintf(stderr, "sv_fifo_putbuffer failed, restarting fifo\n");
 		SV_CHECK( sv_fifo_reset(sv, poutput) );
 		SV_CHECK( sv_fifo_start(sv, poutput) );
 	}
-    //logTF("chan %d: sv_fifo_putbuffer() returned ok\n", chan);
+	//logTF("chan %d: sv_fifo_putbuffer() returned ok\n", chan);
 
-    // set flag so we can zero audio if not present
-    int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
-                || SV_ERROR_INPUT_AUDIO_NOAESEBU == get_res
-                || 0 == pbuffer->audio[0].addr[0]);
+	// set flag so we can zero audio if not present
+	int no_audio = (SV_ERROR_INPUT_AUDIO_NOAIV == get_res
+				|| SV_ERROR_INPUT_AUDIO_NOAESEBU == get_res
+				|| 0 == pbuffer->audio[0].addr[0]);
 
 	if (test_avsync && !no_audio)
-    {
+	{
 		log_avsync_analysis(chan, pc->lastframe,
 			dma_dest, (unsigned long)pbuffer->audio[0].addr[0], (unsigned long)pbuffer->audio[0].addr[1]);
 	}
@@ -603,7 +636,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	int64_t tod_rec = tod - clock_diff;
 
 	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
-    {
+	{
 		uint8_t *vid_input = dma_dest;
 
 		// Use hard-to-code picture when benchmarking
@@ -617,18 +650,18 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 							vid_dest);						// output
 
 		// copy audio to match
-        if (!no_audio)
-        {
-            memcpy(	vid_dest + audio_offset,	// dest
-                    dma_dest + audio_offset,	// src
-                    audio_size);
-        }
+		if (!no_audio)
+		{
+			memcpy(	vid_dest + audio_offset,	// dest
+					dma_dest + audio_offset,	// src
+					audio_size);
+		}
 	}
 
-    if (no_audio)
-    {
-        memset( vid_dest + audio_offset, 0, audio_size);
-    }
+	if (no_audio)
+	{
+		memset( vid_dest + audio_offset, 0, audio_size);
+	}
 
 	if (video_secondary_format != FormatNone) {
 		if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted) {
@@ -722,7 +755,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			//uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
 			//memcpy(tmp_frame, vid_dest, width*height*2);
 			//free(tmp_frame);
-			logTF("chan %d: Recovered.  lastframe=%d ltc=%d\n", chan, pc->lastframe, ltc_as_int);
+			logTF("chan %d: Recovered.	lastframe=%d ltc=%d\n", chan, pc->lastframe, ltc_as_int);
 		}
 	}
 
@@ -736,20 +769,20 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	int frame_tick = pbuffer->control.tick / 2;
 	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &frame_tick, sizeof(int));
 
-    // Set signal_ok flag
-    *(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
+	// Set signal_ok flag
+	*(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
 
 	// Get info structure for statistics
 	sv_fifo_info info;
 	SV_CHECK(sv_fifo_status(sv, poutput, &info));
 
 	// Timecode error occurs when difference is not exactly 1
-    // or (around midnight) not exactly -2159999
+	// or (around midnight) not exactly -2159999
 	// (ignore the first frame captured when lastframe is -1)
 	int vitc_diff = vitc_as_int - last_vitc;
 	int ltc_diff = ltc_as_int - last_ltc;
 	int tc_err = (vitc_diff != 1 && vitc_diff != -2159999
-        && ltc_diff != 1 && ltc_diff != -2159999) && pc->lastframe != -1;
+		&& ltc_diff != 1 && ltc_diff != -2159999) && pc->lastframe != -1;
 
 	// log timecode discontinuity if any, or give verbose log of specified chan
 	if (tc_err || (verbose && chan == verbose_channel)) {
@@ -855,10 +888,10 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 			// Indicate we've got a bad video signal
 			*(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 0;
 
-            if (verbose)
-            {
-	            logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_vitc, last_ltc);
-            }
+			if (verbose)
+			{
+				logTF("chan: %d i:%2d  cur_frame_tick=%d tick_last_dummy_frame=%d last_ftk=%d tc=%d ltc=%d\n", chan, i, current_frame_tick, tick_last_dummy_frame, last_ftk, last_vitc, last_ltc);
+			}
 
 			// signal frame is now ready
 			PTHREAD_MUTEX_LOCK( &pc->m_lastframe )
@@ -963,7 +996,7 @@ static void * sdi_monitor(void *arg)
 							0) );
 
 	// To aid debugging, delay channels by a small amount of time so that
-	// they appear in log files in channel 0...7 order
+	// they appear in log files in channel 0..7 order
 	if (chan > 0) {
 		usleep(10000 + 5000 * chan);				
 	}
@@ -1050,8 +1083,13 @@ static void usage_exit(void)
 	fprintf(stderr, "                         PAL,NTSC,1920x1080i50,1920x1080i60,1280x720p50,1280x720p60\n");
 	fprintf(stderr, "                         AUDIO8 enables 8 audio channels per SDI input\n");
 	fprintf(stderr, "                         E.g. -mode 1920x1080i50:AUDIO8\n");
+	fprintf(stderr, "    -sync <type>         set input sync type on all DVS cards, sync is one of:\n");
+	fprintf(stderr, "                         bilevel   - analog bilevel sync [default for PAL/NTSC mode]\n");
+	fprintf(stderr, "                         trilevel  - analog trilevel sync [default for HD modes]\n");
+	fprintf(stderr, "                         internal  - freerunning\n");
+	fprintf(stderr, "                         external  - sync to incoming SDI signal\n");
 	fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
-	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0...7\n");
+	fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7\n");
 	fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
 	fprintf(stderr, "    -anctc               read \"DLTC\" and \"DVITC\" timecodes from RP188/RP196 ANC data\n");
 	fprintf(stderr, "                         instead of SMPTE-12M LTC and VITC\n");
@@ -1076,6 +1114,7 @@ int main (int argc, char ** argv)
 	long long		opt_max_memory = 0;
 	const char		*logfiledir = ".";
 	int				opt_video_mode = -1;
+	int				opt_sync_type = -1;
 
 	time_t now;
 	struct tm *tm_now;
@@ -1146,7 +1185,7 @@ int main (int argc, char ** argv)
 			if (sscanf(argv[n+1], "%d", &master_channel) != 1 ||
 				master_channel > 7 || master_channel < 0)
 			{
-				fprintf(stderr, "-mc requires channel number from 0...7\n");
+				fprintf(stderr, "-mc requires channel number from 0..7\n");
 				return 1;
 			}
 			n++;
@@ -1233,6 +1272,28 @@ int main (int argc, char ** argv)
 			}
 			n++;
 		}
+		else if (strcmp(argv[n], "-sync") == 0)
+		{
+			if (argc <= n+1)
+				usage_exit();
+
+			if (strcmp(argv[n+1], "bilevel") == 0) {
+				opt_sync_type = SV_SYNC_BILEVEL;
+			}
+			else if (strcmp(argv[n+1], "trilevel") == 0) {
+				opt_sync_type = SV_SYNC_TRILEVEL;
+			}
+			else if (strcmp(argv[n+1], "internal") == 0) {
+				opt_sync_type = SV_SYNC_INTERNAL;
+			}
+			else if (strcmp(argv[n+1], "external") == 0) {
+				opt_sync_type = SV_SYNC_EXTERNAL;
+			}
+			else {
+				usage_exit();
+			}
+			n++;
+		}
 		else if (strcmp(argv[n], "-d") == 0)
 		{
 			if (argc <= n+1)
@@ -1241,7 +1302,7 @@ int main (int argc, char ** argv)
 			if (sscanf(argv[n+1], "%d", &verbose_channel) != 1 ||
 				verbose_channel > 7 || verbose_channel < 0)
 			{
-				fprintf(stderr, "-d requires channel number {0...7}\n");
+				fprintf(stderr, "-d requires channel number {0..7}\n");
 				return 1;
 			}
 			n++;
@@ -1342,10 +1403,10 @@ int main (int argc, char ** argv)
 	logTF("Using %s to determine number of frames to recover when video re-aquired\n",
 			recover_timecode_type == RecoverVITC ? "VITC" : "LTC");
 
-    if (audio8ch)
-    {
-        logTF("Audio 8 channel mode enabled\n");
-    }
+	if (audio8ch)
+	{
+		logTF("Audio 8 channel mode enabled\n");
+	}
 
 	char logfile[FILENAME_MAX];
 	strcpy(logfile, logfiledir);
@@ -1391,7 +1452,7 @@ int main (int argc, char ** argv)
 
 	// Check SDK multichannel capability
 	if (check_sdk_version3())
-    {
+	{
 		sv_info status_info;
 		int card = 0;
 		int channel = 0;
@@ -1399,8 +1460,7 @@ int main (int argc, char ** argv)
 		{
 			char card_str[64] = {0};
 
-            snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
-            //snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+			snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=0", card);
 	
 			int res = sv_openex(&a_sv[channel],
 								card_str,
@@ -1408,93 +1468,90 @@ int main (int argc, char ** argv)
 								SV_OPENTYPE_INPUT,		// Open V+A input, not output too
 								0,
 								0);
-            if (res == SV_ERROR_WRONGMODE)
-            {
-                // Multichannel mode not on so doesn't like "channel=0"
-                snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
-        
-                res = sv_openex(&a_sv[channel],
-                                    card_str,
-                                    SV_OPENPROGRAM_DEMOPROGRAM,
-                                    SV_OPENTYPE_INPUT,		// Open V+A input, not output too
-                                    0,
-                                    0);
-            }
-            if (res == SV_OK)
-            {
+			if (res == SV_ERROR_WRONGMODE)
+			{
+				// Multichannel mode not on so doesn't like "channel=0"
+				snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d", card);
+		
+				res = sv_openex(&a_sv[channel],
+									card_str,
+									SV_OPENPROGRAM_DEMOPROGRAM,
+									SV_OPENTYPE_INPUT,		// Open V+A input, not output too
+									0,
+									0);
+			}
+			if (res == SV_OK)
+			{
 				sv_status(a_sv[channel], &status_info);
 				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
 
-                if (width == 0)
-                {
-                    // Set size from first channel
-				    width = status_info.xsize;
-				    height = status_info.ysize;
-                }
-                else if (width != status_info.xsize || height != status_info.ysize)
-                {
-                    // Warn if other channels different from first
-                    logTF("card %d: warning: different video size!\n", card);
-                }
+				if (width == 0)
+				{
+					// Set size from first channel
+					width = status_info.xsize;
+					height = status_info.ysize;
+				}
+				else if (width != status_info.xsize || height != status_info.ysize)
+				{
+					// Warn if other channels different from first
+					logTF("card %d: warning: different video size!\n", card);
+				}
 
-                // Set AES input
-                if (aes_audio &&
-                    (res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
-                {
-                    logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
-                }
+				// Set AES input
+				set_aes_option(channel, aes_audio);
 
+				set_sync_option(channel, opt_sync_type, status_info.xsize);
 
-                // check for multichannel mode
-                int multichannel_mode = 0;
-                if ((res = sv_option_get(a_sv[channel], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
-                    logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
-                }
+				// check for multichannel mode
+				int multichannel_mode = 0;
+				if ((res = sv_option_get(a_sv[channel], SV_OPTION_MULTICHANNEL, &multichannel_mode)) != SV_OK) {
+					logTF("card %d: sv_option_get(SV_OPTION_MULTICHANNEL) failed: %s\n", card, sv_geterrortext(res));
+				}
 
 				channel++;
 				num_sdi_threads++;
 
-                // If card has a multichannel mode on, open second channel
-                if (multichannel_mode)
-                {
-                    if (channel < max_channels)
-                    {
-                        snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=1", card);
-                        int res = sv_openex(&a_sv[channel],
-                                    card_str,
-                                    SV_OPENPROGRAM_DEMOPROGRAM,
-                                    SV_OPENTYPE_INPUT,		// Open V+A input, not output too
-                                    0,
-                                    0);
-                        if (res == SV_OK)
-                        {
-                            sv_status(a_sv[channel], &status_info);
-                            logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
-                            // Set AES audio routing
-                            if (aes_audio &&
-                                (res = sv_option_set(a_sv[channel-1], SV_OPTION_AUDIOAESROUTING, SV_AUDIOAESROUTING_4_4)) != SV_OK)
-                            {
-                                logTF("card %d: sv_option_set(SV_OPTION_AUDIOAESROUTING) failed: %s\n", card, sv_geterrortext(res));
-                            }
+				// If card has a multichannel mode on, open second channel
+				if (multichannel_mode)
+				{
+					if (channel < max_channels)
+					{
+						snprintf(card_str, sizeof(card_str)-1, "PCI,card=%d,channel=1", card);
+						int res = sv_openex(&a_sv[channel],
+									card_str,
+									SV_OPENPROGRAM_DEMOPROGRAM,
+									SV_OPENTYPE_INPUT,		// Open V+A input, not output too
+									0,
+									0);
+						if (res == SV_OK)
+						{
+							sv_status(a_sv[channel], &status_info);
+							logTF("card %d: opened second channel (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+							// Set AES audio routing
+							if (aes_audio &&
+								(res = sv_option_set(a_sv[channel-1], SV_OPTION_AUDIOAESROUTING, SV_AUDIOAESROUTING_4_4)) != SV_OK)
+							{
+								logTF("card %d: sv_option_set(SV_OPTION_AUDIOAESROUTING) failed: %s\n", card, sv_geterrortext(res));
+							}
 
-                            // Set AES input
-                            if (aes_audio &&
-                                (res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
-                            {
-                                logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
-                            }
+							// Set AES input
+							set_aes_option(channel, aes_audio);
 
-                            channel++;
-                            num_sdi_threads++;
-                        }
-                        else
-                        {
-                            logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
-                        }
+							// Don't set the sync option for the second channel (set_sync_option())
+							// since you get a SV_ERROR_JACK_INVALID error
+							// (perhaps this is a hardware limitation which will eventually go away).
+
+							channel++;
+							num_sdi_threads++;
+						}
+						else
+						{
+							logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
+						}
 					}
 				}
 				else
-                {
+				{
 					logTF("card %d: multichannel mode off\n", card);
 				}
 	
@@ -1510,8 +1567,8 @@ int main (int argc, char ** argv)
 		}
 	}
 	else
-    {
-        // older SDK
+	{
+		// older SDK
 		//
 		// card specified by string of form "PCI,card=n" where n = 0,1,2,3
 		//
@@ -1530,28 +1587,25 @@ int main (int argc, char ** argv)
 								0,
 								0);
 			if (res == SV_OK)
-            {
+			{
 				sv_status(a_sv[card], &status_info);
 				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
-                num_sdi_threads++;
-                if (width == 0)
-                {
-                    width = status_info.xsize;
-                    height = status_info.ysize;
-                }
-                else if (width != status_info.xsize || height != status_info.ysize)
-                {
-                    // Warn if other channels different from first
-                    logTF("card %d: different video size!\n", card);
-                }
+				num_sdi_threads++;
+				if (width == 0)
+				{
+					width = status_info.xsize;
+					height = status_info.ysize;
+				}
+				else if (width != status_info.xsize || height != status_info.ysize)
+				{
+					// Warn if other channels different from first
+					logTF("card %d: different video size!\n", card);
+				}
 
-                // Set AES input
-                if (aes_audio &&
-                    (res = sv_option_set(a_sv[card], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU)) != SV_OK)
-                {
-                    logTF("card %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", card, sv_geterrortext(res));
-                }
+				// Set AES input
+				set_aes_option(card, aes_audio);
 
+				set_sync_option(card, opt_sync_type, status_info.xsize);
 			}
 			else
 			{
@@ -1580,23 +1634,23 @@ int main (int argc, char ** argv)
 #else
 	dma_video_size = width*height*2;
 #endif
-    audio_pair_size = 0x4000;
-    if (audio8ch)
-    {
-	    audio_size = audio_pair_size * 4;
-    }
-    else
-    {
-	    audio_size = audio_pair_size * 2;
-    }
+	audio_pair_size = 0x4000;
+	if (audio8ch)
+	{
+		audio_size = audio_pair_size * 4;
+	}
+	else
+	{
+		audio_size = audio_pair_size * 2;
+	}
 	audio_offset = dma_video_size;
 
-    // audio_size is greater than 1920 * 4 * (4 or 8)
-    // so we use the spare bytes at end for timecode
-    vitc_offset         = audio_offset + audio_size - sizeof(int);
-    ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
-    tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
-    signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
+	// audio_size is greater than 1920 * 4 * (4 or 8)
+	// so we use the spare bytes at end for timecode
+	vitc_offset         = audio_offset + audio_size - sizeof(int);
+	ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
+	tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
+	signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
 
 	// Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
 	int secondary_video_size = width*height*3/2;
@@ -1608,14 +1662,14 @@ int main (int argc, char ** argv)
 					+ audio_size;		// DVS internal structure for audio channels
 										
 
-    element_size = dma_total_size + secondary_video_size;
+	element_size = dma_total_size + secondary_video_size;
 
 
 	// Create "NO VIDEO" frame
 	no_video_frame = (uint8_t*)malloc(width*height*2);
 	uyvy_no_video_frame(width, height, no_video_frame);
 	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
-    {
+	{
 		uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
 		uyvy_no_video_frame(width, height, tmp_frame);
 
@@ -1643,7 +1697,7 @@ int main (int argc, char ** argv)
 		logTF("Read one frame (%dx%d) for use as benchmark frame from %s\n", width, height, video_sample_file);
 	}
 
-    // Allocate shared memory buffers
+	// Allocate shared memory buffers
 	if (! allocate_shared_buffers(num_sdi_threads, opt_max_memory))
 	{
 		return 1;
@@ -1660,10 +1714,10 @@ int main (int argc, char ** argv)
 			logTF("chan %d: failed to create sdi_monitor thread: %s\n", chan, strerror(err));
 			return 1;
 		}
-        else
-        {
-            //logTF("chan %d: started capture thread ok\n", chan);
-        }
+		else
+		{
+			//logTF("chan %d: started capture thread ok\n", chan);
+		}
 	}
 
 	// Update the heartbeat 10 times a second
