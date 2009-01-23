@@ -350,20 +350,11 @@ int TickTreeCtrl::SelectRecursively(wxTreeItemId id, unsigned int & enabledTrack
 }
 
 /// Sets the background colour of the given node depending on the signal present state.
-/// If the node is a recorder, and the state is changing, sends an event to the frame.
 /// @param node The node to set.
 /// @param allSignals True if all record-enabled children have signals present
 void TickTreeCtrl::SetSignalPresentStatus(const wxTreeItemId node, const bool allSignals)
 {
 	if ((GetItemBackgroundColour(node) == mDefaultBackgroundColour) != allSignals) { //signal present status has changed
-		if (GetItemParent(node) == GetRootItem()) { //a recorder node
-			//tell the frame
-			wxCommandEvent guiEvent(wxEVT_TREE_MESSAGE, wxID_ANY);
-			guiEvent.SetString(((ItemData *) GetItemData(node))->GetString()); //recorder name
-			guiEvent.SetExtraLong(1); //indicates the type of event
-			guiEvent.SetInt(allSignals);
-			AddPendingEvent(guiEvent);
-		}
 		//set parent attribute
 		SetItemBackgroundColour(node, allSignals ? mDefaultBackgroundColour : NO_SIGNAL_COLOUR);
 	}

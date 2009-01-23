@@ -46,7 +46,6 @@ class RecorderGroupCtrl : public wxListBox
 		void Record(const wxString &, const CORBA::BooleanSeq &);
 		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
 		void EnableForInput(const bool = true);
-		void PollRapidly(const wxString &, bool = true);
 		void SetProjectNames(const wxSortedArrayString &);
 		const wxSortedArrayString & GetProjectNames();
 		void SetCurrentProjectName(const wxString &);
@@ -73,6 +72,7 @@ class RecorderGroupCtrl : public wxListBox
 	private:
 		void OnListRefreshed(wxCommandEvent &);
 		void OnLMouseDown(wxMouseEvent &);
+		void OnRightMouseDown(wxMouseEvent &);
 		void OnUnwantedMouseDown(wxMouseEvent &);
 		void OnControllerEvent(ControllerThreadEvent &);
 		void Insert(const wxString &, unsigned int);

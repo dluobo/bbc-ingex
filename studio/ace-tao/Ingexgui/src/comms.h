@@ -32,18 +32,18 @@ Handles communication with the name server in a threaded manner.
 class Comms : public wxThread
 {
 public:
-	Comms(wxEvtHandler *, int, wxChar**);
+	Comms(wxWindow *, int, wxChar**);
 	~Comms();
 	void StartGettingRecorders(WXTYPE, int);
 	bool GetStatus(wxString & errMsg);
 	void GetRecorderList(wxArrayString& list);
 	wxString SelectRecorder(wxString, ::ProdAuto::Recorder_var &);
 private:
+	wxWindow * mParent;
 	void SetTimeout(int secs);
 	bool InitNs();
 	CORBA::Object_ptr ResolveObject(const CosNaming::Name & name, wxString & msg);
 	ExitCode Entry();
-	wxEvtHandler * mHandler;
 	WXTYPE mEventType;
 	int mEventId;
 	wxMutex mMutex;

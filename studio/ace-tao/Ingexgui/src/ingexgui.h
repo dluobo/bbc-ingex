@@ -44,6 +44,8 @@
 
 #define CUE_LABEL wxT("Cue")
 
+#define BUTTON_WARNING_COLOUR wxColour(0xFF, 0x80, 0x00)
+
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
 
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
@@ -141,20 +143,21 @@ class IngexguiFrame : public wxFrame
 		MENU_Space,
 		MENU_AutoClear,
 		MENU_ClearLog,
-		MENU_DisablePlayer,
+		MENU_PlayerDisable,
 		MENU_PlayMOV,
 		MENU_PlayMXF,
 		MENU_PlayerType,
-		MENU_ExtOutput,
-		MENU_AccelOutput,
-		MENU_ExtAccelOutput,
-		MENU_ExtUnaccelOutput,
-		MENU_UnaccelOutput,
+		MENU_PlayerExtOutput,
+		MENU_PlayerAccelOutput,
+		MENU_PlayerExtAccelOutput,
+		MENU_PlayerExtUnaccelOutput,
+		MENU_PlayerUnaccelOutput,
 		MENU_PlayerOSD,
-		MENU_AbsoluteTimecode,
-		MENU_RelativeTimecode,
-		MENU_NoOSD,
-		MENU_DisablePlayerSDIOSD,
+		MENU_PlayerAbsoluteTimecode,
+		MENU_PlayerRelativeTimecode,
+		MENU_PlayerNoOSD,
+		MENU_PlayerDisableSDIOSD,
+		MENU_PlayerAudioFollowsVideo,
 		MENU_TestMode,
 		BUTTON_Record,
 		BUTTON_Stop,
@@ -172,7 +175,6 @@ class IngexguiFrame : public wxFrame
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
-		MENU_AudioFollowsVideo,
 	};
 	private:
 	enum EventType
@@ -186,13 +188,12 @@ class IngexguiFrame : public wxFrame
 	enum Stat
 	{
 		STOPPED,
-		RUNNING_UP,
+		RUNNING_UP, //Waiting for recorders to respond to start commands
 		RECORDING,
-		RUNNING_DOWN,
+		RUNNING_DOWN, //Waiting for recorders to respond to stop commands
 		PLAYING,
 		PAUSED,
 		PLAYING_BACKWARDS,
-//		UNKNOWN,
 	};
 		void OnClose(wxCloseEvent&);
 		void OnHelp(wxCommandEvent&);
@@ -207,8 +208,9 @@ class IngexguiFrame : public wxFrame
 		void OnCue(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
 		void OnPlayerOSDChange(wxCommandEvent&);
+		void OnPlayerSDIOSDChange(wxCommandEvent&);
 		void OnPlayerOutputTypeChange(wxCommandEvent&);
-		void OnAudioFollowsVideo(wxCommandEvent& WXUNUSED(event));
+		void OnPlayerAudioFollowsVideo(wxCommandEvent& WXUNUSED(event));
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
 		void OnEventActivated(wxListEvent&);
@@ -226,7 +228,7 @@ class IngexguiFrame : public wxFrame
 		void OnTreeEvent(wxCommandEvent&);
 		void OnPlaybackTrackSelect(wxCommandEvent&);
 		void OnShortcut(wxCommandEvent&);
-		void OnDisablePlayer(wxCommandEvent&);
+		void OnPlayerDisable(wxCommandEvent&);
 		void OnPlayerOpenFile(wxCommandEvent&);
 		void OnClearDescription(wxCommandEvent&);
 		void OnDescriptionChange(wxCommandEvent&);
@@ -248,6 +250,7 @@ class IngexguiFrame : public wxFrame
 		void ResetToDisconnected();
 		void Log(const wxString &);
 		void SetProjectName();
+		bool IsRecording();
 		void EnableButtonReliably(wxButton *, bool = true);
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
@@ -292,6 +295,7 @@ class IngexguiFrame : public wxFrame
 		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
 		int64_t mTakeModeFrameOffset;
+		wxDateTime mToday;
 		DECLARE_EVENT_TABLE()
 };
 

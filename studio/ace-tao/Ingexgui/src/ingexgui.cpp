@@ -98,19 +98,19 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_MENU( MENU_L, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_Space, IngexguiFrame::OnShortcut )
 	EVT_MENU( MENU_ClearLog, IngexguiFrame::OnClearLog )
-	EVT_MENU( MENU_DisablePlayer, IngexguiFrame::OnDisablePlayer )
+	EVT_MENU( MENU_PlayerDisable, IngexguiFrame::OnPlayerDisable )
 	EVT_MENU( MENU_PlayMOV, IngexguiFrame::OnPlayerOpenFile )
 	EVT_MENU( MENU_PlayMXF, IngexguiFrame::OnPlayerOpenFile )
-	EVT_MENU( MENU_AbsoluteTimecode, IngexguiFrame::OnPlayerOSDChange )
-	EVT_MENU( MENU_RelativeTimecode, IngexguiFrame::OnPlayerOSDChange )
-	EVT_MENU( MENU_NoOSD, IngexguiFrame::OnPlayerOSDChange )
-	EVT_MENU( MENU_DisablePlayerSDIOSD, IngexguiFrame::OnPlayerOSDChange )
-	EVT_MENU( MENU_AudioFollowsVideo, IngexguiFrame::OnAudioFollowsVideo )
-	EVT_MENU( MENU_ExtOutput, IngexguiFrame::OnPlayerOutputTypeChange )
-	EVT_MENU( MENU_AccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
-	EVT_MENU( MENU_ExtAccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
-	EVT_MENU( MENU_ExtUnaccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
-	EVT_MENU( MENU_UnaccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
+	EVT_MENU( MENU_PlayerAbsoluteTimecode, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_PlayerRelativeTimecode, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_PlayerNoOSD, IngexguiFrame::OnPlayerOSDChange )
+	EVT_MENU( MENU_PlayerDisableSDIOSD, IngexguiFrame::OnPlayerSDIOSDChange )
+	EVT_MENU( MENU_PlayerAudioFollowsVideo, IngexguiFrame::OnPlayerAudioFollowsVideo )
+	EVT_MENU( MENU_PlayerExtOutput, IngexguiFrame::OnPlayerOutputTypeChange )
+	EVT_MENU( MENU_PlayerAccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
+	EVT_MENU( MENU_PlayerExtAccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
+	EVT_MENU( MENU_PlayerExtUnaccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
+	EVT_MENU( MENU_PlayerUnaccelOutput, IngexguiFrame::OnPlayerOutputTypeChange )
 	EVT_MENU( wxID_CLOSE, IngexguiFrame::OnQuit )
 	EVT_MENU( MENU_SetProjectName, IngexguiFrame::OnSetProjectName )
 	EVT_MENU( MENU_SetRolls, IngexguiFrame::OnSetRolls )
@@ -211,16 +211,15 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 /// @param argc Command line argument count.
 /// @param argv Command line argument vector.
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
-	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mEndEvent(-1), mCurrentTakeInfo(0), mDescriptionControlHasFocus(false), mFileModeSelectedTrack(0)
+	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mEndEvent(-1), mCurrentTakeInfo(0), mDescriptionControlHasFocus(false), mFileModeSelectedTrack(0), mToday(wxDateTime::Today())
+
 {
 //	SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
 
 	wxLog::SetActiveTarget(new wxLogStream(new ofstream(wxDateTime::Now().Format(wxT("ingexguiLog-%y%m%d-%H%M%S")).mb_str(*wxConvCurrent))));
-
         Log(wxT("Controller started on ") + wxDateTime::Now().FormatISODate());
 	mHelpDlg = new HelpDlg(this); //modeless to allow it to remain visible while using the app
 	//icon
-
 	wxIcon icon(ingexgui_xpm);
 	SetIcon(icon);
 	//menu
@@ -240,29 +239,29 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	//Player menu
 	wxMenu * menuPlayer = new wxMenu;
-	menuPlayer->AppendCheckItem(MENU_DisablePlayer, wxT("Disable player"));
+	menuPlayer->AppendCheckItem(MENU_PlayerDisable, wxT("Disable player"));
 	menuPlayer->Append(MENU_PlayMOV, wxT("Play MOV file..."));
 	menuPlayer->Append(MENU_PlayMXF, wxT("Play MXF file(s)..."));
 	wxMenu * menuPlayerType = new wxMenu;
 	wxMenu * menuPlayerOSD = new wxMenu;
 #ifdef HAVE_DVS
-	menuPlayerType->AppendRadioItem(MENU_ExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)")); //first item is selected by default
+	menuPlayerType->AppendRadioItem(MENU_PlayerExtAccelOutput, wxT("External monitor and computer screen (accelerated if possible)")); //first item is selected by default
 #endif
-	menuPlayerType->AppendRadioItem(MENU_AccelOutput, wxT("Computer screen (accelerated if possible)")); //selected by default if no DVS card
+	menuPlayerType->AppendRadioItem(MENU_PlayerAccelOutput, wxT("Computer screen (accelerated if possible)")); //selected by default if no DVS card
 #ifdef HAVE_DVS
-	menuPlayerType->AppendRadioItem(MENU_ExtOutput, wxT("External monitor"));
-	menuPlayerType->AppendRadioItem(MENU_ExtUnaccelOutput, wxT("External monitor and computer screen unaccelerated (use if accelerated fails)"));
+	menuPlayerType->AppendRadioItem(MENU_PlayerExtOutput, wxT("External monitor"));
+	menuPlayerType->AppendRadioItem(MENU_PlayerExtUnaccelOutput, wxT("External monitor and computer screen unaccelerated (use if accelerated fails)"));
 #endif
-	menuPlayerType->AppendRadioItem(MENU_UnaccelOutput, wxT("Computer screen unaccelerated (use if accelerated fails)"));
+	menuPlayerType->AppendRadioItem(MENU_PlayerUnaccelOutput, wxT("Computer screen unaccelerated (use if accelerated fails)"));
 
-	menuPlayerOSD->AppendRadioItem(MENU_AbsoluteTimecode, wxT("&Absolute timecode")); //first item is selected by default
-	menuPlayerOSD->AppendRadioItem(MENU_RelativeTimecode, wxT("&Relative timecode"));
-	menuPlayerOSD->AppendRadioItem(MENU_NoOSD, wxT("&OSD Off"));
+	menuPlayerOSD->AppendRadioItem(MENU_PlayerAbsoluteTimecode, wxT("&Absolute timecode")); //first item is selected by default
+	menuPlayerOSD->AppendRadioItem(MENU_PlayerRelativeTimecode, wxT("&Relative timecode"));
+	menuPlayerOSD->AppendRadioItem(MENU_PlayerNoOSD, wxT("&OSD Off"));
 	menuPlayer->Append(MENU_PlayerType, wxT("Player type"), menuPlayerType);
 	menuPlayer->Append(MENU_PlayerOSD, wxT("Player On-Screen Display"), menuPlayerOSD);
-	menuPlayer->AppendCheckItem(MENU_AudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
+	menuPlayer->AppendCheckItem(MENU_PlayerAudioFollowsVideo, wxT("Audio corresponds to video source displayed"));
 #ifdef HAVE_DVS
-	menuPlayer->AppendCheckItem(MENU_DisablePlayerSDIOSD, wxT("Disable external monitor On-screen Display"));
+	menuPlayer->AppendCheckItem(MENU_PlayerDisableSDIOSD, wxT("Disable external monitor On-screen Display"));
 #endif
 	menuBar->Append(menuPlayer, wxT("&Player"));
 
@@ -297,22 +296,23 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 #ifdef HAVE_DVS
 	mPlayer = new prodauto::Player(this, true, prodauto::DUAL_DVS_AUTO_OUTPUT, prodauto::SOURCE_TIMECODE); //must delete this explicitly on app exit
 	if (!mPlayer->ExtOutputIsAvailable()) {
-		GetMenuBar()->FindItem(MENU_ExtAccelOutput)->Enable(false);
-		GetMenuBar()->FindItem(MENU_ExtOutput)->Enable(false);
-		GetMenuBar()->FindItem(MENU_ExtUnaccelOutput)->Enable(false);
+		GetMenuBar()->FindItem(MENU_PlayerExtAccelOutput)->Enable(false);
+		GetMenuBar()->FindItem(MENU_PlayerExtOutput)->Enable(false);
+		GetMenuBar()->FindItem(MENU_PlayerExtUnaccelOutput)->Enable(false);
 		mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
-		GetMenuBar()->FindItem(MENU_AccelOutput)->Check();
+		GetMenuBar()->FindItem(MENU_PlayerAccelOutput)->Check();
 	}
 #else
 	mPlayer = new prodauto::Player(this, true, prodauto::X11_AUTO_OUTPUT, prodauto::SOURCE_TIMECODE); //must delete this explicitly on app exit
 #endif
-	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_AudioFollowsVideo)->IsChecked());
+	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_PlayerAudioFollowsVideo)->IsChecked());
 	CreateStatusBar();
 
 	//saved state
 	mSavedStateFilename = wxStandardPaths::Get().GetUserConfigDir() + wxFileName::GetPathSeparator() + SAVED_STATE_FILENAME;
 	if (!wxFile::Exists(mSavedStateFilename)) {
-		wxMessageBox(wxT("No saved preferences file found.  Default values will be used."), wxT("No saved preferences"));
+		wxMessageDialog dlg(this, wxT("No saved preferences file found.  Default values will be used."), wxT("No saved preferences")); //NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged
+		dlg.ShowModal();
 		wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
 		mSavedState.SetRoot(rootNode);
 	}
@@ -321,7 +321,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 		mSavedState.SetRoot(rootNode);
 	}
 	else if (wxT("Ingexgui") != mSavedState.GetRoot()->GetName()) {
-		wxMessageBox(wxT("Saved preferences file \"") + mSavedStateFilename + wxT("\": has unrecognised data: recreating with default values."), wxT("Unrecognised saved preferences"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(this, wxT("Saved preferences file \"") + mSavedStateFilename + wxT("\": has unrecognised data: recreating with default values."), wxT("Unrecognised saved preferences"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
 		mSavedState.SetRoot(rootNode); //dialogue will detect this as updated
 	}
@@ -502,18 +503,22 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 void IngexguiFrame::OnClose(wxCloseEvent & event)
 {
 	if (event.CanVeto() && RECORDING == mStatus) {
-		wxMessageBox(wxT("You cannot close the application while recording: stop the recording first"), wxT("Cannot close while recording"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(this, wxT("You cannot close the application while recording: stop the recording first"), wxT("Cannot close while recording"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		event.Veto();
-	}	
-	else if (!event.CanVeto() || !mTree->HasRecorders() || wxYES == wxMessageBox(wxT("Are you sure?  You are not disconnected"), wxT("Confirmation of Quit"), wxYES_NO | wxICON_QUESTION)) {
-		if (mTree->HasRecorders()) {
-			delete mRecorderGroup; //or doesn't exit
-		}
-		Destroy();
-		Log(wxT("Application closed."));
 	}
 	else {
-		event.Veto();
+		wxMessageDialog dlg(this, wxT("Are you sure?  You are not disconnected"), wxT("Confirmation of Quit"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+		if (!event.CanVeto() || !mTree->HasRecorders() || wxID_YES == dlg.ShowModal()) {
+			if (mTree->HasRecorders()) {
+				delete mRecorderGroup; //or doesn't exit
+			}
+			Destroy();
+			Log(wxT("Application closed."));
+		}
+		else {
+			event.Veto();
+		}
 	}
 }
 
@@ -614,26 +619,23 @@ void IngexguiFrame::OnClearLog( wxCommandEvent& WXUNUSED(event) )
 /// @param event The command event.
 void IngexguiFrame::OnPlayerOSDChange( wxCommandEvent& WXUNUSED(event) )
 {
-	if (GetMenuBar()->FindItem(MENU_AbsoluteTimecode)->IsChecked()) {
+	if (GetMenuBar()->FindItem(MENU_PlayerAbsoluteTimecode)->IsChecked()) {
 		mPlayer->SetOSD(prodauto::SOURCE_TIMECODE);
-#ifdef HAVE_DVS
-		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable();
-#endif
 	}
-	else if (GetMenuBar()->FindItem(MENU_RelativeTimecode)->IsChecked()) {
+	else if (GetMenuBar()->FindItem(MENU_PlayerRelativeTimecode)->IsChecked()) {
 		mPlayer->SetOSD(prodauto::CONTROL_TIMECODE);
-#ifdef HAVE_DVS
-		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable();
-#endif
 	}
 	else { //OSD off
 		mPlayer->SetOSD(prodauto::OSD_OFF);
-#ifdef HAVE_DVS
-		GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->Enable(false);
-#endif
 	}
+}
+
+/// Responds to SDI OSD disable menu requests by communicating with the player.
+/// @param event The command event.
+void IngexguiFrame::OnPlayerSDIOSDChange( wxCommandEvent& WXUNUSED(event) )
+{
 #ifdef HAVE_DVS
-	mPlayer->EnableSDIOSD(!GetMenuBar()->FindItem(MENU_DisablePlayerSDIOSD)->IsChecked());
+	mPlayer->EnableSDIOSD(!GetMenuBar()->FindItem(MENU_PlayerDisableSDIOSD)->IsChecked());
 #endif
 }
 
@@ -641,17 +643,17 @@ void IngexguiFrame::OnPlayerOSDChange( wxCommandEvent& WXUNUSED(event) )
 /// @param event The command event.
 void IngexguiFrame::OnPlayerOutputTypeChange(wxCommandEvent& WXUNUSED(event))
 {
-	if (GetMenuBar()->FindItem(MENU_AccelOutput)->IsChecked()) {
+	if (GetMenuBar()->FindItem(MENU_PlayerAccelOutput)->IsChecked()) {
 		mPlayer->SetOutputType(prodauto::X11_AUTO_OUTPUT);
 	}
 #ifdef HAVE_DVS
-	else if (GetMenuBar()->FindItem(MENU_ExtOutput)->IsChecked()) {
+	else if (GetMenuBar()->FindItem(MENU_PlayerExtOutput)->IsChecked()) {
 		mPlayer->SetOutputType(prodauto::DVS_OUTPUT);
 	}
-	else if (GetMenuBar()->FindItem(MENU_ExtAccelOutput)->IsChecked()) {
+	else if (GetMenuBar()->FindItem(MENU_PlayerExtAccelOutput)->IsChecked()) {
 		mPlayer->SetOutputType(prodauto::DUAL_DVS_AUTO_OUTPUT);
 	}
-	else if (GetMenuBar()->FindItem(MENU_ExtUnaccelOutput)->IsChecked()) {
+	else if (GetMenuBar()->FindItem(MENU_PlayerExtUnaccelOutput)->IsChecked()) {
 		mPlayer->SetOutputType(prodauto::DUAL_DVS_X11_OUTPUT);
 	}
 #endif
@@ -663,9 +665,9 @@ void IngexguiFrame::OnPlayerOutputTypeChange(wxCommandEvent& WXUNUSED(event))
 
 /// Responds to player audio follows video menu request
 /// @param event The command event.
-void IngexguiFrame::OnAudioFollowsVideo(wxCommandEvent& WXUNUSED(event))
+void IngexguiFrame::OnPlayerAudioFollowsVideo(wxCommandEvent& WXUNUSED(event))
 {
-	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_AudioFollowsVideo)->IsChecked());
+	mPlayer->AudioFollowsVideo(GetMenuBar()->FindItem(MENU_PlayerAudioFollowsVideo)->IsChecked());
 }
 
 /// Responds to a menu quit event by attempting to close the app.
@@ -856,12 +858,12 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 					SetStatus(PLAYING_BACKWARDS);
 					break;
 				case prodauto::PAUSE :
-					if (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus) { //player is in control of state (This check prevents a sitaution where when toggling rapidly between play and record we get a paused status but recorders are still recording. Record button is not enabled, because recorder selector is not enabled, because RecorderGroup::Stop() hasn't been called.  Position is still running and tree/status are indicating problems.  The only way out of this is to quit - stopping the recorders with another GUI leaves the recorder selector and record buttons disabled.)
+					if (!IsRecording()) { //player is in control of state (This check prevents a sitaution where when toggling rapidly between play and record we get a paused status but recorders are still recording. Record button is not enabled, because recorder selector is not enabled, because RecorderGroup::Stop() hasn't been called.  Position is still running and tree/status are indicating problems.  The only way out of this is to quit - stopping the recorders with another GUI leaves the recorder selector and record buttons disabled.)
 						SetStatus(PAUSED);
 					}
 					break;
 				case prodauto::STOP :
-					if (RECORDING != mStatus && RUNNING_UP != mStatus && RUNNING_DOWN != mStatus) { //player is in control of state
+					if (!IsRecording()) { //player is in control of state
 						SetStatus(STOPPED);
 					}
 					break;
@@ -951,18 +953,18 @@ void IngexguiFrame::OnPlayerEvent(wxCommandEvent& event) {
 			break;
 		case prodauto::CLOSE_REQ : {
 #ifdef HAVE_DVS
-				if (GetMenuBar()->FindItem(MENU_ExtAccelOutput)->IsChecked() || GetMenuBar()->FindItem(MENU_ExtUnaccelOutput)->IsChecked()) {
+				if (GetMenuBar()->FindItem(MENU_PlayerExtAccelOutput)->IsChecked() || GetMenuBar()->FindItem(MENU_PlayerExtUnaccelOutput)->IsChecked()) {
 					//external output is active so don't close the player, just switch to external only
-					GetMenuBar()->FindItem(MENU_ExtOutput)->Check(); //doesn't generate an event
+					GetMenuBar()->FindItem(MENU_PlayerExtOutput)->Check(); //doesn't generate an event
 					wxCommandEvent dummyEvent;
 					OnPlayerOutputTypeChange(dummyEvent);
 				}
 				else {
 #endif
 					//close the player completely
-					GetMenuBar()->FindItem(MENU_DisablePlayer)->Check(); //doesn't generate an event
+					GetMenuBar()->FindItem(MENU_PlayerDisable)->Check(); //doesn't generate an event
 					wxCommandEvent dummyEvent;
-					OnDisablePlayer(dummyEvent);
+					OnPlayerDisable(dummyEvent);
 #ifdef HAVE_DVS
 				}
 #endif
@@ -1397,15 +1399,15 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 			delete (RecorderData *) event.GetClientData();
 			break;
 		case RecorderGroupCtrl::TRACK_STATUS :
-			Log(wxT("TRACK_STATUS for \"") + event.GetString() + wxT("\""));
-			mTree->SetTrackStatus(event.GetString(), RECORDING == mStatus || RUNNING_UP == mStatus || RUNNING_DOWN == mStatus, ((RecorderData *) event.GetClientData())->GetTrackStatusList()); //will set record button and status indicator
+//spam			Log(wxT("TRACK_STATUS for \"") + event.GetString() + wxT("\""));
+			mTree->SetTrackStatus(event.GetString(), IsRecording(), ((RecorderData *) event.GetClientData())->GetTrackStatusList()); //will set record button and status indicator
 			delete (RecorderData *) event.GetClientData();
 			break;
 		case RecorderGroupCtrl::REMOVE_RECORDER :
 			Log(wxT("REMOVE_RECORDER for \"") + event.GetString() + wxT("\""));
 //			mTapeIdButton->Enable(mTree->RemoveRecorder(event.GetString()));
 			EnableButtonReliably(mTapeIdButton, mTree->RemoveRecorder(event.GetString()));
-			if (!mTree->HasRecorders() && (RECORDING == mStatus || RUNNING_UP == mStatus || RUNNING_DOWN == mStatus)) {//this check needed in case we disconnect from a recorder that's recording/running up and we can't contact
+			if (!mTree->HasRecorders() && IsRecording()) {//this check needed in case we disconnect from a recorder that's recording/running up and we can't contact
 				SetStatus(STOPPED);
 			}
 			break;
@@ -1437,7 +1439,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 			mTree->SetRecorderStateUnknown(event.GetString(), wxT("Uncontactable: retrying"));
 			break;
 		case RecorderGroupCtrl::TIMECODE_STUCK :
-				Log(wxT("TIMECODE_STUCK for ") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(((RecorderData *) event.GetClientData())->GetTimecode()));
+				Log(wxT("TIMECODE_STUCK for \"") + event.GetString() + wxT("\" @ ") + Timepos::FormatTimecode(((RecorderData *) event.GetClientData())->GetTimecode()));
 				mTree->SetRecorderStateProblem(event.GetString(), wxT("Timecode stuck at ") + Timepos::FormatTimecode(((RecorderData *) event.GetClientData())->GetTimecode()));
 				delete (RecorderData *) event.GetClientData();
 			break;
@@ -1522,25 +1524,20 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
 		}
 	
 		//Highlight the tape ID button if we can't record because of missing tape IDs
-		mTapeIdButton->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK() ? wxColour(0xFF, 0x80, 0x00) : wxNullColour);
+		mTapeIdButton->SetBackgroundColour(mTree->SomeEnabled() && !mTree->TapeIdsOK() ? BUTTON_WARNING_COLOUR : wxNullColour);
 	}
-	else { //recorder name supplied
-		if (event.GetExtraLong()) { //signal present state has changed
-			mRecorderGroup->PollRapidly(event.GetString(), event.GetInt() == 0);
-		}
-		else { //Tape ID updates
-			CORBA::StringSeq packageNames, tapeIds;
-			mTree->GetRecorderTapeIds(event.GetString(), packageNames, tapeIds);
-			mRecorderGroup->SetTapeIds(event.GetString(), packageNames, tapeIds);
-		}
+	else { //recorder name supplied - tape ID updates
+		CORBA::StringSeq packageNames, tapeIds;
+		mTree->GetRecorderTapeIds(event.GetString(), packageNames, tapeIds);
+		mRecorderGroup->SetTapeIds(event.GetString(), packageNames, tapeIds);
 	}
 }
 
 /// Responds to the player enable/disable menu requests by telling the player and updating menu items.
 /// @param event The command event.
-void IngexguiFrame::OnDisablePlayer(wxCommandEvent& WXUNUSED( event ))
+void IngexguiFrame::OnPlayerDisable(wxCommandEvent& WXUNUSED( event ))
 {
-	bool enabled = !GetMenuBar()->FindItem(MENU_DisablePlayer)->IsChecked();
+	bool enabled = !GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked();
 	mPlayer->Enable(enabled);
 	if (enabled && mPlayFileButton->GetValue()) {
 		mPlayer->SelectTrack(mFileModeSelectedTrack, false);
@@ -1561,6 +1558,7 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 			mFileModeFiles.Clear();
 			mFileModeFrameOffset = 0; //remembers offset when toggling between file and event views
 			mPlayFileButton->SetValue(true); //go into file mode if not already in that mode
+			mPlayFileButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
 			UpdatePlayerAndEventControls(true); //reload player
 		}
 	}
@@ -1571,6 +1569,7 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 			mFileModeMovFile.Clear();
 			mFileModeFrameOffset = 0; //remembers offset when toggling between file and event views
 			mPlayFileButton->SetValue(true); //go into file mode if not already in that mode
+			mPlayFileButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
 			UpdatePlayerAndEventControls(true); //reload player
 		}
 	}
@@ -1580,6 +1579,7 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 /// Loads the player with the correct set of files
 void IngexguiFrame::OnPlayFile(wxCommandEvent & WXUNUSED( event ))
 {
+	mPlayFileButton->SetBackgroundColour(mPlayFileButton->GetValue() ? BUTTON_WARNING_COLOUR : wxNullColour);
 	UpdatePlayerAndEventControls(true); //force player reload
 }
 
@@ -1770,7 +1770,8 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_Record)->Enable(false);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(false);
 			mRecordButton->SetToolTip(wxT(""));
-			mStopButton->Enable();
+//			mStopButton->Enable();
+			EnableButtonReliably(mStopButton);
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable(false);
@@ -2207,7 +2208,10 @@ void IngexguiFrame::ResetToDisconnected()
 void IngexguiFrame::Log(const wxString & message)
 {
 //	std::cerr << wxDateTime::Now().FormatISOTime().mb_str(*wxConvCurrent) << " " << message.mb_str(*wxConvCurrent) << std::endl;
-
+	if (wxDateTime::Today() != mToday) {
+		mToday = wxDateTime::Today();
+	        wxLogMessage(wxT("Date: ") + mToday.FormatISODate());
+	}
 	// Contrary to the documentation, wxLogMessage does in fact want
 	// a const wxChar* argument so this works fine with unicode.
 	wxLogMessage(message);
@@ -2216,4 +2220,9 @@ void IngexguiFrame::Log(const wxString & message)
 void IngexguiFrame::OnJumpToTimecode(wxCommandEvent & WXUNUSED(event))
 {
 	JumpToTimecodeDlg dlg(this);
+}
+
+/// Returns true if in a state associated with recording
+bool IngexguiFrame::IsRecording() {
+	return RECORDING == mStatus || RUNNING_UP == mStatus || RUNNING_DOWN == mStatus;
 }

@@ -29,7 +29,7 @@ DEFINE_EVENT_TYPE(wxEVT_RECORDERGROUP_MESSAGE)
 BEGIN_EVENT_TABLE( RecorderGroupCtrl, wxListBox )
 	EVT_LEFT_DOWN(RecorderGroupCtrl::OnLMouseDown)
 	EVT_MIDDLE_DOWN(RecorderGroupCtrl::OnUnwantedMouseDown)
-	EVT_RIGHT_DOWN(RecorderGroupCtrl::OnUnwantedMouseDown)
+	EVT_RIGHT_DOWN(RecorderGroupCtrl::OnRightMouseDown)
 	EVT_COMMAND(ENABLE_REFRESH, wxEVT_RECORDERGROUP_MESSAGE, RecorderGroupCtrl::OnListRefreshed)
 	EVT_CONTROLLER_THREAD(RecorderGroupCtrl::OnControllerEvent)
 END_EVENT_TABLE()
@@ -119,7 +119,8 @@ void RecorderGroupCtrl::OnListRefreshed(wxCommandEvent & WXUNUSED(event))
 		}
 	}
 	else { //CORBA prob
-		wxMessageBox(wxT("Failed to get list of recorders:\n") + errMsg, wxT("Comms problem"), wxICON_ERROR);
+		wxMessageDialog dlg(this, wxT("Failed to get list of recorders:\n") + errMsg, wxT("Comms problem"), wxICON_ERROR | wxOK); //NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged
+		dlg.ShowModal();
 	}
 }
 
@@ -208,7 +209,10 @@ void RecorderGroupCtrl::OnLMouseDown(wxMouseEvent & event)
 	int clickedItem;
 	if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition()))) {
 		if (IsSelected(clickedItem)) { //disconnect from a recorder
-			Deselect(clickedItem);
+			wxMessageDialog dlg(this, wxT("Are you sure you want to disconnect from ") + GetString(clickedItem) + wxT("?"), wxT("Confirmation of Disconnect"), wxYES_NO | wxICON_QUESTION);
+			if (wxID_YES == dlg.ShowModal()) {
+				Deselect(clickedItem);
+			}
 		}
 		else if (!GetController(clickedItem)) { //connect to a recorder
 			SetString(clickedItem, wxT("Connecting..."));
@@ -221,6 +225,16 @@ void RecorderGroupCtrl::OnLMouseDown(wxMouseEvent & event)
 /// @param event The mouse event.
 void RecorderGroupCtrl::OnUnwantedMouseDown(wxMouseEvent & WXUNUSED(event))
 {
+}
+
+/// Responds to right mouse click on the control by deselecting the item without confirmation
+/// @param event The mouse event.
+void RecorderGroupCtrl::OnRightMouseDown(wxMouseEvent & event)
+{
+	int clickedItem;
+	if (mEnabledForInput && wxNOT_FOUND != (clickedItem = HitTest(event.GetPosition())) && IsSelected(clickedItem)) {
+		Deselect(clickedItem);
+	}
 }
 
 /// Responds to an event from one of the recorder controllers.
@@ -334,13 +348,15 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					}
 				}
 				else { //edit rate incompatibility
-					wxMessageBox(wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxT("") : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION);
+					wxMessageDialog dlg(this, wxT("Recorder \"") + event.GetName() + wxString::Format(wxT("\" has an edit rate incompatible with the existing recorder%s.  Deselecting "), selectedItems.GetCount() == 1 ? wxT("") : wxT("s")) + event.GetName() + wxString::Format(wxT(".\n\nEdit rate numerator: %d ("), GetController(pos)->GetMaxPreroll().edit_rate.numerator) + event.GetName() + wxString::Format(wxT("); %d (existing)\nEdit rate denominator: %d ("), mMaxPreroll.edit_rate.numerator, GetController(pos)->GetMaxPreroll().edit_rate.denominator) + event.GetName() + wxString::Format(wxT("); %d (existing)"), mMaxPreroll.edit_rate.denominator), wxT("Edit rate incompatibility"), wxICON_EXCLAMATION | wxOK);
+					dlg.ShowModal();
 					Disconnect(pos);
 				}
 			}
 			else { //failure or comm failure
 				Disconnect(pos);
-				wxMessageBox(wxT("Couldn't connect to recorder \"") + event.GetName() + wxT("\": ") + event.GetMessage(), wxT("Initialisation failure"), wxICON_EXCLAMATION);
+				wxMessageDialog dlg(this, wxT("Couldn't connect to recorder \"") + event.GetName() + wxT("\": ") + event.GetMessage(), wxT("Initialisation failure"), wxICON_EXCLAMATION | wxOK);
+				dlg.ShowModal();
 			}
 			SetString(pos, event.GetName());
 		}
@@ -356,7 +372,8 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				case Controller::RECONNECT :
 					if (Controller::FAILURE == event.GetResult()) {
 						Deselect(FindString(event.GetName(), true)); //informs frame
-						wxMessageBox(wxT("Cannot reconnect automatically to ") + event.GetName() + wxT(" because ") + event.GetMessage() + wxT(".  Other aspects of this recorder may have changed also.  You must connect to it again manually and be aware that it has changed."), wxT("Cannot reconnect"), wxICON_ERROR);
+						wxMessageDialog dlg(this, wxT("Cannot reconnect automatically to ") + event.GetName() + wxT(" because ") + event.GetMessage() + wxT(".  Other aspects of this recorder may have changed also.  You must connect to it again manually and be aware that it has changed."), wxT("Cannot reconnect"), wxICON_ERROR | wxOK);
+						dlg.ShowModal();
 					}
 					break;
 				case Controller::RECORD : {
@@ -528,16 +545,6 @@ void RecorderGroupCtrl::Record(const wxString & recorderName, const CORBA::Boole
 {
 	if (GetController(FindString(recorderName, true))) { //sanity check
 		GetController(FindString(recorderName, true))->Record(mStartTimecode, mPreroll, mCurrentProject, enableList);
-	}
-}
-
-/// Tell the given recorder to start or stop polling rapidly for status
-/// @param recorderName The recorder in question.
-/// @param rapidly True to poll rapidly.
-void RecorderGroupCtrl::PollRapidly(const wxString & recorderName, bool rapidly)
-{
-	if (GetController(FindString(recorderName, true))) { //sanity check
-		GetController(FindString(recorderName, true))->PollRapidly(rapidly);
 	}
 }
 

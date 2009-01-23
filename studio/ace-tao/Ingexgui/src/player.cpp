@@ -402,6 +402,7 @@ void Player::SetOSD(const OSDtype type)
 void Player::EnableSDIOSD(bool enabled)
 {
 	setSDIOSDEnable(enabled);
+	Load(0); //takes effect on reload
 }
 
 /// Sets how the player appears.

@@ -25,9 +25,7 @@
 #include "RecorderC.h"
 
 #define DEFAULT_MAX_POSTROLL 250 //frames
-//Watchdog timer needs to check twice in quick succession to detect stuck timecode immediately
-#define WATCHDOG_TIMER_LONG_INTERVAL 10000 //ms
-#define WATCHDOG_TIMER_SHORT_INTERVAL 250 //ms
+#define POLLING_INTERVAL 1000 //ms
 
 
 class Comms;
@@ -45,7 +43,6 @@ public:
 	void AddProjectNames(const CORBA::StringSeq &);
 	void Record(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const CORBA::BooleanSeq &);
 	void Stop(const ProdAuto::MxfTimecode &, const ProdAuto::MxfDuration &, const wxString &, const ProdAuto::LocatorSeq &);
-	void PollRapidly(bool = true);
 	bool IsRouterRecorder();
 	void Destroy();
 	const ProdAuto::MxfDuration GetMaxPreroll();
@@ -86,18 +83,18 @@ private:
 	ProdAuto::Recorder_var mRecorder;
 	Comms * mComms;
 	wxMutex mMutex;
-	wxTimer * mWatchdogTimer;
+	wxTimer * mPollingTimer;
 	const wxString mName;
 	bool mTimecodeRunning;
 	bool mReconnecting;
 	bool mRouterRecorder;
-	bool mPollRapidly;
 	Command mPendingCommand;
 	wxDateTime mLastTimecodeRequest;
 	ProdAuto::MxfTimecode mLastTimecodeReceived;
 	//vbls written to in both contexts while thread is running
 	wxCondition* mCondition;
 	Command mCommand;
+	Command mPrevCommand;
 	CORBA::BooleanSeq mEnableList;
 	CORBA::StringSeq mSourceNames;
 	CORBA::StringSeq mProjectNames;

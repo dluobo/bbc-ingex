@@ -28,14 +28,15 @@
 
 
 /// Initialises ORB and naming service, and starts thread which obtains list of recorders.
-/// @param handler The handler where events will be sent.
+/// @param parent the parent window (to where events will be sent)
 /// @param argc Command line argument count - see argv.
 /// @param argv Command line arguments - the ORB will remove and respond to any it recognises.
-Comms::Comms(wxEvtHandler * handler, int argc, wxChar** argv)
-: wxThread(wxTHREAD_JOINABLE), mHandler(handler), mNameService(CosNaming::NamingContext::_nil()), mOK(true), mErrMsg(wxT("Not Initialised")) //joinable thread means we can terminate it in order to be able to delete mCondition safely
+Comms::Comms(wxWindow * parent, int argc, wxChar** argv)
+: wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()), mOK(true), mErrMsg(wxT("Not Initialised")) //joinable thread means we can terminate it in order to be able to delete mCondition safely
 {
 	if (argc < 3) {
-		wxMessageBox(wxT("Requires nameserver details, such as \"-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888\"."), wxT("Comms problem"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(mParent, wxT("To connect to recorders requires nameserver details on the command line, such as \"-ORBDefaultInitRef corbaloc:iiop:192.168.1.123:8888\"."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK); //NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged
+		dlg.ShowModal();
 		mOK = false;
 	}
 	if (mOK) {
@@ -57,18 +58,21 @@ Comms::Comms(wxEvtHandler * handler, int argc, wxChar** argv)
 		catch (const CORBA::Exception & e) {
 			wxString msg(e._name(), *wxConvCurrent);
 			msg = wxT("Failed to initialise ORB: ") + msg;
-			wxMessageBox(msg, wxT("Comms problem"), wxICON_EXCLAMATION);
+			wxMessageDialog dlg(mParent, msg, wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+			dlg.ShowModal();
 			mOK = false;
 		}
 		delete[] argv_;
 	}
 	if (mOK && !InitNs()) {
-		wxMessageBox(wxT("Failed to initialise naming service."), wxT("Comms problem"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(mParent, wxT("Failed to initialise naming service."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		mOK = false;
 	}
 	mCondition = new wxCondition(mMutex);
 	if (mOK && wxTHREAD_NO_ERROR != Create()) {
-		wxMessageBox(wxT("Failed to create comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(mParent, wxT("Failed to create comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		Delete(); //free up memory used by the thread
 		delete mCondition;
 		mOK = false;
@@ -77,7 +81,8 @@ Comms::Comms(wxEvtHandler * handler, int argc, wxChar** argv)
 		mMutex.Lock(); //to detect that thread is ready to accept signals
 	}
 	if (mOK && wxTHREAD_NO_ERROR != Run()) {
-		wxMessageBox(wxT("Failed to run comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(mParent, wxT("Failed to run comms thread."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		Delete(); //free up memory used by the thread
 		delete mCondition;
 		mOK = false;
@@ -140,7 +145,8 @@ bool Comms::InitNs()
 	{
 		wxString msg(e._name(), *wxConvCurrent);
 		msg = wxT("No NameService reference available: ") + msg;
-		wxMessageBox(msg, wxT("Comms problem"), wxICON_EXCLAMATION);
+		wxMessageDialog dlg(mParent, msg, wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
+		dlg.ShowModal();
 		ok_so_far = false;
 	}
 
@@ -456,7 +462,7 @@ wxThread::ExitCode Comms::Entry()
 //		mOK = ok;
 		mMutex.Lock();
 		wxCommandEvent event(mEventType, mEventId);
-		mHandler->AddPendingEvent(event);
+		mParent->AddPendingEvent(event);
 	}
 	return 0;
 }

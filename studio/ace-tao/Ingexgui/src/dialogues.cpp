@@ -283,7 +283,8 @@ void SetProjectDlg::EnterName(const wxString & msg, const wxString & caption, in
 			break;
 		}
 		else {
-			wxMessageBox(wxT("There is already a project named \"") + mProjectList->GetString(mProjectList->FindString( name)) + wxT("\"."), wxT("Name Clash"), wxICON_HAND); //prints existing project name (may have case differences)
+			wxMessageDialog dlg(this, wxT("There is already a project named \"") + mProjectList->GetString(mProjectList->FindString( name)) + wxT("\"."), wxT("Name Clash"), wxICON_HAND | wxOK); //prints existing project name (may have case differences)  (NB not using wxMessageBox because (in GTK) it doesn't stop the parent window from being selected, so it can end up hidden, making the app appear to have hanged)
+			dlg.ShowModal();
 		}
 	}
 	EnableButtons(wxNOT_FOUND != mProjectList->GetSelection());

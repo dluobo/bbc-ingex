@@ -36,12 +36,12 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPollRapidly(false), mPendingCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPrevCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
 {
 	mCondition = new wxCondition(mMutex);
 	SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
 	wxString msg;
-	mWatchdogTimer = new wxTimer(this);
+	mPollingTimer = new wxTimer(this);
 	mMutex.Lock(); //to allow a test for the thread being ready, when it unlocks the mutex with Wait();
 	if (!mCondition->IsOk()) {
 		msg = wxT("Could not create condition object for recorder.");
@@ -70,7 +70,7 @@ Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * hand
 
 Controller::~Controller()
 {
-	wxDELETE(mWatchdogTimer); //may not exist
+	wxDELETE(mPollingTimer); //may not exist
 	delete mCondition;
 }
 
@@ -103,12 +103,10 @@ void Controller::SetTapeIds(const CORBA::StringSeq & sourceNames, const CORBA::S
 	mSourceNames = sourceNames;
 	mTapeIds = tapeIds;
 	mMutex.Unlock();
-	if (mReconnecting) { //can't send a command now
-		Signal(RECONNECT); //try to get things moving immediately; SET_TAPE_IDs will always be signalled after reconnection
-	}
-	else {
+	if (!mReconnecting) { //can send a command now
 		Signal(SET_TAPE_IDS);
 	}
+	//SET_TAPE_IDs is always sent after reconnection
 }
 
 /// Signals to the thread to tell the recorder a project name, or stores the command for later execution.
@@ -118,13 +116,10 @@ void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
 	mMutex.Lock();
 	mProjectNames = projectNames;
 	mMutex.Unlock();
-	if (mReconnecting) { //can't send a command now
-		if (NONE == mPendingCommand) { //nothing more important is happening - adding a project name is not a vital thing to do
-			mPendingCommand = ADD_PROJECT_NAMES; //will send the name upon reconnection
-			Signal(RECONNECT); //try to get things moving immediately
-		}
+	if (NONE == mPendingCommand) { //nothing more important is happening - adding a project name is not a vital thing to do
+		mPendingCommand = ADD_PROJECT_NAMES; //act on it later or detect if it is superceded while retrying
 	}
-	else {
+	if (!mReconnecting) { //can't send a command now
 		Signal(ADD_PROJECT_NAMES);
 	}
 }
@@ -141,11 +136,11 @@ void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdA
 	mPreroll = preroll;
 	mProject = project;
 	mEnableList = enableList;
+	mPendingCommand = RECORD; //act on it later or detect if it is superceded while retrying
 	if (mReconnecting) { //can't send a command now
-		mPendingCommand = RECORD; //will act on this when we can
+//std::cerr << "Record while reconnecting: setting timecode undefined" << std::endl;
 		mStartTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
 		mMutex.Unlock();
-		Signal(RECONNECT); //try to get things moving immediately
 	}
 	else {
 		mStartTimecode = startTimecode;
@@ -166,28 +161,16 @@ void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto
 	mPostroll = postroll;
 	mDescription = description;
 	mLocators = locators; 
+	mPendingCommand = STOP; //act on it later or detect if it is superceded while retrying
 	if (mReconnecting) { //can't send a command now
-		mPendingCommand = STOP; //will act on this when we can
+//std::cerr << "Stop while reconnecting: setting timecode undefined" << std::endl;
 		mStopTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
 		mMutex.Unlock();
-		Signal(RECONNECT); //try to get things moving immediately
 	}
 	else {
 		mStopTimecode = stopTimecode;
 		mMutex.Unlock();
 		Signal(STOP);
-	}
-}
-
-/// Enables or disables continuous polling of the recorder at the rate normally reserved for problem situations
-void Controller::PollRapidly(bool pollRapidly)
-{
-	mPollRapidly = pollRapidly; //will cause timer always to be started with a short interval
-	if (mWatchdogTimer->IsRunning()) {
-		//Short circuit the timer so that status is requested immediately
-		mWatchdogTimer->Stop();
-		wxTimerEvent event(wxID_ANY);
-		AddPendingEvent(event);
 	}
 }
 
@@ -203,7 +186,7 @@ bool Controller::IsRouterRecorder()
 /// Once this function has been called, the controller should be considered unusable.
 void Controller::Destroy()
 {
-	wxDELETE(mWatchdogTimer); //stops it too!
+	wxDELETE(mPollingTimer); //stops it too!
 	if (IsAlive()) { //won't be if initialisation failed
 		Signal(DIE);
 	}
@@ -219,8 +202,8 @@ void Controller::Destroy()
 /// @param command The command to execute.
 void Controller::Signal(Command command)
 {
-	if (mWatchdogTimer) {
-		mWatchdogTimer->Stop(); //about to execute a command, so timer is irrelevant
+	if (mPollingTimer) {
+		mPollingTimer->Stop(); //about to execute a command, so timer is irrelevant
 	}
 	wxMutexLocker lock(mMutex); //prevent concurrent access to mCommand
 	mCommand = command; //this will ensure the thread runs again even if it's currently busy (so not listening for a signal)
@@ -228,7 +211,7 @@ void Controller::Signal(Command command)
 }
 
 /// Respond to a thread event.
-/// Triggers the watchdog timer and passes the event on.
+/// Passes event on if appropriate and starts the timer or sends another command depending on the circumstances.
 /// @param event The thread event.
 void Controller::OnThreadEvent(ControllerThreadEvent & event)
 {
@@ -238,81 +221,77 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 //std::cerr << "die notification" << std::endl;
 		GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 	}
-	else if (mWatchdogTimer) { //not waiting to die
-		if (CONNECT == event.GetCommand() && SUCCESS != event.GetResult()) { //failure to connect - fatal
+	else if (mPollingTimer) { //not waiting to die
+		if (CONNECT == event.GetCommand() && SUCCESS != event.GetResult() //failure to connect
+		   || (RECONNECT == event.GetCommand() && FAILURE == event.GetResult())) { //failure to reconnect
 			//let the parent know - parent will delete this controller
-//std::cerr << "connect failure notification" << std::endl;
+//std::cerr << "connect/reconnect failure notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 		}
-		else if (mReconnecting || FAILURE == event.GetResult()) {
-			if (RECONNECT != event.GetCommand() || FAILURE == event.GetResult()) { //parent doesn't want to know about reconnect attempts unless they fail (which will be due to recorder parameters changing)
-//std::cerr << "reconnect notification" << std::endl;
+		else if (FAILURE == event.GetResult()) {
+			if (event.GetCommand() != mPrevCommand) {
+				//let the parent know
+//std::cerr << "command failure notification" << std::endl;
+				GetNextHandler()->AddPendingEvent(event);
+			}
+			if (event.GetCommand() == mPendingCommand || NONE == mPendingCommand) { //this isn't the result of a previous command which has been superceded
+				//try again
+//std::cerr << "retrying failed command" << std::endl;
+				Signal(event.GetCommand());
+			}
+		}
+		else if (COMM_FAILURE == event.GetResult()) {
+			if (RECONNECT != event.GetCommand()) { //not already reconnecting
+				//start reconnecting
+//std::cerr << "reconnect starting notification: setting timecodes undefined" << std::endl;
+				//if trying to record or stop, the requested frame might not be available by the time we succeed so record/stop "now"
+				mMutex.Lock();
+				mStartTimecode.undefined = true; //in case we're recording and the start time requested is no longer in the buffer
+				mStopTimecode.undefined = true; //in case we're stopping and the stop time requested is no longer in the buffer
+				mMutex.Unlock();
 				//let the parent know
 				GetNextHandler()->AddPendingEvent(event);
 				//buffer the command
-				if (RECORD == event.GetCommand() || STOP == event.GetCommand()) {
-					//record or stop when reconnected
+				if ((RECORD == event.GetCommand() || STOP == event.GetCommand() || ADD_PROJECT_NAMES == event.GetCommand()) && NONE == mPendingCommand) { //make sure the event doesn't override a command received while waiting for a response
+//std::cerr << "new pending command" << std::endl;
+					//execute command when reconnected
 					mPendingCommand = event.GetCommand();
-					//the requested frame might not be available by the time we succeed so record/stop "now"
-					mMutex.Lock();
-					mStartTimecode.undefined = true; 
-					mMutex.Unlock();
-				}
-				else if (ADD_PROJECT_NAMES == event.GetCommand()) {
-					mPendingCommand = ADD_PROJECT_NAMES;
 				}
 			}
-			//Set the timer to try again soon
-			mWatchdogTimer->Start(WATCHDOG_TIMER_SHORT_INTERVAL, wxTIMER_ONE_SHOT);
+			Signal(RECONNECT);
 		}
-		else if (RECONNECT == event.GetCommand()) {
-			//let the parent know
-//std::cerr << "reconnect notification" << std::endl;
+		else if (RECONNECT == event.GetCommand()) { //just reconnected
+			//set tape IDs as may be a restarted recorder which won't have this information
+//std::cerr << "successful reconnect notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event);
-			Signal(SET_TAPE_IDS); //may be a restarted recorder which won't have the tape IDs
+			Signal(SET_TAPE_IDS);
 		}
-		else { //a successful ordinary event
-			if (event.GetCommand() == mPendingCommand) { //pending command successfully sent
-				mPendingCommand = NONE;
-			}
-			else if (NONE != mPendingCommand) { //pending command not sent yet
-				//Send the pending command again immediately, with updated parameters
-				Signal(mPendingCommand);
-			}
-			//let the parent know
+		else if (event.GetCommand() == mPendingCommand) { //pending command successfully sent
+//std::cerr << "pending command successfully sent" << std::endl;
+			mPendingCommand = NONE;
+			GetNextHandler()->AddPendingEvent(event);
+			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT); //back to normal
+		}
+		else if (NONE != mPendingCommand) { //pending command not sent yet
+			//Send the pending command again immediately, with updated parameters
+//std::cerr << "pending command being sent" << std::endl;
+			Signal(mPendingCommand);
+		}
+		else {
 //std::cerr << "ordinary notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event);
-			//start the timer
-			if (WATCHDOG_TIMER_SHORT_INTERVAL == mWatchdogTimer->GetInterval() && RUNNING == event.GetTimecodeState() && !mPollRapidly) {
-				//everything is fine so wake up after a while
-				mWatchdogTimer->Start(WATCHDOG_TIMER_LONG_INTERVAL, wxTIMER_ONE_SHOT);
-			}
-			else {
-				//need to do timecode check so wake up soon
-				mWatchdogTimer->Start(WATCHDOG_TIMER_SHORT_INTERVAL, wxTIMER_ONE_SHOT);
-			}
+			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT);
 		}
 	}
+	mPrevCommand = event.GetCommand();
 }
 
-/// Called by the watchdog timer.
-/// Executes pending commands, or makes a status request
+/// Called by the polling timer, which should only happen in the idle, connected state.
+/// Makes a status request.
 void Controller::OnTimer(wxTimerEvent& WXUNUSED(event))
 {
-	//timer is one-shot so has stopped: it will be re-started if necessary when the thread returns an event in response to Signal() or the parent issues a command in response to Retry()
-	if (mReconnecting) {
-		//try again
-//std::cerr << "signal reconnect" << std::endl;
-		Signal(RECONNECT);
-	}
-	else if (NONE != mPendingCommand) {
-		Signal(mPendingCommand);
-	}
-	else {
-		//periodic status request
-//std::cerr << "signal status" << std::endl;
-		Signal(STATUS);
-	}
+	//timer is one-shot so has stopped: it will be re-started if necessary when the thread returns an event in response to Signal() or the parent issues a command
+	Signal(STATUS);
 }
 
 /// Thread entry point, called by wxWidgets.
@@ -329,7 +308,7 @@ wxThread::ExitCode Controller::Entry()
 		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
 		event.SetName(mName);
 		event.SetCommand(mCommand);
-		mCommand = NONE; //can now detect if another command is issued while busy
+		mCommand = NONE; //can now detect if another command is issued while busy(more frequently during abnormal situations) 
 		mMutex.Unlock();
 		if (DIE == event.GetCommand()) {
 			AddPendingEvent(event);
@@ -346,6 +325,7 @@ wxThread::ExitCode Controller::Entry()
 			switch (event.GetCommand())
 			{
 				case CONNECT: case RECONNECT: {
+//std::cerr << "thread CONNECT/RECONNECT" << std::endl;
 //					ProdAuto::MxfDuration maxPreroll, maxPostroll;
 					ProdAuto::MxfDuration maxPreroll = InvalidMxfDuration; //initialisation prevents compiler warning
 					ProdAuto::MxfDuration maxPostroll = InvalidMxfDuration; //initialisation prevents compiler warning
@@ -464,6 +444,7 @@ wxThread::ExitCode Controller::Entry()
 					break;
 				}
 				case SET_TAPE_IDS: {
+//std::cerr << "thread SET_TAPE_IDS" << std::endl;
 					mMutex.Lock();
 					CORBA::StringSeq sourceNames = mSourceNames;
 					CORBA::StringSeq tapeIds = mTapeIds;
@@ -493,6 +474,7 @@ wxThread::ExitCode Controller::Entry()
 					break;
 				}
 				case RECORD: {
+//std::cerr << "thread RECORD" << std::endl;
 					mMutex.Lock();
 					timecode = mStartTimecode;
 					ProdAuto::MxfDuration preroll = mPreroll;
@@ -509,6 +491,7 @@ wxThread::ExitCode Controller::Entry()
 					break;
 				}
 				case STOP: {
+//std::cerr << "thread STOP" << std::endl;
 					mMutex.Lock();
 					timecode = mStopTimecode;
 					ProdAuto::MxfDuration postroll = mPostroll;

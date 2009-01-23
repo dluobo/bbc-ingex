@@ -30,6 +30,7 @@ public:
 	RecordButton(wxWindow *, wxWindowID, const wxString & = wxT(""));
 	virtual bool Enable(bool = true);
 	virtual void Disable();
+	virtual void SetLabel(const wxString &);
 	void Record();
 	void Pending();
 private:
@@ -38,6 +39,7 @@ private:
 	bool mEnabled;
 	wxColour mInitialColour;
 	wxTimer * mTimer;
+	wxString mLabel;
 	DECLARE_EVENT_TABLE()
 };
 
