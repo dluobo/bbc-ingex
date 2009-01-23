@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.6 2008/10/10 16:50:49 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.7 2009/01/23 19:49:33 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -134,8 +134,12 @@ private:
     unsigned int mMixDestination;
     std::vector<Vt> mVts;  // eventually from database
 
+    // Details of last relevant cut
     std::string mLastSrc;
     std::string mLastTc;
+    int mLastYear;
+    int mLastMonth;
+    int mLastDay;
 };
 
 

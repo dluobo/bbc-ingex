@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.7 2008/11/06 11:08:37 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.8 2009/01/23 19:49:33 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -256,7 +256,7 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
         mpCutsDatabase->OpenAppend();
         if (! mLastSrc.empty())
         {
-            mpCutsDatabase->AppendEntry(mLastSrc, mLastTc);
+            mpCutsDatabase->AppendEntry(mLastSrc, mLastTc, mLastYear, mLastMonth, mLastDay);
         }
     }
 }
@@ -284,8 +284,12 @@ void SimplerouterloggerImpl::StopSavingFile()
 
 void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
 {
-    // Get timestamp
+    // Get timecode
     std::string tc = routerloggerApp::Instance()->Timecode();
+
+    // Get date
+    int year, month, day;
+    DateTime::GetDate(year, month, day);
 
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Observe: tc=%C\n"), tc.c_str()));
 
@@ -335,7 +339,7 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
             // update database file
             if (mpCutsDatabase)
             {
-                mpCutsDatabase->AppendEntry(src_name, tc);
+                mpCutsDatabase->AppendEntry(src_name, tc, year, month, day);
             }
         }
     }

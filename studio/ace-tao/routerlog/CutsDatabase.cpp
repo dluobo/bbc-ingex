@@ -1,5 +1,5 @@
 /*
- * $Id: CutsDatabase.cpp,v 1.2 2008/11/06 11:08:37 john_f Exp $
+ * $Id: CutsDatabase.cpp,v 1.3 2009/01/23 19:49:32 john_f Exp $
  *
  * Simple file database for video switch events.
  *
@@ -79,7 +79,7 @@ void CutsDatabase::Close()
     }
 }
 
-void CutsDatabase::AppendEntry(const std::string & sourceId, const std::string & tc)
+void CutsDatabase::AppendEntry(const std::string & sourceId, const std::string & tc, int year, int month, int day)
 {
     if (mFile.is_open())
     {
@@ -93,8 +93,8 @@ void CutsDatabase::AppendEntry(const std::string & sourceId, const std::string &
         strncpy(&buf[SOURCE_ID_OFFSET], sourceId.c_str(), SOURCE_ID_LEN - 1);
         
         // date
-        int year, month, day;
-        DateTime::GetDate(year, month, day);
+        //int year, month, day;
+        //DateTime::GetDate(year, month, day);
         ACE_OS::snprintf(&buf[DATE_OFFSET], DATE_LEN + 1, "%04d-%02d-%02d", 
             (year > 9999) ? 0 : year,
             (month > 12) ? 0 : month,
