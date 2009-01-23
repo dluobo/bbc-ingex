@@ -34,8 +34,10 @@ Install libodbc++
 Installation
 ------------
 
-1) edit the configuration file "ingex-conf/ingex.conf" to match your system setup
-2) run "sudo install.sh" to install the files.
+ingex> cd <...>ingex/studio/web/WebIngex
+
+1) edit the configuration file "ingex-config/ingex.conf" to match your system setup
+2) run "sudo ./install.sh" to install the files.
 
 
 AAF file creation

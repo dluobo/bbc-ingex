@@ -53,3 +53,16 @@ ingex> ./create_bamzooki_user.sh
 ingex> ./create_prodautodb.sh
 ingex> ./add_basic_config.sh
 
+To drop the database:
+ingex> ./drop_database.sh
+
+(After a drop, you need to do create_prodautodb and add_basic_config again.)
+
+Backup a database
+    pg_dump -U bamzooki -d prodautodb -Fc -f backup.pgdump
+
+Restore a database:
+    First two lines from create_prodautodb.sh
+    Then use pg_restore with appropriate options e.g.
+    pg_restore -U bamzooki -d prodautodb backup.pgdump
+
