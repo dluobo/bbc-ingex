@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.2 2008/10/10 16:50:49 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.3 2009/01/23 19:50:15 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -29,6 +29,8 @@
 #include "CorbaUtil.h"
 #include "Logfile.h"
 #include "DateTime.h"
+#include "DatabaseManager.h"
+#include "DBException.h"
 
 #include "RecorderApp.h"
 
@@ -63,19 +65,19 @@ bool RecorderApp::Init(int argc, char * argv[])
 // Now that InitOrb has consumed its arguments, check for
 // command line arguments.
     std::string recorder_name;
-    std::string db_user;
-    std::string db_pw;
+    std::string db_username;
+    std::string db_password;
     if (argc > 1)
     {
         recorder_name = argv[1];
     }
     if (argc > 2)
     {
-        db_user = argv[2];
+        db_username = argv[2];
     }
     if (argc > 3)
     {
-        db_pw = argv[3];
+        db_password = argv[3];
     }
 
     int verbosity = 2;
@@ -95,7 +97,11 @@ bool RecorderApp::Init(int argc, char * argv[])
     // Initialise database connection
     try
     {
-        prodauto::Database::initialise("prodautodb", db_user, db_pw, 4, 12);
+        DatabaseManager::Instance()->Initialise(db_username, db_password, 4, 12);
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed: %C\n"), dbe.getMessage().c_str()));
     }
     catch (...)
     {

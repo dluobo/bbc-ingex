@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.10 2008/10/08 10:16:06 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.11 2009/01/23 19:50:15 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -796,6 +796,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         {
             prodauto::MXFWriter * p = new prodauto::MXFWriter(
                                             ric,
+                                            true,  // PAL
                                             resolution,
                                             image_aspect,
                                             mxf_audio_bits,

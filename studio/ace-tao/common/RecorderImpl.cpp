@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.7 2008/10/10 16:50:49 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.8 2009/01/23 19:50:15 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -29,12 +29,13 @@
 #include <map>
 #include <string>
 
-#include <Database.h>
-#include <DatabaseEnums.h>
-#include <DBException.h>
+#include "Database.h"
+#include "DatabaseEnums.h"
+#include "DBException.h"
 
-#include "RecorderSettings.h"
 #include "RecorderImpl.h"
+#include "RecorderSettings.h"
+#include "DatabaseManager.h"
 
 
 // Implementation skeleton constructor
@@ -476,10 +477,12 @@ Update tracks and settings from database.
 bool RecorderImpl::UpdateFromDatabase()
 {
     bool ok = true;
-    prodauto::Database * db = 0;
+
+    // Load recorder object from database
+    prodauto::Recorder * rec = 0;
     try
     {
-        db = prodauto::Database::getInstance();
+        rec = prodauto::Database::getInstance()->loadRecorder(mName);
     }
     catch (const prodauto::DBException & dbe)
     {
@@ -487,144 +490,141 @@ bool RecorderImpl::UpdateFromDatabase()
         ok = false;
     }
 
-    prodauto::Recorder * rec = 0;
-    if (db)
+    if (!rec)
     {
-        try
-        {
-            rec = db->loadRecorder(mName);
-        }
-        catch(const prodauto::DBException & dbe)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
-            ok = false;
-        }
-    }
-
-    // Store the Recorder object
-    mRecorder.reset(rec);
-
-    // Clear the set of SourceConfigs
-    // and the track map
-    mSourceConfigs.clear();
-    mTrackMap.clear();
-
-    prodauto::RecorderConfig * rc = 0;
-    if (rec && rec->hasConfig())
-    {
-        rc = rec->getConfig();
-    }
-
-    // Now we have RecorderConfig, we can set the source track names
-    if (rc)
-    {
-        ACE_DEBUG((LM_INFO, ACE_TEXT("UpdateSources() loaded config \"%C\" of recorder \"%C\".\n"),
-            rc->name.c_str(), mRecorder->name.c_str()));
-
-        const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
-        CORBA::ULong track_i = 0;
-        unsigned int n_video_tracks = 0;
-        for (unsigned int i = 0; i < n_inputs; ++i)
-        {
-            prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
-            // We force number of tracks per input to be the hardware max because
-            // this makes it easier to map to hardware parameters when filling out
-            // tracks status with "signal present" etc.
-            //const unsigned int n_tracks = ACE_MIN(ric->trackConfigs.size(), mMaxTracksPerInput);
-            const unsigned int n_tracks = mMaxTracksPerInput;
-            for (unsigned int j = 0; j < n_tracks; ++j)
-            {
-                prodauto::RecorderInputTrackConfig * ritc = 0;
-                if (ric && j < ric->trackConfigs.size())
-                {
-                    ritc = ric->trackConfigs[j];
-                }
-                prodauto::SourceConfig * sc = 0;
-                if (ritc)
-                {
-                    sc = ritc->sourceConfig;
-                }
-                prodauto::SourceTrackConfig * stc = 0;
-                if (sc)
-                {
-                    stc = sc->getTrackConfig(ritc->sourceTrackID);
-                }
-            
-                // Update our set of SourceConfig.  Actually using
-                // a map with database ID as the key, simply because
-                // having a pointer as a key is not good practice.
-                if (sc)
-                {
-                    long id = sc->getDatabaseID();
-                    mSourceConfigs[id] = sc;
-                }
-
-                // Update map from source to hardware tracks
-                if (stc)
-                {
-                    long id = stc->getDatabaseID();
-                    HardwareTrack trk = {i, j};
-                    mTrackMap[id] = trk;
-                }
-
-                mTracks->length(track_i + 1);
-                ProdAuto::Track & track = mTracks[track_i];
-
-                // Assuming first track of an input is video, others audio.
-                std::ostringstream s;
-                if (j == 0)
-                {
-                    ++n_video_tracks;
-                    track.type = ProdAuto::VIDEO;
-                    s << "V";
-                }
-                else
-                {
-                    track.type = ProdAuto::AUDIO;
-                    s << "A" << j;
-                }
-                s << "  (input " << i << ")";
-                track.name = CORBA::string_dup(s.str().c_str());
-                track.id = j; // Is this ever used?
-
-                if (sc && stc)
-                {
-                    track.has_source = 1;
-                    track.src.package_name = CORBA::string_dup(sc->name.c_str());
-                    track.src.track_name = CORBA::string_dup(stc->name.c_str());
-                }
-                else
-                {
-                    // No connection to this input
-                    track.has_source = 0;
-                    track.src.package_name = CORBA::string_dup("zz No Connection");
-                    track.src.track_name = CORBA::string_dup("");
-                }
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, src.track_name %C\n"),
-                    i, j, (const char *) track.src.track_name));
-
-                ++track_i;
-            } // tracks
-        } // inputs
-        mVideoTrackCount = n_video_tracks;
+        // If there was a problem, re-initialise database and hope
+        // for better luck next time.
+        ACE_DEBUG((LM_WARNING, ACE_TEXT("Re-initialising database.\n")));
+        DatabaseManager::Instance()->ReInitialise();
     }
     else
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("UpdateSources() failed to load recorder config!\n")));
-    }
+        // Store the Recorder object
+        mRecorder.reset(rec);
 
-    // Re-initialise tracks status, if necessary.
-    if (mTracksStatus->length() != mTracks->length())
-    {
-        mTracksStatus->length(mTracks->length());
 
-        for (unsigned int i = 0; i < mTracksStatus->length(); ++i)
+        // Clear the set of SourceConfigs
+        // and the track map
+        mSourceConfigs.clear();
+        mTrackMap.clear();
+
+        prodauto::RecorderConfig * rc = 0;
+        if (rec && rec->hasConfig())
         {
-            ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
-            ts.rec = 0;
-            ts.signal_present = 0;
-            ts.timecode.undefined = true;
-            ts.timecode.edit_rate = mEditRate;
+            rc = rec->getConfig();
+        }
+
+        // Now we have RecorderConfig, we can set the source track names
+        if (rc)
+        {
+            ACE_DEBUG((LM_INFO, ACE_TEXT("UpdateSources() loaded config \"%C\" of recorder \"%C\".\n"),
+                rc->name.c_str(), mRecorder->name.c_str()));
+
+            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
+            CORBA::ULong track_i = 0;
+            unsigned int n_video_tracks = 0;
+            for (unsigned int i = 0; i < n_inputs; ++i)
+            {
+                prodauto::RecorderInputConfig * ric = rc->getInputConfig(i + 1);
+                // We force number of tracks per input to be the hardware max because
+                // this makes it easier to map to hardware parameters when filling out
+                // tracks status with "signal present" etc.
+                //const unsigned int n_tracks = ACE_MIN(ric->trackConfigs.size(), mMaxTracksPerInput);
+                const unsigned int n_tracks = mMaxTracksPerInput;
+                for (unsigned int j = 0; j < n_tracks; ++j)
+                {
+                    prodauto::RecorderInputTrackConfig * ritc = 0;
+                    if (ric && j < ric->trackConfigs.size())
+                    {
+                        ritc = ric->trackConfigs[j];
+                    }
+                    prodauto::SourceConfig * sc = 0;
+                    if (ritc)
+                    {
+                        sc = ritc->sourceConfig;
+                    }
+                    prodauto::SourceTrackConfig * stc = 0;
+                    if (sc)
+                    {
+                        stc = sc->getTrackConfig(ritc->sourceTrackID);
+                    }
+                
+                    // Update our set of SourceConfig.  Actually using
+                    // a map with database ID as the key, simply because
+                    // having a pointer as a key is not good practice.
+                    if (sc)
+                    {
+                        long id = sc->getDatabaseID();
+                        mSourceConfigs[id] = sc;
+                    }
+
+                    // Update map from source to hardware tracks
+                    if (stc)
+                    {
+                        long id = stc->getDatabaseID();
+                        HardwareTrack trk = {i, j};
+                        mTrackMap[id] = trk;
+                    }
+
+                    mTracks->length(track_i + 1);
+                    ProdAuto::Track & track = mTracks[track_i];
+
+                    // Assuming first track of an input is video, others audio.
+                    std::ostringstream s;
+                    if (j == 0)
+                    {
+                        ++n_video_tracks;
+                        track.type = ProdAuto::VIDEO;
+                        s << "V";
+                    }
+                    else
+                    {
+                        track.type = ProdAuto::AUDIO;
+                        s << "A" << j;
+                    }
+                    s << "  (input " << i << ")";
+                    track.name = CORBA::string_dup(s.str().c_str());
+                    track.id = j; // Is this ever used?
+
+                    if (sc && stc)
+                    {
+                        track.has_source = 1;
+                        track.src.package_name = CORBA::string_dup(sc->name.c_str());
+                        track.src.track_name = CORBA::string_dup(stc->name.c_str());
+                    }
+                    else
+                    {
+                        // No connection to this input
+                        track.has_source = 0;
+                        track.src.package_name = CORBA::string_dup("zz No Connection");
+                        track.src.track_name = CORBA::string_dup("");
+                    }
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, src.track_name %C\n"),
+                        i, j, (const char *) track.src.track_name));
+
+                    ++track_i;
+                } // tracks
+            } // inputs
+            mVideoTrackCount = n_video_tracks;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("UpdateSources() failed to load recorder config!\n")));
+        }
+
+        // Re-initialise tracks status, if necessary.
+        if (mTracksStatus->length() != mTracks->length())
+        {
+            mTracksStatus->length(mTracks->length());
+
+            for (unsigned int i = 0; i < mTracksStatus->length(); ++i)
+            {
+                ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
+                ts.rec = 0;
+                ts.signal_present = 0;
+                ts.timecode.undefined = true;
+                ts.timecode.edit_rate = mEditRate;
+            }
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.8 2008/10/10 16:50:49 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.9 2009/01/23 19:50:15 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -281,7 +281,8 @@ char * IngexRecorderImpl::RecordingFormat (
     IngexShm::Instance()->InfoResetChannels();
 
     // Stop any copy process to reduce disc activity.
-    mCopyManager.StopCopying(mRecordingIndex);
+    unsigned int recording_index = mRecordingIndex++;
+    mCopyManager.StopCopying(recording_index);
 
     // Make sure we are up-to-date with source config and
     // settings from database.
@@ -291,7 +292,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // alternative (not updating here) would mean you rely
     // on controller disconnecting and reconnecting to
     // force an update.
-    ok = ok && UpdateFromDatabase();
+    UpdateFromDatabase();
 
     // Translate enables to per-track and per-channel.
     std::vector<bool> channel_enables;
@@ -333,7 +334,7 @@ char * IngexRecorderImpl::RecordingFormat (
     }
 
     // Make a new IngexRecorder to manage this recording.
-    mpIngexRecorder = new IngexRecorder(this, mRecordingIndex++);
+    mpIngexRecorder = new IngexRecorder(this, recording_index);
 
     // Set-up callback for completion of recording
     mpIngexRecorder->SetCompletionCallback(&recording_completed);
@@ -398,6 +399,7 @@ char * IngexRecorderImpl::RecordingFormat (
     {
         delete mpIngexRecorder;
         mpIngexRecorder = 0;
+        StartCopying(recording_index);
     }
 
     // Return
