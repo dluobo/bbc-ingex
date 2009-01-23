@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2008/10/29 17:27:13 john_f Exp $
+# $Id: Makefile,v 1.2 2009/01/23 20:09:45 john_f Exp $
 #
 # Makefile for building the Ingex suite of applications
 #
@@ -25,6 +25,7 @@
 .PHONY: all
 all:
 	$(MAKE) -C libMXF
+	$(MAKE) -C libMXF++
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C studio
@@ -32,6 +33,7 @@ all:
 .PHONY: studio
 studio:
 	$(MAKE) -C libMXF
+	$(MAKE) -C libMXF++
 	$(MAKE) -C common
 	$(MAKE) -C player
 	$(MAKE) -C studio
@@ -43,9 +45,15 @@ archive:
 	$(MAKE) -C player
 	$(MAKE) -C archive
 
+.PHONY: install
+install:
+	$(MAKE) -C libMXF $@
+	$(MAKE) -C libMXF++ $@
+
 .PHONY: clean
 clean:
 	$(MAKE) -C libMXF $@
+	$(MAKE) -C libMXF++ $@
 	$(MAKE) -C common $@
 	$(MAKE) -C player $@
 	$(MAKE) -C studio $@
