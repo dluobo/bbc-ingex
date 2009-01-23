@@ -64,6 +64,8 @@ int main(int argc, char ** argv) {
 		exit(1);
 	}
 	int dest;
+	printf("Opening destination file... "); /* may take a while if it's overwriting an old one */
+	fflush(stdout);
 	if (-1 == (dest = open(argv[5], O_WRONLY | O_CREAT | O_TRUNC))) { /* setting the mode doesn't seem to work */
 		printf("Couldn't open destination file '%s' for writing.\n", argv[5]);
 		exit(1);
@@ -81,7 +83,7 @@ int main(int argc, char ** argv) {
 	display();
 	struct timeval now;
 	do {
-		while (slow && !slow_rate) { /* copying is stopped */
+		while (slow && !slow_rate && src_st.st_size) { /* copying is stopped */
 			/* wait for a signal */
 			sleep(1);
 			display();
@@ -126,8 +128,11 @@ int main(int argc, char ** argv) {
 		}
 	} while (bytes_read = read(src, &buffer, BUFSIZE));
 	close(src);
+	printf(".  Closing file...");
+	fflush(stdout);
 	close(dest);
-	printf("\n");
+	display();
+	printf("                  \n");
 	return 0;
 }
 
@@ -144,11 +149,12 @@ void display() {
 	if (elapsed) {
 		sprintf(ave_speed, "%6.2f", (float) written_this_mode / (1024. * 1024.) / elapsed * ONE_SEC);
 	}
-	printf("\r%s %5dsec %10.2fMB %3d%% %sMB/sec; average: %sMB/sec",
+	printf("\r%s %5dsec %10.2fMB %s%3d%% %sMB/sec; average: %sMB/sec",
 		slow ? "SLOW" : "FAST", /* mode */
 		now.tv_sec - start_time.tv_sec, /* elapsed time */
 		(float) total_written / (1024 * 1024), /* total written in MB */
-		(int) (total_written * 100 / src_st.st_size), /* % written */
+		src_st.st_size ? "" : "(empty file) ", /* empty file or not */
+		src_st.st_size ? (int) (total_written * 100 / src_st.st_size) : 100, /* % written */
 		speed,
 		ave_speed
 	);

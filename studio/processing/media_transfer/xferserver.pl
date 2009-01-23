@@ -300,7 +300,7 @@ sub serveStatus {
 	print $client "\t\t],\n";
 
 	print $client "\t\t\"endpoints\" : {\n";
-	my $transfers = thaw($share->fetch);
+	my $transfers = thaw($share->fetch); #fetch is atomic so no need to lock as not changing $transfers
 	if (keys %{ $transfers->{transfers} }) {
 		my @priorities;
 		foreach my $priority (sort keys %{ $transfers->{transfers} }) {
@@ -416,7 +416,7 @@ sub addPair {
 }
 
 sub Scan {
- my ($handle, $srcDir, $destRoot, $ctimeCleared, $essenceFiles, $ok, $msgs) = @_;
+ my ($handle, $srcDir, $destRoot, $ctimeCleared, $essenceFiles, $retry, $msgs) = @_;
  my ($totalFiles, $totalSize, $latestCtime) = (0, 0, 0);
  while (my $fname = readdir $handle) {
 	my $destDir;
@@ -439,9 +439,14 @@ sub Scan {
 	#Use mtime to test for deleting old files, because if ctime has changed for some spurious reason (permissions/ownership were modified, perhaps?),
 	#it's still safe to delete the files.
 	my ($dev, $size, $mtime, $ctime) = (lstat $fullSource)[0, 7, 9, 10]; 
-	unless ($dev) { #if lstat failed then it returns a null list
+	unless ($dev) { #if lstat fails then it returns a null list
 		Report("WARNING: failed to lstat '$fullSource': $!: not copying\n");
-		$$ok = 0;
+		$$retry = 1;
+		$$msgs = 1;
+		next;
+	}
+	unless ($size) {
+		Report("WARNING: '$fullSource' has zero length: ignoring\n");
 		$$msgs = 1;
 		next;
 	}
@@ -449,9 +454,9 @@ sub Scan {
 	my $fullDest = "$destDir/$fname";
 	if (-e $fullDest) {
 		#warn and skip if the file size differs (possibly due to filename clash in system)
-		if (-s $fullSource != -s $fullDest) {
-			Report("WARNING: '$fullDest' exists and is a different size (" . (-s $fullDest) . ") from '$fullSource' (" . (-s $fullSource) . "): may be a filename conflict: not copying\n");
-			$$ok = 0;
+		if ($size != -s $fullDest) {
+			Report("WARNING: '$fullDest' exists and is a different size (" . (-s $fullDest) . ") from '$fullSource' ($size): may be a filename conflict: not copying\n");
+			$$retry = 1;
 			$$msgs = 1;
 		}
 		#remove source file if it's old
@@ -507,20 +512,20 @@ sub childLoop {
  $SIG{USR2} = 'IGNORE';
  local $| = 1; #autoflush stdout
 
- my $ok = 1;
+ my $retry = 0;
  my $msgs = 1; #print the idle message the first time round
  while (1) {
 
 	#wait for main thread or retry
 	my $rin = "";
 	vec($rin, fileno(STDIN), 1) = 1;
-	if (!select $rin, undef, $rin, $ok ? undef : RECHECK_INTERVAL) {
+	if (!select $rin, undef, $rin, $retry ? RECHECK_INTERVAL : undef) {
 		Report("Retrying...\n");
 	}
 	else { #kicked by the main thread
 		<STDIN>;
 	}
-	$ok = 1;
+	$retry = 0;
 	$share->lock(LOCK_EX);
 	my $transfers = thaw($share->fetch);
 	$transfers->{new} = 0; #checking from the top level so don't need to be told to do so
@@ -530,9 +535,9 @@ sub childLoop {
 	my @priorities = sort keys %{ $transfers->{transfers} };
 	while (@priorities) {
 		my $priority = shift @priorities;
-		my $priOK = 1;
+		my $priRetry = 0;
 		#get src/dest pairs for this priority
-		$transfers = thaw($share->fetch);
+		$transfers = thaw($share->fetch); #fetch is atomic so no need to lock as not changing $transfers
 		my %pairs = %{ $transfers->{transfers}{$priority}{pairs} };
 		my $ctimeCleared = $transfers->{transfers}{$priority}{ctimeCleared};
 		#make a list of all the files to copy at this priority
@@ -541,7 +546,7 @@ sub childLoop {
 		foreach (sort keys %pairs) {
 			if (!opendir(SRC, $_)) {
 				Report("WARNING: failed to open source directory '$_/': $!: ignoring\n");
-				$priOK = 0;
+				$$priRetry = 1;
 				$msgs = 1;
 			}
 			else {
@@ -550,14 +555,14 @@ sub childLoop {
 				do { #loop to make sure we get all the files with the latest ctime we find
 					@files = ();
 					$scanTime = time;
-					@stats = Scan(*SRC, $_, $pairs{$_}, $ctimeCleared, \@files, \$priOK, \$msgs);
+					@stats = Scan(*SRC, $_, $pairs{$_}, $ctimeCleared, \@files, \$priRetry, \$msgs);
 					rewinddir SRC; #looks at the directory again!
 				} while ($stats[2] >= $scanTime); #in the unlikely event we find files with the same or later ctime as when (just before) the scan started, scan again in case more files have appeared with the same ctime
 				push @essenceFiles, @files;
 				$totalFiles += $stats[0];
 				$totalSize += $stats[1];
 				if ($priority == 1 && EXTRA_DEST ne '') {
-					@stats = Scan(*SRC, $_, EXTRA_DEST, $ctimeCleared, \@essenceFiles, \$priOK, \$msgs);
+					@stats = Scan(*SRC, $_, EXTRA_DEST, $ctimeCleared, \@essenceFiles, \$priRetry, \$msgs);
 					$totalFiles += $stats[0];
 					$totalSize += $stats[1];
 				}
@@ -576,7 +581,7 @@ sub childLoop {
 		foreach my $essenceFile (sort { $a->{ctime} <=> $b->{ctime} } @essenceFiles) {
 			$share->lock(LOCK_EX);
 			$transfers = thaw($share->fetch);
-			if ($priOK && $essenceFile->{ctime} > $prevCtime) { #have copied all files older than current file's ctime
+			if (!$priRetry && $essenceFile->{ctime} > $prevCtime) { #have copied all files older than current file's ctime
 				$transfers->{transfers}{$priority}{ctimeCleared} = $prevCtime;
 				SaveConfig($transfers);
 			}
@@ -589,7 +594,7 @@ sub childLoop {
 			if (!-d $essenceFile->{destRoot} && MakeDir($essenceFile->{destRoot})) {
 		 		Report("WARNING: Couldn't create '" . $essenceFile->{destRoot} . "': $!\n");
 				$msgs = 1;
-				$priOK = 0;
+				$priRetry = 1;
 				last; # can't do this on a per-destination basis as it would break the ctime order
 			}
 			# check free space
@@ -597,7 +602,7 @@ sub childLoop {
 			if ($free < $essenceFile->{size}) { # a crude test but which will catch most instances of insufficient space.  Assumes subdirs are all on the same partition
 				Report("Prio $priority: '" . $essenceFile->{destRoot} . "' full ($free byte" . ($free == 1 ? '' : 's') . " free; file size " . $essenceFile->{size} . " bytes): not attempting to copy anything else at this priority.\n");
 				$msgs = 1;
-				$priOK = 0;
+				$priRetry = 1;
 				last; # can't do this on a per-destination basis as it would break the ctime order
 			}
 			# check/create copy subdir
@@ -605,7 +610,7 @@ sub childLoop {
 			if (!-d $incomingPath && MakeDir($incomingPath)) {
 			 	Report("WARNING: Couldn't create '$incomingPath': $!\n");
 				$msgs = 1;
-				$priOK = 0;
+				$priRetry = 1;
 				last; # can't do this on a per-destination basis as it would break the ctime order
 			}
 			$incomingDirs{$incomingPath} = 1;
@@ -678,7 +683,7 @@ sub childLoop {
 				Report("WARNING: copy failed, exiting with value " . ($? >> 8) . ": $childMsgs\n");
 				unlink "$incomingPath/" . $essenceFile->{fname};
 				$msgs = 1;
-				$priOK = 0;
+				$priRetry = 1;
 				last; # have to abandon the whole priority or it would break the ctime order
 			}
 			# move the file from the incoming directory to the live directory
@@ -686,7 +691,7 @@ sub childLoop {
 			if (!rename "$incomingPath/" . $essenceFile->{fname}, $essenceFile->{destDir} . '/' . $essenceFile->{fname}) {
 				Report("\nWARNING: Failed to move file to '" . $essenceFile->{destDir} . "/': $!");
 				$msgs = 1;
-				$priOK = 0;
+				$priRetry = 1;
 				last; # have to abandon the whole priority or it would break the ctime order
 			}
 			print " Done\n";
@@ -706,7 +711,7 @@ sub childLoop {
 		$share->lock(LOCK_EX);
 		$transfers = thaw($share->fetch);
 		delete $transfers->{current};
-		if ($priOK) {
+		if (!$priRetry) {
 			#no more files so must have copied everything at the last file's ctime
 			$transfers->{transfers}{$priority}{ctimeCleared} = $prevCtime;
 			SaveConfig($transfers);
@@ -719,13 +724,13 @@ sub childLoop {
 				Report("Prio $priority: Pausing copying to check for new files of a higher priority\n");
 			}
 		}
-		elsif ($priOK) { #everything at this priority copied OK
-			Report("Prio $priority: All files successfully copied.\n");
-		}
-		else {
+		elsif ($priRetry) {
 			Report("Prio $priority: All copyable files copied.\n") if $msgs;
 		}
-		$ok &= $priOK;
+		else {
+			Report("Prio $priority: All files successfully copied.\n");
+		}
+		$retry |= $priRetry;
 	} # priorities loop
 	# remove temp incoming directoris
 	foreach (keys %incomingDirs) {
@@ -733,11 +738,11 @@ sub childLoop {
 	}
 	# print status
 	if ($msgs) {
-		if ($ok) {
-			print "Idle.\n\n";
+		if ($retry) {
+			Report('Pausing for ' . RECHECK_INTERVAL . " seconds before retrying.\n\n");
 		}
 		else {
-			Report('Pausing for ' . RECHECK_INTERVAL . " seconds before retrying.\n\n");
+			print "Idle.\n\n";
 		}
 	}
 	$msgs = 0;
