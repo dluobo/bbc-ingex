@@ -24,6 +24,7 @@
 #include "npruntime.h"
 
 #include "LocalIngexPlayer.h"
+#include "IngexPlayerListener.h"
 
 #include "debug_x11.h"
 
@@ -43,8 +44,8 @@ using namespace std;
 class TestIngexPlayerListener : public IngexPlayerListener
 {
 public:    
-    TestIngexPlayerListener(LocalIngexPlayer* player)
-        : IngexPlayerListener(player), _player(player) {};
+    TestIngexPlayerListener(LocalIngexPlayer* player, IngexPlayerListenerRegistry* listener_registry)
+        : IngexPlayerListener(listener_registry), _player(player), _listener_registry(listener_registry) {};
     virtual ~TestIngexPlayerListener() {};
 
     virtual void frameDisplayedEvent(const FrameInfo* frameInfo)
@@ -190,6 +191,7 @@ public:
     
 private:
     LocalIngexPlayer* _player;
+	IngexPlayerListenerRegistry* _listener_registry;
 };
 
 /* Private per-instance data */
@@ -207,6 +209,7 @@ typedef struct {
 
   X11WindowInfo pluginInfo;
   auto_ptr<LocalIngexPlayer> player;
+  auto_ptr<IngexPlayerListenerRegistry> listener_registry;
   auto_ptr<TestIngexPlayerListener> listener;
   vector<PlayerInput> inputs;
   vector<bool> opened;
@@ -501,8 +504,9 @@ NPError NPP_New (NPMIMEType mimetype, NPP instance, uint16 mode,
     }
   }
 
-  priv->player = auto_ptr<LocalIngexPlayer>(new LocalIngexPlayer(X11_AUTO_OUTPUT));
-  priv->listener = auto_ptr<TestIngexPlayerListener>(new TestIngexPlayerListener(priv->player.get()));
+  priv->listener_registry = auto_ptr<IngexPlayerListenerRegistry>(new IngexPlayerListenerRegistry);
+  priv->player = auto_ptr<LocalIngexPlayer>(new LocalIngexPlayer(priv->listener_registry.get(), X11_AUTO_OUTPUT));
+  priv->listener = auto_ptr<TestIngexPlayerListener>(new TestIngexPlayerListener(priv->player.get(), priv->listener_registry.get()));
 
   pthread_mutexattr_init (&attr);
   pthread_mutexattr_settype (&attr, PTHREAD_MUTEX_RECURSIVE);

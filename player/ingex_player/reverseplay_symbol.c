@@ -1,9 +1,10 @@
 /*
- * $Id: reverseplay_symbol.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: reverseplay_symbol.c,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 static const struct {
   unsigned int 	 width;
   unsigned int 	 height;
-  unsigned int 	 bytes_per_pixel; /* 3:RGB, 4:RGBA */ 
+  unsigned int 	 bytes_per_pixel; /* 3:RGB, 4:RGBA */
   unsigned char	 pixel_data[34 * 34 * 3 + 1];
 } gimp_image = {
   34, 34, 3,

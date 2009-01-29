@@ -1,9 +1,11 @@
 #
-# $Id: Makefile,v 1.11 2008/12/05 16:50:22 philipn Exp $
+# $Id: Makefile,v 1.12 2009/01/29 07:10:26 stuart_hc Exp $
 #
 # Makefile for building IngexPlayer library
 #
-# Copyright (C) 2008  BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+# Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+# Author: Philip de Nier
+# Modifications: Matthew Marks
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -30,11 +32,12 @@ LIBMXF_READER_DIR = $(LIBMXF_DIR)/examples/reader
 
 ifneq "$(MAKECMDGOALS)" "clean"
 
-DVS_PATH := $(shell for f in /usr/local /usr; do test -e $$f/include/dvs_fifo.h && echo $$f && break; done)
-ifneq "$(DVS_INCLUDE_PATH)" ""
-	ifndef DVS_SDK_INSTALL
-$(warning no DVS available - set the DVS_SDK_INSTALL environment variable to the location of your installed DVS SDK files)
-	endif
+# dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
+# search is overridden by setting DVSSDK
+include ../../common/dvs_sdk_paths.mk
+
+ifndef DVS_HARDWARE_INCLUDE
+  $(warning no DVS available - set the DVSSDK environment variable to build with DVS hardware support)
 endif
 
 ifndef DISABLE_FFMPEG
@@ -42,7 +45,7 @@ ifndef DISABLE_FFMPEG
 	ifeq "$(FFMPEG_INCLUDE_PATH)" ""
 $(warning no FFMPEG library found - DV stream connector not available)
 	endif
-endif	
+endif
 
 PORTAUDIO_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/portaudio.h && echo $$f && break; done)
 ifneq "$(PORTAUDIO_INCLUDE_PATH)" ""
@@ -52,40 +55,21 @@ $(warning: no PortAudio library found - No PC audio playback available)
 endif
 
 
-endif	
+endif
 
 
 CFLAGS = -Wall -W -Wno-unused-parameter -D_THREAD_SAFE
 OPT = -O3 -mmmx -msse2
 
-INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR) 
+INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR)
 
 LIBDIRS = -L$(C_INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
 LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lMXFReader -lMXF
- 
 
-ifdef DVS_PATH
-	INCLUDEDIRS += -I$(DVS_PATH)/include
-	LIBDIRS += -L$(DVS_PATH)/lib -L$(DVS_PATH)/lib64
-	LIBS += -ldvsoem
-	CFLAGS += -DHAVE_DVS
-else 
-	ifdef DVSSDK
-		# DVS SDK version 3		
-		INCLUDEDIRS += -I$(DVSSDK)/development/header
-		LIBDIRS += -L$(DVSSDK)/linux-x86/lib -L$(DVSSDK)/linux-x86_64/lib
-		LIBS += -ldvsoem
-		CFLAGS += -DHAVE_DVS
-	else
-		ifdef DVS_SDK_INSTALL
-			INCLUDEDIRS += -I$(DVS_SDK_INSTALL)/development/header
-			LIBDIRS += -L$(DVS_SDK_INSTALL)/linux/lib
-			LIBS += -ldvsoem
-			CFLAGS += -DHAVE_DVS
-		endif
-	endif
+
+ifdef DVS_HARDWARE_INCLUDE
+  LIBS += $(DVS_HARDWARE_LIB)
 endif
-
 
 ifdef FFMPEG_INCLUDE_PATH
 
@@ -127,7 +111,7 @@ endif
 
 ifdef HAVE_PORTAUDIO
 	CFLAGS += -DHAVE_PORTAUDIO -I$(PORTAUDIO_INCLUDE_PATH)
-	LIBS += -lportaudio 
+	LIBS += -lportaudio
 endif
 
 
@@ -135,7 +119,7 @@ CC = g++ -g $(CFLAGS) $(OPT)
 AR_APPEND = ar r
 
 
-SOURCES = IngexPlayerException.cpp LocalIngexPlayer.cpp
+SOURCES = IngexPlayerException.cpp LocalIngexPlayer.cpp IngexPlayerListener.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
@@ -144,17 +128,15 @@ DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 all: libIngexPlayer.a test_IngexPlayer
 
 
-
 $(C_INGEX_PLAYER_DIR)/libingexplayer.a:
 	@cd $(C_INGEX_PLAYER_DIR) && $(MAKE) libingexplayer.a
 
-	
+
 libIngexPlayer.a: $(OBJECTS) $(C_INGEX_PLAYER_DIR)/libingexplayer.a
 	cp $(C_INGEX_PLAYER_DIR)/libingexplayer.a libIngexPlayer.a
-	$(AR_APPEND) libIngexPlayer.a $(OBJECTS) 
+	$(AR_APPEND) libIngexPlayer.a $(OBJECTS)
 
-	
-	
+
 .deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
 	mkdir -p .deps; \
@@ -176,12 +158,9 @@ clean:
 	@rm -f *~ *.a test_IngexPlayer
 	@rm -Rf .objs
 	@rm -fR .deps
-	
+
 
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(DEPENDENCIES)
 -include .deps/test_IngexPlayer.d
-endif	
-	
-
-	
+endif

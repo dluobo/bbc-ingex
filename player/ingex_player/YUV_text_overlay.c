@@ -1,9 +1,10 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: YUV_text_overlay.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Jim Easterbrook, <easter@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,11 +55,11 @@ typedef struct info_rec
 void free_info_rec(p_info_rec* p_info)
 {
     info_rec*	info;
-    
+
     if (*p_info == NULL)
         return;
     info = *p_info;
-    
+
     if (info->face != NULL)
     {
         FT_Done_Face(info->face);
@@ -163,7 +164,7 @@ void free_overlay(overlay* ovly)
 {
     if (ovly == NULL || ovly->buff == NULL)
         return;
-    
+
     free(ovly->buff);
     ovly->buff = NULL;
 }
@@ -229,7 +230,7 @@ YUV_error text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
                           int center,
                           int tab_width,
                           int enable_align_right,
-                          char* font, const int size, 
+                          char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den)
 {
@@ -260,8 +261,8 @@ YUV_error text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
         FT_Vector	delta;
         FT_Bool		use_kerning;
         int		pen_x, pen_y, n, margin;
-        FT_Glyph	glyphs[MAX_GLYPHS];   /* glyph image    */    
-        FT_Vector	pos   [MAX_GLYPHS];   /* glyph position */    
+        FT_Glyph	glyphs[MAX_GLYPHS];   /* glyph image    */
+        FT_Vector	pos   [MAX_GLYPHS];   /* glyph position */
         FT_UInt		num_glyphs;
         FT_UInt		render_num_glyphs;
         FT_UInt		vis_last_glyph;
@@ -329,7 +330,7 @@ YUV_error text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
                 }
                 pos[num_glyphs].x = pen_x;
                 pos[num_glyphs].y = pen_y;
-    
+
                 pen_x += slot->advance.x / 64;
                 last_glyph = glyph_idx;
                 num_glyphs++;
@@ -429,7 +430,7 @@ YUV_error text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
 }
 
 YUV_error ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
-                          int max_width, char* font, const int size, int margin, 
+                          int max_width, char* font, const int size, int margin,
                           const int aspect_ratio_num, const int aspect_ratio_den)
 {
     #define MAX_LINES 100
@@ -673,8 +674,8 @@ void free_timecode(timecode_data* tc_data)
 
     if (tc_data == NULL)
         return;
-    
-    for (c = 0; c < 11; c++)
+
+    for (c = 0; c < 12; c++)
         free_overlay(&tc_data->tc_ovly[c]);
 }
 
@@ -685,7 +686,7 @@ YUV_error init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     info_rec*		info;
     FT_GlyphSlot	slot;
     int			w_max;
-    char		cset[] = "0123456789:";
+    char		cset[] = "0123456789:;";
     int			bb_t, bb_b;	// bounding box
     BYTE*		dstLine;
     BYTE*		srcPtr;
@@ -709,7 +710,7 @@ YUV_error init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     w_max = 0;
     bb_t =  1000000;
     bb_b = -1000000;
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         /* load glyph image into the slot (erase previous one) */
         if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
@@ -727,7 +728,7 @@ YUV_error init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     bb_b += 1;
     tc_data->height = bb_b - bb_t;
     // initialise character overlays
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         tc_data->tc_ovly[c].w = w_max;
         tc_data->tc_ovly[c].h = tc_data->height;
@@ -742,7 +743,7 @@ YUV_error init_timecode(p_info_rec* p_info, timecode_data* tc_data,
         tc_data->tc_ovly[c].Cbuff = NULL;
     }
     // copy bitmaps
-    for (c = 0; c < 11; c++)
+    for (c = 0; c < 12; c++)
     {
         /* load glyph image into the slot (erase previous one) */
         if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
@@ -775,22 +776,23 @@ YUV_error init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     return YUV_OK;
 }
 
-YUV_error add_timecode(timecode_data* tc_data, const int frameNo,
+YUV_error add_timecode(timecode_data* tc_data, int hr, int mn, int sc, int fr, int isPAL,
                        YUV_frame* frame, int x, int y,
                        BYTE txtY, BYTE txtU, BYTE txtV, int box)
 {
     int		c, n;
     int		offset;
-    int		hr, mn, sc, fr;
     char	tc_str[16];
     int		result;
 
-    // convert frame no to time code string
-    hr = frameNo;
-    fr = hr % 25;	hr = hr / 25;
-    sc = hr % 60;	hr = hr / 60;
-    mn = hr % 60;	hr = hr / 60;
-    sprintf(tc_str, "%02d:%02d:%02d:%02d", hr, mn, sc, fr);
+    if (isPAL)
+    {
+        sprintf(tc_str, "%02d:%02d:%02d:%02d", hr, mn, sc, fr);
+    }
+    else
+    {
+        sprintf(tc_str, "%02d;%02d;%02d;%02d", hr, mn, sc, fr);
+    }
     // legitimise start point
     if (x < 0) x = 0;
     if (y < 0) y = 0;
@@ -894,7 +896,7 @@ YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
 void free_char_set(char_set_data* cs_data)
 {
     int	c;
-    
+
     if (cs_data == NULL)
         return;
 
@@ -902,7 +904,7 @@ void free_char_set(char_set_data* cs_data)
         free_overlay(&cs_data->cs_ovly[c]);
 }
 
-YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data, 
+YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
                           char* cset, char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den)
@@ -1000,10 +1002,10 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
             dstLine += cs_data->cs_ovly[c].w;
         }
     }
-    
+
     memcpy(cs_data->chars, cset, csetLen);
     cs_data->numChars = csetLen;
-    
+
     return YUV_OK;
 }
 

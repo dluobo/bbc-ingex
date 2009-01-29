@@ -1,9 +1,9 @@
 /*
- * $Id: IngexPlayerListener.h,v 1.4 2008/11/06 19:56:56 john_f Exp $
+ * $Id: IngexPlayerListener.h,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
- *
- *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
+ * Modifications: Matthew Marks
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,55 +30,43 @@
 #include <media_player.h>
 #include <x11_common.h>
 
-
-
 namespace prodauto
 {
+
+class ReadWriteLockGuard
+{
+public:
+    ReadWriteLockGuard(pthread_rwlock_t* rwlock, bool writeLock);
+    ~ReadWriteLockGuard();
+
+private:
+    pthread_rwlock_t* _rwlock;
+};
 
 class IngexPlayerListener;
 
 class IngexPlayerListenerRegistry
 {
 public:
-    virtual ~IngexPlayerListenerRegistry() {};
-    
-    /* (un)register listener for player events */
-    
-    virtual bool registerListener(IngexPlayerListener* listener) = 0;
-    virtual bool unregisterListener(IngexPlayerListener* listener) = 0;
+    IngexPlayerListenerRegistry();
+    ~IngexPlayerListenerRegistry();
+    bool registerListener(IngexPlayerListener* listener);
+    bool unregisterListener(IngexPlayerListener* listener);
+    /* allowing access for C callback functions */
+    pthread_rwlock_t _listenersRWLock;
+    std::vector<IngexPlayerListener*> _listeners;
 };
-    
+
 class IngexPlayerListener
 {
 public:
-    IngexPlayerListener(IngexPlayerListenerRegistry* registry)
-    : _registry(0)
-    {
-        registry->registerListener(this);
-    }
-    virtual ~IngexPlayerListener() 
-    {
-        if (_registry != 0)
-        {
-            _registry->unregisterListener(this);
-        }
-    };
-    
-    virtual IngexPlayerListenerRegistry* getRegistry()
-    {
-        return _registry;
-    }
+    IngexPlayerListener(IngexPlayerListenerRegistry* registry);
+    virtual ~IngexPlayerListener();
 
-    virtual void setRegistry(IngexPlayerListenerRegistry* registry)
-    {
-        _registry = registry;
-    }
-    
-    virtual void unsetRegistry()
-    {
-        _registry = 0;
-    }
-    
+    virtual IngexPlayerListenerRegistry* getRegistry();
+    virtual void setRegistry(IngexPlayerListenerRegistry* registry);
+    virtual void unsetRegistry();
+
     virtual void frameDisplayedEvent(const FrameInfo* frameInfo) = 0;
     virtual void frameDroppedEvent(const FrameInfo* lastFrameInfo) = 0;
     virtual void stateChangeEvent(const MediaPlayerStateEvent* event) = 0;
@@ -90,8 +78,7 @@ public:
     virtual void keyReleased(int key, int modifier) = 0;
     virtual void progressBarPositionSet(float position) = 0;
     virtual void mouseClicked(int imageWidth, int imageHeight, int xPos, int yPos) = 0;
-    
-    
+
 protected:
     IngexPlayerListenerRegistry* _registry;
 };
@@ -102,6 +89,3 @@ protected:
 
 
 #endif
-
-
-

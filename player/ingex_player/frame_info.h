@@ -1,9 +1,10 @@
 /*
- * $Id: frame_info.h,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: frame_info.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +31,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -67,7 +68,7 @@ typedef enum
 typedef enum
 {
     UNKNOWN_FORMAT = 0,
-    
+
     /* Picture */
     UYVY_FORMAT,
     UYVY_10BIT_FORMAT,
@@ -81,16 +82,16 @@ typedef enum
     D10_PICTURE_FORMAT,
     AVID_MJPEG_FORMAT,
     AVID_DNxHD_FORMAT,
-    
+
     /* Sound */
     PCM_FORMAT,
-    
+
     /* Timecode */
     TIMECODE_FORMAT,
-    
+
     /* Event */
     SOURCE_EVENT_FORMAT
-    
+
 } StreamFormat;
 
 typedef enum
@@ -130,45 +131,48 @@ typedef enum
     SRC_INFO_D3MXF_TX_DATE,
     SRC_INFO_D3MXF_PROGRAMME_NUMBER,
     SRC_INFO_D3MXF_PROGRAMME_DURATION,
-    
+
     SRC_INFO_TITLE,
-    
+
     SRC_INFO_NAME,
-    
+
     SRC_INFO_UNKNOWN
 } SourceInfoName;
 
 typedef struct
 {
     StreamType type;
-    
+
     /* source */
     int sourceId;
-    
+
     /* general identifier for format */
     StreamFormat format;
-    
-    /* detailed picture parameters */
+
+    /* video frame rate used for all stream types */
     Rational frameRate;
+    int isHardFrameRate;
+
+    /* detailed picture parameters */
     int width;
     int height;
     Rational aspectRatio;
     int singleField;
-    
+
     /* detailed sound parameters */
     Rational samplingRate;
     int numChannels;
     int bitsPerSample;
-    
+
     /* detailed timecode parameters */
     TimecodeType timecodeType;
     TimecodeSubType timecodeSubType;
-    
+
     /* source info */
     SourceInfoValue* sourceInfoValues;
     int numSourceInfoValues;
     int numSourceInfoValuesAlloc;
-    
+
     /* clip info */
     char clipId[CLIP_ID_SIZE];
 } StreamInfo;
@@ -183,24 +187,26 @@ typedef struct
 
 typedef struct
 {
+    Rational frameRate;
+
     int64_t position; /* position in the media source */
     int64_t sourceLength; /* length of media source - 0 <= position < sourceLength */
     int64_t availableSourceLength; /* this will progress from 0 to sourceLength for a file that is still being written to  */
     int64_t startOffset;
-    
+
     int64_t frameCount; /* count of frames read and accepted */
     int rateControl; /* true if the frame is the next one and the playing speed is normal */
 
     int reversePlay; /* true if the player is playing in reverse */
-    
+
     int isRepeat; /* true if frame is a repeat of the last frame */
-    
+
     int muteAudio; /* true for the first frame when the player starts in paused mode */
-    
+
     int locked; /* true if player controls are locked */
-    
+
     int droppedFrame; /* true if a frame was dropped when the player controls are locked */
-    
+
     /* user mark */
     int isMarked;
     int markType;
@@ -229,6 +235,15 @@ int duplicate_stream_info(const StreamInfo* fromStreamInfo, StreamInfo* toStream
 void set_stream_clip_id(StreamInfo* streamInfo, const char* clipId);
 
 int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, int tcSubType, Timecode* timecode);
+
+int is_pal_frame_rate(const Rational* frameRate);
+int is_ntsc_frame_rate(const Rational* frameRate);
+int stream_is_pal_frame_rate(const StreamInfo* streamInfo);
+int stream_is_ntsc_frame_rate(const StreamInfo* streamInfo);
+int frame_is_pal_frame_rate(const FrameInfo* frameInfo);
+int frame_is_ntsc_frame_rate(const FrameInfo* frameInfo);
+
+int get_rounded_frame_rate(const Rational* frameRate);
 
 
 #ifdef __cplusplus

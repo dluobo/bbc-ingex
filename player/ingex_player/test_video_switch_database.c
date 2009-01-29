@@ -1,9 +1,10 @@
 /*
- * $Id: test_video_switch_database.c,v 1.1 2009/01/23 19:51:48 john_f Exp $
+ * $Id: test_video_switch_database.c,v 1.2 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +51,7 @@
 static int file_exists(const char* filename)
 {
     struct stat buf;
-    
+
     return stat(filename, &buf) == 0;
 }
 
@@ -60,9 +61,9 @@ static int parse_sources(const char* sourcesStr, char*** sources, int* numSource
     int len;
     int sourceIndex;
     int sourceLen;
-    
+
     len = (int)strlen(sourcesStr);
-    
+
     /* count number of sources */
     *numSources = 1;
     for (i = 0; i < len; i++)
@@ -72,11 +73,11 @@ static int parse_sources(const char* sourcesStr, char*** sources, int* numSource
             (*numSources)++;
         }
     }
-    
+
     /* allocate sources */
     *sources = (char**)malloc(sizeof(char*) * (*numSources));
     CHECK_MALLOC(*sources);
-    
+
     /* parse source names */
     sourceIndex = 0;
     sourceLen = 0;
@@ -86,10 +87,10 @@ static int parse_sources(const char* sourcesStr, char*** sources, int* numSource
         {
             (*sources)[sourceIndex] = (char*)malloc(sourceLen + 1);
             CHECK_MALLOC((*sources)[sourceIndex]);
-            
+
             strncpy((*sources)[sourceIndex], &sourcesStr[i - sourceLen], sourceLen);
             (*sources)[sourceIndex][sourceLen] = '\0';
-            
+
             sourceIndex++;
             sourceLen = 0;
         }
@@ -101,10 +102,10 @@ static int parse_sources(const char* sourcesStr, char*** sources, int* numSource
 
     (*sources)[sourceIndex] = (char*)malloc(sourceLen + 1);
     CHECK_MALLOC((*sources)[sourceIndex]);
-    
+
     strncpy((*sources)[sourceIndex], &sourcesStr[i - sourceLen], sourceLen);
     (*sources)[sourceIndex][sourceLen] = '\0';
-    
+
 
     return 1;
 }
@@ -125,17 +126,17 @@ static int parse_cut(const char* cutStr, int cutStrLen, char** sources, int numS
 {
     int i;
     int64_t position;
-    
+
     /* parse position */
     if (sscanf(cutStr, "%"PRIi64"", &position) != 1)
     {
         fprintf(stderr, "Error: Failed to parse position in cut string\n");
         return 0;
     }
-    
+
     position += start->hour * 60 * 60 * 25 +
         start->min * 60 * 25 +
-        start->sec * 25 + 
+        start->sec * 25 +
         start->frame;
 
     cut->tc.hour = (position) / (60 * 60 * 25);
@@ -167,21 +168,21 @@ static int parse_cut(const char* cutStr, int cutStrLen, char** sources, int numS
         fprintf(stderr, "Error: Unknown source index %d in cuts\n", cut->sourceIndex);
     }
     cut->sourceId = sources[cut->sourceIndex];
-    
-    
+
+
     return 1;
 }
 
-static int parse_cuts(const char* cutsStr, char** sources, int numSources, Timecode* start, 
+static int parse_cuts(const char* cutsStr, char** sources, int numSources, Timecode* start,
     VideoSwitchDbEntry** cuts, int* numCuts)
 {
     int i;
     int len;
     int cutIndex;
     int cutLen;
-    
+
     len = (int)strlen(cutsStr);
-    
+
     /* count number of cuts */
     *numCuts = 1;
     for (i = 0; i < len; i++)
@@ -191,11 +192,11 @@ static int parse_cuts(const char* cutsStr, char** sources, int numSources, Timec
             (*numCuts)++;
         }
     }
-    
+
     /* allocate cuts */
     *cuts = (VideoSwitchDbEntry*)malloc(sizeof(VideoSwitchDbEntry) * (*numCuts));
     CHECK_MALLOC(*cuts);
-    
+
     /* parse cuts */
     cutIndex = 0;
     cutLen = 0;
@@ -208,7 +209,7 @@ static int parse_cuts(const char* cutsStr, char** sources, int numSources, Timec
                 fprintf(stderr, "Error: Failed to parse cut\n");
                 return 0;
             }
-            
+
             cutIndex++;
             cutLen = 0;
         }
@@ -223,7 +224,7 @@ static int parse_cuts(const char* cutsStr, char** sources, int numSources, Timec
         fprintf(stderr, "Error: Failed to parse cut\n");
         return 0;
     }
-    
+
 
     return 1;
 }
@@ -277,7 +278,7 @@ int main (int argc, const char** argv)
     int numSources = 0;
     VideoSwitchDbEntry* cuts = NULL;
     int numCuts = 0;
-    
+
     while (cmdlnIndex < argc)
     {
         if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
@@ -361,7 +362,7 @@ int main (int argc, const char** argv)
             break;
         }
     }
-    
+
     if (cmdlnIndex + 1 < argc)
     {
         usage(argv[0]);
@@ -394,7 +395,7 @@ int main (int argc, const char** argv)
             fprintf(stderr, "Error: Missing --start\n");
             return 1;
         }
-        
+
         if (!parse_sources(sourcesStr, &sources, &numSources))
         {
             usage(argv[0]);
@@ -420,11 +421,11 @@ int main (int argc, const char** argv)
             return 1;
         }
     }
-    
+
     dbFilename = argv[cmdlnIndex];
     cmdlnIndex++;
-    
-    
+
+
     if (doCreate)
     {
         if (!overwrite && file_exists(dbFilename))
@@ -432,9 +433,9 @@ int main (int argc, const char** argv)
             fprintf(stderr, "Error: No overwriting file '%s'. Use --overwrite to overwrite file\n", dbFilename);
             return 1;
         }
-        
+
         CHECK(vsd_open_write(dbFilename, &db));
-        
+
         for (i = 0; i < numCuts; i++)
         {
             if (startDateStr != NULL)
@@ -446,7 +447,7 @@ int main (int argc, const char** argv)
                 CHECK(vsd_append_entry(db, cuts[i].sourceIndex, cuts[i].sourceId, &cuts[i].tc));
             }
         }
-        
+
         vsd_close(&db);
     }
     else if (doAppend)
@@ -456,9 +457,9 @@ int main (int argc, const char** argv)
             fprintf(stderr, "Error: Cannot append to non-existent file '%s'\n", dbFilename);
             return 1;
         }
-        
+
         CHECK(vsd_open_append(dbFilename, &db));
-        
+
         for (i = 0; i < numCuts; i++)
         {
             if (startDateStr != NULL)
@@ -470,7 +471,7 @@ int main (int argc, const char** argv)
                 CHECK(vsd_append_entry(db, cuts[i].sourceIndex, cuts[i].sourceId, &cuts[i].tc));
             }
         }
-        
+
         vsd_close(&db);
     }
     else
@@ -478,8 +479,8 @@ int main (int argc, const char** argv)
         CHECK(vsd_dump(dbFilename, stdout));
     }
 
-    
-    return 0;    
+
+    return 0;
 }
 
 

@@ -1,9 +1,10 @@
 /*
- * $Id: emulate_key.h,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: emulate_key.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +26,12 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
 
-/* key codes are defined in /usr/include/X11/keysymdef.h (include keysym.h and not keysymdef.h) 
+/* key codes are defined in /usr/include/X11/keysymdef.h (include keysym.h and not keysymdef.h)
    and modifiers (masks, eg. ShiftMask) in /usr/include/X11/X.h */
 
 
@@ -40,7 +41,7 @@ typedef struct EmulateKey EmulateKey;
 int create_emu(EmulateKey** emu);
 int emu_key_down(EmulateKey* emu, int keysym, int modifier);
 int emu_key_up(EmulateKey* emu, int keysym, int modifier);
-/* emu_key is equivalent to emu_key_down followed by emu_key_up */ 
+/* emu_key is equivalent to emu_key_down followed by emu_key_up */
 int emu_key(EmulateKey* emu, int keysym, int modifier);
 void free_emu(EmulateKey** emu);
 

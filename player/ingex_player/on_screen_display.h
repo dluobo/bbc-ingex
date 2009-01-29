@@ -1,9 +1,10 @@
 /*
- * $Id: on_screen_display.h,v 1.5 2008/11/06 11:30:09 john_f Exp $
+ * $Id: on_screen_display.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -59,10 +60,10 @@ typedef enum
     MENU_ITEM_HIGHLIGHTED
 } OSDMenuListItemState;
 
-typedef struct   
-{ 
-    long id; 
-    void* data;    
+typedef struct
+{
+    long id;
+    void* data;
     void (*free_func)(void* data);
 } OSDPrivateData;
 
@@ -70,38 +71,38 @@ typedef struct OSDMenuListItem
 {
     struct OSDMenuListItem* next;
     struct OSDMenuListItem* prev;
-    
+
     char* text;
     int textUpdated;
 
     OSDMenuListItemState state;
-    
+
     /* supports maximum 2 OSDs (eg dual sink) */
     OSDPrivateData osdPrivateData[2];
-    
+
 } OSDMenuListItem;
 
 typedef struct
 {
     char* title;
     int titleUpdated;
-    
+
     char* status;
     int statusUpdated;
-    
+
     char* comment;
     int commentUpdated;
-    
+
     OSDMenuListItem* items;
     int numItems;
     int currentItemIndex;
     int itemsUpdated;
 
     pthread_mutex_t menuModelMutex;
-    
+
     /* supports maximum 2 OSDs (eg dual sink) */
     OSDPrivateData osdPrivateData[2];
-    
+
 } OSDMenuModel;
 
 typedef enum
@@ -117,7 +118,7 @@ typedef enum
     OSD_PLAY_STATE,
     OSD_SPEED_STATE
 } OSDPlayState;
- 
+
 typedef struct OnScreenDisplayState OnScreenDisplayState;
 
 typedef struct
@@ -131,7 +132,7 @@ typedef struct
 typedef struct
 {
     void* data; /* passed as parameter to functions */
-    
+
     void (*refresh_required)(void* data);
     void (*osd_screen_changed)(void* data, OSDScreen screen);
 } OSDListener;
@@ -139,23 +140,23 @@ typedef struct
 typedef struct
 {
     void* data; /* passed as parameter to functions */
-    
+
     int (*initialise)(void* data, const StreamInfo* streamInfo, const Rational* aspectRatio);
-    
+
     void (*set_listener)(void* data, OSDListener* listener);
 
     int (*create_menu_model)(void* data, OSDMenuModel** menu);
     void (*free_menu_model)(void* data, OSDMenuModel** menu);
     void (*set_active_menu_model)(void* data, int updateMask, OSDMenuModel* menu);
-    
-    int (*set_screen)(void* data, OSDScreen screen);    
-    int (*next_screen)(void* data);    
-    int (*get_screen)(void* data, OSDScreen* screen);    
+
+    int (*set_screen)(void* data, OSDScreen screen);
+    int (*next_screen)(void* data);
+    int (*get_screen)(void* data, OSDScreen* screen);
     int (*set_timecode)(void* data, int index, int type, int subType);
     int (*next_timecode)(void* data);
     int (*set_play_state)(void* data, OSDPlayState state, int value);
     int (*set_state)(void* data, const OnScreenDisplayState* state);
-    
+
     void (*set_minimum_audio_stream_level)(void* data, double level);
     void (*set_audio_lineup_level)(void* data, float level);
     void (*reset_audio_stream_levels)(void* data);
@@ -165,22 +166,22 @@ typedef struct
     void (*toggle_audio_level_visibility)(void* data);
 
     void (*show_field_symbol)(void* data, int enable);
-    
+
     void (*set_mark_display)(void* data, const MarkConfigs* markConfigs);
-    int (*create_marks_model)(void* data, OSDMarksModel** model); 
-    void (*free_marks_model)(void* data, OSDMarksModel** model); 
+    int (*create_marks_model)(void* data, OSDMarksModel** model);
+    void (*free_marks_model)(void* data, OSDMarksModel** model);
     void (*set_marks_model)(void* data, int updateMask, OSDMarksModel* model);
     void (*set_second_marks_model)(void* data, int updateMask, OSDMarksModel* model);
-    
+
     void (*set_progress_bar_visibility)(void* data, int visible);
     float (*get_position_in_progress_bar)(void* data, int x, int y);
     void (*highlight_progress_bar_pointer)(void* data, int on);
     void (*set_active_progress_bar_marks)(void* data, int index);
-    
-    void (*set_label)(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
-        int fontSize, Colour colour, int box, const char* label); 
-    
-    int (*add_to_image)(void* data, const FrameInfo* frameInfo, unsigned char* image, 
+
+    void (*set_label)(void* data, int xPos, int yPos, int imageWidth, int imageHeight,
+        int fontSize, Colour colour, int box, const char* label);
+
+    int (*add_to_image)(void* data, const FrameInfo* frameInfo, unsigned char* image,
         int width, int height);
 
     int (*reset)(void* data);
@@ -202,9 +203,9 @@ void osd_set_listener(OnScreenDisplay* osd, OSDListener* listener);
 int osd_create_menu_model(OnScreenDisplay* osd, OSDMenuModel** menu);
 void osd_free_menu_model(OnScreenDisplay* osd, OSDMenuModel** menu);
 void osd_set_active_menu_model(OnScreenDisplay* osd, int updateMask, OSDMenuModel* menu);
-int osd_set_screen(OnScreenDisplay* osd, OSDScreen screen);    
-int osd_next_screen(OnScreenDisplay* osd);    
-int osd_get_screen(OnScreenDisplay* osd, OSDScreen* screen);    
+int osd_set_screen(OnScreenDisplay* osd, OSDScreen screen);
+int osd_next_screen(OnScreenDisplay* osd);
+int osd_get_screen(OnScreenDisplay* osd, OSDScreen* screen);
 int osd_set_timecode(OnScreenDisplay* osd, int index, int type, int subType);
 int osd_next_timecode(OnScreenDisplay* osd);
 int osd_set_play_state(OnScreenDisplay* osd, OSDPlayState state, int value);
@@ -218,17 +219,17 @@ void osd_set_audio_level_visibility(OnScreenDisplay* osd, int visible);
 void osd_toggle_audio_level_visibility(OnScreenDisplay* osd);
 void osd_show_field_symbol(OnScreenDisplay* osd, int enable);
 void osd_set_mark_display(OnScreenDisplay* osd, const MarkConfigs* markConfigs);
-int osd_create_marks_model(OnScreenDisplay* osd, OSDMarksModel** model); 
-void osd_free_marks_model(OnScreenDisplay* osd, OSDMarksModel** model); 
-void osd_set_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model); 
-void osd_set_second_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model); 
+int osd_create_marks_model(OnScreenDisplay* osd, OSDMarksModel** model);
+void osd_free_marks_model(OnScreenDisplay* osd, OSDMarksModel** model);
+void osd_set_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model);
+void osd_set_second_marks_model(OnScreenDisplay* osd, int updateMask, OSDMarksModel* model);
 void osd_set_progress_bar_visibility(OnScreenDisplay* osd, int visible);
 float osd_get_position_in_progress_bar(OnScreenDisplay* osd, int x, int y);
 void osd_highlight_progress_bar_pointer(OnScreenDisplay* osd, int on);
 void osd_set_active_progress_bar_marks(OnScreenDisplay* osd, int index);
-void osd_set_label(OnScreenDisplay* osd, int xPos, int yPos, int imageWidth, int imageHeight, 
-    int fontSize, Colour colour, int box, const char* label); 
-int osd_add_to_image(OnScreenDisplay* osd, const FrameInfo* frameInfo, unsigned char* image, 
+void osd_set_label(OnScreenDisplay* osd, int xPos, int yPos, int imageWidth, int imageHeight,
+    int fontSize, Colour colour, int box, const char* label);
+int osd_add_to_image(OnScreenDisplay* osd, const FrameInfo* frameInfo, unsigned char* image,
     int width, int height);
 int osd_reset(OnScreenDisplay* osd);
 void osd_free(OnScreenDisplay* osd);
@@ -278,7 +279,7 @@ typedef struct
     int streamId;
     double level; /*  MIN_AUDIO_LOG_LEVEL dB <= level <= 0dB */
 } AudioStreamLevel;
-    
+
 struct OnScreenDisplayState
 {
     /* the state */
@@ -289,11 +290,11 @@ struct OnScreenDisplayState
     int timecodeIndex;
     int timecodeStreamId;
     int showFieldSymbol;
-    
+
     /* used to set the screen when adding the OSD to the image */
     int screenSet;
     int nextScreen;
-    
+
     /* used to set the state when commit is called */
     int setTimecode;
     int setTimecodeIndex;
@@ -301,7 +302,7 @@ struct OnScreenDisplayState
     int setTimecodeSubType;
     int nextTimecode;
 
-    /* (internal) */    
+    /* (internal) */
     OnScreenDisplay osd;
     AudioStreamLevel audioStreamLevels[MAX_AUDIO_LEVELS];
     int numAudioLevels;

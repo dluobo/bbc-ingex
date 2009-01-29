@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS = -Wall -W -Wno-unused-parameter -O2
+CFLAGS = -Wall -W -O2
 INCLUDES = -I.
 LIBS = -lpthread
 
@@ -37,11 +37,11 @@ clean:
 	@rm -f *~ *.a test_JogShuttle
 	@rm -Rf .objs
 	@rm -fR .deps
-	
+
 
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(DEPENDENCIES)
-endif	
-	
+endif
 
-	
+
+

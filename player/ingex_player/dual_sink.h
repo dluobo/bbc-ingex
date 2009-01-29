@@ -1,9 +1,10 @@
 /*
- * $Id: dual_sink.h,v 1.7 2008/11/06 19:56:56 john_f Exp $
+ * $Id: dual_sink.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -39,9 +40,9 @@ extern "C"
 typedef struct DualSink DualSink;
 
 
-int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, 
-    int extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD, 
-    const Rational* pixelAspectRatio, const Rational* monitorAspectRatio, 
+int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource,
+    int extraSDIVITCSource, int numBuffers, int useXV, int disableSDIOSD, int disableX11OSD,
+    const Rational* pixelAspectRatio, const Rational* monitorAspectRatio,
     float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink);
 MediaSink* dusk_get_media_sink(DualSink* dualSink);
 void dusk_set_media_control(DualSink* dualSink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);

@@ -1,9 +1,10 @@
 /*
- * $Id: connection_matrix.c,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ * $Id: connection_matrix.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,7 +54,7 @@ static int stm_accept_frame(void* data, int streamId, const FrameInfo* frameInfo
 {
     ConnectionMatrix* matrix = (ConnectionMatrix*)data;
     int i;
-    
+
     for (i = 0; i < matrix->numStreams; i++)
     {
         if (matrix->entries[i].connect != NULL && matrix->entries[i].sourceStreamId == streamId)
@@ -63,17 +64,17 @@ static int stm_accept_frame(void* data, int streamId, const FrameInfo* frameInfo
     }
     return 0;
 }
-    
+
 static int stm_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
     ConnectionMatrix* matrix = (ConnectionMatrix*)data;
     int i;
-    
+
     for (i = 0; i < matrix->numStreams; i++)
     {
         if (matrix->entries[i].connect != NULL && matrix->entries[i].sourceStreamId == streamId)
         {
-            return sdl_allocate_buffer(stc_get_source_listener(matrix->entries[i].connect), streamId, 
+            return sdl_allocate_buffer(stc_get_source_listener(matrix->entries[i].connect), streamId,
                 buffer, bufferSize);
         }
     }
@@ -84,7 +85,7 @@ static void stm_deallocate_buffer(void* data, int streamId, unsigned char** buff
 {
     ConnectionMatrix* matrix = (ConnectionMatrix*)data;
     int i;
-    
+
     for (i = 0; i < matrix->numStreams; i++)
     {
         if (matrix->entries[i].connect != NULL && matrix->entries[i].sourceStreamId == streamId)
@@ -99,12 +100,12 @@ static int stm_receive_frame(void* data, int streamId, unsigned char* buffer, un
 {
     ConnectionMatrix* matrix = (ConnectionMatrix*)data;
     int i;
-    
+
     for (i = 0; i < matrix->numStreams; i++)
     {
         if (matrix->entries[i].connect != NULL && matrix->entries[i].sourceStreamId == streamId)
         {
-            return sdl_receive_frame(stc_get_source_listener(matrix->entries[i].connect), streamId, 
+            return sdl_receive_frame(stc_get_source_listener(matrix->entries[i].connect), streamId,
                 buffer, bufferSize);
         }
     }
@@ -115,19 +116,19 @@ static int stm_receive_frame_const(void* data, int streamId, const unsigned char
 {
     ConnectionMatrix* matrix = (ConnectionMatrix*)data;
     int i;
-    
+
     for (i = 0; i < matrix->numStreams; i++)
     {
         if (matrix->entries[i].connect != NULL && matrix->entries[i].sourceStreamId == streamId)
         {
-            return sdl_receive_frame_const(stc_get_source_listener(matrix->entries[i].connect), streamId, 
+            return sdl_receive_frame_const(stc_get_source_listener(matrix->entries[i].connect), streamId,
                 buffer, bufferSize);
         }
     }
     return 0;
 }
 
-int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFFMPEGThreads, 
+int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFFMPEGThreads,
     int useWorkerThreads, ConnectionMatrix** matrix)
 {
     ConnectionMatrix* newMatrix;
@@ -135,7 +136,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
     int i;
     const StreamInfo* streamInfo;
     int streamIndex;
-    
+
     CALLOC_ORET(newMatrix, ConnectionMatrix, 1);
 
     /* count the number of media source streams that can be connected */
@@ -147,7 +148,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
             /* streams that are disabled before connection are not connected */
             continue;
         }
-            
+
         CHK_OFAIL(msc_get_stream_info(source, i, &streamInfo));
         if (pass_through_accept(sink, streamInfo))
         {
@@ -171,23 +172,23 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
         }
         else
         {
-            ml_log_info("Failed to find stream connector for stream %d (%s, %s)\n", 
+            ml_log_info("Failed to find stream connector for stream %d (%s, %s)\n",
                 i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
         }
     }
-    
-    
+
+
     newMatrix->sourceListener.data = newMatrix;
     newMatrix->sourceListener.accept_frame = stm_accept_frame;
     newMatrix->sourceListener.allocate_buffer = stm_allocate_buffer;
     newMatrix->sourceListener.deallocate_buffer = stm_deallocate_buffer;
     newMatrix->sourceListener.receive_frame = stm_receive_frame;
     newMatrix->sourceListener.receive_frame_const = stm_receive_frame_const;
-    
+
     if (newMatrix->numStreams > 0)
     {
         CALLOC_OFAIL(newMatrix->entries, ConnectionMatrixEntry, newMatrix->numStreams);
-        
+
         /* create stream connects */
         streamIndex = 0;
         for (i = 0; i < numSourceStreams; i++)
@@ -197,7 +198,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* streams that are disabled before connection are not connected */
                 continue;
             }
-            
+
             CHK_OFAIL(msc_get_stream_info(source, i, &streamInfo));
             if (pass_through_accept(sink, streamInfo))
             {
@@ -209,7 +210,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
                 else
                 {
-                    ml_log_info("Failed to pass through connect stream %d (%s, %s)\n", 
+                    ml_log_info("Failed to pass through connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }
@@ -227,7 +228,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
                 else
                 {
-                    ml_log_info("Failed to dv connect stream %d (%s, %s)\n", 
+                    ml_log_info("Failed to dv connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }
@@ -245,7 +246,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
                 else
                 {
-                    ml_log_info("Failed to MPEG I-frame only connect stream %d (%s, %s)\n", 
+                    ml_log_info("Failed to MPEG I-frame only connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }
@@ -263,7 +264,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
                 else
                 {
-                    ml_log_info("Failed to MJPEG connect stream %d (%s, %s)\n", 
+                    ml_log_info("Failed to MJPEG connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }
@@ -281,7 +282,7 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
                 /* failure is possible (eg. max streams exceeded) and so we ignore the stream */
                 else
                 {
-                    ml_log_info("Failed to DNxHD connect stream %d (%s, %s)\n", 
+                    ml_log_info("Failed to DNxHD connect stream %d (%s, %s)\n",
                         i, get_stream_type_string(streamInfo->type), get_stream_format_string(streamInfo->format));
                     CHK_OFAIL(msc_disable_stream(source, i));
                 }
@@ -294,10 +295,10 @@ int stm_create_connection_matrix(MediaSource* source, MediaSink* sink, int numFF
             }
         }
     }
-    
+
     *matrix = newMatrix;
     return 1;
-    
+
 fail:
     stm_close(&newMatrix);
     return 0;
@@ -317,26 +318,26 @@ int stm_sync(ConnectionMatrix* matrix)
     {
         result = stc_sync(matrix->entries[i].connect) && result;
     }
-    
+
     return result;
 }
 
 void stm_close(ConnectionMatrix** matrix)
 {
     int i;
-    
+
     if (*matrix == NULL)
     {
         return;
     }
-    
+
     for (i = 0; i < (*matrix)->numStreams; i++)
     {
         stc_close((*matrix)->entries[i].connect);
     }
-    
+
     SAFE_FREE(&(*matrix)->entries);
-    
+
     SAFE_FREE(matrix);
 }
 

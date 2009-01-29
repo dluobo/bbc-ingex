@@ -1,9 +1,8 @@
 /*
- * $Id: IngexPlayerException.cpp,v 1.2 2008/10/29 17:49:55 john_f Exp $
+ * $Id: IngexPlayerException.cpp,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
- *
- *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +37,7 @@ IngexPlayerException::IngexPlayerException()
 IngexPlayerException::IngexPlayerException(const char* format, ...)
 {
     char message[512];
-    
+
     va_list varg;
     va_start(varg, format);
 #if defined(_MSC_VER)
@@ -47,7 +46,7 @@ IngexPlayerException::IngexPlayerException(const char* format, ...)
     vsnprintf(message, 512, format, varg);
 #endif
     va_end(varg);
-    
+
     _message = message;
 }
 
@@ -59,5 +58,3 @@ string IngexPlayerException::getMessage() const
 {
     return _message;
 }
-
-

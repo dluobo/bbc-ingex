@@ -1,9 +1,10 @@
 /*
- * $Id: udp_source.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: udp_source.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +25,7 @@
 #define __UDP_MEM_SOURCE_H__
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 

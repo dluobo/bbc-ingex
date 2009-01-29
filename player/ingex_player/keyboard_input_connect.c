@@ -1,9 +1,10 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.8 2008/11/06 19:56:56 john_f Exp $
+ * $Id: keyboard_input_connect.c,v 1.9 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,16 +45,16 @@ struct KeyboardConnect
     MediaControl* control;
     KeyboardInput* input;
     KeyboardInputListener listener;
-    
+
     int speedIndex;
     int reverse;
-    
+
     struct timeval halfSplitMovePressedTime;
     int halfSplitSpeed;
 };
 
 
-static const ControlInputHelp g_defaultKeyboardInputHelp[] = 
+static const ControlInputHelp g_defaultKeyboardInputHelp[] =
 {
     {"'q'", "Quit"},
     {"<SPACE>", "Toggle play/pause"},
@@ -96,7 +97,7 @@ static const ControlInputHelp g_defaultKeyboardInputHelp[] =
     {NULL, NULL}
 };
 
-static const ControlInputHelp g_qcKeyboardInputHelp[] = 
+static const ControlInputHelp g_qcKeyboardInputHelp[] =
 {
     {"'q'", "Quit"},
     {"<SPACE>", "Toggle play/pause"},
@@ -143,18 +144,18 @@ static long get_elapsed_time(struct timeval* from)
 {
     long diff;
     struct timeval now;
-    
+
     gettimeofday(&now, NULL);
-    
+
     diff = (now.tv_sec - from->tv_sec) * 1000000 + now.tv_usec - from->tv_usec;
     if (diff < 0)
     {
         /* we don't allow negative differences */
         diff = 0;
     }
-    
+
     *from = now;
-    
+
     return diff;
 }
 
@@ -175,7 +176,7 @@ static void default_key_pressed(void* data, int key, int modifier)
             }
             else
             {
-                connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ? 
+                connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ?
                     (connect->speedIndex + 1) : connect->speedIndex;
             }
             mc_play_speed(connect->control, g_reverseKeyboardSpeed[connect->speedIndex], FRAME_PLAY_UNIT);
@@ -188,7 +189,7 @@ static void default_key_pressed(void* data, int key, int modifier)
             }
             else
             {
-                connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ? 
+                connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ?
                     (connect->speedIndex + 1) : connect->speedIndex;
             }
             mc_play_speed(connect->control, g_keyboardSpeed[connect->speedIndex], FRAME_PLAY_UNIT);
@@ -363,7 +364,7 @@ static void default_key_pressed(void* data, int key, int modifier)
                 mc_select_menu_item_extra(connect->control);
             }
             break;
-            
+
         case XK_Delete:
             if (mode == MENU_MODE)
             {
@@ -374,11 +375,11 @@ static void default_key_pressed(void* data, int key, int modifier)
         case '-':
             mc_toggle_show_source_name(connect->control);
             break;
-            
+
         case XK_KP_Add:
             mc_toggle_show_audio_level(connect->control);
             break;
-            
+
         default:
             break;
     }
@@ -389,8 +390,8 @@ static void default_key_released(void* data, int key, int modifier)
     KeyboardConnect* connect = (KeyboardConnect*)data;
     MediaControlMode mode = mc_get_mode(connect->control);
 
-    switch (key) 
-    {    
+    switch (key)
+    {
         case XK_Up:
             if (mode != MENU_MODE)
             {
@@ -405,7 +406,7 @@ static void default_key_released(void* data, int key, int modifier)
                 mc_play_speed(connect->control, 1, FRAME_PLAY_UNIT);
             }
             break;
-            
+
         default:
             break;
     }
@@ -461,7 +462,7 @@ static void qc_key_pressed(void* data, int key, int modifier)
             case XK_Delete:
                 mc_select_menu_item_center(connect->control);
                 break;
-                
+
             default:
                 break;
         }
@@ -478,7 +479,7 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 }
                 else
                 {
-                    connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ? 
+                    connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ?
                         (connect->speedIndex + 1) : connect->speedIndex;
                 }
                 mc_play_speed(connect->control, g_reverseKeyboardSpeed[connect->speedIndex], FRAME_PLAY_UNIT);
@@ -491,7 +492,7 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 }
                 else
                 {
-                    connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ? 
+                    connect->speedIndex = (connect->speedIndex < NUM_SPEEDS - 1) ?
                         (connect->speedIndex + 1) : connect->speedIndex;
                 }
                 mc_play_speed(connect->control, g_keyboardSpeed[connect->speedIndex], FRAME_PLAY_UNIT);
@@ -640,11 +641,11 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 }
                 mc_move_half_split(connect->control, 1 /* right or up */, connect->halfSplitSpeed);
                 break;
-                
+
             case '\'':
                 mc_toggle_show_source_name(connect->control);
                 break;
-                
+
             default:
                 break;
         }
@@ -658,8 +659,8 @@ void qc_key_released(void* data, int key, int modifier)
 
     if (mode != MENU_MODE)
     {
-        switch (key) 
-        {    
+        switch (key)
+        {
             case XK_Up:
                 /* back to normal speed */
                 mc_play_speed(connect->control, 1, FRAME_PLAY_UNIT);
@@ -668,7 +669,7 @@ void qc_key_released(void* data, int key, int modifier)
                 /* back to normal speed */
                 mc_play_speed(connect->control, 1, FRAME_PLAY_UNIT);
                 break;
-                
+
             default:
                 break;
         }
@@ -676,19 +677,19 @@ void qc_key_released(void* data, int key, int modifier)
 }
 
 
-int kic_create_keyboard_connect(int reviewDuration, MediaControl* control, 
+int kic_create_keyboard_connect(int reviewDuration, MediaControl* control,
     KeyboardInput* input, ConnectMapping mapping, KeyboardConnect** connect)
 {
     KeyboardConnect* newConnect;
 
     CALLOC_ORET(newConnect, KeyboardConnect, 1);
-    
+
     newConnect->reviewDuration = reviewDuration;
     newConnect->control = control;
     newConnect->input = input;
 
     newConnect->speedIndex = -1;
-    
+
     newConnect->listener.data = newConnect;
     switch (mapping)
     {
@@ -696,14 +697,14 @@ int kic_create_keyboard_connect(int reviewDuration, MediaControl* control,
             newConnect->listener.key_pressed = qc_key_pressed;
             newConnect->listener.key_released = qc_key_released;
             break;
-            
-        default:            
+
+        default:
             newConnect->listener.key_pressed = default_key_pressed;
             newConnect->listener.key_released = default_key_released;
             break;
     }
     kip_set_listener(input, &newConnect->listener);
-    
+
     *connect = newConnect;
     return 1;
 }
@@ -714,9 +715,9 @@ void kic_free_keyboard_connect(KeyboardConnect** connect)
     {
         return;
     }
-    
+
     kip_unset_listener((*connect)->input);
-    
+
     SAFE_FREE(connect);
 }
 

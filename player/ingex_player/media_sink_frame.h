@@ -1,9 +1,10 @@
 /*
- * $Id: media_sink_frame.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_sink_frame.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -40,7 +41,7 @@ typedef struct
     void* data;
 
     int (*register_stream)(void* data, int streamId, const StreamInfo* streamInfo);
-    
+
     void (*reset)(void* data);
 
     int (*accept_stream_frame)(void* data, int streamId, const FrameInfo* frameInfo);
@@ -49,7 +50,7 @@ typedef struct
     int (*complete_frame)(void* data, const OnScreenDisplayState* osdState, const FrameInfo* frameInfo);
 
     int (*get_stream_buffer)(void* data, int streamId, unsigned int bufferSize, unsigned char** buffer);
-    
+
     void (*free)(void* data);
 } MediaSinkFrame;
 

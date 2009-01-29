@@ -1,9 +1,10 @@
 /*
- * $Id: http_access_resources.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: http_access_resources.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,7 +47,7 @@ static const char* g_htmlContentType = "text/html";
 static const char* g_imageContentType = "image/png";
 
 
-static const char* g_PlayerPage = 
+static const char* g_PlayerPage =
     "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
     "\n"
     "<html>\n"
@@ -185,8 +186,8 @@ static const char* g_PlayerPage =
     "\n"
     "";
 
-    
-static const unsigned char g_PlayImage[] = 
+
+static const unsigned char g_PlayImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -210,7 +211,7 @@ static const unsigned char g_PlayImage[] =
     0x60,0x82
 };
 
-static const unsigned char g_StopImage[] = 
+static const unsigned char g_StopImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -226,7 +227,7 @@ static const unsigned char g_StopImage[] =
     0x82
 };
 
-static const unsigned char g_PauseImage[] =  
+static const unsigned char g_PauseImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -265,7 +266,7 @@ static const unsigned char g_FastForwardImage[] =
     0x60,0x82
 };
 
-static const unsigned char g_FastRewindImage[] =  
+static const unsigned char g_FastRewindImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -288,7 +289,7 @@ static const unsigned char g_FastRewindImage[] =
     0x44,0xae,0x42,0x60,0x82
 };
 
-static const unsigned char g_HomeImage[] =  
+static const unsigned char g_HomeImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -310,7 +311,7 @@ static const unsigned char g_HomeImage[] =
     0xdd,0x4c,0x1a,0x33,0x22,0x20,0x4e,0x00,0x00,0x00,0x00,0x49,0x45,0x4e,0x44,0xae,0x42,0x60,0x82
 };
 
-static const unsigned char g_EndImage[] =  
+static const unsigned char g_EndImage[] =
 {
     0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x3b,
     0x00,0x00,0x00,0x3b,0x08,0x02,0x00,0x00,0x00,0x4a,0x47,0x65,0xe4,0x00,0x00,0x00,0x09,0x70,0x48,0x59,
@@ -337,12 +338,12 @@ int har_create_resources(HTTPAccessResources** resources)
 {
     HTTPAccessResources* newResources = NULL;
     HTTPAccessResource resource;
-    
+
     CALLOC_ORET(newResources, HTTPAccessResources, 1);
-    
-    CALLOC_OFAIL(newResources->resources, HTTPAccessResource, RESOURCE_ALLOCATION_STEP); 
+
+    CALLOC_OFAIL(newResources->resources, HTTPAccessResource, RESOURCE_ALLOCATION_STEP);
     newResources->allocatedResources = RESOURCE_ALLOCATION_STEP;
-    
+
     /* add resources */
     strcpy(resource.name, "player_page");
     strcpy(resource.contentType, g_htmlContentType);
@@ -350,60 +351,60 @@ int har_create_resources(HTTPAccessResources** resources)
     resource.dataSize = strlen(g_PlayerPage) + 1;
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/play.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_PlayImage;
     resource.dataSize = sizeof(g_PlayImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/stop.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_StopImage;
     resource.dataSize = sizeof(g_StopImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/pause.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_PauseImage;
     resource.dataSize = sizeof(g_PauseImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/fastforward.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_FastForwardImage;
     resource.dataSize = sizeof(g_FastForwardImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/fastrewind.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_FastRewindImage;
     resource.dataSize = sizeof(g_FastRewindImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/home.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_HomeImage;
     resource.dataSize = sizeof(g_HomeImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
+
     strcpy(resource.name, "/resources/end.png");
     strcpy(resource.contentType, g_imageContentType);
     resource.data = g_EndImage;
     resource.dataSize = sizeof(g_EndImage);
     resource.dynData = NULL;
     CHK_OFAIL(har_add_resource(newResources, &resource));
-    
-    
+
+
     *resources = newResources;
     return 1;
-    
+
 fail:
     har_free_resources(&newResources);
     return 0;
@@ -416,13 +417,13 @@ void har_free_resources(HTTPAccessResources** resources)
     {
         return;
     }
-    
+
     for (i = 0; i < (*resources)->numResources; i++)
     {
         SAFE_FREE(&(*resources)->resources[i].dynData);
     }
     SAFE_FREE(&(*resources)->resources);
-    
+
     SAFE_FREE(resources);
 }
 
@@ -430,26 +431,26 @@ int har_add_resource(HTTPAccessResources* resources, HTTPAccessResource* resourc
 {
     HTTPAccessResource* newResources = NULL;
     int i;
-    
+
     if (resources->numResources + 1 > resources->allocatedResources)
     {
         /* enlarge resource array */
-        
-        CALLOC_ORET(newResources, HTTPAccessResource, 
+
+        CALLOC_ORET(newResources, HTTPAccessResource,
             resources->allocatedResources + RESOURCE_ALLOCATION_STEP);
-        memcpy(newResources, resources->resources, resources->allocatedResources * sizeof(HTTPAccessResource)); 
+        memcpy(newResources, resources->resources, resources->allocatedResources * sizeof(HTTPAccessResource));
 
         for (i = 0; i < resources->numResources; i++)
         {
             SAFE_FREE(&resources->resources[i].dynData);
         }
         SAFE_FREE(&resources->resources);
-        
+
         resources->resources = newResources;
         newResources = NULL;
         resources->allocatedResources += RESOURCE_ALLOCATION_STEP;
     }
-    
+
     resources->resources[resources->numResources] = *resource;
     resources->numResources++;
     return 1;
@@ -466,7 +467,7 @@ const HTTPAccessResource* har_get_resource(HTTPAccessResources* resources, const
             return &resources->resources[i];
         }
     }
-    
+
     return NULL;
 }
 

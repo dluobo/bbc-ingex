@@ -1,9 +1,10 @@
 /*
- * $Id: stream_connect.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: stream_connect.c,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,19 +73,19 @@ typedef struct
 static MediaSourceListener* cyc_get_source_listener(void* data)
 {
     CopyStreamConnect* connect = (CopyStreamConnect*)data;
-    
+
     return &connect->sourceListener;
 }
 
 static void cyc_close(void* data)
 {
     CopyStreamConnect* connect = (CopyStreamConnect*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     SAFE_FREE(&connect);
 }
 
@@ -92,14 +93,14 @@ static void cyc_close(void* data)
 static int cyc_accept_frame(void* data, int streamId, const FrameInfo* frameInfo)
 {
     CopyStreamConnect* connect = (CopyStreamConnect*)data;
-    
+
     return connect->sourceStreamId == streamId && msk_accept_stream_frame(connect->sink, streamId, frameInfo);
 }
-    
+
 static int cyc_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
     CopyStreamConnect* connect = (CopyStreamConnect*)data;
-    
+
     if (connect->sourceStreamId != streamId)
     {
         ml_log_error("Buffer allocation request for unknown source stream %d in copy connect\n", streamId);
@@ -129,9 +130,9 @@ static int cyc_receive_frame(void* data, int streamId, unsigned char* buffer, un
         ml_log_error("failed to write frame to media sink\n");
         return 0;
     }
-    
+
     return 1;
-    
+
 }
 
 static int cyc_receive_frame_const(void* data, int streamId, const unsigned char* buffer, unsigned int bufferSize)
@@ -149,9 +150,9 @@ static int cyc_receive_frame_const(void* data, int streamId, const unsigned char
         ml_log_error("failed to write frame to media sink\n");
         return 0;
     }
-    
+
     return 1;
-    
+
 }
 
 
@@ -161,23 +162,23 @@ int pass_through_accept(MediaSink* sink, const StreamInfo* streamInfo)
     return msk_accept_stream(sink, streamInfo);
 }
 
-int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId, 
+int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, StreamConnect** connect)
 {
     CopyStreamConnect* newConnect;
-    
+
     if (!msk_register_stream(sink, sinkStreamId, streamInfo))
     {
         /* could have failed if max streams exceeded for example */
         return 0;
     }
-    
+
     CALLOC_ORET(newConnect, CopyStreamConnect, 1);
-    
+
     newConnect->sink = sink;
     newConnect->sourceStreamId = sourceStreamId;
     newConnect->sinkStreamId = sinkStreamId;
-    
+
     newConnect->streamConnect.data = newConnect;
     newConnect->streamConnect.get_source_listener = cyc_get_source_listener;
     newConnect->streamConnect.close = cyc_close;
@@ -188,8 +189,8 @@ int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStr
     newConnect->sourceListener.deallocate_buffer = cyc_deallocate_buffer;
     newConnect->sourceListener.receive_frame = cyc_receive_frame;
     newConnect->sourceListener.receive_frame_const = cyc_receive_frame_const;
-    
-    
+
+
     *connect = &newConnect->streamConnect;
     return 1;
 }

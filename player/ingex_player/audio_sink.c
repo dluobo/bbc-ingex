@@ -1,9 +1,10 @@
 /*
- * $Id: audio_sink.c,v 1.7 2008/11/11 10:39:35 philipn Exp $
+ * $Id: audio_sink.c,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,7 +46,7 @@ MediaSink* aus_get_media_sink(AudioSink* sink)
 #else /* defined(HAVE_PORTAUDIO) */
 
 
-#include <portaudio.h> 
+#include <portaudio.h>
 
 #include "audio_sink.h"
 #include "utils.h"
@@ -58,12 +59,14 @@ MediaSink* aus_get_media_sink(AudioSink* sink)
 typedef struct
 {
     int streamId;
-    
-    unsigned int bufferSize;
+
+    unsigned int bufferSize[2];
     unsigned char* buffer[2];
     unsigned int allocatedBufferSize[2];
-    int bufferIsReady[2];
-    
+    int bufferIsReadyForRead[2];
+
+    unsigned int bufferBytesUsed[2];
+
     unsigned char* nextSinkBuffer;
     unsigned int nextSinkBufferSize;
     int nextSinkAcceptedFrame;
@@ -72,9 +75,9 @@ typedef struct
 struct AudioSink
 {
     int audioDevice;
-    
+
     int muteAudio;
-    
+
     MediaSink* nextSink;
     MediaSink sink;
 
@@ -82,20 +85,22 @@ struct AudioSink
     int numAudioStreams;
     int readBuffer;
     int writeBuffer;
-    
+    pthread_mutex_t bufferMutex;
+
     Rational samplingRate;
     int numChannels;
     int bitsPerSample;
     int byteAlignment;
-    
-    
+
+
     PaStream* paStream;
     int paStreamStarted;
     int paStreamInitialised;
     PaSampleFormat paFormat;
-    unsigned long paFramesPerBuffer;
-    
+
     int sinkDisabled;
+
+    int stop;
 };
 
 static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
@@ -107,9 +112,16 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
 
     AudioSink* sink = (AudioSink*)userData;
     unsigned int j;
-    int fillWithSilence = 0;
+    unsigned char* buffer = NULL;
+    unsigned char* bufferL = NULL;
+    unsigned char* bufferR = NULL;
+    unsigned int framesToWrite = 0;
+    unsigned int bytesToWrite = 0;
+    unsigned long totalFramesWritten = 0;
+    int bufferIsReadyForRead;
+    int returnEmptyFrame;
 
-#if 0    
+#if 0
    printf( "Timing info given to callback: Adc: %g, Current: %g, Dac: %g\n",
             timeInfo->inputBufferAdcTime,
             timeInfo->currentTime,
@@ -117,96 +129,108 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
     {
         static struct timeval prev;
         struct timeval now;
-        
+
         gettimeofday(&now, NULL);
         long diff = (now.tv_sec - prev.tv_sec) * 1000000 + now.tv_usec - prev.tv_usec;
         printf("%ld\n", diff);
-        
+
         prev = now;
     }
 #endif
 
-
-    
-    if (sink->numAudioStreams == 1)
+    while (!sink->stop && totalFramesWritten < framesPerBuffer)
     {
-        unsigned char* buffer = NULL;
-        
-        if (sink->readBuffer == 0)
+        bufferIsReadyForRead = 1;
+        returnEmptyFrame = 0;
+
+        /* check if the source buffer is ready */
+        PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
+        if (sink->numAudioStreams == 1)
         {
-            buffer = sink->audioStreams[0].buffer[0];
-            if (!sink->audioStreams[0].bufferIsReady[0])
+            if (!sink->audioStreams[0].bufferIsReadyForRead[sink->readBuffer])
             {
-                fillWithSilence = 1;
+                bufferIsReadyForRead = 0;
             }
         }
-        else /* sink->readBuffer == 1 */
+        else /* (sink->numAudioStreams == 2) */
         {
-            buffer = sink->audioStreams[0].buffer[1];
-            if (!sink->audioStreams[0].bufferIsReady[1])
+            if (!sink->audioStreams[0].bufferIsReadyForRead[sink->readBuffer] || !sink->audioStreams[1].bufferIsReadyForRead[sink->readBuffer])
             {
-                fillWithSilence = 1;
+                bufferIsReadyForRead = 0;
             }
         }
-    
-        if (sink->byteAlignment == 1)
+
+        if (!bufferIsReadyForRead && sink->writeBuffer == sink->readBuffer)
         {
-            if (fillWithSilence)
+            returnEmptyFrame = 1;
+        }
+        PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
+
+        /* return an empty frame if no data is available and not busy filling a buffer */
+        if (returnEmptyFrame)
+        {
+            if (sink->byteAlignment <= 2)
             {
-                memset(outputBuffer, 0, sink->audioStreams[0].bufferSize);
+                memset(outputBuffer, 0, framesPerBuffer * sink->byteAlignment * sink->numAudioStreams);
             }
             else
             {
-                int8_t* out = (int8_t*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j++)
+                memset(outputBuffer, 0, framesPerBuffer * sizeof(float) * sink->numAudioStreams);
+            }
+            break;
+        }
+
+        /* sleep and try again if the source buffer is not ready */
+        if (!bufferIsReadyForRead)
+        {
+            usleep(500);
+            continue;
+        }
+
+
+        /* transfer samples from source buffer to output */
+        if (sink->numAudioStreams == 1)
+        {
+            buffer = sink->audioStreams[0].buffer[sink->readBuffer] + sink->audioStreams[0].bufferBytesUsed[sink->readBuffer];
+
+            framesToWrite = (sink->audioStreams[0].bufferSize[sink->readBuffer] - sink->audioStreams[0].bufferBytesUsed[sink->readBuffer]) / sink->byteAlignment;
+            if (totalFramesWritten + framesToWrite > framesPerBuffer)
+            {
+                framesToWrite = framesPerBuffer - totalFramesWritten;
+            }
+            bytesToWrite = framesToWrite * sink->byteAlignment;
+
+            if (sink->byteAlignment == 1)
+            {
+                int8_t* out = ((int8_t*)outputBuffer) + totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j++)
                 {
                     *out++ = buffer[j];
                 }
             }
-        }
-        else if (sink->byteAlignment == 2)
-        {
-            if (fillWithSilence)
+            else if (sink->byteAlignment == 2)
             {
-                memset(outputBuffer, 0, sink->audioStreams[0].bufferSize);
-            }
-            else
-            {
-                int16_t* out = (int16_t*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 2)
+                int16_t* out = ((int16_t*)outputBuffer) + totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 2)
                 {
                     *out++ = (int16_t)(((uint16_t)buffer[j]) |
                         ((uint16_t)buffer[j + 1]) << 8);
                 }
             }
-        }
-        else if (sink->byteAlignment == 3)
-        {
-            if (fillWithSilence)
+            else if (sink->byteAlignment == 3)
             {
-                memset(outputBuffer, 0, sizeof(float) * sink->audioStreams[0].bufferSize / 3);
-            }
-            else
-            {
-                float* out = (float*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 3)
+                float* out = ((float*)outputBuffer) + totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 3)
                 {
                     *out++ = (int32_t)((((uint32_t)buffer[j]) << 8) |
                         (((uint32_t)buffer[j + 1]) << 16) |
                         (((uint32_t)buffer[j + 2]) << 24)) / 2147483648.0;
                 }
             }
-        }
-        else /* (sink->byteAlignment == 4) */
-        {
-            if (fillWithSilence)
+            else /* (sink->byteAlignment == 4) */
             {
-                memset(outputBuffer, 0, sizeof(float) * sink->audioStreams[0].bufferSize / 4);
-            }
-            else
-            {
-                float* out = (float*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 4)
+                float* out = ((float*)outputBuffer) + totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 4)
                 {
                     *out++ = (int32_t)(((uint32_t)buffer[j]) |
                         (((uint32_t)buffer[j + 1]) << 8) |
@@ -214,59 +238,35 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
                         (((uint32_t)buffer[j + 3]) << 24)) / 2147483648.0;
                 }
             }
+
+            sink->audioStreams[0].bufferBytesUsed[sink->readBuffer] += bytesToWrite;
+            totalFramesWritten += framesToWrite;
         }
-        
-    }
-    else /* (sink->numAudioStreams == 2) */
-    {
-        unsigned char* bufferL = NULL;
-        unsigned char* bufferR = NULL;
-        
-        if (sink->readBuffer == 0)
+        else /* (sink->numAudioStreams == 2) */
         {
-            bufferL = sink->audioStreams[0].buffer[0];
-            bufferR = sink->audioStreams[1].buffer[0];
-            if (!sink->audioStreams[0].bufferIsReady[0] || !sink->audioStreams[1].bufferIsReady[0])
+            bufferL = sink->audioStreams[0].buffer[sink->readBuffer] + sink->audioStreams[0].bufferBytesUsed[sink->readBuffer];
+            bufferR = sink->audioStreams[1].buffer[sink->readBuffer] + sink->audioStreams[1].bufferBytesUsed[sink->readBuffer];
+
+            framesToWrite = (sink->audioStreams[0].bufferSize[sink->readBuffer] - sink->audioStreams[0].bufferBytesUsed[sink->readBuffer]) / sink->byteAlignment;
+            if (totalFramesWritten + framesToWrite > framesPerBuffer)
             {
-                fillWithSilence = 1;
+                framesToWrite = framesPerBuffer - totalFramesWritten;
             }
-        }
-        else /* sink->readBuffer == 1 */
-        {
-            bufferL = sink->audioStreams[0].buffer[1];
-            bufferR = sink->audioStreams[1].buffer[1];
-            if (!sink->audioStreams[0].bufferIsReady[1] || !sink->audioStreams[1].bufferIsReady[1])
+            bytesToWrite = framesToWrite * sink->byteAlignment;
+
+            if (sink->byteAlignment == 1)
             {
-                fillWithSilence = 1;
-            }
-        }
-    
-        if (sink->byteAlignment == 1)
-        {
-            if (fillWithSilence)
-            {
-                memset(outputBuffer, 0, 2 * sink->audioStreams[0].bufferSize);
-            }
-            else
-            {
-                int8_t* out = (int8_t*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j++)
+                int8_t* out = ((int8_t*)outputBuffer) + 2 * totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j++)
                 {
                     *out++ = bufferL[j];
                     *out++ = bufferR[j];
                 }
             }
-        }
-        else if (sink->byteAlignment == 2)
-        {
-            if (fillWithSilence)
+            else if (sink->byteAlignment == 2)
             {
-                memset(outputBuffer, 0, 2 * sink->audioStreams[0].bufferSize);
-            }
-            else
-            {
-                int16_t* out = (int16_t*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 2)
+                int16_t* out = ((int16_t*)outputBuffer) + 2 * totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 2)
                 {
                     *out++ = (int16_t)(((uint16_t)bufferL[j]) |
                         ((uint16_t)bufferL[j + 1]) << 8);
@@ -274,17 +274,10 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
                         ((uint16_t)bufferR[j + 1]) << 8);
                 }
             }
-        }
-        else if (sink->byteAlignment == 3)
-        {
-            if (fillWithSilence)
+            else if (sink->byteAlignment == 3)
             {
-                memset(outputBuffer, 0, sizeof(float) * 2 * sink->audioStreams[0].bufferSize / 3);
-            }
-            else
-            {
-                float* out = (float*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 3)
+                float* out = ((float*)outputBuffer) + 2 * totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 3)
                 {
                     *out++ = (int32_t)((((uint32_t)bufferL[j]) << 8) |
                         (((uint32_t)bufferL[j + 1]) << 16) |
@@ -294,17 +287,10 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
                         (((uint32_t)bufferR[j + 2]) << 24)) / 2147483648.0;
                 }
             }
-        }
-        else /* (sink->byteAlignment == 4) */
-        {
-            if (fillWithSilence)
+            else /* (sink->byteAlignment == 4) */
             {
-                memset(outputBuffer, 0, sizeof(float) * 2 * sink->audioStreams[0].bufferSize / 4);
-            }
-            else
-            {
-                float* out = (float*)outputBuffer;
-                for (j = 0; j < sink->audioStreams[0].bufferSize; j += 4)
+                float* out = ((float*)outputBuffer) + 2 * totalFramesWritten;
+                for (j = 0; j < bytesToWrite; j += 4)
                 {
                     *out++ = (int32_t)(((uint32_t)bufferL[j]) |
                         (((uint32_t)bufferL[j + 1]) << 8) |
@@ -316,20 +302,29 @@ static int paAudioCallback(const void *inputBuffer, void *outputBuffer,
                         (((uint32_t)bufferR[j + 3]) << 24)) / 2147483648.0;
                 }
             }
+
+            sink->audioStreams[0].bufferBytesUsed[sink->readBuffer] += bytesToWrite;
+            sink->audioStreams[1].bufferBytesUsed[sink->readBuffer] += bytesToWrite;
+            totalFramesWritten += framesToWrite;
         }
-    }
-    
-    if (!fillWithSilence)
-    {
-        sink->audioStreams[0].bufferIsReady[sink->readBuffer] = 0;
-        if (sink->numAudioStreams > 1)
+
+        /* signal buffer can be written to if all samples have been transferred */
+        if (sink->audioStreams[0].bufferBytesUsed[sink->readBuffer] == sink->audioStreams[0].bufferSize[sink->readBuffer])
         {
-            sink->audioStreams[1].bufferIsReady[sink->readBuffer] = 0;
+            PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
+
+            sink->audioStreams[0].bufferIsReadyForRead[sink->readBuffer] = 0;
+            sink->audioStreams[0].bufferBytesUsed[sink->readBuffer] = 0;
+            sink->audioStreams[1].bufferIsReadyForRead[sink->readBuffer] = 0;
+            sink->audioStreams[1].bufferBytesUsed[sink->readBuffer] = 0;
+            sink->readBuffer = (sink->readBuffer + 1) % 2;
+
+            PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
         }
-        sink->readBuffer = (sink->readBuffer + 1) % 2;
     }
-    
-    return 0;
+
+
+    return paContinue;
 }
 
 
@@ -352,14 +347,14 @@ static int aus_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     AudioSink* sink = (AudioSink*)data;
 
-    if (streamInfo->type == SOUND_STREAM_TYPE && 
-        streamInfo->format == PCM_FORMAT && 
+    if (streamInfo->type == SOUND_STREAM_TYPE &&
+        streamInfo->format == PCM_FORMAT &&
         streamInfo->numChannels == 1 && /* only 1 channel per audio track supported for now */
         streamInfo->bitsPerSample <= 32)
     {
         return 1;
     }
-    
+
     return msk_accept_stream(sink->nextSink, streamInfo);
 }
 
@@ -379,7 +374,7 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
     }
 
 
-    if (streamInfo->type == SOUND_STREAM_TYPE && 
+    if (streamInfo->type == SOUND_STREAM_TYPE &&
         streamInfo->format == PCM_FORMAT &&
         streamInfo->numChannels == 1 && /* only 1 channel per audio track supported for now */
         streamInfo->bitsPerSample <= 32)
@@ -396,12 +391,12 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
                     return nextSinkResult;
                 }
             }
-            
+
             sink->samplingRate = streamInfo->samplingRate;
             sink->numChannels = streamInfo->numChannels;
             sink->bitsPerSample = streamInfo->bitsPerSample;
             sink->byteAlignment = (streamInfo->bitsPerSample + 7) / 8;
-            
+
             switch (sink->byteAlignment)
             {
                 case 1:
@@ -417,23 +412,10 @@ static int aus_register_stream(void* data, int streamId, const StreamInfo* strea
                     sink->paFormat = paFloat32;
                     break;
             }
-            
-            /* TODO: don't assume 25 fps */
-            sink->paFramesPerBuffer = (int)((sink->samplingRate.num / (double)(25 * sink->samplingRate.den) + 0.5));
-            
+
             sink->audioStreams[sink->numAudioStreams].streamId = streamId;
-            sink->audioStreams[sink->numAudioStreams].bufferSize = streamInfo->numChannels *
-                sink->paFramesPerBuffer * sink->byteAlignment;   
-            sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[0] = 
-                sink->audioStreams[sink->numAudioStreams].bufferSize;   
-            CALLOC_ORET(sink->audioStreams[sink->numAudioStreams].buffer[0], unsigned char, 
-                sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[0]);
-            sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[1] = 
-                sink->audioStreams[sink->numAudioStreams].bufferSize;   
-            CALLOC_ORET(sink->audioStreams[sink->numAudioStreams].buffer[1], unsigned char, 
-                sink->audioStreams[sink->numAudioStreams].allocatedBufferSize[1]);
             sink->numAudioStreams++;
-            
+
             return 1;
         }
     }
@@ -445,20 +427,20 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
 {
     AudioSink* sink = (AudioSink*)data;
     int i;
-    
+    int bufferIsReadyForWrite;
+
     for (i = 0; i < sink->numAudioStreams; i++)
     {
         if (sink->audioStreams[i].streamId == streamId)
         {
             sink->audioStreams[i].nextSinkAcceptedFrame = msk_accept_stream_frame(sink->nextSink, streamId, frameInfo);
-            
-            
+
             if (sink->sinkDisabled)
             {
                 /* some error occurred which has disabled the stream */
                 return 0;
             }
-            
+
             /* take opportunity to do first time initialisation */
             if (!sink->paStreamInitialised)
             {
@@ -471,7 +453,7 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                         sink->numAudioStreams,
                         sink->paFormat,
                         sink->samplingRate.num / (double)sink->samplingRate.den,
-                        sink->paFramesPerBuffer,
+                        0,
                         paAudioCallback,
                         sink);
                 }
@@ -486,9 +468,9 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                     outParam.hostApiSpecificStreamInfo = NULL;
                     err = Pa_OpenStream(&sink->paStream,
                         NULL, /* no input channels */
-                        &outParam, 
+                        &outParam,
                         sink->samplingRate.num / (double)sink->samplingRate.den,
-                        sink->paFramesPerBuffer,
+                        0,
                         paNoFlag,
                         paAudioCallback,
                         sink);
@@ -502,7 +484,7 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                 }
 
                 sink->paStreamInitialised = 1;
-                
+
                 /* start the stream */
                 err = Pa_StartStream(sink->paStream);
                 if (err != paNoError)
@@ -519,12 +501,23 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
             PaError result = Pa_IsStreamActive(sink->paStream);
             if (result == 1)
             {
-                /* stream is active */
-                while (sink->writeBuffer == sink->readBuffer &&
-                    sink->audioStreams[i].bufferIsReady[sink->writeBuffer])
+                while (1)
                 {
-                    /* TODO: more or less */
-                    usleep(50);
+                    bufferIsReadyForWrite = 1;
+                    PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
+                    if (sink->writeBuffer == sink->readBuffer &&
+                        sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer])
+                    {
+                        bufferIsReadyForWrite = 0;
+                    }
+                    PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
+
+                    if (bufferIsReadyForWrite)
+                    {
+                        break;
+                    }
+
+                    usleep(100);
                 }
             }
             else if (result < 0)
@@ -534,12 +527,12 @@ static int aus_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                 sink->sinkDisabled = 1;
                 return 0;
             }
-            
-            
+
+
             return 1;
         }
     }
-    
+
     return msk_accept_stream_frame(sink->nextSink, streamId, frameInfo);
 }
 
@@ -559,19 +552,26 @@ static int aus_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                     sink->audioStreams[i].nextSinkBufferSize = bufferSize;
                 }
             }
-            
-            if (bufferSize > sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer])
+
+            if (bufferSize != sink->audioStreams[i].bufferSize[sink->writeBuffer])
             {
-                /* the source required more work space - reallocate the buffer */
-                
-                SAFE_FREE(&sink->audioStreams[i].buffer[sink->writeBuffer]);
-                sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = 0;
-                
-                CALLOC_ORET(sink->audioStreams[i].buffer[sink->writeBuffer], unsigned char, bufferSize); 
-                sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = bufferSize;
+                if (bufferSize > sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer])
+                {
+                    /* the source required more work space - reallocate the buffer */
+
+                    SAFE_FREE(&sink->audioStreams[i].buffer[sink->writeBuffer]);
+                    sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = 0;
+                    sink->audioStreams[i].bufferSize[sink->writeBuffer] = 0;
+
+                    CALLOC_ORET(sink->audioStreams[i].buffer[sink->writeBuffer], unsigned char, bufferSize);
+                    sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = bufferSize;
+                }
+
+                sink->audioStreams[i].bufferSize[sink->writeBuffer] = bufferSize;
             }
-            
+
             *buffer = sink->audioStreams[i].buffer[sink->writeBuffer];
+
             return 1;
         }
     }
@@ -599,13 +599,9 @@ static int aus_receive_stream_frame(void* data, int streamId, unsigned char* buf
                 msk_receive_stream_frame(sink->nextSink, streamId, sink->audioStreams[i].nextSinkBuffer, bufferSize);
             }
 
-            /* the buffer size should now equal what we expect to receive */            
-            if (bufferSize != sink->audioStreams[i].bufferSize)
-            {
-                ml_log_error("Buffer size (%d) != audio sink buffer size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
-                return 0;
-            }
-            
+            /* the buffer size could have shrinked */
+            sink->audioStreams[i].bufferSize[sink->writeBuffer] = bufferSize;
+
             return 1;
         }
     }
@@ -626,14 +622,24 @@ static int aus_receive_stream_frame_const(void* data, int streamId, const unsign
             {
                 msk_receive_stream_frame_const(sink->nextSink, streamId, buffer, bufferSize);
             }
-            
-            /* the buffer size should now equal what we expect to receive */            
-            if (bufferSize != sink->audioStreams[i].bufferSize)
+
+            if (bufferSize != sink->audioStreams[i].bufferSize[sink->writeBuffer])
             {
-                ml_log_error("Buffer size (%d) != audio sink buffer size (%d)\n", bufferSize, sink->audioStreams[i].bufferSize);
-                return 0;
+                if (bufferSize > sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer])
+                {
+                    /* the source required more work space - reallocate the buffer */
+
+                    SAFE_FREE(&sink->audioStreams[i].buffer[sink->writeBuffer]);
+                    sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = 0;
+                    sink->audioStreams[i].bufferSize[sink->writeBuffer] = 0;
+
+                    CALLOC_ORET(sink->audioStreams[i].buffer[sink->writeBuffer], unsigned char, bufferSize);
+                    sink->audioStreams[i].allocatedBufferSize[sink->writeBuffer] = bufferSize;
+                }
+
+                sink->audioStreams[i].bufferSize[sink->writeBuffer] = bufferSize;
             }
-            
+
             memcpy(sink->audioStreams[i].buffer[sink->writeBuffer], buffer, bufferSize);
             return 1;
         }
@@ -657,7 +663,7 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
         sink->audioStreams[i].nextSinkBufferSize = 0;
         sink->audioStreams[i].nextSinkAcceptedFrame = 0;
     }
-    
+
     if (sink->numAudioStreams > 0)
     {
         if (!(frameInfo->isRepeat || frameInfo->muteAudio || sink->muteAudio))
@@ -668,8 +674,8 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
                 for (i = 0; i < sink->numAudioStreams; i++)
                 {
                     front = sink->audioStreams[i].buffer[sink->writeBuffer];
-                    back = &sink->audioStreams[i].buffer[sink->writeBuffer][sink->audioStreams[i].bufferSize - sink->byteAlignment];
-                    for (j = 0; j < sink->audioStreams[i].bufferSize / 2; j += sink->byteAlignment)
+                    back = &sink->audioStreams[i].buffer[sink->writeBuffer][sink->audioStreams[i].bufferSize[sink->writeBuffer] - sink->byteAlignment];
+                    for (j = 0; j < sink->audioStreams[i].bufferSize[sink->writeBuffer] / 2; j += sink->byteAlignment)
                     {
                         memcpy(tmp, front, sink->byteAlignment);
                         memcpy(front, back, sink->byteAlignment);
@@ -679,19 +685,21 @@ static int aus_complete_frame(void* data, const FrameInfo* frameInfo)
                     }
                 }
             }
-        
+
             /* signal buffer is ready */
+            PTHREAD_MUTEX_LOCK(&sink->bufferMutex);
             for (i = 0; i < sink->numAudioStreams; i++)
             {
-                sink->audioStreams[i].bufferIsReady[sink->writeBuffer] = 1;
+                sink->audioStreams[i].bufferIsReadyForRead[sink->writeBuffer] = 1;
             }
-            
             sink->writeBuffer = (sink->writeBuffer + 1) % 2;
+            PTHREAD_MUTEX_UNLOCK(&sink->bufferMutex);
+
         }
         /* else don't send any audio */
     }
-    
-    
+
+
     return msk_complete_frame(sink->nextSink, frameInfo);
 }
 
@@ -706,7 +714,7 @@ static void aus_cancel_frame(void* data)
         sink->audioStreams[i].nextSinkBufferSize = 0;
         sink->audioStreams[i].nextSinkAcceptedFrame = 0;
     }
-    
+
 
     msk_cancel_frame(sink->nextSink);
 }
@@ -717,35 +725,35 @@ static OnScreenDisplay* aus_get_osd(void* data)
 
     return msk_get_osd(sink->nextSink);
 }
-    
+
 static VideoSwitchSink* aus_get_video_switch(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
 
     return msk_get_video_switch(sink->nextSink);
 }
-    
+
 static AudioSwitchSink* aus_get_audio_switch(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
 
     return msk_get_audio_switch(sink->nextSink);
 }
-    
+
 static HalfSplitSink* aus_get_half_split(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
 
     return msk_get_half_split(sink->nextSink);
 }
-    
+
 static FrameSequenceSink* aus_get_frame_sequence(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
 
     return msk_get_frame_sequence(sink->nextSink);
 }
-    
+
 static int aus_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
 {
     AudioSink* sink = (AudioSink*)data;
@@ -765,10 +773,10 @@ static int aus_mute_audio(void* data, int mute)
     {
         sink->muteAudio = mute;
     }
-    
+
     return 1;
 }
-    
+
 static void aus_close(void* data)
 {
     AudioSink* sink = (AudioSink*)data;
@@ -778,6 +786,8 @@ static void aus_close(void* data)
     {
         return;
     }
+
+    sink->stop = 1; /* stop the pa callback */
 
     if (sink->paStream != NULL)
     {
@@ -798,18 +808,21 @@ static void aus_close(void* data)
         }
         sink->paStream = NULL;
     }
-    
+
     for (i = 0; i < sink->numAudioStreams; i++)
     {
         SAFE_FREE(&sink->audioStreams[i].buffer[0]);
         SAFE_FREE(&sink->audioStreams[i].buffer[1]);
-        sink->audioStreams[i].bufferSize = 0;
+        sink->audioStreams[i].bufferSize[0] = 0;
+        sink->audioStreams[i].bufferSize[1] = 0;
     }
-    
+
+    destroy_mutex(&sink->bufferMutex);
+
     msk_close(sink->nextSink);
 
     Pa_Terminate();
-    
+
     SAFE_FREE(&sink);
 }
 
@@ -818,6 +831,8 @@ static int aus_reset_or_close(void* data)
     AudioSink* sink = (AudioSink*)data;
     int i;
     int result;
+
+    sink->stop = 1; /* stop the pa callback */
 
     if (sink->paStreamStarted)
     {
@@ -836,17 +851,22 @@ static int aus_reset_or_close(void* data)
         sink->paStreamInitialised = 0;
         sink->sinkDisabled = 0;
     }
-    
+
     for (i = 0; i < sink->numAudioStreams; i++)
     {
         SAFE_FREE(&sink->audioStreams[i].buffer[0]);
         SAFE_FREE(&sink->audioStreams[i].buffer[1]);
-        sink->audioStreams[i].bufferSize = 0;
-        sink->audioStreams[i].bufferIsReady[0] = 0;
-        sink->audioStreams[i].bufferIsReady[1] = 0;
+        sink->audioStreams[i].allocatedBufferSize[0] = 0;
+        sink->audioStreams[i].allocatedBufferSize[1] = 0;
+        sink->audioStreams[i].bufferSize[0] = 0;
+        sink->audioStreams[i].bufferSize[1] = 0;
+        sink->audioStreams[i].bufferIsReadyForRead[0] = 0;
+        sink->audioStreams[i].bufferIsReadyForRead[1] = 0;
+        sink->audioStreams[i].bufferBytesUsed[0] = 0;
+        sink->audioStreams[i].bufferBytesUsed[1] = 0;
     }
     sink->numAudioStreams = 0;
-    
+
     result = msk_reset_or_close(sink->nextSink);
     if (result != 1)
     {
@@ -857,9 +877,11 @@ static int aus_reset_or_close(void* data)
         }
         goto fail;
     }
-    
+
+    sink->stop = 0; /* allow pa callback to be used again */
+
     return 1;
-    
+
 fail:
     aus_close(data);
     return 2;
@@ -877,7 +899,7 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
         return 0;
     }
 
-    
+
     /* initialise the port audio library */
     PaError err = Pa_Initialize();
     if (err != paNoError)
@@ -907,8 +929,8 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
             return 0;
         }
     }
-    
-    
+
+
     CALLOC_ORET(newSink, AudioSink, 1);
 
     newSink->nextSink = nextSink;
@@ -934,13 +956,20 @@ int aus_create_audio_sink(MediaSink* nextSink, int audioDevice, AudioSink** sink
     newSink->sink.mute_audio = aus_mute_audio;
     newSink->sink.reset_or_close = aus_reset_or_close;
     newSink->sink.close = aus_close;
-    
+
+    CHK_OFAIL(init_mutex(&newSink->bufferMutex));
+
+
     *sink = newSink;
     return 1;
-    
+
 paerror:
     Pa_Terminate();
     ml_log_error("An error occured while using the portaudio stream: (%d) %s\n", err, Pa_GetErrorText(err));
+    return 0;
+
+fail:
+    aus_close(newSink);
     return 0;
 }
 

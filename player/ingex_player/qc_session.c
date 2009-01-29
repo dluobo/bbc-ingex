@@ -1,9 +1,10 @@
 /*
- * $Id: qc_session.c,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_session.c,v 1.6 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +49,7 @@ struct QCSession
     int haveFirstFrame;
     int haveEndOfSource;
     char sessionComments[MAX_SESSION_COMMENTS_SIZE];
-    
+
     int64_t controlTCStartPos;
 };
 
@@ -64,7 +65,7 @@ static const char* strip_path(const char* filePath)
     {
         return filePath;
     }
-    
+
     return name + 1;
 }
 
@@ -72,19 +73,19 @@ static void safe_fprintf(FILE* file, const char* str, char* buffer, int bufferSi
 {
     strncpy(buffer, str, bufferSize);
     buffer[bufferSize - 1] = '\0';
-    
+
     char* bufferPtr = buffer;
     while (*bufferPtr != '\0')
     {
         if (!isprint(*bufferPtr) ||
-            *bufferPtr == ',' || 
+            *bufferPtr == ',' ||
             *bufferPtr == '\n' || *bufferPtr == '\r')
         {
             *bufferPtr = ' ';
         }
         bufferPtr++;
     }
-    
+
     fprintf(file, "%s", buffer);
 }
 
@@ -92,14 +93,14 @@ static char* get_mark_name(const MarkConfigs* markConfigs, int typeBit, char nam
 {
     int i;
     int bitMask;
-    
+
     name[0] = '\0';
     name[31] = '\0';
-    
+
     if (typeBit >= 1 && typeBit <= 32)
     {
         bitMask = 0x1 << (typeBit - 1);
-        
+
         /* try find a config */
         for (i = 0; i < markConfigs->numConfigs; i++)
         {
@@ -109,14 +110,14 @@ static char* get_mark_name(const MarkConfigs* markConfigs, int typeBit, char nam
                 break;
             }
         }
-        
+
         /* if no config, then use generic naming scheme */
         if (i == markConfigs->numConfigs)
         {
             snprintf(name, 32, "M%d", typeBit - 1);
         }
     }
-    
+
     return name;
 }
 
@@ -128,12 +129,12 @@ static void init_log_line(LogLine logLine)
 static void write_log_line_element(LogLine logLine, int elementNum, const char* format, ...)
 {
     va_list p_arg;
-    
+
     if (format == NULL)
     {
         return;
     }
-    
+
     va_start(p_arg, format);
     vsprintf(logLine[elementNum], format, p_arg);
     va_end(p_arg);
@@ -143,17 +144,17 @@ static void write_comment(QCSession* qcSession, const char* format, ...)
 {
     va_list p_arg;
     int i;
-    
+
     if (format == NULL)
     {
         return;
     }
-    
+
     fprintf(qcSession->sessionFile, "# ");
     va_start(p_arg, format);
     vfprintf(qcSession->sessionFile, format, p_arg);
     va_end(p_arg);
-    
+
     for (i = 0; i < QC_LOG_LINE_ELEMENTS - 1; i++)
     {
         fprintf(qcSession->sessionFile, ", ");
@@ -169,12 +170,12 @@ static void write_comment_start(QCSession* qcSession)
 static void write_comment_middle(QCSession* qcSession, const char* format, ...)
 {
     va_list p_arg;
-    
+
     if (format == NULL)
     {
         return;
     }
-    
+
     va_start(p_arg, format);
     vfprintf(qcSession->sessionFile, format, p_arg);
     va_end(p_arg);
@@ -183,7 +184,7 @@ static void write_comment_middle(QCSession* qcSession, const char* format, ...)
 static void write_comment_end(QCSession* qcSession)
 {
     int i;
-    
+
     for (i = 0; i < QC_LOG_LINE_ELEMENTS - 1; i++)
     {
         fprintf(qcSession->sessionFile, ", ");
@@ -198,7 +199,7 @@ static void qcs_write_timecodes(LogLine logLine, const FrameInfo* frameInfo)
     int haveControlTC = 0;
     int haveVITC = 0;
     int haveLTC = 0;
-    
+
     for (i = 0; i < frameInfo->numTimecodes; i++)
     {
         if (!haveControlTC && frameInfo->timecodes[i].timecodeType == CONTROL_TIMECODE_TYPE)
@@ -225,11 +226,11 @@ static void qcs_write_timecodes(LogLine logLine, const FrameInfo* frameInfo)
 
         if (element >= 0)
         {
-            sprintf(logLine[element], 
-                "%02u:%02u:%02u:%02u", 
-                frameInfo->timecodes[i].timecode.hour, 
-                frameInfo->timecodes[i].timecode.min, 
-                frameInfo->timecodes[i].timecode.sec, 
+            sprintf(logLine[element],
+                "%02u:%02u:%02u:%02u",
+                frameInfo->timecodes[i].timecode.hour,
+                frameInfo->timecodes[i].timecode.min,
+                frameInfo->timecodes[i].timecode.sec,
                 frameInfo->timecodes[i].timecode.frame);
         }
     }
@@ -238,12 +239,12 @@ static void qcs_write_timecodes(LogLine logLine, const FrameInfo* frameInfo)
 static void write_log_line(QCSession* qcSession, LogLine logLine, const FrameInfo* frameInfo)
 {
     int i;
-    
+
     if (frameInfo != NULL)
     {
         qcs_write_timecodes(logLine, frameInfo);
     }
-    
+
     for (i = 0; i < QC_LOG_LINE_ELEMENTS; i++)
     {
         if (i != 0)
@@ -300,7 +301,7 @@ static int parse_mark_type(const char* data)
         }
         data++;
     }
- 
+
     return type;
 }
 
@@ -309,27 +310,28 @@ static void qcs_frame_displayed_event(void* data, const FrameInfo* frameInfo)
     QCSession* qcSession = (QCSession*)data;
     LogLine logLine;
     int i;
-    
+    int roundedFrameRate = get_rounded_frame_rate(&frameInfo->frameRate);
+
     if (!qcSession->haveFirstFrame)
     {
         init_log_line(logLine);
-        
+
         write_log_line_element(logLine, 1, "First frame displayed");
         write_log_line(qcSession, logLine, frameInfo);
 
-        /* get the control timecode position */        
+        /* get the control timecode position */
         qcSession->controlTCStartPos = 0;
         for (i = 0; i < frameInfo->numTimecodes; i++)
         {
             if (frameInfo->timecodes[i].timecodeType == CONTROL_TIMECODE_TYPE)
             {
-                qcSession->controlTCStartPos = frameInfo->timecodes[i].timecode.hour * 60 * 60 * 25 +
-                    frameInfo->timecodes[i].timecode.min * 60 * 25 +
-                    frameInfo->timecodes[i].timecode.sec * 25 +
+                qcSession->controlTCStartPos = frameInfo->timecodes[i].timecode.hour * 60 * 60 * roundedFrameRate +
+                    frameInfo->timecodes[i].timecode.min * 60 * roundedFrameRate +
+                    frameInfo->timecodes[i].timecode.sec * roundedFrameRate +
                     frameInfo->timecodes[i].timecode.frame;
                 if (qcSession->controlTCStartPos < frameInfo->position)
                 {
-                    ml_log_warn("QC session found negative control timecode start position - ignoring and assuming 0 start position\n"); 
+                    ml_log_warn("QC session found negative control timecode start position - ignoring and assuming 0 start position\n");
                     qcSession->controlTCStartPos = 0;
                 }
                 else
@@ -355,10 +357,10 @@ static void qcs_state_change_event(void* data, const MediaPlayerStateEvent* even
     QCSession* qcSession = (QCSession*)data;
     LogLine logLine;
     int elementNum;
-    
+
     init_log_line(logLine);
     elementNum = 2;
-    
+
     if (event->lockedChanged)
     {
         if (event->locked)
@@ -371,7 +373,7 @@ static void qcs_state_change_event(void* data, const MediaPlayerStateEvent* even
         }
     }
     elementNum++;
-    
+
     if (event->playChanged)
     {
         if (event->play)
@@ -384,7 +386,7 @@ static void qcs_state_change_event(void* data, const MediaPlayerStateEvent* even
         }
     }
     elementNum++;
-    
+
     if (event->stopChanged)
     {
         if (event->stop)
@@ -397,13 +399,13 @@ static void qcs_state_change_event(void* data, const MediaPlayerStateEvent* even
         }
     }
     elementNum++;
-    
+
     if (event->speedChanged)
     {
         write_log_line_element(logLine, elementNum, "%dx", event->speed);
     }
     elementNum++;
-    
+
 
     write_log_line(qcSession, logLine, &event->displayedFrameInfo);
 }
@@ -412,23 +414,23 @@ static void qcs_player_closed(void* data)
 {
     QCSession* qcSession = (QCSession*)data;
     LogLine logLine;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     if (qcSession->haveFirstFrame)
     {
         init_log_line(logLine);
-        
+
         write_log_line_element(logLine, 1, "Last frame displayed");
         write_log_line(qcSession, logLine, &qcSession->lastFrameInfo);
     }
 }
 
 
-int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
+int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv,
     const char* name, const char* loadedSessionFilename, const char* userName, const char* hostName,
     QCSession** qcSession)
 {
@@ -443,7 +445,7 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
 
 
     CALLOC_ORET(newQCSession, QCSession, 1);
-    
+
     get_short_timestamp_string(timestampStr);
     snprintf(filename, FILENAME_MAX, "%s%s%s.txt", mxfFilename, g_qcSessionPreSuf, timestampStr);
     if ((lastSep = strrchr(filename, '/')) == NULL)
@@ -462,13 +464,13 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
         CALLOC_OFAIL(newQCSession->ltoDir, char, strlen(filename) - strlen(lastSep + 1) + 1);
         strncpy(newQCSession->ltoDir, filename, strlen(filename) - strlen(lastSep + 1));
     }
-    
+
     if ((newQCSession->sessionFile = fopen(filename, "wb")) == NULL)
     {
         ml_log_error("Failed to open QC session '%s' for writing\n", filename);;
         goto fail;
     }
-    
+
     newQCSession->playerListener.data = newQCSession;
     newQCSession->playerListener.frame_displayed_event = qcs_frame_displayed_event;
     newQCSession->playerListener.frame_dropped_event = qcs_frame_dropped_event;
@@ -500,10 +502,10 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
         }
     }
     write_comment_end(newQCSession);
-    
-    
+
+
     /* write metadata */
-    
+
     write_comment(newQCSession, "");
     write_comment(newQCSession, "");
     write_comment(newQCSession, "");
@@ -520,10 +522,10 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     for (i = 0; i < streamInfo->numSourceInfoValues; i++)
     {
         fprintf(newQCSession->sessionFile, ", ");
-        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].name, 
+        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].name,
             metadataBuffer, sizeof(metadataBuffer));
         fprintf(newQCSession->sessionFile, ", ");
-        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].value, 
+        safe_fprintf(newQCSession->sessionFile, streamInfo->sourceInfoValues[i].value,
             metadataBuffer, sizeof(metadataBuffer));
         for (j = 0; j < QC_LOG_LINE_ELEMENTS - 3; j++)
         {
@@ -532,11 +534,11 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
         fprintf(newQCSession->sessionFile, "\n");
     }
     write_comment(newQCSession, "");
-    
 
-    
+
+
     /* write state header */
-    
+
     write_comment(newQCSession, "");
     write_comment(newQCSession, "");
     write_comment(newQCSession, "Player state");
@@ -553,10 +555,10 @@ int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char*
     write_log_line_element(logLine, 8, "LTC");
     write_log_line(newQCSession, logLine, NULL);
     write_comment(newQCSession, "");
-    
+
     *qcSession = newQCSession;
     return 1;
-    
+
 fail:
     qcs_close(&newQCSession, NULL, NULL, NULL, 0);
     return 0;
@@ -567,7 +569,7 @@ int qcs_connect_to_player(QCSession* qcSession, MediaPlayer* player)
     return ply_register_player_listener(player, &qcSession->playerListener);
 }
 
-void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType, 
+void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
     const MarkConfigs* markConfigs, Mark* marks, int numMarks)
 {
     int i;
@@ -577,7 +579,7 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
     int mask;
     char markName[32];
     int markType;
-    
+
     write_comment(qcSession, "");
     write_comment(qcSession, "");
     write_comment(qcSession, "Marks");
@@ -594,7 +596,7 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
     write_log_line(qcSession, logLine, NULL);
 
     write_comment(qcSession, "");
-    
+
     for (i = 0; i < numMarks; i++)
     {
         if (includeAll)
@@ -610,14 +612,14 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
                 continue;
             }
         }
-        
+
         /* filter out dangling clip marks */
         if ((markType & clipMarkType) != 0)
         {
             if (marks[i].pairedPosition < 0)
             {
                 ml_log_warn("Incomplete clip mark when writing marks to session file\n");
-                
+
                 markType &= ~clipMarkType;
                 if (markType == 0)
                 {
@@ -626,19 +628,20 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
             }
         }
 
-        /* Position */        
+        /* Position */
         fprintf(qcSession->sessionFile, ", %"PRId64"", marks[i].position);
 
-        /* CTC */        
+        /* CTC */
+        /* TODO: don't hard code 25 fps */
         controlTCPos = marks[i].position + qcSession->controlTCStartPos;
         fprintf(qcSession->sessionFile, ", %02"PRId64":%02"PRId64":%02"PRId64":%02"PRId64"",
             controlTCPos / (25 * 60 * 60),
             (controlTCPos % (25 * 60 * 60)) / (25 * 60),
             ((controlTCPos % (25 * 60 * 60)) % (25 * 60)) / 25,
             ((controlTCPos % (25 * 60 * 60)) % (25 * 60)) % 25);
-        
-        
-        /* Clip Duration, Clip Mark Type */        
+
+
+        /* Clip Duration, Clip Mark Type */
         if (marks[i].pairedPosition >= 0)
         {
             int64_t duration;
@@ -652,7 +655,7 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
                 duration *= -1; /* negative duration indicates that this mark is at the end of the clip */
             }
             fprintf(qcSession->sessionFile, ", %"PRId64"", duration);
-    
+
             fprintf(qcSession->sessionFile, ", 0x%08x", clipMarkType);
         }
         else
@@ -660,11 +663,11 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
             fprintf(qcSession->sessionFile, ", ");
             fprintf(qcSession->sessionFile, ", ");
         }
-        
-        /* Mark Type */        
+
+        /* Mark Type */
         fprintf(qcSession->sessionFile, ", 0x%08x", markType);
-        
-        /* Mark Description */        
+
+        /* Mark Description */
         fprintf(qcSession->sessionFile, ", ");
         mask = 0x00000001;
         for (j = 1; j <= 32; j++)
@@ -697,7 +700,7 @@ void qcs_close(QCSession** qcSession, const char* reportDirectory, const char* s
     char timestampStr[MAX_TIMESTAMP_STRING_SIZE];
     char scriptCmd[FILENAME_MAX];
     char reportAccessPortStr[32];
-    
+
     if (*qcSession == NULL)
     {
         return;
@@ -726,42 +729,42 @@ void qcs_close(QCSession** qcSession, const char* reportDirectory, const char* s
         }
     }
 
-    
+
     write_comment((*qcSession), "");
     write_comment((*qcSession), "");
     get_timestamp_string(timestampStr);
     write_comment((*qcSession), "Ended: %s", timestampStr);
-    
+
     write_comment((*qcSession), "");
     write_comment((*qcSession), "");
     get_timestamp_string(timestampStr);
     write_comment((*qcSession), "Comments");
     write_comment((*qcSession), "");
     fprintf((*qcSession)->sessionFile, "%s\n", (*qcSession)->sessionComments);
-    
-    
+
+
     if ((*qcSession)->sessionFile != NULL)
     {
         fclose((*qcSession)->sessionFile);
         (*qcSession)->sessionFile = NULL;
     }
-    
+
     SAFE_FREE(&(*qcSession)->sessionName);
     SAFE_FREE(&(*qcSession)->ltoDir);
-    
+
     SAFE_FREE(qcSession);
-    
-    
+
+
     /* call the session script */
     if (sessionScriptName != NULL)
     {
         if (system(scriptCmd) == 0)
         {
-            ml_log_info("Session script success: %s\n", scriptCmd); 
+            ml_log_info("Session script success: %s\n", scriptCmd);
         }
         else
         {
-            ml_log_error("Session script failed: %s\n", scriptCmd); 
+            ml_log_error("Session script failed: %s\n", scriptCmd);
         }
     }
 }
@@ -786,15 +789,15 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
     int commentCount;
     int c;
     int haveFirst;
-    
-    
+
+
     /* open QC session file */
     if ((qcSessionFile = fopen(filename, "rb")) == NULL)
     {
         ml_log_error("Failed to open QC session %s for reading\n", filename);;
         return 0;
     }
-    
+
     /* parse marks and set in player */
     while (!done)
     {
@@ -808,18 +811,18 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                     done = 1;
                     break;
                 }
-                
+
                 if (strncmp("# Ended", buffer, 7) == 0)
                 {
                     done = 1;
                     break;
                 }
-                
+
                 if (strncmp("# Marks", buffer, 7) == 0)
                 {
                     state = 1;
                 }
-                
+
                 /* skip rest of line */
                 while (strchr(buffer, '\n') == NULL)
                 {
@@ -847,7 +850,7 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                     done = 1;
                     break;
                 }
-                
+
                 if (buffer[0] != '#')
                 {
                     positionStr = NULL;
@@ -855,7 +858,7 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                     clipDurationStr = NULL;
                     clipMarkTypeStr = NULL;
                     markTypeStr = NULL;
-                    
+
                     positionStr = strchr(buffer, ',');
                     if (positionStr)
                     {
@@ -873,7 +876,7 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                     {
                         markTypeStr = strchr(clipMarkTypeStr + 1, ',');
                     }
-                    
+
                     if (positionStr && clipDurationStr && clipMarkTypeStr && markTypeStr)
                     {
                         if (sscanf(positionStr + 1, "%"PRId64"", &position) != 1)
@@ -892,9 +895,9 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                                     mc_mark_position(control, position, type, 0);
                                     count++;
                                 }
-                                
+
                                 /* mark the clip end position */
-                                /* negative durations indicate this is the end mark and will be ignored because 
+                                /* negative durations indicate this is the end mark and will be ignored because
                                 the previous clip mark has already being read */
                                 if (sscanf(clipDurationStr + 1, "%"PRId64"", &duration) == 1 &&
                                     duration > 1)
@@ -928,7 +931,7 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                         ml_log_warn("Failed to read mark line\n");
                     }
                 }
-                
+
                 /* skip rest of line */
                 while (strchr(buffer, '\n') == NULL)
                 {
@@ -943,11 +946,11 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                 break;
         }
     }
-    
+
     /* parse the comments */
 
     sessionComments[0] = '\0';
-    
+
     while (1)
     {
         if (fgets(buffer, 128, qcSessionFile) == NULL)
@@ -955,7 +958,7 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
             /* EOF */
             break;
         }
-        
+
         if (strncmp("# Comments", buffer, 7) == 0)
         {
             /* skip the next line */
@@ -983,14 +986,14 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                     commentCount--;
                 }
             }
-            
+
             break;
         }
     }
-     
-                
+
+
     ml_log_info("Set %"PRId64" marks from qc session\n", count);
-    
+
     fclose(qcSessionFile);
     return 1;
 }
@@ -999,9 +1002,9 @@ int qcs_is_session_file(const char* filename, const char* mxfFilename)
 {
     size_t filenameLen = strlen(filename);
     size_t mxfFilenameLen = strlen(mxfFilename);
-    
+
     /* return 1 if filename = mxfFilename + (.*) + '.txt' */
-    
+
     if (strncmp(filename, mxfFilename, mxfFilenameLen) != 0)
     {
         return 0;
@@ -1017,7 +1020,7 @@ int qcs_is_session_file(const char* filename, const char* mxfFilename)
     {
         return 0;
     }
-    
+
     return 1;
 }
 
@@ -1029,7 +1032,7 @@ const char* qcs_get_session_name(QCSession* qcSession)
 int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, int* day, int* hour, int* min, int* sec)
 {
     /* the session filename has the format <mxf filename> + g_qcSessionPreSuf + YYYYMMDD_HHMMSS.txt */
-    
+
     const char* timestampStr = strstr(sessionFilename, g_qcSessionPreSuf);
     if (timestampStr == NULL)
     {
@@ -1047,11 +1050,11 @@ int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, in
     memcpy(buffer, timestampStr, 4);
     buffer[4] = '\0';
     *year = atoi(buffer);
-    
+
     memcpy(buffer, &timestampStr[4], 2);
     buffer[2] = '\0';
     *month = atoi(buffer);
-    
+
     memcpy(buffer, &timestampStr[6], 2);
     buffer[2] = '\0';
     *day = atoi(buffer);
@@ -1059,15 +1062,15 @@ int qcs_extract_timestamp(const char* sessionFilename, int* year, int* month, in
     memcpy(buffer, &timestampStr[9], 2);
     buffer[2] = '\0';
     *hour = atoi(buffer);
-    
+
     memcpy(buffer, &timestampStr[11], 2);
     buffer[2] = '\0';
     *min = atoi(buffer);
-    
+
     memcpy(buffer, &timestampStr[13], 2);
     buffer[2] = '\0';
     *sec = atoi(buffer);
-    
+
     return 1;
 }
 

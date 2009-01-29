@@ -1,9 +1,10 @@
 /*
- * $Id: emulate_key.c,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ * $Id: emulate_key.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +21,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-/* originally code and ideas were used from XFakeKey, produced by Adam Pierce (http://www.doctort.org/adam/) */ 
+/* originally code and ideas were used from XFakeKey, produced by Adam Pierce (http://www.doctort.org/adam/) */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -49,10 +50,10 @@ static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
     XKeyEvent event;
     Window winFocus;
     int revert;
-    
+
     /* get window to send event to */
     XGetInputFocus(emu->display, &winFocus, &revert);
-    
+
     /* create event */
     memset(&event, 0, sizeof(XKeyEvent));
     event.type = (down) ? KeyPress : KeyRelease;
@@ -70,7 +71,7 @@ static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
     event.state = modifiers;
     event.keycode = XKeysymToKeycode(emu->display, keysym);
     event.same_screen = True;
-    
+
     /* send event */
     int result = XSendEvent(event.display, event.window, True, KeyPressMask, (XEvent*)&event);
 
@@ -78,9 +79,9 @@ static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
 #else
 
     int result = XTestFakeKeyEvent(emu->display, XKeysymToKeycode(emu->display, keysym), down ? True : False, CurrentTime);
-    
+
 #endif
-    
+
     return result != 0;
 }
 
@@ -89,15 +90,15 @@ static int send_key(EmulateKey* emu, int down, int keysym, int modifiers)
 int create_emu(EmulateKey** emu)
 {
     EmulateKey* newEmu;
-    
+
     if ((newEmu = (EmulateKey*)malloc(sizeof(EmulateKey))) == NULL)
     {
         fprintf(stderr, "Failed to allocate memory\n");
         return 0;
     }
     memset(newEmu, 0, sizeof(EmulateKey));
-    
-    
+
+
     if ((newEmu->display = XOpenDisplay(0)) == NULL)
     {
         fprintf(stderr, "Failed to open display\n");
@@ -105,7 +106,7 @@ int create_emu(EmulateKey** emu)
         return 0;
     }
     newEmu->rootWin = XDefaultRootWindow(newEmu->display);
-    
+
     *emu = newEmu;
     return 1;
 }
@@ -122,7 +123,7 @@ int emu_key_up(EmulateKey* emu, int keysym, int modifier)
 
 int emu_key(EmulateKey* emu, int keysym, int modifier)
 {
-    return emu_key_down(emu, keysym, modifier) && emu_key_up(emu, keysym, modifier); 
+    return emu_key_down(emu, keysym, modifier) && emu_key_up(emu, keysym, modifier);
 }
 
 void free_emu(EmulateKey** emu)
@@ -136,7 +137,7 @@ void free_emu(EmulateKey** emu)
     {
         XCloseDisplay((*emu)->display);
     }
-    
+
     SAFE_FREE(emu);
 }
 

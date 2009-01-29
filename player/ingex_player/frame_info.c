@@ -1,9 +1,10 @@
 /*
- * $Id: frame_info.c,v 1.5 2008/10/29 17:47:41 john_f Exp $
+ * $Id: frame_info.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +31,7 @@
 #include "macros.h"
 
 
-static const char* g_streamTypeStrings[] = 
+static const char* g_streamTypeStrings[] =
 {
     "unknown",
     "picture",
@@ -39,7 +40,7 @@ static const char* g_streamTypeStrings[] =
     "event"
 };
 
-static const char* g_streamFormatStrings[] = 
+static const char* g_streamFormatStrings[] =
 {
     "unknown",
     "uyvy",
@@ -60,27 +61,27 @@ static const char* g_streamFormatStrings[] =
 };
 
 /* keep length <= MAX_SOURCE_INFO_NAME_LEN */
-static const char* g_sourceInfoNames[] = 
-{ 
-    "Filename", 
+static const char* g_sourceInfoNames[] =
+{
+    "Filename",
     "File type",
-    "File duration", 
-    
-    "Orig filename", 
-    "Creation date", 
-    "LTO spool no.", 
-    "D3 spool no.", 
-    "D3 item no.", 
-    "Prog title", 
-    "Episode title", 
-    "Tx date", 
-    "Prog number", 
-    "Prog duration", 
-    
+    "File duration",
+
+    "Orig filename",
+    "Creation date",
+    "LTO spool no.",
+    "D3 spool no.",
+    "D3 item no.",
+    "Prog title",
+    "Episode title",
+    "Tx date",
+    "Prog number",
+    "Prog duration",
+
     "Title",
-    
+
     "Name",
-    
+
     "Unknown"
 };
 
@@ -94,7 +95,7 @@ const char* get_stream_type_string(StreamType type)
         ml_log_error("unknown stream type %d\n", type);
         return g_streamTypeStrings[0];
     }
-    
+
     return g_streamTypeStrings[type];
 }
 
@@ -106,7 +107,7 @@ const char* get_stream_format_string(StreamFormat format)
         ml_log_error("unknown stream format %d\n", format);
         return g_streamFormatStrings[0];
     }
-    
+
     return g_streamFormatStrings[format];
 }
 
@@ -114,10 +115,10 @@ const char* get_stream_format_string(StreamFormat format)
 int initialise_stream_info(StreamInfo* streamInfo)
 {
     memset(streamInfo, 0, sizeof(StreamInfo));
-    
+
     CALLOC_ORET(streamInfo->sourceInfoValues, SourceInfoValue, 32);
     streamInfo->numSourceInfoValuesAlloc = 32;
-    
+
     return 1;
 }
 
@@ -126,7 +127,8 @@ int add_source_info(StreamInfo* streamInfo, const char* name, const char* value)
     SourceInfoValue* newArray = NULL;
     char* newName = NULL;
     char* newValue = NULL;
-    
+    int i;
+
     /* copy new name-value pair */
     if (name == NULL)
     {
@@ -150,13 +152,32 @@ int add_source_info(StreamInfo* streamInfo, const char* name, const char* value)
         strncpy(newValue, value, MAX_SOURCE_INFO_VALUE_LEN);
         newValue[MAX_SOURCE_INFO_VALUE_LEN] = '\0';
     }
-    
+
+    /* replace existing value */
+    for (i = 0; i < streamInfo->numSourceInfoValues; i++)
+    {
+
+        if (strcmp(name, streamInfo->sourceInfoValues[i].name) == 0)
+        {
+            SAFE_FREE(&streamInfo->sourceInfoValues[i].name);
+            SAFE_FREE(&streamInfo->sourceInfoValues[i].value);
+
+            streamInfo->sourceInfoValues[i].name = newName;
+            newName = NULL;
+            streamInfo->sourceInfoValues[i].value = newValue;
+            newValue = NULL;
+
+            return 1;
+        }
+    }
+
+    /* else append new value */
     if (streamInfo->numSourceInfoValues + 1 > streamInfo->numSourceInfoValuesAlloc)
     {
         /* allocate new array and copy over old values */
         CALLOC_OFAIL(newArray, SourceInfoValue, streamInfo->numSourceInfoValuesAlloc + 32);
         memcpy(newArray, streamInfo->sourceInfoValues, streamInfo->numSourceInfoValuesAlloc * sizeof(SourceInfoValue));
-        
+
         SAFE_FREE(&streamInfo->sourceInfoValues);
         streamInfo->sourceInfoValues = newArray;
         newArray = NULL;
@@ -168,9 +189,9 @@ int add_source_info(StreamInfo* streamInfo, const char* name, const char* value)
     newName = NULL;
     streamInfo->sourceInfoValues[streamInfo->numSourceInfoValues - 1].value = newValue;
     newValue = NULL;
-    
+
     return 1;
-    
+
 fail:
     SAFE_FREE(&newName);
     SAFE_FREE(&newValue);
@@ -195,7 +216,7 @@ int add_filename_source_info(StreamInfo* streamInfo, SourceInfoName name, const 
 {
     char limitedFilename[MAX_SOURCE_INFO_VALUE_LEN + 1];
     size_t len;
-    
+
     len = strlen(filename);
     if (len > MAX_SOURCE_INFO_VALUE_LEN)
     {
@@ -205,21 +226,21 @@ int add_filename_source_info(StreamInfo* streamInfo, SourceInfoName name, const 
     {
         sprintf(limitedFilename, "%s", filename);
     }
-    
+
     return add_known_source_info(streamInfo, name, limitedFilename);
 }
 
 int add_timecode_source_info(StreamInfo* streamInfo, SourceInfoName name, int64_t timecode, int timecodeBase)
 {
     char timecodeStr[MAX_SOURCE_INFO_VALUE_LEN + 1];
-    
+
     if (timecode < 0)
     {
-        sprintf(timecodeStr, "?"); 
+        sprintf(timecodeStr, "?");
     }
     else
     {
-        sprintf(timecodeStr, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64, 
+        sprintf(timecodeStr, "%02"PFi64":%02"PFi64":%02"PFi64":%02"PFi64,
             timecode / (60 * 60 * timecodeBase),
             (timecode % (60 * 60 * timecodeBase)) / (60 * timecodeBase),
             ((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) / timecodeBase,
@@ -233,12 +254,12 @@ int add_timecode_source_info(StreamInfo* streamInfo, SourceInfoName name, int64_
 void clear_stream_info(StreamInfo* streamInfo)
 {
     int i;
-    
+
     if (streamInfo == NULL)
     {
         return;
     }
-    
+
     for (i = 0; i < streamInfo->numSourceInfoValues; i++)
     {
         SAFE_FREE(&streamInfo->sourceInfoValues[i].name);
@@ -259,21 +280,21 @@ const char* get_source_info_value(const StreamInfo* streamInfo, const char* name
            return streamInfo->sourceInfoValues[i].value;
        }
     }
-    
+
     return NULL;
 }
 
 const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfoName name)
 {
     int i;
-    
+
     if (name > sizeof(g_sourceInfoNames) / sizeof(char*))
     {
         assert(name <= sizeof(g_sourceInfoNames) / sizeof(char*));
         ml_log_warn("Unknown name enum %d\n", name);
         return NULL;
     }
-    
+
     for (i = 0; i < streamInfo->numSourceInfoValues; i++)
     {
        if (strcmp(g_sourceInfoNames[name], streamInfo->sourceInfoValues[i].name) == 0)
@@ -281,7 +302,7 @@ const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfo
            return streamInfo->sourceInfoValues[i].value;
        }
     }
-   
+
     return NULL;
 }
 
@@ -289,9 +310,9 @@ const char* get_known_source_info_value(const StreamInfo* streamInfo, SourceInfo
 int duplicate_stream_info(const StreamInfo* fromStreamInfo, StreamInfo* toStreamInfo)
 {
     int i;
-    
+
     *toStreamInfo = *fromStreamInfo;
-    
+
     toStreamInfo->sourceInfoValues = NULL;
     toStreamInfo->numSourceInfoValues = 0;
     toStreamInfo->numSourceInfoValuesAlloc = 0;
@@ -299,7 +320,7 @@ int duplicate_stream_info(const StreamInfo* fromStreamInfo, StreamInfo* toStream
     {
         CHK_ORET(add_source_info(toStreamInfo, fromStreamInfo->sourceInfoValues[i].name, fromStreamInfo->sourceInfoValues[i].value));
     }
-    
+
     return 1;
 }
 
@@ -311,7 +332,7 @@ void set_stream_clip_id(StreamInfo* streamInfo, const char* clipId)
         streamInfo->clipId[0] = '\0';
         return;
     }
-    
+
     strncpy(streamInfo->clipId, clipId, sizeof(streamInfo->clipId));
     streamInfo->clipId[sizeof(streamInfo->clipId) - 1] = '\0';
 }
@@ -338,7 +359,43 @@ int select_frame_timecode(const FrameInfo* frameInfo, int tcIndex, int tcType, i
         }
         index++;
     }
-    
+
     return 0;
 }
+
+int is_pal_frame_rate(const Rational* frameRate)
+{
+    return memcmp(frameRate, &g_palFrameRate, sizeof(*frameRate)) == 0;
+}
+
+int is_ntsc_frame_rate(const Rational* frameRate)
+{
+    return memcmp(frameRate, &g_ntscFrameRate, sizeof(*frameRate)) == 0;
+}
+
+int stream_is_pal_frame_rate(const StreamInfo* streamInfo)
+{
+    return is_pal_frame_rate(&streamInfo->frameRate);
+}
+
+int stream_is_ntsc_frame_rate(const StreamInfo* streamInfo)
+{
+    return is_ntsc_frame_rate(&streamInfo->frameRate);
+}
+
+int frame_is_pal_frame_rate(const FrameInfo* frameInfo)
+{
+    return is_pal_frame_rate(&frameInfo->frameRate);
+}
+
+int frame_is_ntsc_frame_rate(const FrameInfo* frameInfo)
+{
+    return is_ntsc_frame_rate(&frameInfo->frameRate);
+}
+
+int get_rounded_frame_rate(const Rational* frameRate)
+{
+    return (int)(frameRate->num / (float)frameRate->den + 0.5);
+}
+
 

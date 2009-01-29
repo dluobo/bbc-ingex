@@ -1,9 +1,10 @@
 /*
- * $Id: frame_sequence_sink.c,v 1.6 2008/11/06 11:30:09 john_f Exp $
+ * $Id: frame_sequence_sink.c,v 1.7 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,27 +41,27 @@ struct FrameSequenceSink
     int numImageQuads;
     int numImages;
     int imageScale;
-    
+
     MediaSink* targetSink;
-    
+
     MediaSink sink;
-    
+
     /* targetSinkListener listens to target sink and forwards to the frame sequence sink listener */
     MediaSinkListener targetSinkListener;
     MediaSinkListener* switchListener;
-    
+
     int streamId;
     StreamInfo streamInfo;
-    
+
     int64_t previousPosition;
-    
+
     unsigned char* inBuffer;
     unsigned int inBufferSize;
     int imageLineBytes;
 
     unsigned char** intermediateBuffers;
     unsigned char* workBuffer;
-    
+
     int numBufferedImages;
     unsigned char** scaledImageBuffers;
     int64_t* positions;
@@ -77,7 +78,7 @@ struct FrameSequenceSink
 static void fss_frame_displayed(void* data, const FrameInfo* frameInfo)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
-    
+
     msl_frame_displayed(sequence->switchListener, frameInfo);
 }
 
@@ -102,7 +103,7 @@ static int fss_register_listener(void* data, MediaSinkListener* listener)
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     sequence->switchListener = listener;
-    
+
     return msk_register_listener(sequence->targetSink, &sequence->targetSinkListener);
 }
 
@@ -114,7 +115,7 @@ static void fss_unregister_listener(void* data, MediaSinkListener* listener)
     {
         sequence->switchListener = NULL;
     }
-    
+
     msk_unregister_listener(sequence->targetSink, &sequence->targetSinkListener);
 }
 
@@ -124,8 +125,8 @@ static int fss_accept_stream(void* data, const StreamInfo* streamInfo)
     int result;
 
     result = msk_accept_stream(sequence->targetSink, streamInfo);
-    if (result && 
-        streamInfo->type == PICTURE_STREAM_TYPE && 
+    if (result &&
+        streamInfo->type == PICTURE_STREAM_TYPE &&
         streamInfo->format != UYVY_FORMAT)
     {
         return 0;
@@ -140,7 +141,7 @@ static int fss_register_stream(void* data, int streamId, const StreamInfo* strea
     int scale;
 
     if (sequence->streamId < 0 &&
-        streamInfo->type == PICTURE_STREAM_TYPE && 
+        streamInfo->type == PICTURE_STREAM_TYPE &&
         streamInfo->format == UYVY_FORMAT)
     {
         if (msk_register_stream(sequence->targetSink, streamId, streamInfo))
@@ -150,10 +151,10 @@ static int fss_register_stream(void* data, int streamId, const StreamInfo* strea
 
             sequence->inBufferSize = streamInfo->width * streamInfo->height * 2;
             sequence->imageLineBytes = streamInfo->width * 2;
-            
+
             CALLOC_ORET(sequence->inBuffer, unsigned char, sequence->inBufferSize);
             CALLOC_ORET(sequence->workBuffer, unsigned char, sequence->inBufferSize);
-            
+
             CALLOC_ORET(sequence->intermediateBuffers, unsigned char*, sequence->numImageQuads);
             scale = 2;
             for (i = 0; i < sequence->numImageQuads; i++)
@@ -161,7 +162,7 @@ static int fss_register_stream(void* data, int streamId, const StreamInfo* strea
                 CALLOC_ORET(sequence->intermediateBuffers[i], unsigned char, sequence->inBufferSize / scale);
                 scale *= 2;
             }
-            
+
             CALLOC_ORET(sequence->scaledImageBuffers, unsigned char*, sequence->numBufferedImages);
             CALLOC_ORET(sequence->positions, int64_t, sequence->numBufferedImages);
             sequence->scaledImageLineBytes = streamInfo->width * 2 / sequence->imageScale;
@@ -173,7 +174,7 @@ static int fss_register_stream(void* data, int streamId, const StreamInfo* strea
                 CALLOC_ORET(sequence->scaledImageBuffers[i], unsigned char, sequence->scaledImageBufferSize);
                 sequence->positions[i] = -1;
             }
-            
+
             return 1;
         }
         else
@@ -205,9 +206,9 @@ static int fss_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
             ml_log_error("Buffer size (%d) != sequence data size (%d)\n", bufferSize, sequence->inBufferSize);
             return 0;
         }
-        
+
         CHK_ORET(msk_get_stream_buffer(sequence->targetSink, streamId, bufferSize, &sequence->outBuffer));
-        
+
         *buffer = sequence->inBuffer;
         return 1;
     }
@@ -225,7 +226,7 @@ static int fss_receive_stream_frame(void* data, int streamId, unsigned char* buf
     YUV_frame intermediateFrame;
     YUV_frame srcFrame;
     int scale;
-    
+
 
     if (streamId == sequence->streamId)
     {
@@ -234,33 +235,33 @@ static int fss_receive_stream_frame(void* data, int streamId, unsigned char* buf
             ml_log_error("Buffer size (%d) != sequence data size (%d)\n", bufferSize, sequence->inBufferSize);
             return 0;
         }
-        
+
         scale = 2;
         for (i = 0; i < sequence->numImageQuads; i++)
         {
-            YUV_frame_from_buffer(&srcFrame, srcBuffer, 
+            YUV_frame_from_buffer(&srcFrame, srcBuffer,
                 sequence->streamInfo.width * 2 / scale, sequence->streamInfo.height * 2 / scale,
                 UYVY);
-        
-            YUV_frame_from_buffer(&intermediateFrame, sequence->intermediateBuffers[i], 
-                sequence->streamInfo.width / scale, sequence->streamInfo.height / scale, 
+
+            YUV_frame_from_buffer(&intermediateFrame, sequence->intermediateBuffers[i],
+                sequence->streamInfo.width / scale, sequence->streamInfo.height / scale,
                 UYVY);
-        
-            small_pic(&srcFrame, 
+
+            small_pic(&srcFrame,
                 &intermediateFrame,
-                0, 
+                0,
                 0,
                 2,
                 2,
-                1, 
-                i == sequence->numImageQuads - 1, 
-                i == sequence->numImageQuads - 1, 
+                1,
+                i == sequence->numImageQuads - 1,
+                i == sequence->numImageQuads - 1,
                 sequence->workBuffer);
-                
+
             srcBuffer = sequence->intermediateBuffers[i];
             scale *= 2;
         }
-        
+
         return 1;
     }
     else
@@ -289,29 +290,29 @@ static int fss_receive_stream_frame_const(void* data, int streamId, const unsign
         scale = 2;
         for (i = 0; i < sequence->numImageQuads; i++)
         {
-            YUV_frame_from_buffer(&srcFrame, srcBuffer, 
-                sequence->streamInfo.width * 2 / scale, sequence->streamInfo.height * 2 / scale, 
+            YUV_frame_from_buffer(&srcFrame, srcBuffer,
+                sequence->streamInfo.width * 2 / scale, sequence->streamInfo.height * 2 / scale,
                 UYVY);
-        
-            YUV_frame_from_buffer(&intermediateFrame, sequence->intermediateBuffers[i], 
-                sequence->streamInfo.width / scale, sequence->streamInfo.height / scale, 
+
+            YUV_frame_from_buffer(&intermediateFrame, sequence->intermediateBuffers[i],
+                sequence->streamInfo.width / scale, sequence->streamInfo.height / scale,
                 UYVY);
-        
-            small_pic(&srcFrame, 
+
+            small_pic(&srcFrame,
                 &intermediateFrame,
-                0, 
+                0,
                 0,
                 2,
                 2,
-                1, 
-                i == sequence->numImageQuads - 1, 
-                i == sequence->numImageQuads - 1, 
+                1,
+                i == sequence->numImageQuads - 1,
+                i == sequence->numImageQuads - 1,
                 sequence->workBuffer);
-                
+
             srcBuffer = sequence->intermediateBuffers[i];
             scale *= 2;
         }
-        
+
         return 1;
     }
     else
@@ -334,22 +335,22 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
         /* fill output with black */
         fill_black(sequence->streamInfo.format, sequence->streamInfo.width, sequence->streamInfo.height,
             sequence->outBuffer);
-        
+
         /* copy image into slot */
         memcpy(sequence->scaledImageBuffers[frameInfo->position % sequence->numBufferedImages],
             sequence->intermediateBuffers[sequence->numImageQuads - 1],
             sequence->scaledImageBufferSize);
-        sequence->positions[frameInfo->position % sequence->numBufferedImages] = frameInfo->position;            
-            
+        sequence->positions[frameInfo->position % sequence->numBufferedImages] = frameInfo->position;
+
 
         /* set the position in the list of images for the current frame */
-        if (sequence->previousPosition > frameInfo->position && 
+        if (sequence->previousPosition > frameInfo->position &&
             sequence->positionInImageBuffers > 0)
         {
             sequence->positionInImageBuffers--;
         }
         else if (sequence->previousPosition >= 0 &&
-            sequence->previousPosition < frameInfo->position && 
+            sequence->previousPosition < frameInfo->position &&
             sequence->positionInImageBuffers < sequence->numImages - 1)
         {
             sequence->positionInImageBuffers++;
@@ -360,10 +361,10 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
         for (i = 0; i < sequence->numImages; i++)
         {
             imagePosition = frameInfo->position - sequence->positionInImageBuffers + i;
-            
+
             if (imagePosition >= 0)
             {
-                if (sequence->positions[imagePosition % sequence->numBufferedImages] == imagePosition) 
+                if (sequence->positions[imagePosition % sequence->numBufferedImages] == imagePosition)
                 {
                     count++;
                 }
@@ -373,18 +374,18 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
         {
             sequence->positionInImageBuffers = 0;;
         }
-        
+
         /* copy images to slots */
         for (i = 0; i < sequence->numImages; i++)
         {
             imagePosition = frameInfo->position - sequence->positionInImageBuffers + i;
-            
+
             if (imagePosition >= 0)
             {
-                if (sequence->positions[imagePosition % sequence->numBufferedImages] == imagePosition) 
+                if (sequence->positions[imagePosition % sequence->numBufferedImages] == imagePosition)
                 {
                     inBufPtr = sequence->scaledImageBuffers[imagePosition % sequence->numBufferedImages];
-                    outBufPtr = sequence->outBuffer +  
+                    outBufPtr = sequence->outBuffer +
                         (i % sequence->imageScale) * sequence->scaledImageLineBytes +
                         (i / sequence->imageScale) * sequence->imageLineBytes * sequence->scaledImageHeight;
                     for (j = 0; j < sequence->scaledImageHeight; j++)
@@ -398,9 +399,9 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
             }
             /* else don't have image */
         }
-        
+
         sequence->previousPosition = frameInfo->position;
-        
+
         /* send the sequence */
         if (!msk_receive_stream_frame(sequence->targetSink, sequence->streamId, sequence->outBuffer, sequence->inBufferSize))
         {
@@ -408,7 +409,7 @@ static int fss_complete_frame(void* data, const FrameInfo* frameInfo)
             return 0;
         }
     }
-    
+
     return msk_complete_frame(sequence->targetSink, frameInfo);
 }
 
@@ -425,42 +426,42 @@ static OnScreenDisplay* fss_get_osd(void* data)
 
     return msk_get_osd(sequence->targetSink);
 }
-    
+
 static VideoSwitchSink* fss_get_video_switch(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     return msk_get_video_switch(sequence->targetSink);
 }
-    
+
 static AudioSwitchSink* fss_get_audio_switch(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     return msk_get_audio_switch(sequence->targetSink);
 }
-    
+
 static HalfSplitSink* fss_get_half_split(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     return msk_get_half_split(sequence->targetSink);
 }
-    
+
 static FrameSequenceSink* fss_get_frame_sequence(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     return sequence;
 }
-    
+
 static int fss_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
 
     return msk_get_buffer_state(sequence->targetSink, numBuffers, numBuffersFilled);
 }
-    
+
 static int fss_mute_audio(void* data, int mute)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
@@ -472,12 +473,12 @@ static void fss_close(void* data)
 {
     FrameSequenceSink* sequence = (FrameSequenceSink*)data;
     int i;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     msk_close(sequence->targetSink);
 
     for (i = 0; i < sequence->numBufferedImages; i++)
@@ -492,10 +493,10 @@ static void fss_close(void* data)
     for (i = 0; i < sequence->numImageQuads; i++)
     {
         SAFE_FREE(&sequence->intermediateBuffers[i]);
-    }    
+    }
     SAFE_FREE(&sequence->intermediateBuffers);
     SAFE_FREE(&sequence->workBuffer);
-    
+
     SAFE_FREE(&sequence);
 }
 
@@ -505,7 +506,7 @@ static int fss_reset_or_close(void* data)
     int i;
     int result;
 
-    
+
     for (i = 0; i < sequence->numBufferedImages; i++)
     {
         SAFE_FREE(&sequence->scaledImageBuffers[i]);
@@ -518,13 +519,13 @@ static int fss_reset_or_close(void* data)
     for (i = 0; i < sequence->numImageQuads; i++)
     {
         SAFE_FREE(&sequence->intermediateBuffers[i]);
-    }    
+    }
     SAFE_FREE(&sequence->intermediateBuffers);
     SAFE_FREE(&sequence->workBuffer);
-    
+
     sequence->streamId = -1;
-    
-    
+
+
     result = msk_reset_or_close(sequence->targetSink);
     if (result != 1)
     {
@@ -535,9 +536,9 @@ static int fss_reset_or_close(void* data)
         }
         goto fail;
     }
-    
+
     return 1;
-    
+
 fail:
     fss_close(data);
     return 2;
@@ -549,11 +550,11 @@ int fss_create_frame_sequence(MediaSink* sink, FrameSequenceSink** sequence)
 {
     FrameSequenceSink* newSequence;
     int i;
-    
+
     CALLOC_ORET(newSequence, FrameSequenceSink, 1);
-    
+
     newSequence->targetSink = sink;
-    
+
     newSequence->numImageQuads = 2;
     newSequence->numImages = 1;
     newSequence->imageScale = 1;
@@ -571,7 +572,7 @@ int fss_create_frame_sequence(MediaSink* sink, FrameSequenceSink** sequence)
     newSequence->targetSinkListener.frame_displayed = fss_frame_displayed;
     newSequence->targetSinkListener.frame_dropped = fss_frame_dropped;
     newSequence->targetSinkListener.refresh_required = fss_refresh_required;
-    
+
     newSequence->sink.data = newSequence;
     newSequence->sink.register_listener = fss_register_listener;
     newSequence->sink.unregister_listener = fss_unregister_listener;
@@ -592,8 +593,8 @@ int fss_create_frame_sequence(MediaSink* sink, FrameSequenceSink** sequence)
     newSequence->sink.mute_audio = fss_mute_audio;
     newSequence->sink.reset_or_close = fss_reset_or_close;
     newSequence->sink.close = fss_close;
-    
-    
+
+
     *sequence = newSequence;
     return 1;
 }

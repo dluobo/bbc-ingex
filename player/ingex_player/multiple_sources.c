@@ -1,9 +1,10 @@
 /*
- * $Id: multiple_sources.c,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: multiple_sources.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +27,7 @@
 #include <string.h>
 
 #include "multiple_sources.h"
+#include "utils.h"
 #include "logging.h"
 #include "macros.h"
 
@@ -34,15 +36,15 @@
 #define SOURCE_IS_DISABLED(ele) \
     (ele->numStreams == ele->disabledStreamCount)
 
-    
+
 typedef struct MediaSourceElement
 {
     struct MediaSourceElement* next;
-    
+
     MediaSource* source;
     int numStreams;
     int disabledStreamCount;
-    
+
     int isComplete;
     int postComplete;
 } MediaSourceElement;
@@ -53,18 +55,19 @@ typedef struct
 {
     MediaSourceListener sourceListener;
     int startStreamId;
-    
-    MediaSourceListener* targetListener;    
+
+    MediaSourceListener* targetListener;
 } CollectiveListener;
 
 struct MultipleMediaSources
 {
     Rational aspectRatio;
     int64_t maxLength;
-    
+    Rational maxLengthFrameRate;
+
     MediaSource collectiveSource;
     MediaSourceList sources;
-    
+
     int64_t syncPosition; /* all sources must report that they are at this position before
                              a file command is executed */
 };
@@ -74,30 +77,30 @@ struct MultipleMediaSources
 static int mls_accept_frame(void* data, int streamId, const FrameInfo* frameInfo)
 {
     CollectiveListener* cListener = (CollectiveListener*)data;
-    
+
     return sdl_accept_frame(cListener->targetListener, cListener->startStreamId + streamId, frameInfo);
 }
-    
+
 static int mls_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
     CollectiveListener* cListener = (CollectiveListener*)data;
-    
-    return sdl_allocate_buffer(cListener->targetListener, cListener->startStreamId + streamId, 
+
+    return sdl_allocate_buffer(cListener->targetListener, cListener->startStreamId + streamId,
         buffer, bufferSize);
 }
 
 static void mls_deallocate_buffer(void* data, int streamId, unsigned char** buffer)
 {
     CollectiveListener* cListener = (CollectiveListener*)data;
-    
+
     sdl_deallocate_buffer(cListener->targetListener, cListener->startStreamId + streamId, buffer);
 }
 
 static int mls_receive_frame(void* data, int streamId, unsigned char* buffer, unsigned int bufferSize)
 {
     CollectiveListener* cListener = (CollectiveListener*)data;
-    
-    return sdl_receive_frame(cListener->targetListener, cListener->startStreamId + streamId, 
+
+    return sdl_receive_frame(cListener->targetListener, cListener->startStreamId + streamId,
         buffer, bufferSize);
 }
 
@@ -107,7 +110,7 @@ static int sync_sources(MultipleMediaSources* multSource)
     MediaSourceElement* ele = &multSource->sources;
     int64_t position;
     int syncResult = 0;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
@@ -117,7 +120,7 @@ static int sync_sources(MultipleMediaSources* multSource)
                 syncResult = -1;
                 break;
             }
-            
+
             if (position != multSource->syncPosition)
             {
                 /* seek back to the sync position */
@@ -128,10 +131,10 @@ static int sync_sources(MultipleMediaSources* multSource)
                 }
             }
         }
-        
+
         ele = ele->next;
     }
-    
+
     return syncResult;
 }
 
@@ -149,7 +152,7 @@ static int append_source(MediaSourceList* sourceList, MediaSource** source)
         *source = NULL;
         return 1;
     }
-    
+
     /* move to end */
     while (ele->next != NULL)
     {
@@ -163,11 +166,11 @@ static int append_source(MediaSourceList* sourceList, MediaSource** source)
         return 0;
     }
     memset(newEle, 0, sizeof(MediaSourceElement));
-    
+
     /* append source and take ownership */
     ele->next = newEle;
     newEle->source = *source;
-    
+
     /* get num streams and disabled count */
     newEle->numStreams = msc_get_num_streams(*source);
     newEle->disabledStreamCount = 0;
@@ -178,7 +181,7 @@ static int append_source(MediaSourceList* sourceList, MediaSource** source)
             newEle->disabledStreamCount++;
         }
     }
-    
+
     *source = NULL;
     return 1;
 }
@@ -189,7 +192,7 @@ static int mls_is_complete(void* data)
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
     int isComplete = 1;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!ele->isComplete)
@@ -199,7 +202,7 @@ static int mls_is_complete(void* data)
         }
         ele = ele->next;
     }
-    
+
     return isComplete;
 }
 
@@ -208,7 +211,7 @@ static int mls_post_complete(void* data, MediaSource* rootSource, MediaControl* 
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
     int result = 1;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (ele->isComplete)
@@ -218,7 +221,7 @@ static int mls_post_complete(void* data, MediaSource* rootSource, MediaControl* 
         result &= ele->isComplete && ele->postComplete;
         ele = ele->next;
     }
-    
+
     return result;
 }
 
@@ -227,14 +230,14 @@ static int mls_get_num_streams(void* data)
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
     int total = 0;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         total += ele->numStreams;
-        
+
         ele = ele->next;
     }
-    
+
     return total;
 }
 
@@ -245,16 +248,16 @@ static int mls_get_stream_info(void* data, int streamIndex, const StreamInfo** s
     int maxIndex = 0;
     int minIndex = 0;
     int result;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         maxIndex += ele->numStreams;
         if (streamIndex < maxIndex)
         {
             result = msc_get_stream_info(ele->source, streamIndex - minIndex, streamInfo);
-            
+
             /* force picture aspect ratio if neccessary */
-            if (result && 
+            if (result &&
                 (*streamInfo)->type == PICTURE_STREAM_TYPE &&
                 (multSource->aspectRatio.num > 0 && multSource->aspectRatio.den > 0))
             {
@@ -263,11 +266,38 @@ static int mls_get_stream_info(void* data, int streamIndex, const StreamInfo** s
             return result;
         }
         minIndex = maxIndex;
-        
+
         ele = ele->next;
     }
-    
+
     return 0;
+}
+
+static void mls_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    MultipleMediaSources* multSource = (MultipleMediaSources*)data;
+    MediaSourceElement* ele = &multSource->sources;
+    int i;
+
+    while (ele != NULL && ele->source != NULL)
+    {
+        msc_set_frame_rate_or_disable(ele->source, frameRate);
+
+        /* recalculate disabledStreamCount */
+        ele->disabledStreamCount = 0;
+        for (i = 0; i < ele->numStreams; i++)
+        {
+            if (msc_stream_is_disabled(ele->source, i))
+            {
+                ele->disabledStreamCount++;
+            }
+        }
+
+        ele = ele->next;
+    }
+
+    multSource->maxLength = convert_length(multSource->maxLength, &multSource->maxLengthFrameRate, frameRate);
+    multSource->maxLengthFrameRate = *frameRate;
 }
 
 static int mls_disable_stream(void* data, int streamIndex)
@@ -276,7 +306,7 @@ static int mls_disable_stream(void* data, int streamIndex)
     MediaSourceElement* ele = &multSource->sources;
     int maxIndex = 0;
     int minIndex = 0;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         maxIndex += ele->numStreams;
@@ -290,10 +320,10 @@ static int mls_disable_stream(void* data, int streamIndex)
             return 1;
         }
         minIndex = maxIndex;
-        
+
         ele = ele->next;
     }
-    
+
     return 0;
 }
 
@@ -301,11 +331,11 @@ static void mls_disable_audio(void* data)
 {
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         msc_disable_audio(ele->source);
-        
+
         ele = ele->next;
     }
 }
@@ -316,7 +346,7 @@ static int mls_stream_is_disabled(void* data, int streamIndex)
     MediaSourceElement* ele = &multSource->sources;
     int maxIndex = 0;
     int minIndex = 0;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         maxIndex += ele->numStreams;
@@ -325,10 +355,10 @@ static int mls_stream_is_disabled(void* data, int streamIndex)
             return msc_stream_is_disabled(ele->source, streamIndex - minIndex);
         }
         minIndex = maxIndex;
-        
+
         ele = ele->next;
     }
-    
+
     return 0;
 }
 
@@ -346,17 +376,17 @@ static int mls_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     {
         return syncResult;
     }
-    
+
     memset(&collectiveListener, 0, sizeof(collectiveListener));
-    
+
     collectiveListener.sourceListener.data = &collectiveListener;
     collectiveListener.sourceListener.accept_frame = mls_accept_frame;
     collectiveListener.sourceListener.allocate_buffer = mls_allocate_buffer;
     collectiveListener.sourceListener.deallocate_buffer = mls_deallocate_buffer;
     collectiveListener.sourceListener.receive_frame = mls_receive_frame;
-    
+
     collectiveListener.targetListener = listener;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         collectiveListener.startStreamId = startStreamId;
@@ -369,18 +399,18 @@ static int mls_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
                 break;
             }
         }
-        
+
         startStreamId += ele->numStreams;
-        
+
         ele = ele->next;
     }
-    
+
     if (readResult == 0)
     {
         /* update sync position */
         multSource->syncPosition += 1;
     }
-    
+
     return readResult;
 }
 
@@ -389,7 +419,7 @@ static int mls_is_seekable(void* data)
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
     int isSeekable = 1;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
@@ -400,10 +430,10 @@ static int mls_is_seekable(void* data)
                 break;
             }
         }
-        
+
         ele = ele->next;
     }
-    
+
     return isSeekable;
 }
 
@@ -419,7 +449,7 @@ static int mls_seek(void* data, int64_t position)
     {
         return syncResult;
     }
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
@@ -430,16 +460,16 @@ static int mls_seek(void* data, int64_t position)
                 break;
             }
         }
-        
+
         ele = ele->next;
     }
-    
+
     if (seekResult == 0)
     {
         /* update sync position */
         multSource->syncPosition = position;
     }
-    
+
     return seekResult;
 }
 
@@ -459,7 +489,7 @@ static int mls_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
     {
         return syncResult;
     }
-    
+
     /* find the source that supports and successfully seeks to the timecode */
     while (ele != NULL && ele->source != NULL)
     {
@@ -481,7 +511,7 @@ static int mls_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
                 haveATimedOutResult = 1;
             }
         }
-        
+
         ele = ele->next;
     }
     if (passedEle == NULL)
@@ -494,7 +524,7 @@ static int mls_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
         }
         return -1;
     }
-    
+
     /* try seek to the position corresponding to the timecode for the sources that failed */
     ele = &multSource->sources;
     while (ele != NULL && ele->source != NULL)
@@ -507,16 +537,16 @@ static int mls_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
                 break;
             }
         }
-        
+
         ele = ele->next;
     }
-    
+
     if (!failed)
     {
         /* update sync position */
         multSource->syncPosition = position;
     }
-    
+
     return !failed ? 0 : -1;
 }
 
@@ -527,7 +557,7 @@ static int mls_get_length(void* data, int64_t* length)
     int failed = 0;
     int64_t srcLength;
     int64_t minLength = -1;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
@@ -539,20 +569,20 @@ static int mls_get_length(void* data, int64_t* length)
             }
             minLength = (minLength < 0 || srcLength < minLength) ? srcLength : minLength;
         }
-        
+
         ele = ele->next;
     }
-    
+
     if (failed)
     {
         return 0;
     }
-    
+
     if (multSource->maxLength > 0 && minLength > multSource->maxLength)
     {
         minLength = multSource->maxLength;
     }
-    
+
     *length = minLength;
     return 1;
 }
@@ -560,7 +590,7 @@ static int mls_get_length(void* data, int64_t* length)
 static int mls_get_position(void* data, int64_t* position)
 {
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
-    
+
     *position = multSource->syncPosition;
     return 1;
 }
@@ -571,7 +601,7 @@ static int mls_get_available_length(void* data, int64_t* length)
     MediaSourceElement* ele = &multSource->sources;
     int64_t srcLength;
     int64_t minSrcLength = -1;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
@@ -586,10 +616,10 @@ static int mls_get_available_length(void* data, int64_t* length)
                 minSrcLength = srcLength;
             }
         }
-        
+
         ele = ele->next;
     }
-    
+
     if (minSrcLength == -1)
     {
         return 0;
@@ -599,7 +629,7 @@ static int mls_get_available_length(void* data, int64_t* length)
     {
         minSrcLength = multSource->maxLength;
     }
-    
+
     *length = minSrcLength;
     return 1;
 }
@@ -617,17 +647,17 @@ static int mls_eof(void* data)
         /* failure result is 0 and not the sync result */
         return 0;
     }
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         if (!SOURCE_IS_DISABLED(ele))
         {
             eof |= msc_eof(ele->source);
         }
-        
+
         ele = ele->next;
     }
-    
+
     return eof;
 }
 
@@ -638,7 +668,7 @@ static void mls_set_source_name(void* data, const char* name)
     while (ele != NULL && ele->source != NULL)
     {
         msc_set_source_name(ele->source, name);
-        
+
         ele = ele->next;
     }
 }
@@ -650,7 +680,7 @@ static void mls_set_clip_id(void* data, const char* id)
     while (ele != NULL && ele->source != NULL)
     {
         msc_set_clip_id(ele->source, id);
-        
+
         ele = ele->next;
     }
 }
@@ -660,22 +690,22 @@ static void mls_close(void* data)
     MultipleMediaSources* multSource = (MultipleMediaSources*)data;
     MediaSourceElement* ele = &multSource->sources;
     MediaSourceElement* nextEle;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     while (ele != NULL)
     {
         nextEle = ele->next;
-        
+
         msc_close(ele->source);
         if (ele != &multSource->sources) /* first element is static */
         {
             SAFE_FREE(&ele);
         }
-        
+
         ele = nextEle;
     }
     SAFE_FREE(&multSource);
@@ -687,12 +717,12 @@ static int64_t mls_convert_position(void* data, int64_t position, MediaSource* c
     MediaSourceElement* ele = &multSource->sources;
     int64_t returnPosition = position;
     int64_t childPosition;
-    
+
     if (childSource == &multSource->collectiveSource)
     {
         return position;
     }
-    
+
     /* we take the position of any child source that deviates from the given position */
     while (ele != NULL && ele->source != NULL)
     {
@@ -702,31 +732,33 @@ static int64_t mls_convert_position(void* data, int64_t position, MediaSource* c
             returnPosition = childPosition;
             break;
         }
-        
+
         ele = ele->next;
     }
-    
+
     return returnPosition;
 }
 
 
-int mls_create(const Rational* aspectRatio, int64_t maxLength, MultipleMediaSources** multSource)
+int mls_create(const Rational* aspectRatio, int64_t maxLength, const Rational* maxLengthFrameRate, MultipleMediaSources** multSource)
 {
     MultipleMediaSources* newMultSource;
-    
+
     CALLOC_ORET(newMultSource, MultipleMediaSources, 1);
-    
+
     if (aspectRatio != NULL)
     {
         newMultSource->aspectRatio = *aspectRatio;
     }
     newMultSource->maxLength = maxLength;
-    
+    newMultSource->maxLengthFrameRate = *maxLengthFrameRate;
+
     newMultSource->collectiveSource.data = newMultSource;
     newMultSource->collectiveSource.is_complete = mls_is_complete;
     newMultSource->collectiveSource.post_complete = mls_post_complete;
     newMultSource->collectiveSource.get_num_streams = mls_get_num_streams;
     newMultSource->collectiveSource.get_stream_info = mls_get_stream_info;
+    newMultSource->collectiveSource.set_frame_rate_or_disable = mls_set_frame_rate_or_disable;
     newMultSource->collectiveSource.disable_stream = mls_disable_stream;
     newMultSource->collectiveSource.disable_audio = mls_disable_audio;
     newMultSource->collectiveSource.stream_is_disabled = mls_stream_is_disabled;
@@ -742,7 +774,7 @@ int mls_create(const Rational* aspectRatio, int64_t maxLength, MultipleMediaSour
     newMultSource->collectiveSource.set_clip_id = mls_set_clip_id;
     newMultSource->collectiveSource.close = mls_close;
     newMultSource->collectiveSource.convert_position = mls_convert_position;
-    
+
     *multSource = newMultSource;
     return 1;
 }
@@ -759,7 +791,7 @@ int mls_finalise_blank_sources(MultipleMediaSources* multSource)
     int i;
     const StreamInfo* streamInfo;
     int haveVideoStreamInfo = 0;
-    
+
     while (ele != NULL && ele->source != NULL)
     {
         int numStreams = msc_get_num_streams(ele->source);
@@ -787,14 +819,14 @@ int mls_finalise_blank_sources(MultipleMediaSources* multSource)
         videoStreamInfo.aspectRatio.num = 4;
         videoStreamInfo.aspectRatio.den = 3;
     }
-    
+
     ele = &multSource->sources;
     while (ele != NULL && ele->source != NULL)
     {
         CHK_ORET(msc_finalise_blank_source(ele->source, &videoStreamInfo));
         ele = ele->next;
-    }    
-    
+    }
+
     return 1;
 }
 

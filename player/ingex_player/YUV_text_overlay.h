@@ -1,9 +1,10 @@
 /*
- * $Id: YUV_text_overlay.h,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: YUV_text_overlay.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Jim Easterbrook, <easter@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +45,7 @@ typedef struct
 typedef struct
 {
     int		width, height;	// dimensions of complete timecode
-    overlay	tc_ovly[11];	// character overlay
+    overlay	tc_ovly[12];	// character overlay
 } timecode_data;
 
 typedef struct
@@ -101,13 +102,12 @@ YUV_error init_timecode(p_info_rec* info, timecode_data* tc_data,
                         const int aspect_ratio_num, const int aspect_ratio_den);
 
 // Superimpose a timecode on a video frame at position (x, y).
-// The timecode is computed from the frame number, assuming 25 frames/second.
 // See also the notes on add_overlay above.
-YUV_error add_timecode(timecode_data* tc_data, const int frameNo,
+YUV_error add_timecode(timecode_data* tc_data, int hr, int mn, int sc, int fr, int isPAL,
                        YUV_frame* frame, int x, int y,
                        BYTE txtY, BYTE txtU, BYTE txtV, int box);
 
-                       
+
 YUV_error char_to_overlay(p_info_rec* info, overlay* ovly, char character,
                           char* font, const int size,
                           const int aspect_ratio_num,
@@ -115,12 +115,12 @@ YUV_error char_to_overlay(p_info_rec* info, overlay* ovly, char character,
 
 void free_char_set(char_set_data* cs_data);
 
-YUV_error char_set_to_overlay(p_info_rec* info, char_set_data* cs_data, 
+YUV_error char_set_to_overlay(p_info_rec* info, char_set_data* cs_data,
                           char* cset, char* font, const int size,
                           const int aspect_ratio_num,
                           const int aspect_ratio_den);
 
-                       
+
 #ifdef __cplusplus
 }
 #endif

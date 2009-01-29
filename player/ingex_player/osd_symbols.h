@@ -1,9 +1,10 @@
 /*
- * $Id: osd_symbols.h,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: osd_symbols.h,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,17 +32,17 @@ extern overlay g_osdPlaySymbol;
 extern overlay g_osdFastForwardSymbol;
 extern overlay g_osdFastRewindSymbol;
 extern overlay g_osdPauseSymbol;
-extern overlay g_osdReversePlaySymbol; 
-extern overlay g_osdFieldSymbol; 
-extern overlay g_osdProgressBarPointer; 
-extern overlay g_osdLongProgressBarPointer; 
+extern overlay g_osdReversePlaySymbol;
+extern overlay g_osdFieldSymbol;
+extern overlay g_osdProgressBarPointer;
+extern overlay g_osdLongProgressBarPointer;
 extern overlay g_osdLockSymbol;
 
 extern overlay g_osdPlaySymbolSmall;
 extern overlay g_osdFastForwardSymbolSmall;
 extern overlay g_osdFastRewindSymbolSmall;
 extern overlay g_osdPauseSymbolSmall;
-extern overlay g_osdReversePlaySymbolSmall; 
+extern overlay g_osdReversePlaySymbolSmall;
 
 #endif
 

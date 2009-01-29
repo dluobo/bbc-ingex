@@ -1,9 +1,10 @@
 /*
- * $Id: test_media_control.c,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: test_media_control.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +38,7 @@
         exit(1); \
     }
 
-    
+
 static void tmc_toggle_lock(void* data)
 {
     printf("Toggle lock\n");
@@ -96,7 +97,7 @@ static void tmc_step(void* data, int forward, PlayUnit unit)
         printf("backwards 1 %s\n", (unit == FRAME_PLAY_UNIT) ? "frame" : "percentage");
     }
 }
-    
+
 static void tmc_mark(void* data, int type, int toggle)
 {
     printf("Mark %d (%s)\n", type, toggle ? "toggle" : "set");
@@ -121,12 +122,12 @@ static void tmc_seek_prev_mark(void* data)
 {
     printf("Seek previous mark\n");
 }
- 
+
 static void tmc_seek_clip_mark(void* data)
 {
     printf("Seek clip mark\n");
 }
- 
+
 static void tmc_toggle_osd(void* data)
 {
     printf("Toggle OSD\n");
@@ -156,7 +157,7 @@ static void tmc_switch_video(void* data, int index)
 static void init_media_control(MediaControl* control)
 {
     memset(control, 0, sizeof(MediaControl));
-    
+
     control->data = NULL;
     control->toggle_lock = tmc_toggle_lock;
     control->play = tmc_play;
@@ -184,9 +185,9 @@ static int test_shuttle(int qc)
     ShuttleInput* shuttle;
     ShuttleConnect* connect;
     MediaControl control;
-    
+
     init_media_control(&control);
-    
+
     CHECK_FATAL(shj_open_shuttle(&shuttle));
     if (qc)
     {
@@ -196,13 +197,13 @@ static int test_shuttle(int qc)
     {
         CHECK_FATAL(sic_create_shuttle_connect(&control, shuttle, DEFAULT_SHUTTLE_MAPPING, &connect));
     }
-    
+
     shj_start_shuttle(shuttle);
-    
+
     shj_close_shuttle(&shuttle);
     sic_free_shuttle_connect(&connect);
-    
-    
+
+
     return 0;
 }
 
@@ -210,16 +211,16 @@ static int test_keyboard()
 {
     X11KeyboardConnect* connect;
     MediaControl control;
-    
+
     init_media_control(&control);
-    
+
     CHECK_FATAL(create_x11_keyboard_connect(&control, &connect));
-    
+
     start_x11_keyboard_connect(connect);
-    
+
     free_x11_keyboard_connect(&connect);
-    
-    
+
+
     return 0;
 }
 
@@ -228,16 +229,16 @@ static int test_term_keyboard()
 {
     TermKeyboardConnect* connect;
     MediaControl control;
-    
+
     init_media_control(&control);
-    
+
     CHECK_FATAL(create_term_keyboard_connect(&control, &connect));
-    
+
     start_term_keyboard_connect(connect);
-    
+
     free_term_keyboard_connect(&connect);
-    
-    
+
+
     return 0;
 }
 
@@ -261,7 +262,7 @@ int main (int argc, const char** argv)
     {
         test_keyboard();
     }
-    else if (argc == 2 && 
+    else if (argc == 2 &&
         (strcmp(argv[1], "-h") == 0 ||
         strcmp(argv[1], "?") == 0 ||
         strcmp(argv[1], "-help") == 0 ||
@@ -270,17 +271,17 @@ int main (int argc, const char** argv)
         usage(argv[0]);
         return 0;
     }
-    else if (argc == 2 && 
+    else if (argc == 2 &&
         (strcmp(argv[1], "-s") == 0))
     {
         test_shuttle(0);
     }
-    else if (argc == 2 && 
+    else if (argc == 2 &&
         (strcmp(argv[1], "-q") == 0))
     {
         test_shuttle(1);
     }
-    else if (argc == 2 && 
+    else if (argc == 2 &&
         (strcmp(argv[1], "-t") == 0))
     {
         test_term_keyboard();
@@ -290,7 +291,7 @@ int main (int argc, const char** argv)
         usage(argv[0]);
         return 0;
     }
-    
+
     return 0;
 }
 

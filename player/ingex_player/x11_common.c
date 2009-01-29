@@ -1,9 +1,10 @@
 /*
- * $Id: x11_common.c,v 1.7 2008/11/07 14:24:55 philipn Exp $
+ * $Id: x11_common.c,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,14 +47,14 @@ static void* process_event_thread(void* arg)
     struct timeval now;
     struct timeval last;
     long diff_usec;
-    
+
     memset(&last, 0, sizeof(last));
 
     while (!x11Common->stopped)
     {
         gettimeofday(&now, NULL);
         last = x11Common->processEventTime;
-        
+
         diff_usec = (now.tv_sec - last.tv_sec) * 1000000 + now.tv_usec - last.tv_usec;
 
         if (diff_usec > MIN_PROCESS_EVENT_INTERVAL)
@@ -65,7 +66,7 @@ static void* process_event_thread(void* arg)
             usleep(MIN_PROCESS_EVENT_INTERVAL - diff_usec);
         }
     }
-    
+
     pthread_exit((void*) 0);
 }
 
@@ -87,12 +88,12 @@ static void x11c_unset_pbar_listener(void* data)
 static void x11c_close_pbar(void* data)
 {
     X11Common* x11Common = (X11Common*)data;
-    
+
     if (x11Common == NULL)
     {
         return;
     }
-    
+
     x11Common->progressBarListener = NULL;
 }
 
@@ -114,12 +115,12 @@ static void x11c_unset_keyboard_listener(void* data)
 static void x11c_close_keyboard(void* data)
 {
     X11Common* x11Common = (X11Common*)data;
-    
+
     if (x11Common == NULL)
     {
         return;
     }
-    
+
     x11Common->keyboardListener = NULL;
 }
 
@@ -141,12 +142,12 @@ static void x11c_unset_mouse_listener(void* data)
 static void x11c_close_mouse(void* data)
 {
     X11Common* x11Common = (X11Common*)data;
-    
+
     if (x11Common == NULL)
     {
         return;
     }
-    
+
     x11Common->mouseListener = NULL;
 }
 
@@ -163,15 +164,15 @@ void x11wl_close_request(X11WindowListener* listener)
 int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* osd, X11WindowInfo* windowInfo)
 {
     memset(x11Common, 0, sizeof(x11Common));
-    
+
     x11Common->reviewDuration = reviewDuration;
     x11Common->osd = osd;
-    
+
     x11Common->progressBarInput.data = x11Common;
     x11Common->progressBarInput.set_listener = x11c_set_pbar_listener;
     x11Common->progressBarInput.unset_listener = x11c_unset_pbar_listener;
     x11Common->progressBarInput.close = x11c_close_pbar;
-    
+
     x11Common->keyboardInput.data = x11Common;
     x11Common->keyboardInput.set_listener = x11c_set_keyboard_listener;
     x11Common->keyboardInput.unset_listener = x11c_unset_keyboard_listener;
@@ -190,7 +191,7 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* o
     CHK_ORET(init_mutex(&x11Common->eventMutex));
 
     CHK_ORET(create_joinable_thread(&x11Common->processEventThreadId, process_event_thread, x11Common));
-    
+
     return 1;
 }
 
@@ -199,9 +200,9 @@ void x11c_clear(X11Common* x11Common)
     x11Common->stopped = 1;
     join_thread(&x11Common->processEventThreadId, NULL, NULL);
 
-    
+
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* don't allow events to be processed */
-    
+
     kic_free_keyboard_connect(&x11Common->keyboardConnect);
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
     mic_free_mouse_connect(&x11Common->mouseConnect);
@@ -211,16 +212,16 @@ void x11c_clear(X11Common* x11Common)
         x11c_close_window(&x11Common->windowInfo);
         x11Common->createdWindowInfo = 0;
     }
-    
+
     SAFE_FREE(&x11Common->windowName);
-    
+
     x11Common->osd = NULL;
 
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
-    
-    
+
+
     destroy_mutex(&x11Common->eventMutex);
-    
+
     memset(x11Common, 0, sizeof(x11Common));
 }
 
@@ -231,7 +232,7 @@ int x11c_reset(X11Common* x11Common)
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
     mic_free_mouse_connect(&x11Common->mouseConnect);
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
-    
+
     return 1;
 }
 
@@ -311,7 +312,7 @@ int x11c_prepare_display(X11Common* x11Common)
     {
         return 1;
     }
-    
+
     return x11c_open_display(&x11Common->windowInfo.display);
 }
 
@@ -322,10 +323,10 @@ int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height)
         ml_log_error("Can't get screen dimensions because display has not been opened\n");
         return 0;
     }
-    
+
     *width = XWidthOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
     *height = XHeightOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
-    
+
     return 1;
 }
 
@@ -336,18 +337,18 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
     {
         return 1;
     }
-    
+
     if (x11Common->windowInfo.display == NULL)
     {
         ml_log_error("Can't create X11 window because display has not been opened\n");
         return 0;
     }
-    
+
     x11Common->displayWidth = displayWidth;
     x11Common->displayHeight = displayHeight;
     x11Common->imageWidth = imageWidth;
     x11Common->imageHeight = imageHeight;
-    
+
     if (x11Common->windowName == NULL)
     {
         x11c_set_window_name(x11Common, NULL);
@@ -367,7 +368,7 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
     XGetWindowAttributes(x11Common->windowInfo.display, x11Common->windowInfo.window, &attrs);
     x11Common->windowWidth = attrs.width;
     x11Common->windowHeight = attrs.height;
-    
+
     x11Common->haveWindow = 1;
     return 1;
 }
@@ -375,27 +376,27 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
 void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control)
 {
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
-    
+
     if (x11Common->windowInfo.display != NULL)
     {
-       if (!kic_create_keyboard_connect(x11Common->reviewDuration, control, 
+       if (!kic_create_keyboard_connect(x11Common->reviewDuration, control,
            &x11Common->keyboardInput, mapping, &x11Common->keyboardConnect))
        {
-           ml_log_warn("Failed to create X11 keyboard input connect\n"); 
+           ml_log_warn("Failed to create X11 keyboard input connect\n");
        }
-       if (!pic_create_progress_bar_connect(control, &x11Common->progressBarInput, 
+       if (!pic_create_progress_bar_connect(control, &x11Common->progressBarInput,
            &x11Common->progressBarConnect))
        {
-           ml_log_warn("Failed to create X11 progress bar input connect\n"); 
+           ml_log_warn("Failed to create X11 progress bar input connect\n");
        }
        if (!mic_create_mouse_connect(control, videoSwitch, &x11Common->mouseInput, &x11Common->mouseConnect))
        {
-           ml_log_warn("Failed to create X11 mouse input connect\n"); 
+           ml_log_warn("Failed to create X11 mouse input connect\n");
        }
     }
     else
     {
-        ml_log_warn("Failed to connect X11 keyboard input because display not initialised\n"); 
+        ml_log_warn("Failed to connect X11 keyboard input because display not initialised\n");
     }
 
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
@@ -404,11 +405,11 @@ void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoS
 void x11c_unset_media_control(X11Common* x11Common)
 {
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex) /* wait until events have been processed */
-    
+
     kic_free_keyboard_connect(&x11Common->keyboardConnect);
     pic_free_progress_bar_connect(&x11Common->progressBarConnect);
     mic_free_mouse_connect(&x11Common->mouseConnect);
-    
+
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 }
 
@@ -419,7 +420,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
     float progressBarPosition = -1.0;
     int modifier;
 
-    
+
     PTHREAD_MUTEX_LOCK(&x11Common->eventMutex)
 
     /* NOTE: if there isn't a window (haveWindow == 1), then a sync problem could
@@ -429,9 +430,9 @@ int x11c_process_events(X11Common* x11Common, int sync)
         goto fail;
     }
 
-    
+
     gettimeofday(&x11Common->processEventTime, NULL);
-    
+
     if (!XPending(x11Common->windowInfo.display))
     {
         if (sync)
@@ -439,7 +440,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
             /* wait until image has been processed by the X server */
             XSync(x11Common->windowInfo.display, False);
         }
-        
+
         processedEvent = 0;
     }
     else
@@ -447,7 +448,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
         do
         {
             XNextEvent(x11Common->windowInfo.display, &event);
-            
+
             if (event.type == FocusOut || event.type == FocusIn || event.type == Expose)
             {
                 msl_refresh_required(x11Common->sinkListener);
@@ -494,7 +495,7 @@ int x11c_process_events(X11Common* x11Common, int sync)
                 {
                     int xPos = (int)(((XButtonEvent*)&event)->x * x11Common->imageWidth / (float)x11Common->displayWidth + 0.5);
                     int yPos = (int)(((XButtonEvent*)&event)->y * x11Common->imageHeight / (float)x11Common->displayHeight + 0.5);
-                    
+
                     progressBarPosition = osd_get_position_in_progress_bar(x11Common->osd, xPos, yPos);
                     if (progressBarPosition >= 0.0)
                     {
@@ -512,8 +513,8 @@ int x11c_process_events(X11Common* x11Common, int sync)
             {
                 int xPos = (int)(((XButtonEvent*)&event)->x * x11Common->imageWidth / (float)x11Common->displayWidth + 0.5);
                 int yPos = (int)(((XButtonEvent*)&event)->y * x11Common->imageHeight / (float)x11Common->displayHeight + 0.5);
-                
-                progressBarPosition = osd_get_position_in_progress_bar(x11Common->osd, xPos, yPos); 
+
+                progressBarPosition = osd_get_position_in_progress_bar(x11Common->osd, xPos, yPos);
                 if (progressBarPosition >= 0.0)
                 {
                     pil_position_set(x11Common->progressBarListener, progressBarPosition);
@@ -539,20 +540,20 @@ int x11c_process_events(X11Common* x11Common, int sync)
             }
         }
         while (XPending(x11Common->windowInfo.display));
-        
+
         if (sync)
         {
             /* wait until image has been processed by the X server */
             XSync(x11Common->windowInfo.display, False);
         }
-        
+
         processedEvent = 1;
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
-    
+
     return processedEvent;
-    
+
 fail:
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
     return 0;
@@ -562,12 +563,12 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
 {
     char* newWindowName = NULL;
     char* oldWindowName;
-    
+
     if (x11Common == NULL)
     {
         return 0;
     }
-    
+
     /* store new name */
     if (name == NULL)
     {
@@ -582,32 +583,32 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
     oldWindowName = x11Common->windowName;
     x11Common->windowName = newWindowName;
     SAFE_FREE(&oldWindowName);
-    
+
     /* set name if we have a window */
     if (x11Common->windowInfo.display != NULL && x11Common->haveWindow)
     {
         XStoreName(x11Common->windowInfo.display, x11Common->windowInfo.window, x11Common->windowName);
     }
-    
+
     return 1;
 }
 
 int x11c_shared_memory_available(X11Common* common)
 {
     char* displayName;
-    
+
     if (common == NULL || common->windowInfo.display == NULL)
     {
         return 0;
     }
-    
+
     if (!XShmQueryExtension(common->windowInfo.display))
     {
         return 0;
     }
-    
+
     displayName = XDisplayName(NULL);
-    
+
     if (strncmp("unix", displayName, 4) == 0)
     {
         displayName += 4;
@@ -620,7 +621,7 @@ int x11c_shared_memory_available(X11Common* common)
     {
         return 1;
     }
-    
+
     return 0;
 }
 
@@ -628,12 +629,12 @@ int x11c_shared_memory_available(X11Common* common)
 int x11c_open_display(Display** display)
 {
     Display* newDisplay = NULL;
-    
+
     if (*display != NULL)
     {
         return 1;
     }
-    
+
     newDisplay = XOpenDisplay(NULL);
     if (newDisplay == NULL)
     {
@@ -649,7 +650,7 @@ int x11c_create_window(X11WindowInfo* windowInfo, int displayWidth, int displayH
 {
     XSetWindowAttributes x_attr;
     XEvent event;
-    
+
     if (windowInfo->display == NULL)
     {
         ml_log_error("Can't create X11 window because display has not been opened\n");
@@ -660,20 +661,20 @@ int x11c_create_window(X11WindowInfo* windowInfo, int displayWidth, int displayH
         ml_log_error("Can't create X11 window when one is already opened\n");
         return 0;
     }
-    
+
     x_attr.border_pixel = BlackPixel(windowInfo->display, DefaultScreen(windowInfo->display));
     x_attr.background_pixel = BlackPixel(windowInfo->display, DefaultScreen(windowInfo->display));
     x_attr.backing_store = Always;
     x_attr.event_mask = ExposureMask | StructureNotifyMask;
 
     windowInfo->window = XCreateWindow(
-        windowInfo->display, 
+        windowInfo->display,
         DefaultRootWindow(windowInfo->display),
-        0, 0, 
+        0, 0,
         displayWidth, displayHeight,
-        0, 
-        DefaultDepth(windowInfo->display, DefaultScreen(windowInfo->display)), 
-        InputOutput, 
+        0,
+        DefaultDepth(windowInfo->display, DefaultScreen(windowInfo->display)),
+        InputOutput,
         CopyFromParent,
         CWBackingStore | CWBackPixel | CWBorderPixel | CWEventMask, &x_attr);
 
@@ -681,8 +682,8 @@ int x11c_create_window(X11WindowInfo* windowInfo, int displayWidth, int displayH
 
     /* XSelectInput will fail with BadAccess if more than one client
      * is trying to get ButtonPressMask and a few other event types */
-    XSelectInput(windowInfo->display, windowInfo->window, 
-        ExposureMask | StructureNotifyMask | FocusChangeMask | 
+    XSelectInput(windowInfo->display, windowInfo->window,
+        ExposureMask | StructureNotifyMask | FocusChangeMask |
         KeyPressMask | KeyReleaseMask |
         ButtonPressMask | Button1MotionMask);
 
@@ -696,16 +697,16 @@ int x11c_create_window(X11WindowInfo* windowInfo, int displayWidth, int displayH
 
     XMapWindow(windowInfo->display, windowInfo->window);
     /* Wait until window is mapped */
-    do 
+    do
     {
         XNextEvent(windowInfo->display, &event);
-    } 
+    }
     while (event.type != MapNotify || event.xmap.event != windowInfo->window);
 
 
     windowInfo->gc = XCreateGC(windowInfo->display, windowInfo->window, 0, 0);
-    
-    
+
+
     return 1;
 }
 
@@ -729,8 +730,8 @@ void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int display
 
     /* XSelectInput will fail with BadAccess if more than one client
      * is trying to get ButtonPressMask and a few other event types */
-    XSelectInput(windowInfo->display, windowInfo->window, 
-        ExposureMask | StructureNotifyMask | FocusChangeMask | 
+    XSelectInput(windowInfo->display, windowInfo->window,
+        ExposureMask | StructureNotifyMask | FocusChangeMask |
         KeyPressMask | KeyReleaseMask |
         ButtonPressMask | Button1MotionMask);
 
@@ -744,7 +745,7 @@ void x11c_update_window(X11WindowInfo* windowInfo, int displayWidth, int display
             ml_log_warn("Failed to register interest in X11 window closing event\n");
         }
     }
-    
+
     XStoreName(windowInfo->display, windowInfo->window, windowName);
 
     XResizeWindow(windowInfo->display, windowInfo->window, displayWidth, displayHeight);

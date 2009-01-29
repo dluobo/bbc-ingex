@@ -1,10 +1,11 @@
 /*
- * $Id: logging.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: logging.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,13 +49,13 @@ static void logmsg(FILE* file, LogLevel level, int cont, const char* format, va_
         {
             case DEBUG_LOG_LEVEL:
                 fprintf(file, "Debug: ");
-                break;            
+                break;
             case INFO_LOG_LEVEL:
                 fprintf(file, "Info: ");
-                break;            
+                break;
             case WARN_LOG_LEVEL:
                 fprintf(file, "Warning: ");
-                break;            
+                break;
             case ERROR_LOG_LEVEL:
                 fprintf(file, "ERROR: ");
                 break;
@@ -74,20 +75,20 @@ static void vlog_to_file(LogLevel level, int cont, const char* format, va_list p
     {
         return;
     }
-    
+
     assert(gmt != NULL);
     assert(g_fileLog != NULL);
     if (g_fileLog == NULL)
     {
         return;
     }
-    
+
     if (!cont)
     {
         strftime(timeStr, 128, "%Y-%m-%d %H:%M:%S", gmt);
         fprintf(g_fileLog, "(%s) ", timeStr);
     }
-    
+
     logmsg(g_fileLog, level, cont, format, p_arg);
 }
 
@@ -123,7 +124,7 @@ void ml_vlog_default(LogLevel level, int cont, const char* format, va_list p_arg
     {
         return;
     }
-    
+
     if (level == ERROR_LOG_LEVEL)
     {
         logmsg(stderr, level, cont, format, p_arg);
@@ -137,7 +138,7 @@ void ml_vlog_default(LogLevel level, int cont, const char* format, va_list p_arg
 void ml_log_default(LogLevel level, int cont, const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog_default(level, cont, format, p_arg);
     va_end(p_arg);
@@ -149,7 +150,7 @@ int ml_log_file_open(const char* filename)
     {
         return 0;
     }
-    
+
     ml_log = log_to_file;
     ml_vlog = vlog_to_file;
     return 1;
@@ -175,7 +176,7 @@ void ml_log_file_close()
 void ml_log_debug(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(DEBUG_LOG_LEVEL, 0, format, p_arg);
     va_end(p_arg);
@@ -184,7 +185,7 @@ void ml_log_debug(const char* format, ...)
 void ml_log_info(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(INFO_LOG_LEVEL, 0, format, p_arg);
     va_end(p_arg);
@@ -193,7 +194,7 @@ void ml_log_info(const char* format, ...)
 void ml_log_warn(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(WARN_LOG_LEVEL, 0, format, p_arg);
     va_end(p_arg);
@@ -202,7 +203,7 @@ void ml_log_warn(const char* format, ...)
 void ml_log_error(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(ERROR_LOG_LEVEL, 0, format, p_arg);
     va_end(p_arg);
@@ -211,7 +212,7 @@ void ml_log_error(const char* format, ...)
 void ml_log_debug_cont(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(DEBUG_LOG_LEVEL, 1, format, p_arg);
     va_end(p_arg);
@@ -220,7 +221,7 @@ void ml_log_debug_cont(const char* format, ...)
 void ml_log_info_cont(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(INFO_LOG_LEVEL, 1, format, p_arg);
     va_end(p_arg);
@@ -229,7 +230,7 @@ void ml_log_info_cont(const char* format, ...)
 void ml_log_warn_cont(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(WARN_LOG_LEVEL, 1, format, p_arg);
     va_end(p_arg);
@@ -238,7 +239,7 @@ void ml_log_warn_cont(const char* format, ...)
 void ml_log_error_cont(const char* format, ...)
 {
     va_list p_arg;
-    
+
     va_start(p_arg, format);
     ml_vlog(ERROR_LOG_LEVEL, 1, format, p_arg);
     va_end(p_arg);

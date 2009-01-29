@@ -1,9 +1,10 @@
 /*
- * $Id: generate_http_resource.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: generate_http_resource.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,13 +28,13 @@
 int main(int argc, const char** argv)
 {
     int isHTML;
-    
+
     if (argc != 3)
     {
         fprintf(stderr, "Usage: %s (--html|--binary) <filename>\n", argv[0]);
         return 1;
     }
-    
+
     if (strcmp("--html", argv[1]) == 0)
     {
         isHTML = 1;
@@ -47,15 +48,15 @@ int main(int argc, const char** argv)
         fprintf(stderr, "Usage: %s (--html|--binary) <filename>\n", argv[0]);
         return 1;
     }
-    
-    
+
+
     FILE* file;
     if ((file = fopen(argv[2], "rb")) == NULL)
     {
         perror("fopen");
         return 1;
     }
-    
+
     if (isHTML)
     {
         printf("const char* g_xxxxxx = \n");
@@ -72,7 +73,7 @@ int main(int argc, const char** argv)
     {
         lineWidth = 20;
     }
-    
+
     int size = 0;
     unsigned char buffer[80];
     int numRead = lineWidth;
@@ -128,8 +129,8 @@ int main(int argc, const char** argv)
             }
         }
     }
-    
-    
+
+
     if (isHTML)
     {
         printf("\";\n");
@@ -138,8 +139,8 @@ int main(int argc, const char** argv)
     {
         printf("\n};\n");
     }
-    
+
     fclose(file);
-    
+
     return 0;
 }

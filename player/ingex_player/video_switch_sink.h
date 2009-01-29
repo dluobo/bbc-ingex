@@ -1,9 +1,10 @@
 /*
- * $Id: video_switch_sink.h,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: video_switch_sink.h,v 1.7 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -37,9 +38,9 @@ extern "C"
 struct VideoSwitchSink
 {
     void* data;
-    
+
     MediaSink* (*get_media_sink)(void* data);
-    
+
     int (*switch_next_video)(void* data);
     int (*switch_prev_video)(void* data);
     int (*switch_video)(void* data, int index);

@@ -1,14 +1,16 @@
 INGEX PLAYER
 ------------
 
+The C code is in the ingex_player directory. The CPP code for the "local"
+ingex player (direct playback to screen and/or SDI cards) is in the IngexPlayer
+directory, and wraps the C code in a class called IngexPlayer.
 
+The CPP code for the remote ingex player (controlled by HTTP requests
+over a network) is in the http_IngexPlayer directory and uses IngexPlayer.
+A CPP client class is in the client subdirectory.
 
-The C code is in ingex_player directory. The CPP code is in IngexPlayer directory. 
-The CPP code wraps the C code in a class called IngexPlayer.
-
-etc. etc.
-
-
+Classes to interface to a ShuttlePRO jog/shuttle controller are in the
+jogshuttle directory.
 
 Build requirements:
 
@@ -84,12 +86,9 @@ Building the CPP library:
 > make
 
 
+Testing the CPP library (an example - run without arguments for usage information:
 
-Testing the CPP library:
-
-> ingex/player/IngexPlayer/test_IngexPlayer -m test_v1.mxf
-
-
+> ingex/player/IngexPlayer/test_IngexPlayer --clapper
 
 
 Building the C library and players:
@@ -102,14 +101,38 @@ Building the C library and players:
 > sudo make install
 
 
-
 Testing the C library:
 
 > ingex/player/ingex_player/player -h
 > ...
-or 
+or
 > make testapps
 > ./test_...
 
 
+Building the HTTP player:
 
+build the cpp library
+> cd ingex/player/http_IngexPlayer
+> make
+
+
+Testing the HTTP player server:
+
+> cd ingex/player/http_IngexPlayer
+> ./http_player --doc-root .
+point your web browser at http://localhost:9008/test.html
+press "Test Start"
+
+
+Building the HTTP player client
+> cd ingex/player/http_IngexPlayer/client
+> make
+
+
+Testing the HTTP player client:
+
+> cd ingex/player/http_IngexPlayer
+> ./http_player &
+> cd client
+> ./test_HTTPPlayerClient --clapper

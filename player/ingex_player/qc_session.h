@@ -1,9 +1,10 @@
 /*
- * $Id: qc_session.h,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_session.h,v 1.6 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -38,8 +39,8 @@ extern "C"
 typedef struct QCSession QCSession;
 
 
-int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv, 
-    const char* name, const char* loadedSessionFilename, const char* userName, const char* hostName, 
+int qcs_open(const char* mxfFilename, MediaSource* source, int argc, const char** argv,
+    const char* name, const char* loadedSessionFilename, const char* userName, const char* hostName,
     QCSession** qcSession);
 int qcs_connect_to_player(QCSession* qcSession, MediaPlayer* player);
 void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType, const MarkConfigs* markConfigs, Mark* marks, int numMarks);

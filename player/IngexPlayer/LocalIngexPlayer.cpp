@@ -1,9 +1,9 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.13 2008/11/07 14:28:36 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.14 2009/01/29 07:10:26 stuart_hc Exp $
  *
- *
- *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
+ * Modifications: Matthew Marks
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,16 +74,16 @@ public:
     : _mutex(NULL)
     {
         if (pthread_mutex_lock(mutex) != 0)
-        { 
+        {
             ml_log_error("pthread_mutex_lock failed\n");
-            
+
         }
         else
         {
             _mutex = mutex;
         }
     }
-    
+
     ~MutexGuard()
     {
         if (_mutex != NULL)
@@ -94,57 +94,10 @@ public:
             }
         }
     }
-    
+
 private:
     pthread_mutex_t* _mutex;
 };
-
-
-class ReadWriteLockGuard
-{
-public:
-    ReadWriteLockGuard(pthread_rwlock_t* rwlock, bool writeLock)
-    : _rwlock(NULL)
-    {
-        if (writeLock)
-        {
-            if (pthread_rwlock_wrlock(rwlock) != 0)
-            { 
-                ml_log_error("pthread_rwlock_wrlock failed\n");
-            }
-            else
-            {
-                _rwlock = rwlock;
-            }
-        }
-        else
-        {
-            if (pthread_rwlock_rdlock(rwlock) != 0)
-            { 
-                ml_log_error("pthread_rwlock_rdlock failed\n");
-            }
-            else
-            {
-                _rwlock = rwlock;
-            }
-        }
-    }
-    
-    ~ReadWriteLockGuard()
-    {
-        if (_rwlock != NULL)
-        {
-            if (pthread_rwlock_unlock(_rwlock) != 0)
-            {
-                ml_log_error("pthread_rwlock_unlock failed\n");
-            }
-        }
-    }
-    
-private:
-    pthread_rwlock_t* _rwlock;
-};
-
 
 typedef struct
 {
@@ -157,43 +110,43 @@ class prodauto::LocalIngexPlayerState
 {
 public:
     LocalIngexPlayerState()
-    : x11Sink(0), x11XVSink(0), dualSink(0), mediaSource(0), mediaSink(0), mediaPlayer(0), playThreadId(0) 
+    : x11Sink(0), x11XVSink(0), dualSink(0), mediaSource(0), mediaSink(0), mediaPlayer(0), playThreadId(0)
     {}
-    
+
     ~LocalIngexPlayerState()
     {
         stopPlaying();
-        
-        // close int this order 
+
+        // close int this order
         msc_close(mediaSource);
         ply_close_player(&mediaPlayer);
         closeMediaSink();
     }
-    
+
     bool hasStopped() { return playThreadId == 0; };
-    
+
     void stopPlaying()
     {
         if (playThreadId != 0)
         {
             // stop the player; this will also cause the player thread to exit
             mc_stop(ply_get_media_control(mediaPlayer));
-    
+
             // wait until player has stopped
             join_thread(&playThreadId, NULL, NULL);
-            
+
             playThreadId = 0;
         }
     }
-    
+
     bool reset()
     {
         inputsPresent.clear();
-        
+
         msc_close(mediaSource);
         mediaSource = 0;
         ply_close_player(&mediaPlayer);
-        
+
         int result = msk_reset_or_close(mediaSink);
         if (result == 0)
         {
@@ -201,13 +154,13 @@ public:
             closeMediaSink();
             return false;
         }
-        else if (result == 2) // failed to reset so it was closed 
+        else if (result == 2) // failed to reset so it was closed
         {
             mediaSink = 0; // media sink already closed
             closeMediaSink();
             return false;
         }
-        
+
         return true;
     }
 
@@ -223,19 +176,19 @@ public:
         x11XVSink = 0;
         dualSink = 0;
     }
-    
-    X11DisplaySink* x11Sink;    
-    X11XVDisplaySink* x11XVSink;    
-    DualSink* dualSink;    
-    
+
+    X11DisplaySink* x11Sink;
+    X11XVDisplaySink* x11XVSink;
+    DualSink* dualSink;
+
     MediaSource* mediaSource;
     MediaSink* mediaSink;
     MediaPlayer* mediaPlayer;
-    
+
     vector<bool> inputsPresent;
-    
+
     PlayerThreadArgs playThreadArgs;
-	pthread_t playThreadId;
+    pthread_t playThreadId;
 };
 
 
@@ -300,7 +253,7 @@ static void parse_streaminfo_options(const map<string, string>& options, StreamI
     {
         streamInfo->type = PICTURE_STREAM_TYPE;
     }
-    
+
     string formatStr = get_option(options, "stream_format");
     if (strcmp(formatStr.c_str(), "uyvy") == 0)
     {
@@ -347,7 +300,7 @@ static void parse_streaminfo_options(const map<string, string>& options, StreamI
             streamInfo->format = TIMECODE_FORMAT;
         }
     }
-    
+
     streamInfo->frameRate = parse_rational_option(options, "frame_rate", (Rational){25, 1});
     if (streamInfo->type == PICTURE_STREAM_TYPE)
     {
@@ -366,7 +319,7 @@ static void parse_streaminfo_options(const map<string, string>& options, StreamI
 static void init_sound_streaminfo(StreamInfo* streamInfo)
 {
     memset(streamInfo, 0, sizeof(*streamInfo));
-    
+
     streamInfo->type = SOUND_STREAM_TYPE;
     streamInfo->format = PCM_FORMAT;
     streamInfo->frameRate = (Rational){25, 1};
@@ -374,7 +327,6 @@ static void init_sound_streaminfo(StreamInfo* streamInfo)
     streamInfo->numChannels = 1;
     streamInfo->bitsPerSample = 16;
 }
-
 
 static void* player_thread(void* arg)
 {
@@ -384,20 +336,18 @@ static void* player_thread(void* arg)
     {
         ml_log_error("Media player failed to play\n");
     }
-    
+
     pthread_exit((void*)0);
 }
 
-
-
 static void frame_displayed_event(void* data, const FrameInfo* frameInfo)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->frameDisplayedEvent(frameInfo);
     }
@@ -405,12 +355,12 @@ static void frame_displayed_event(void* data, const FrameInfo* frameInfo)
 
 static void frame_dropped_event(void* data, const FrameInfo* lastFrameInfo)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->frameDroppedEvent(lastFrameInfo);
     }
@@ -418,12 +368,12 @@ static void frame_dropped_event(void* data, const FrameInfo* lastFrameInfo)
 
 static void state_change_event(void* data, const MediaPlayerStateEvent* event)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->stateChangeEvent(event);
     }
@@ -431,12 +381,12 @@ static void state_change_event(void* data, const MediaPlayerStateEvent* event)
 
 static void end_of_source_event(void* data, const FrameInfo* lastReadFrameInfo)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->endOfSourceEvent(lastReadFrameInfo);
     }
@@ -444,12 +394,12 @@ static void end_of_source_event(void* data, const FrameInfo* lastReadFrameInfo)
 
 static void start_of_source_event(void* data, const FrameInfo* firstReadFrameInfo)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->startOfSourceEvent(firstReadFrameInfo);
     }
@@ -457,12 +407,12 @@ static void start_of_source_event(void* data, const FrameInfo* firstReadFrameInf
 
 static void close_request(void* data)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
-    vector<IngexPlayerListener*>::iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
+    vector<IngexPlayerListener*>::const_iterator iter;
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->playerCloseRequested();
     }
@@ -470,12 +420,12 @@ static void close_request(void* data)
 
 static void player_closed(void* data)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
-    vector<IngexPlayerListener*>::iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
+    vector<IngexPlayerListener*>::const_iterator iter;
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->playerClosed();
     }
@@ -483,12 +433,12 @@ static void player_closed(void* data)
 
 static void x11_key_pressed(void* data, int key, int modifier)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->keyPressed(key, modifier);
     }
@@ -496,12 +446,12 @@ static void x11_key_pressed(void* data, int key, int modifier)
 
 static void x11_key_released(void* data, int key, int modifier)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->keyReleased(key, modifier);
     }
@@ -509,12 +459,12 @@ static void x11_key_released(void* data, int key, int modifier)
 
 static void x11_progress_bar_position_set(void* data, float position)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->progressBarPositionSet(position);
     }
@@ -522,49 +472,48 @@ static void x11_progress_bar_position_set(void* data, float position)
 
 static void x11_mouse_clicked(void* data, int imageWidth, int imageHeight, int xPos, int yPos)
 {
-    LocalIngexPlayer* player = (LocalIngexPlayer*)data;
-    
-    ReadWriteLockGuard guard(&player->_listenersRWLock, false);
-        
+    IngexPlayerListenerRegistry* listener_registry = (IngexPlayerListenerRegistry*)data;
+
+    ReadWriteLockGuard guard(&listener_registry->_listenersRWLock, false);
+
     vector<IngexPlayerListener*>::const_iterator iter;
-    for (iter = player->_listeners.begin(); iter != player->_listeners.end(); iter++)
+    for (iter = listener_registry->_listeners.begin(); iter != listener_registry->_listeners.end(); iter++)
     {
         (*iter)->mouseClicked(imageWidth, imageHeight, xPos, yPos);
     }
 }
 
 
-
-LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit videoSplit, 
+LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType, VideoSwitchSplit videoSplit,
     int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
-    int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
+    int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio,
     Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
     int audioDevice, int numAudioLevelMonitors, float audioLineupLevel, bool enableAudioSwitch)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1), 
-_nextVideoSplit(videoSplit), _videoSplit(videoSplit), 
+: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1),
+_nextVideoSplit(videoSplit), _videoSplit(videoSplit),
 _numFFMPEGThreads(numFFMPEGThreads),
-_initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads), 
-_applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize), 
-_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD), 
-_x11WindowName("Ingex Player"), 
+_initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads),
+_applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize),
+_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD),
+_x11WindowName("Ingex Player"),
 _sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
 _monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
-_disablePCAudio(disablePCAudio), _audioDevice(audioDevice), 
+_disablePCAudio(disablePCAudio), _audioDevice(audioDevice),
 _numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLevel),
 _enableAudioSwitch(enableAudioSwitch)
 {
-    initialise();
+    initialise(listenerRegistry);
 }
 
-LocalIngexPlayer::LocalIngexPlayer(PlayerOutputType outputType)
+LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType)
 : _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1),
 _nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
 _numFFMPEGThreads(4),
-_initiallyLocked(false), _useWorkerThreads(true), 
-_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false), 
-_x11WindowName("Ingex Player"), 
-_scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0), 
-_numAudioLevelMonitors(2), _audioLineupLevel(-18.0), 
+_initiallyLocked(false), _useWorkerThreads(true),
+_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false),
+_x11WindowName("Ingex Player"),
+_scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0),
+_numAudioLevelMonitors(2), _audioLineupLevel(-18.0),
 _enableAudioSwitch(true)
 {
     _sourceAspectRatio.num = 0;
@@ -573,17 +522,17 @@ _enableAudioSwitch(true)
     _pixelAspectRatio.den = 0;
     _monitorAspectRatio.num = 4;
     _monitorAspectRatio.den = 3;
-    
-    initialise();
+
+    initialise(listenerRegistry);
 }
 
-void LocalIngexPlayer::initialise()
+void LocalIngexPlayer::initialise(IngexPlayerListenerRegistry* listenerRegistry)
 {
     _playState = 0;
-    
+
     memset(&_mediaPlayerListener, 0, sizeof(MediaPlayerListener));
-    
-    _mediaPlayerListener.data = this;
+
+    _mediaPlayerListener.data = listenerRegistry;
     _mediaPlayerListener.frame_displayed_event = frame_displayed_event;
     _mediaPlayerListener.frame_dropped_event = frame_dropped_event;
     _mediaPlayerListener.state_change_event = state_change_event;
@@ -591,33 +540,32 @@ void LocalIngexPlayer::initialise()
     _mediaPlayerListener.start_of_source_event = start_of_source_event;
     _mediaPlayerListener.player_closed = player_closed;
 
-    
+
     memset(&_x11WindowListener, 0, sizeof(X11WindowListener));
-    _x11WindowListener.data = this;
+    _x11WindowListener.data = listenerRegistry;
     _x11WindowListener.close_request = close_request;
-    
+
     memset(&_x11KeyListener, 0, sizeof(KeyboardInputListener));
-    _x11KeyListener.data = this;
+    _x11KeyListener.data = listenerRegistry;
     _x11KeyListener.key_pressed = x11_key_pressed;
     _x11KeyListener.key_released = x11_key_released;
-    
+
     memset(&_x11ProgressBarListener, 0, sizeof(ProgressBarInputListener));
-    _x11ProgressBarListener.data = this;
+    _x11ProgressBarListener.data = listenerRegistry;
     _x11ProgressBarListener.position_set = x11_progress_bar_position_set;
-    
+
     memset(&_x11MouseListener, 0, sizeof(MouseInputListener));
-    _x11MouseListener.data = this;
+    _x11MouseListener.data = listenerRegistry;
     _x11MouseListener.click = x11_mouse_clicked;
-    
+
     memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
-    
+
     memset(&_windowInfo, 0, sizeof(_windowInfo));
     memset(&_localWindowInfo, 0, sizeof(_localWindowInfo));
     memset(&_externalWindowInfo, 0, sizeof(_externalWindowInfo));
-    
-    pthread_rwlock_init(&_listenersRWLock, NULL);
+
     pthread_rwlock_init(&_playStateRWLock, NULL);
-    
+
     init_dv_decoder_resources();
     init_mjpeg_decoder_resources();
 }
@@ -632,20 +580,8 @@ LocalIngexPlayer::~LocalIngexPlayer()
     }
     SAFE_DELETE(&currentPlayState);
 
-    {    
-        ReadWriteLockGuard guard(&_listenersRWLock, true);
-        
-        vector<IngexPlayerListener*>::iterator iter;
-        for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
-        {
-            (*iter)->unsetRegistry();
-        }
-        _listeners.clear();
-    }
-    
-    pthread_rwlock_destroy(&_listenersRWLock);
     pthread_rwlock_destroy(&_playStateRWLock);
-    
+
     free_dv_decoder_resources();
     free_mjpeg_decoder_resources();
 }
@@ -717,13 +653,13 @@ bool LocalIngexPlayer::reset()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             // no player - pretend the reset failed and the player was closed
             return false;
         }
-        
+
         _playState->stopPlaying();
         return _playState->reset();
     }
@@ -743,7 +679,7 @@ bool LocalIngexPlayer::close()
             currentPlayState = _playState;
             _playState = 0;
         }
-        
+
         SAFE_DELETE(&currentPlayState);
 
         x11c_close_window(&_localWindowInfo);
@@ -770,30 +706,30 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
     int swScale = 1;
     vector<bool> inputsPresent;
     MediaSource* mainMediaSource = 0;
-    
+
     try
     {
         if (inputs.size() == 0)
         {
             THROW_EXCEPTION(("No files to play\n"));
         }
-        
+
         // effectively disable client access to the player
         {
             ReadWriteLockGuard guard(&_playStateRWLock, true);
             currentPlayState = _playState;
             _playState = 0;
         }
-        
-        
-        // create a multiple source source 
-        
-        CHK_OTHROW(mls_create(&_sourceAspectRatio, -1, &multipleSource));
+
+
+        // create a multiple source source
+
+        CHK_OTHROW(mls_create(&_sourceAspectRatio, -1, &g_palFrameRate, &multipleSource));
         mainMediaSource = mls_get_media_source(multipleSource);
-    
-        
-        // open the media sources 
-        
+
+
+        // open the media sources
+
         int videoStreamIndex = -1;
         bool videoChanged = false;
         bool atLeastOneInputOpened = false;
@@ -806,7 +742,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             StreamInfo soundStreamInfo;
             int numBalls = 5;
             int numFFMPEGThreads = 0;
-            
+
             memset(&streamInfo, 0, sizeof(streamInfo));
             memset(&soundStreamInfo, 0, sizeof(soundStreamInfo));
 
@@ -825,7 +761,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     mediaSource = mxfs_get_media_source(mxfSource);
                 }
                 break;
-                    
+
                 case RAW_INPUT:
                 {
                     parse_streaminfo_options(input.options, &streamInfo);
@@ -838,7 +774,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case DV_INPUT:
                 {
                     if (!rds_open(input.name.c_str(), &mediaSource))
@@ -850,7 +786,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case FFMPEG_INPUT:
                 {
                     numFFMPEGThreads = parse_int_option(input.options, "num_ffmpeg_threads", 0);
@@ -863,7 +799,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case SHM_INPUT:
                 {
                     if (!shared_mem_open(input.name.c_str(), &mediaSource))
@@ -875,7 +811,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-    
+
                 case UDP_INPUT:
                 {
                     if (!udp_open(input.name.c_str(), &mediaSource))
@@ -887,7 +823,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case BALLS_INPUT:
                 {
                     streamInfo.type = PICTURE_STREAM_TYPE;
@@ -902,7 +838,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case BLANK_INPUT:
                 {
                     streamInfo.type = PICTURE_STREAM_TYPE;
@@ -916,7 +852,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
                 case CLAPPER_INPUT:
                 {
                     streamInfo.type = PICTURE_STREAM_TYPE;
@@ -931,7 +867,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
                 break;
-                    
+
             }
 
             // set software scaling to 2 if the material dimensions exceeds 1024
@@ -949,7 +885,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                         if (videoStreamIndex == -1 && streamInfo->type == PICTURE_STREAM_TYPE)
                         {
                             videoStreamIndex = i;
-                            
+
                             if (_videoStreamInfo.type == PICTURE_STREAM_TYPE)
                             {
                                 if (streamInfo->format != _videoStreamInfo.format ||
@@ -960,10 +896,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                                     videoChanged = true;
                                 }
                             }
-                            
+
                             _videoStreamInfo = *streamInfo;
                         }
-                        
+
                         if (swScale == 1 &&
                             streamInfo->type == PICTURE_STREAM_TYPE &&
                             (streamInfo->width > 1024 || streamInfo->height > 1024))
@@ -973,13 +909,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
             }
-            
+
             opened.push_back(true);
             inputsPresent.push_back(true);
             atLeastOneInputOpened = true;
             CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
         }
-        
+
         // check at least one input could be opened
         if (!atLeastOneInputOpened)
         {
@@ -990,10 +926,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             }
             return false;
         }
-        
-        
+
+
         // add a blank video source if no video source is present
-        
+
         if (videoStreamIndex == -1)
         {
             if (_videoStreamInfo.type == PICTURE_STREAM_TYPE)
@@ -1031,24 +967,24 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             MediaSource* mediaSource;
             CHK_OTHROW(bks_create(&_videoStreamInfo, 120 * 60 * 60 * 25, &mediaSource));
             CHK_OTHROW(mls_assign_source(multipleSource, &mediaSource));
-            
+
         }
 
         // finalise blank sources
-        
+
         CHK_OTHROW(mls_finalise_blank_sources(multipleSource));
-        
-        
-        // open the buffered media source 
-        
+
+
+        // open the buffered media source
+
         if (_srcBufferSize > 0)
         {
             CHK_OTHROW(bmsrc_create(mainMediaSource, _srcBufferSize, 1, -1.0, &bufferedSource));
             mainMediaSource = bmsrc_get_source(bufferedSource);
         }
-        
 
-        // decide how to proceed if already playing 
+
+        // decide how to proceed if already playing
 
         if (currentPlayState)
         {
@@ -1097,7 +1033,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 resetPlayer = false;
             }
-            else if (_actualOutputType != DVS_OUTPUT && 
+            else if (_actualOutputType != DVS_OUTPUT &&
                 _externalWindowInfo.window != 0 &&
                 memcmp(&_windowInfo, &_externalWindowInfo, sizeof(_windowInfo)) != 0)
             {
@@ -1106,7 +1042,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 resetPlayer = false;
             }
-            
+
             if (resetPlayer)
             {
                 // stop and reset the player
@@ -1130,20 +1066,20 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             // new player
             newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
         }
-   
+
         newPlayState->mediaSource = mainMediaSource;
         mainMediaSource = 0;
         newPlayState->inputsPresent = inputsPresent;
         inputsPresent.clear();
 
-        
-        
-        // open media sink 
-        
+
+
+        // open media sink
+
         if (!haveReset)
         {
             // get the actual output type, possibly auto-detect whether X11 XV is available as output type
-            
+
             if (_nextOutputType == X11_AUTO_OUTPUT)
             {
                 if (x11XVIsAvailable())
@@ -1174,16 +1110,16 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             {
                 _actualOutputType = _nextOutputType;
             }
-            
-            
+
+
             _disableSDIOSD = _nextDisableSDIOSD;
 
-            
+
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
+                    CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio,
                         _scale, swScale, &_windowInfo, &x11Sink),
                         ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
@@ -1196,10 +1132,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     newPlayState->mediaSink = bms_get_sink(bufSink);
                     newPlayState->x11Sink = x11Sink;
                     break;
-        
+
                 case X11_XV_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio, 
+                    CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio,
                         _scale, swScale, &_windowInfo, &x11XVSink),
                         ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
@@ -1212,18 +1148,18 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     newPlayState->mediaSink = bms_get_sink(bufSink);
                     newPlayState->x11XVSink = x11XVSink;
                     break;
-        
+
                 case DVS_OUTPUT:
                     closeLocalX11Window();
-                    CHK_OTHROW_MSG(dvs_open(_dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink), 
+                    CHK_OTHROW_MSG(dvs_open(_dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink),
                         ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
-                    
+
                 case DUAL_DVS_X11_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD, 
-                        _disableX11OSD, &_pixelAspectRatio, 
+                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD,
+                        _disableX11OSD, &_pixelAspectRatio,
                         &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
                         ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
@@ -1233,11 +1169,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     newPlayState->mediaSink = dusk_get_media_sink(dualSink);
                     newPlayState->dualSink = dualSink;
                     break;
-                    
+
                 case DUAL_DVS_X11_XV_OUTPUT:
                     CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD, 
-                        _disableX11OSD, &_pixelAspectRatio, 
+                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD,
+                        _disableX11OSD, &_pixelAspectRatio,
                         &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
                         ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
@@ -1247,14 +1183,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     newPlayState->mediaSink = dusk_get_media_sink(dualSink);
                     newPlayState->dualSink = dualSink;
                     break;
-                    
+
                 default:
                     assert(false);
             }
-            
-#if defined(HAVE_PORTAUDIO)    
+
+#if defined(HAVE_PORTAUDIO)
             // create audio sink
-            
+
             if (!_disablePCAudio)
             {
                 if (_actualOutputType == X11_OUTPUT ||
@@ -1272,31 +1208,31 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     }
                 }
             }
-#endif    
+#endif
 
-            // create video switch sink 
-            
+            // create video switch sink
+
             if (_nextVideoSplit == QUAD_SPLIT_VIDEO_SWITCH || _nextVideoSplit == NONA_SPLIT_VIDEO_SWITCH)
             {
                 VideoSwitchSink* videoSwitch;
-                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, _nextVideoSplit, _applySplitFilter, 
+                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, _nextVideoSplit, _applySplitFilter,
                     0, 0, 0, -1, -1, -1, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
-            
-            
+
+
             // create audio level monitors
-            
+
             if (_numAudioLevelMonitors > 0)
             {
                 AudioLevelSink* audioLevelSink;
-                CHK_OTHROW(als_create_audio_level_sink(newPlayState->mediaSink, _numAudioLevelMonitors, 
+                CHK_OTHROW(als_create_audio_level_sink(newPlayState->mediaSink, _numAudioLevelMonitors,
                     _audioLineupLevel, &audioLevelSink));
                 newPlayState->mediaSink = als_get_media_sink(audioLevelSink);
             }
-            
 
-            // create audio switch sink 
+
+            // create audio switch sink
 
             if (_enableAudioSwitch)
             {
@@ -1305,34 +1241,34 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 newPlayState->mediaSink = asw_get_media_sink(audioSwitch);
             }
         }
-    
-        
-        // create the player 
-        
-        CHK_OTHROW(ply_create_player(newPlayState->mediaSource, newPlayState->mediaSink, 
-            _initiallyLocked, 0, _numFFMPEGThreads, _useWorkerThreads, 0, 0, 
+
+
+        // create the player
+
+        CHK_OTHROW(ply_create_player(newPlayState->mediaSource, newPlayState->mediaSink,
+            _initiallyLocked, 0, _numFFMPEGThreads, _useWorkerThreads, 0, 0,
             &g_invalidTimecode, &g_invalidTimecode, NULL, NULL, 0, &newPlayState->mediaPlayer));
         CHK_OTHROW(ply_register_player_listener(newPlayState->mediaPlayer, &_mediaPlayerListener));
-            
+
         if (_srcBufferSize > 0)
         {
             bmsrc_set_media_player(bufferedSource, newPlayState->mediaPlayer);
         }
-        
-        
+
+
         // start with player state screen
         mc_set_osd_screen(ply_get_media_control(newPlayState->mediaPlayer), OSD_PLAY_STATE_SCREEN);
 
-        
+
         // seek to the start position
         if (startPosition > 0)
         {
             mc_seek(ply_get_media_control(newPlayState->mediaPlayer), startPosition, SEEK_SET, FRAME_PLAY_UNIT);
         }
-        
-        
-        // start play thread 
-    
+
+
+        // start play thread
+
         newPlayState->playThreadArgs.startPaused = startPaused;
         newPlayState->playThreadArgs.playState = newPlayState.get();
         CHK_OTHROW(create_joinable_thread(&newPlayState->playThreadId, player_thread, &newPlayState->playThreadArgs));
@@ -1345,7 +1281,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             ReadWriteLockGuard guard(&_playStateRWLock, true);
             _playState = newPlayState.release();
         }
-        
+
         setX11WindowName(_x11WindowName);
     }
     catch (...)
@@ -1359,70 +1295,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
     return true;
 }
 
-bool LocalIngexPlayer::registerListener(IngexPlayerListener* listener)
-{
-    if (listener == 0)
-    {
-        return false;
-    }
-    
-    try
-    {
-        ReadWriteLockGuard guard(&_listenersRWLock, true);
-        
-        _listeners.push_back(listener);
-        if (listener->getRegistry() != 0 && listener->getRegistry() != this)
-        {
-            // first unregister the listener with the 'other' player 
-            listener->getRegistry()->unregisterListener(listener);
-        }
-        
-        listener->setRegistry(this);
-    }
-    catch (...)
-    {
-        return false;
-    }
-    return true;
-}
-
-bool LocalIngexPlayer::unregisterListener(IngexPlayerListener* listener)
-{
-    if (listener == 0 || listener->getRegistry() != this)
-    {
-        return true;
-    }
-    
-    try
-    {
-        ReadWriteLockGuard guard(&_listenersRWLock, true);
-        
-        vector<IngexPlayerListener*>::iterator iter;
-        for (iter = _listeners.begin(); iter != _listeners.end(); iter++)
-        {
-            if (*iter == listener)
-            {
-                _listeners.erase(iter);
-                listener->unsetRegistry();
-                break;
-            }
-        }
-    }
-    catch (...)
-    {
-        return false;
-    }
-    return true;
-}
-
 bool LocalIngexPlayer::setX11WindowName(string name)
 {
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         _x11WindowName = name;
-        
+
         // set name straight away if sink is open
         if (_playState != 0)
         {
@@ -1452,12 +1332,12 @@ bool LocalIngexPlayer::stop()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
         }
-    
+
         _playState->stopPlaying();
     }
     catch (...)
@@ -1472,7 +1352,7 @@ bool LocalIngexPlayer::toggleLock()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1481,7 +1361,7 @@ bool LocalIngexPlayer::toggleLock()
         {
             return false;
         }
-        
+
         mc_toggle_lock(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1496,7 +1376,7 @@ bool LocalIngexPlayer::play()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1505,7 +1385,7 @@ bool LocalIngexPlayer::play()
         {
             return false;
         }
-    
+
         mc_play(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1520,7 +1400,7 @@ bool LocalIngexPlayer::pause()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1529,7 +1409,7 @@ bool LocalIngexPlayer::pause()
         {
             return false;
         }
-    
+
         mc_pause(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1544,7 +1424,7 @@ bool LocalIngexPlayer::togglePlayPause()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1553,7 +1433,7 @@ bool LocalIngexPlayer::togglePlayPause()
         {
             return false;
         }
-    
+
         mc_toggle_play_pause(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1568,7 +1448,7 @@ bool LocalIngexPlayer::seek(int64_t offset, int whence, PlayUnit unit)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1577,7 +1457,7 @@ bool LocalIngexPlayer::seek(int64_t offset, int whence, PlayUnit unit)
         {
             return false;
         }
-    
+
         mc_seek(ply_get_media_control(_playState->mediaPlayer), offset, whence, unit);
     }
     catch (...)
@@ -1593,7 +1473,7 @@ bool LocalIngexPlayer::playSpeed(int speed)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1602,7 +1482,7 @@ bool LocalIngexPlayer::playSpeed(int speed)
         {
             return false;
         }
-    
+
         mc_play_speed(ply_get_media_control(_playState->mediaPlayer), speed, FRAME_PLAY_UNIT);
     }
     catch (...)
@@ -1618,7 +1498,7 @@ bool LocalIngexPlayer::step(bool forward)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1627,7 +1507,7 @@ bool LocalIngexPlayer::step(bool forward)
         {
             return false;
         }
-    
+
         mc_step(ply_get_media_control(_playState->mediaPlayer), forward, FRAME_PLAY_UNIT);
     }
     catch (...)
@@ -1642,7 +1522,7 @@ bool LocalIngexPlayer::muteAudio(int mute)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1651,7 +1531,7 @@ bool LocalIngexPlayer::muteAudio(int mute)
         {
             return false;
         }
-    
+
         mc_mute_audio(ply_get_media_control(_playState->mediaPlayer), mute);
     }
     catch (...)
@@ -1666,7 +1546,7 @@ bool LocalIngexPlayer::mark(int type)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1675,7 +1555,7 @@ bool LocalIngexPlayer::mark(int type)
         {
             return false;
         }
-    
+
         /* TODO: legacy fix; type == 0 is no longer allowed */
         mc_mark(ply_get_media_control(_playState->mediaPlayer), type + 1, 0);
     }
@@ -1691,7 +1571,7 @@ bool LocalIngexPlayer::markPosition(int64_t position, int type)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1700,7 +1580,7 @@ bool LocalIngexPlayer::markPosition(int64_t position, int type)
         {
             return false;
         }
-    
+
         /* TODO: legacy fix; type == 0 is no longer allowed */
         mc_mark_position(ply_get_media_control(_playState->mediaPlayer), position, type + 1, 0);
     }
@@ -1716,7 +1596,7 @@ bool LocalIngexPlayer::clearMark()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1725,7 +1605,7 @@ bool LocalIngexPlayer::clearMark()
         {
             return false;
         }
-    
+
         mc_clear_mark(ply_get_media_control(_playState->mediaPlayer), ALL_MARK_TYPE);
     }
     catch (...)
@@ -1740,7 +1620,7 @@ bool LocalIngexPlayer::clearAllMarks()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1749,7 +1629,7 @@ bool LocalIngexPlayer::clearAllMarks()
         {
             return false;
         }
-    
+
         mc_clear_all_marks(ply_get_media_control(_playState->mediaPlayer), ALL_MARK_TYPE);
     }
     catch (...)
@@ -1764,7 +1644,7 @@ bool LocalIngexPlayer::seekNextMark()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1773,7 +1653,7 @@ bool LocalIngexPlayer::seekNextMark()
         {
             return false;
         }
-    
+
         mc_seek_next_mark(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1788,7 +1668,7 @@ bool LocalIngexPlayer::seekPrevMark()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1797,7 +1677,7 @@ bool LocalIngexPlayer::seekPrevMark()
         {
             return false;
         }
-    
+
         mc_seek_prev_mark(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1812,7 +1692,7 @@ bool LocalIngexPlayer::setOSDScreen(OSDScreen screen)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1821,7 +1701,7 @@ bool LocalIngexPlayer::setOSDScreen(OSDScreen screen)
         {
             return false;
         }
-    
+
         mc_set_osd_screen(ply_get_media_control(_playState->mediaPlayer), screen);
     }
     catch (...)
@@ -1836,7 +1716,7 @@ bool LocalIngexPlayer::nextOSDScreen()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1845,7 +1725,7 @@ bool LocalIngexPlayer::nextOSDScreen()
         {
             return false;
         }
-    
+
         mc_next_osd_screen(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1860,7 +1740,7 @@ bool LocalIngexPlayer::setOSDTimecode(int index, int type, int subType)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1869,7 +1749,7 @@ bool LocalIngexPlayer::setOSDTimecode(int index, int type, int subType)
         {
             return false;
         }
-    
+
         mc_set_osd_timecode(ply_get_media_control(_playState->mediaPlayer), index, type, subType);
     }
     catch (...)
@@ -1884,7 +1764,7 @@ bool LocalIngexPlayer::nextOSDTimecode()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1893,7 +1773,7 @@ bool LocalIngexPlayer::nextOSDTimecode()
         {
             return false;
         }
-    
+
         mc_next_osd_timecode(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1908,7 +1788,7 @@ bool LocalIngexPlayer::switchNextVideo()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1917,7 +1797,7 @@ bool LocalIngexPlayer::switchNextVideo()
         {
             return false;
         }
-    
+
         mc_switch_next_video(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1932,7 +1812,7 @@ bool LocalIngexPlayer::switchPrevVideo()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1941,7 +1821,7 @@ bool LocalIngexPlayer::switchPrevVideo()
         {
             return false;
         }
-    
+
         mc_switch_prev_video(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -1956,7 +1836,7 @@ bool LocalIngexPlayer::switchVideo(int index)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -1978,8 +1858,8 @@ bool LocalIngexPlayer::switchVideo(int index)
             int actualIndex = 1;
             int indexCount;
             vector<bool>::const_iterator iter;
-            for (indexCount = 1, iter = _playState->inputsPresent.begin(); 
-                iter != _playState->inputsPresent.end(); 
+            for (indexCount = 1, iter = _playState->inputsPresent.begin();
+                iter != _playState->inputsPresent.end();
                 indexCount++, iter++)
             {
                 if (indexCount == index)
@@ -2012,7 +1892,7 @@ bool LocalIngexPlayer::switchNextAudioGroup()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2021,7 +1901,7 @@ bool LocalIngexPlayer::switchNextAudioGroup()
         {
             return false;
         }
-    
+
         mc_switch_next_audio_group(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -2036,7 +1916,7 @@ bool LocalIngexPlayer::switchPrevAudioGroup()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2045,7 +1925,7 @@ bool LocalIngexPlayer::switchPrevAudioGroup()
         {
             return false;
         }
-    
+
         mc_switch_prev_audio_group(ply_get_media_control(_playState->mediaPlayer));
     }
     catch (...)
@@ -2060,7 +1940,7 @@ bool LocalIngexPlayer::switchAudioGroup(int index)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2084,7 +1964,7 @@ bool LocalIngexPlayer::snapAudioToVideo()
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2108,7 +1988,7 @@ bool LocalIngexPlayer::reviewStart(int64_t duration)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2117,7 +1997,7 @@ bool LocalIngexPlayer::reviewStart(int64_t duration)
         {
             return false;
         }
-    
+
         mc_review_start(ply_get_media_control(_playState->mediaPlayer), duration);
     }
     catch (...)
@@ -2132,7 +2012,7 @@ bool LocalIngexPlayer::reviewEnd(int64_t duration)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2141,7 +2021,7 @@ bool LocalIngexPlayer::reviewEnd(int64_t duration)
         {
             return false;
         }
-    
+
         mc_review_end(ply_get_media_control(_playState->mediaPlayer), duration);
     }
     catch (...)
@@ -2156,7 +2036,7 @@ bool LocalIngexPlayer::review(int64_t duration)
     try
     {
         ReadWriteLockGuard guard(&_playStateRWLock, false);
-        
+
         if (!_playState)
         {
             return false;
@@ -2165,7 +2045,7 @@ bool LocalIngexPlayer::review(int64_t duration)
         {
             return false;
         }
-    
+
         mc_review(ply_get_media_control(_playState->mediaPlayer), duration);
     }
     catch (...)
@@ -2181,7 +2061,7 @@ bool LocalIngexPlayer::setOrCreateX11Window()
     if (_externalWindowInfo.window != 0)
     {
         closeLocalX11Window();
-        
+
         /* use the externally provided window */
         _windowInfo = _externalWindowInfo;
     }
@@ -2207,7 +2087,7 @@ bool LocalIngexPlayer::setOrCreateX11Window()
 
         _windowInfo = _localWindowInfo;
     }
-    
+
     return true;
 }
 
@@ -2218,5 +2098,3 @@ void LocalIngexPlayer::closeLocalX11Window()
         x11c_close_window(&_localWindowInfo);
     }
 }
-
-

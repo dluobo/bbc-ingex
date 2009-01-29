@@ -7,7 +7,7 @@
 <meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1"/>
 
 <script type="text/javascript"><!--
-	
+
 	function send_control(controlType)
 	{
         var request = new XMLHttpRequest();
@@ -43,11 +43,11 @@
 		}
 	}
 
-	
+
 	var statusInterval = 1000;
 	var stateRequest = null;
-	
-	
+
+
 	function handleStateContent(event)
 	{
 		try
@@ -58,38 +58,38 @@
 				{
 					throw "failed to get player state";
 				}
-				
+
 				var result = event.target.responseXML;
 				var timecodeXEles = result.getElementsByTagName("timecode");
-				
+
 				if (timecodeXEles.length > 0)
 				{
 					var timecodeXEle = timecodeXEles[0];
-					
+
 					var timecodeDivEle = document.getElementById("timecode");
 					if (timecodeDivEle != null)
 					{
 						var newEle = document.createElement("div");
 						var timecodeText = document.createTextNode(timecodeXEle.firstChild.nodeValue);
-						
+
 						newEle.setAttribute("id", "timecode");
 						newEle.appendChild(timecodeText);
-						
+
 						timecodeDivEle.parentNode.replaceChild(newEle, timecodeDivEle);
 					}
 				}
-				
+
 				setTimeout("get_state()", statusInterval)
 			}
-		} 
+		}
 		catch (err)
 		{
 			// ignore the error
-			
+
 			setTimeout("get_state()", statusInterval)
 		}
 	}
-	
+
 	function get_state()
 	{
 		try

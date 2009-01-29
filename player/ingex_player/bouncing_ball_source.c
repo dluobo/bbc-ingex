@@ -1,9 +1,10 @@
 /*
- * $Id: bouncing_ball_source.c,v 1.5 2008/10/29 17:47:41 john_f Exp $
+ * $Id: bouncing_ball_source.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +30,7 @@
 #include "YUV_frame.h"
 #include "YUV_text_overlay.h"
 #include "video_conversion.h"
+#include "utils.h"
 #include "types.h"
 #include "logging.h"
 #include "macros.h"
@@ -56,24 +58,24 @@ typedef struct
 
     int64_t length;
     int64_t position;
-    
+
     unsigned char* image;
     unsigned int imageSize;
-    
+
     overlay blackOverlay;
-    
+
     BallInfo* balls;
     int numBalls;
 } BouncingBallSource;
 
 
-static void get_ball_pos(BouncingBallSource* source, double angle, int64_t position, 
+static void get_ball_pos(BouncingBallSource* source, double angle, int64_t position,
     int speed, int field, int* xPos, int* yPos)
 {
     int64_t unboundedXPos, unboundedYPos;
     int xSign, ySign;
     int xInvert, yInvert;
-    
+
     if (field == 0 && position != 0)
     {
         unboundedXPos = cos(angle) * (position - 0.5) * speed;
@@ -84,16 +86,16 @@ static void get_ball_pos(BouncingBallSource* source, double angle, int64_t posit
         unboundedXPos = cos(angle) * position * speed;
         unboundedYPos = sin(angle) * position * speed;
     }
-    
+
     unboundedXPos += (source->streamInfo.width - g_ballOverlay0.w) / 2;
     unboundedYPos += (source->streamInfo.height - g_ballOverlay0.h) / 2;
 
-    xSign = (unboundedXPos >= 0) ? 1 : -1; 
-    ySign = (unboundedYPos >= 0) ? 1 : -1; 
-    
+    xSign = (unboundedXPos >= 0) ? 1 : -1;
+    ySign = (unboundedYPos >= 0) ? 1 : -1;
+
     xInvert = ((xSign * unboundedXPos / (source->streamInfo.width - g_ballOverlay0.w)) % 2 == 1) ? 1 : 0;
     yInvert = ((ySign * unboundedYPos / (source->streamInfo.height - g_ballOverlay0.h)) % 2 == 1) ? 1 : 0;
-    
+
     *xPos = (xSign * unboundedXPos) % (source->streamInfo.width - g_ballOverlay0.w);
     if (xInvert)
     {
@@ -116,7 +118,7 @@ static void add_balls(BouncingBallSource* source)
 
     CHK_OFAIL(YUV_frame_from_buffer(&yuvFrame, source->image, source->streamInfo.width, source->streamInfo.height, source->yuvFormat) == 1);
 
-    
+
     /* remove existing balls */
     for (i = 0; i < source->numBalls; i++)
     {
@@ -125,22 +127,22 @@ static void add_balls(BouncingBallSource* source)
             source->balls[i].position = 0;
             continue;
         }
-        
+
         txtY = g_rec601YUVColours[BLACK_COLOUR].Y;
         txtU = g_rec601YUVColours[BLACK_COLOUR].U;
         txtV = g_rec601YUVColours[BLACK_COLOUR].V;
         box = 100;
-        
+
         /* field 1 */
         get_ball_pos(source, source->balls[i].angle, source->balls[i].position, source->balls[i].speed, 0, &xPos, &yPos);
         CHK_OFAIL(add_overlay(&source->blackOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
-        
+
         /* field 2 */
         get_ball_pos(source, source->balls[i].angle, source->balls[i].position, source->balls[i].speed, 1, &xPos, &yPos);
         CHK_OFAIL(add_overlay(&source->blackOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
     }
 
-    
+
     /* add balls */
     for (i = 0; i < source->numBalls; i++)
     {
@@ -148,7 +150,7 @@ static void add_balls(BouncingBallSource* source)
         txtU = g_rec601YUVColours[source->balls[i].colour].U;
         txtV = g_rec601YUVColours[source->balls[i].colour].V;
         box = 0;
-        
+
         /* field 1 */
         get_ball_pos(source, source->balls[i].angle, source->position, source->balls[i].speed, 0, &xPos, &yPos);
         if (yPos % 2 == 0)
@@ -159,7 +161,7 @@ static void add_balls(BouncingBallSource* source)
         {
             CHK_OFAIL(add_overlay(&g_ballOverlay1, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
         }
-            
+
         /* field 2 */
         get_ball_pos(source, source->balls[i].angle, source->position, source->balls[i].speed, 1, &xPos, &yPos);
         if (yPos % 2 == 0)
@@ -170,10 +172,10 @@ static void add_balls(BouncingBallSource* source)
         {
             CHK_OFAIL(add_overlay(&g_ballOverlay0, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
         }
-        
+
         source->balls[i].position = source->position;
     }
-    
+
 fail:
     return;
 }
@@ -186,25 +188,41 @@ static int bbs_get_num_streams(void* data)
 static int bbs_get_stream_info(void* data, int streamIndex, const StreamInfo** streamInfo)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (streamIndex < 0 || streamIndex >= 1)
     {
         return 0;
     }
-    
+
     *streamInfo = &source->streamInfo;
     return 1;
+}
+
+static void bbs_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    BouncingBallSource* source = (BouncingBallSource*)data;
+
+    if (source->streamInfo.isHardFrameRate &&
+        memcmp(frameRate, &source->streamInfo.frameRate, sizeof(*frameRate)) != 0)
+    {
+        msc_disable_stream(&source->mediaSource, 0);
+        return;
+    }
+
+    source->length = convert_length(source->length, &source->streamInfo.frameRate, frameRate);
+    source->position = convert_length(source->position, &source->streamInfo.frameRate, frameRate);
+    source->streamInfo.frameRate = *frameRate;
 }
 
 static int bbs_disable_stream(void* data, int streamIndex)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (streamIndex != 0)
     {
         return 0;
     }
-    
+
     source->isDisabled = 1;
     return 1;
 }
@@ -212,36 +230,36 @@ static int bbs_disable_stream(void* data, int streamIndex)
 static int bbs_stream_is_disabled(void* data, int streamIndex)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (streamIndex != 0)
     {
         return 0;
     }
-    
+
     return source->isDisabled;
 }
 
 static int bbs_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceListener* listener)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (source->isDisabled)
     {
         return 0;
     }
-    
+
     if (sdl_accept_frame(listener, 0, frameInfo))
     {
         add_balls(source);
-        
+
         if (!sdl_receive_frame_const(listener, 0, source->image, source->imageSize))
         {
             return -1;
         }
     }
-    
+
     source->position += 1;
-    
+
     return 0;
 }
 
@@ -253,12 +271,12 @@ static int bbs_is_seekable(void* data)
 static int bbs_seek(void* data, int64_t position)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (source->isDisabled)
     {
         return 0;
     }
-    
+
     source->position = position;
     return 0;
 }
@@ -279,7 +297,7 @@ static int bbs_get_position(void* data, int64_t* position)
     {
         return 0;
     }
-    
+
     *position = source->position;
     return 1;
 }
@@ -295,12 +313,12 @@ static int bbs_get_available_length(void* data, int64_t* length)
 static int bbs_eof(void* data)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (source->isDisabled)
     {
         return 0;
     }
-    
+
     if (source->position >= source->length)
     {
         return 1;
@@ -312,33 +330,33 @@ static void bbs_set_source_name(void* data, const char* name)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
 
-    add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);    
+    add_known_source_info(&source->streamInfo, SRC_INFO_NAME, name);
 }
 
 static void bbs_set_clip_id(void* data, const char* id)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
 
-    set_stream_clip_id(&source->streamInfo, id);    
+    set_stream_clip_id(&source->streamInfo, id);
 }
 
 static void bbs_close(void* data)
 {
     BouncingBallSource* source = (BouncingBallSource*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     clear_stream_info(&source->streamInfo);
-    
+
     SAFE_FREE(&source->balls);
-    
+
     free_overlay(&source->blackOverlay);
-    
+
     SAFE_FREE(&source->image);
-    
+
     SAFE_FREE(&source);
 }
 
@@ -347,14 +365,14 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
 {
     BouncingBallSource* newSource = NULL;
     int i;
-    Colour ballColours[] = 
+    Colour ballColours[] =
     {
         ORANGE_COLOUR, YELLOW_COLOUR, GREEN_COLOUR, MAGENTA_COLOUR,
-        RED_COLOUR, LIGHT_WHITE_COLOUR, BLUE_COLOUR, BLACK_COLOUR, CYAN_COLOUR 
+        RED_COLOUR, LIGHT_WHITE_COLOUR, BLUE_COLOUR, BLACK_COLOUR, CYAN_COLOUR
     };
     double angle;
 
-    
+
     if (videoStreamInfo->type != PICTURE_STREAM_TYPE ||
         (videoStreamInfo->format != UYVY_FORMAT &&
             videoStreamInfo->format != YUV422_FORMAT &&
@@ -363,15 +381,15 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
         ml_log_error("Invalid stream for bouncing ball source\n");
         return 0;
     }
-    
+
     init_ball_overlay();
 
-    
+
     CALLOC_ORET(newSource, BouncingBallSource, 1);
-    
+
     newSource->length = length;
-    
-    
+
+
     CALLOC_OFAIL(newSource->balls, BallInfo, numBalls);
     newSource->numBalls = numBalls;
     angle = M_PI / 16.0;
@@ -401,17 +419,18 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     }
     MALLOC_OFAIL(newSource->image, unsigned char, newSource->imageSize);
     fill_black(videoStreamInfo->format, videoStreamInfo->width, videoStreamInfo->height, newSource->image);
-    
+
     newSource->blackOverlay.w = g_ballOverlay0.w;
     newSource->blackOverlay.h = g_ballOverlay0.h;
     MALLOC_OFAIL(newSource->blackOverlay.buff, unsigned char, g_ballOverlay0.w * g_ballOverlay0.h * 2);
     newSource->blackOverlay.Cbuff = NULL;
     memset(newSource->blackOverlay.buff, 255, g_ballOverlay0.w * g_ballOverlay0.h * 2);
-    
-    
+
+
     newSource->mediaSource.data = newSource;
     newSource->mediaSource.get_num_streams = bbs_get_num_streams;
     newSource->mediaSource.get_stream_info = bbs_get_stream_info;
+    newSource->mediaSource.set_frame_rate_or_disable = bbs_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = bbs_disable_stream;
     newSource->mediaSource.stream_is_disabled = bbs_stream_is_disabled;
     newSource->mediaSource.read_frame = bbs_read_frame;
@@ -424,16 +443,16 @@ int bbs_create(const StreamInfo* videoStreamInfo, int64_t length, int numBalls, 
     newSource->mediaSource.set_source_name = bbs_set_source_name;
     newSource->mediaSource.set_clip_id = bbs_set_clip_id;
     newSource->mediaSource.close = bbs_close;
-    
+
     newSource->streamInfo = *videoStreamInfo;
     newSource->streamInfo.sourceId = msc_create_id();
-    
+
     CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_TITLE, "Bouncing balls"));
-    
-    
+
+
     *source = &newSource->mediaSource;
     return 1;
-    
+
 fail:
     bbs_close(newSource);
     return 0;
@@ -446,7 +465,7 @@ fail:
 
 
 
-static unsigned char g_ballBitMap0[] = 
+static unsigned char g_ballBitMap0[] =
 {
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x35,0x49,0x49,0x35,0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -534,7 +553,7 @@ static unsigned char g_ballBitMap0[] =
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 };
 
-static unsigned char g_ballBitMap1[] = 
+static unsigned char g_ballBitMap1[] =
 {
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x35,0x49,0x49,0x49,0x68,0x99,0xb8,0xb8,0x99,0x68,0x49,0x49,0x49,0x35,0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -624,7 +643,7 @@ static unsigned char g_ballBitMap1[] =
 
 static void init_ball_overlay()
 {
-    overlay ballOverlay = 
+    overlay ballOverlay =
     {
         42,
         42,
@@ -634,8 +653,8 @@ static void init_ball_overlay()
         0
     };
     g_ballOverlay0 = ballOverlay;
-    
-    ballOverlay.buff = g_ballBitMap1; 
+
+    ballOverlay.buff = g_ballBitMap1;
     g_ballOverlay1 = ballOverlay;
 }
 

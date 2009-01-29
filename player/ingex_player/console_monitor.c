@@ -1,9 +1,10 @@
 /*
- * $Id: console_monitor.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: console_monitor.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,14 +52,14 @@ static void csm_frame_dropped_event(void* data, const FrameInfo* lastFrameInfo)
     ConsoleMonitor* monitor = (ConsoleMonitor*)data;
     int i;
 
-    if (lastFrameInfo->position != monitor->lastDroppedFramePosition || 
+    if (lastFrameInfo->position != monitor->lastDroppedFramePosition ||
         lastFrameInfo->frameCount != monitor->lastFrameCount)
     {
         printf("Dropped: last frame displayed: ");
         for (i = 0; i < lastFrameInfo->numTimecodes; i++)
         {
-            print_timecode(lastFrameInfo->timecodes[i].timecodeType, lastFrameInfo->timecodes[i].timecodeSubType, 
-                &lastFrameInfo->timecodes[i].timecode);
+            print_timecode(lastFrameInfo->timecodes[i].timecodeType, lastFrameInfo->timecodes[i].timecodeSubType,
+                &lastFrameInfo->frameRate, &lastFrameInfo->timecodes[i].timecode);
             printf(" ");
         }
         printf("\n");
@@ -71,7 +72,7 @@ static void csm_state_change_event(void* data, const MediaPlayerStateEvent* even
 {
     //ConsoleMonitor* monitor = (ConsoleMonitor*)data;
     int i;
-    
+
     if (event->lockedChanged)
     {
         if (event->locked)
@@ -109,15 +110,15 @@ static void csm_state_change_event(void* data, const MediaPlayerStateEvent* even
     {
         printf("Speed %dx\n", event->speed);
     }
-    
+
     if (event->displayedFrameInfo.numTimecodes > 0)
     {
         printf("Displayed: ");
         for (i = 0; i < event->displayedFrameInfo.numTimecodes; i++)
         {
-            print_timecode(event->displayedFrameInfo.timecodes[i].timecodeType, 
-                event->displayedFrameInfo.timecodes[i].timecodeSubType, 
-                &event->displayedFrameInfo.timecodes[i].timecode);
+            print_timecode(event->displayedFrameInfo.timecodes[i].timecodeType,
+                event->displayedFrameInfo.timecodes[i].timecodeSubType,
+                &event->displayedFrameInfo.frameRate, &event->displayedFrameInfo.timecodes[i].timecode);
             printf(" ");
         }
         printf("\n");
@@ -127,12 +128,12 @@ static void csm_state_change_event(void* data, const MediaPlayerStateEvent* even
 static void csm_end_of_source_event(void* data, const FrameInfo* lastReadFrameInfo)
 {
     int i;
-    
+
     printf("End of source reached: ");
     for (i = 0; i < lastReadFrameInfo->numTimecodes; i++)
     {
-        print_timecode(lastReadFrameInfo->timecodes[i].timecodeType, lastReadFrameInfo->timecodes[i].timecodeSubType, 
-            &lastReadFrameInfo->timecodes[i].timecode);
+        print_timecode(lastReadFrameInfo->timecodes[i].timecodeType, lastReadFrameInfo->timecodes[i].timecodeSubType,
+            &lastReadFrameInfo->frameRate, &lastReadFrameInfo->timecodes[i].timecode);
         printf(" ");
     }
     printf("\n");
@@ -141,12 +142,12 @@ static void csm_end_of_source_event(void* data, const FrameInfo* lastReadFrameIn
 static void csm_start_of_source_event(void* data, const FrameInfo* firstReadFrameInfo)
 {
     int i;
-    
+
     printf("Start of source reached: ");
     for (i = 0; i < firstReadFrameInfo->numTimecodes; i++)
     {
-        print_timecode(firstReadFrameInfo->timecodes[i].timecodeType, firstReadFrameInfo->timecodes[i].timecodeSubType, 
-            &firstReadFrameInfo->timecodes[i].timecode);
+        print_timecode(firstReadFrameInfo->timecodes[i].timecodeType, firstReadFrameInfo->timecodes[i].timecodeSubType,
+            &firstReadFrameInfo->frameRate, &firstReadFrameInfo->timecodes[i].timecode);
         printf(" ");
     }
     printf("\n");
@@ -163,9 +164,9 @@ static void csm_player_closed(void* data)
 int csm_open(MediaPlayer* player, ConsoleMonitor** monitor)
 {
     ConsoleMonitor* newMonitor = NULL;
-    
+
     CALLOC_ORET(newMonitor, ConsoleMonitor, 1);
-    
+
     newMonitor->lastDroppedFramePosition = -1;
 
     newMonitor->playerListener.data = newMonitor;
@@ -180,10 +181,10 @@ int csm_open(MediaPlayer* player, ConsoleMonitor** monitor)
         ml_log_error("Failed to register console monitor as player listener\n");
         goto fail;
     }
-    
+
     *monitor = newMonitor;
     return 1;
-    
+
 fail:
     csm_close(&newMonitor);
     return 0;
@@ -195,7 +196,7 @@ void csm_close(ConsoleMonitor** monitor)
     {
         return;
     }
-    
+
     SAFE_FREE(monitor);
 }
 

@@ -1,9 +1,10 @@
 /*
- * $Id: progress_bar_input_connect.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: progress_bar_input_connect.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +36,7 @@
 struct ProgressBarConnect
 {
     MediaControl* control;
-    
+
     ProgressBarInput* input;
     ProgressBarInputListener listener;
 };
@@ -44,28 +45,28 @@ struct ProgressBarConnect
 static void pic_position_set(void* data, float position)
 {
     ProgressBarConnect* connect = (ProgressBarConnect*)data;
-    
+
     mc_seek(connect->control, (int64_t)(position * 1000.0), SEEK_SET, PERCENTAGE_PLAY_UNIT);
     mc_pause(connect->control);
 }
 
 
 
-int pic_create_progress_bar_connect(MediaControl* control, ProgressBarInput* input, 
+int pic_create_progress_bar_connect(MediaControl* control, ProgressBarInput* input,
     ProgressBarConnect** connect)
 {
     ProgressBarConnect* newConnect;
 
     CALLOC_ORET(newConnect, ProgressBarConnect, 1);
-    
+
     newConnect->control = control;
     newConnect->input = input;
 
     newConnect->listener.data = newConnect;
     newConnect->listener.position_set = pic_position_set;
     pip_set_listener(input, &newConnect->listener);
-    
-    
+
+
     *connect = newConnect;
     return 1;
 }
@@ -76,9 +77,9 @@ void pic_free_progress_bar_connect(ProgressBarConnect** connect)
     {
         return;
     }
-    
+
     pip_unset_listener((*connect)->input);
-    
+
     SAFE_FREE(connect);
 }
 

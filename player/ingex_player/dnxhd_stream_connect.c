@@ -1,9 +1,10 @@
 /*
- * $Id: dnxhd_stream_connect.c,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ * $Id: dnxhd_stream_connect.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,8 +42,8 @@ int dnxhd_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
     return 0;
 }
 
-int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId, 
-    const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread, 
+int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
+    const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread,
     StreamConnect** connect)
 {
     return 0;
@@ -66,7 +67,7 @@ typedef struct
     StreamFormat format;
     int width;
     int height;
-    
+
     AVCodecContext* dec;
     int isThreaded;
     int openedDecoder; /* only close if decoder opened */
@@ -76,18 +77,18 @@ typedef struct
 typedef struct
 {
     int useWorkerThread;
-    
+
     int sourceStreamId;
     int sinkStreamId;
-    
+
     StreamConnect streamConnect;
     MediaSourceListener sourceListener;
-    
+
     MediaSink* sink;
-    
+
     StreamInfo streamInfo;
     StreamFormat decodedFormat;
-    
+
     DNxHDDecoder* decoder;
 
     unsigned char* dnxhdData;
@@ -97,7 +98,7 @@ typedef struct
     unsigned int sinkBufferSize;
 
     int frameWasReceived;
-    
+
     pthread_t workerThreadId;
     pthread_mutex_t workerMutex;
     pthread_cond_t frameIsReadyCond;
@@ -123,7 +124,7 @@ static void free_dnxhd_decoder(DNxHDDecoder** decoder)
     }
     SAFE_FREE(&(*decoder)->dec);
     SAFE_FREE(&(*decoder)->decFrame);
-    
+
     SAFE_FREE(decoder);
 }
 
@@ -132,23 +133,23 @@ static int create_dnxhd_decoder(StreamFormat format, int width, int height, int 
     DNxHDDecoder* newDecoder = NULL;
     AVCodec* avDecoder = NULL;
 
-    
+
     CALLOC_ORET(newDecoder, DNxHDDecoder, 1);
 
     newDecoder->format = format;
     newDecoder->width = width;
     newDecoder->height = height;
-    
-    
+
+
     avDecoder = avcodec_find_decoder(CODEC_ID_DNXHD);
-    if (!avDecoder) 
+    if (!avDecoder)
     {
         ml_log_error("Could not find the DNxHD decoder\n");
         goto fail;
     }
 
     newDecoder->dec = avcodec_alloc_context();
-    if (!newDecoder->dec) 
+    if (!newDecoder->dec)
     {
         ml_log_error("Could not allocate DNxHD decoder context\n");
         goto fail;
@@ -159,12 +160,12 @@ static int create_dnxhd_decoder(StreamFormat format, int width, int height, int 
         avcodec_thread_init(newDecoder->dec, numFFMPEGThreads);
         newDecoder->isThreaded = 1;
     }
-    
-    
+
+
     avcodec_set_dimensions(newDecoder->dec, width, height);
     newDecoder->dec->pix_fmt = PIX_FMT_YUV422P;
 
-    if (avcodec_open(newDecoder->dec, avDecoder) < 0) 
+    if (avcodec_open(newDecoder->dec, avDecoder) < 0)
     {
         ml_log_error("Could not open decoder\n");
         goto fail;
@@ -172,7 +173,7 @@ static int create_dnxhd_decoder(StreamFormat format, int width, int height, int 
     newDecoder->openedDecoder = 1;
 
     newDecoder->decFrame = avcodec_alloc_frame();
-    if (!newDecoder->decFrame) 
+    if (!newDecoder->decFrame)
     {
         ml_log_error("Could not allocate decoded frame\n");
         goto fail;
@@ -180,32 +181,32 @@ static int create_dnxhd_decoder(StreamFormat format, int width, int height, int 
 
     *decoder = newDecoder;
     return 1;
-    
+
 fail:
     free_dnxhd_decoder(&newDecoder);
     return 0;
 }
 
 
-static int decode_and_send_const(DNxHDDecodeStreamConnect* connect, const unsigned char* buffer, 
+static int decode_and_send_const(DNxHDDecodeStreamConnect* connect, const unsigned char* buffer,
     unsigned int bufferSize)
 {
     int finished;
-    
+
     /* We know that avcodec_decode_video will not modify the input data, so we can cast buffer to non-const */
     avcodec_decode_video(connect->decoder->dec, connect->decoder->decFrame, &finished, (unsigned char*)buffer, bufferSize);
-    if (!finished) 
+    if (!finished)
     {
         ml_log_error("Failed to decode DNxHD video\n");
         return 0;
     }
 
     /* reformat decoded frame */
-    yuv422_to_yuv422(connect->streamInfo.width, connect->streamInfo.height, 1,
+    yuv422_to_yuv422(connect->streamInfo.width, connect->streamInfo.height, 0,
         connect->decoder->decFrame, connect->sinkBuffer);
 
     /* send decoded frame to sink */
-    if (!msk_receive_stream_frame(connect->sink, connect->sinkStreamId, connect->sinkBuffer, 
+    if (!msk_receive_stream_frame(connect->sink, connect->sinkStreamId, connect->sinkBuffer,
         connect->sinkBufferSize))
     {
         ml_log_error("failed to write frame to media sink\n");
@@ -241,11 +242,11 @@ static void* worker_thread(void* arg)
                 if (status != 0)
                 {
                     ml_log_error("DNxHD connect worker thread failed to wait for condition\n");
-                    /* TODO: don't try again? */ 
+                    /* TODO: don't try again? */
                 }
             }
-    
-            /* done waiting if there is a frame ready for processing */        
+
+            /* done waiting if there is a frame ready for processing */
             if (connect->frameIsReady)
             {
                 /* worker will now be busy */
@@ -256,7 +257,7 @@ static void* worker_thread(void* arg)
             }
             PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
         }
-        
+
         /* no more work */
         if (connect->stopped)
         {
@@ -264,12 +265,12 @@ static void* worker_thread(void* arg)
         }
 
         /* decode and send frame to sink */
-        
+
         workerResult = decode_and_send(connect);
-        
+
 
         /* signal that we are done with the frame */
-        
+
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         connect->workerResult = workerResult;
         connect->workerIsBusy = 0;
@@ -280,7 +281,7 @@ static void* worker_thread(void* arg)
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
     }
- 
+
     pthread_exit((void*) 0);
 }
 
@@ -291,7 +292,7 @@ static void* worker_thread(void* arg)
 static MediaSourceListener* ddc_get_source_listener(void* data)
 {
     DNxHDDecodeStreamConnect* connect = (DNxHDDecodeStreamConnect*)data;
-    
+
     return &connect->sourceListener;
 }
 
@@ -310,7 +311,7 @@ static int ddc_sync(void* data)
 
     /* reset for next time */
     connect->frameWasReceived = 0;
-    
+
     if (!connect->useWorkerThread)
     {
         /* work is already complete */
@@ -331,10 +332,10 @@ static int ddc_sync(void* data)
             if (status != 0)
             {
                 ml_log_error("DNxHD connect worker thread failed to wait for condition\n");
-                /* TODO: don't try again? */ 
+                /* TODO: don't try again? */
             }
         }
-        
+
         /* worker is not busy and no frame is waiting to be processed */
         if (!connect->workerIsBusy && !connect->frameIsReady)
         {
@@ -355,33 +356,33 @@ static void ddc_close(void* data)
     {
         return;
     }
-    
+
     if (connect->useWorkerThread)
     {
         connect->stopped = 1;
-        
-        /* wake up threads - this is to avoid valgrind saying the mutx is 
+
+        /* wake up threads - this is to avoid valgrind saying the mutx is
         still in use when pthread_mutex_destroy is called below */
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         pthread_cond_broadcast(&connect->frameIsReadyCond);
         pthread_cond_broadcast(&connect->workerIsBusyCond);
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
-        
+
         join_thread(&connect->workerThreadId, NULL, NULL);
     }
 
     free_dnxhd_decoder(&connect->decoder);
 
     SAFE_FREE(&connect->dnxhdData);
-    
+
     if (connect->useWorkerThread)
     {
         destroy_cond_var(&connect->workerIsBusyCond);
         destroy_cond_var(&connect->frameIsReadyCond);
         destroy_mutex(&connect->workerMutex);
     }
-    
-    
+
+
     SAFE_FREE(&connect);
 }
 
@@ -392,15 +393,15 @@ static int ddc_accept_frame(void* data, int streamId, const FrameInfo* frameInfo
     DNxHDDecodeStreamConnect* connect = (DNxHDDecodeStreamConnect*)data;
 
     connect->frameWasReceived = 0;
-    
+
     return connect->sourceStreamId == streamId && msk_accept_stream_frame(connect->sink, streamId, frameInfo);
 }
-    
+
 static int ddc_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
     DNxHDDecodeStreamConnect* connect = (DNxHDDecodeStreamConnect*)data;
     int result;
-    
+
     if (connect->sourceStreamId != streamId)
     {
         ml_log_error("Buffer allocation request for unknown source stream %d in copy connect\n", streamId);
@@ -412,16 +413,16 @@ static int ddc_allocate_buffer(void* data, int streamId, unsigned char** buffer,
         ml_log_error("Invalid DNxHD buffer allocation request for stream %d in copy connect\n", streamId);
         return 0;
     }
-    
+
     /* ask sink to allocate buffer for decoded frame */
-    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize, 
+    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize,
         &connect->sinkBuffer);
     if (!result)
     {
         ml_log_error("Sink failed to allocate buffer for stream %d for DNxHD decoder connector\n", streamId);
         return 0;
     }
-    
+
     *buffer = connect->dnxhdData;
     return 1;
 }
@@ -445,17 +446,17 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
 
     /* signal to ddc_sync at later time that we have received a frame to decode and send */
     connect->frameWasReceived = 1;
-    
-    
+
+
     if (!connect->useWorkerThread)
     {
         result = decode_and_send(connect);
     }
     else
     {
-        
+
         /* check that the worker isn't busy */
-    
+
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         if (connect->workerIsBusy)
         {
@@ -463,15 +464,15 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
-        
+
         if (result != 1)
         {
             return result;
         }
-    
-        
+
+
         /* signal worker that a new frame is ready */
-    
+
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         connect->frameIsReady = 1;
         status = pthread_cond_signal(&connect->frameIsReadyCond);
@@ -482,7 +483,7 @@ static int ddc_receive_frame(void* data, int streamId, unsigned char* buffer, un
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
     }
-    
+
     return result;
 }
 
@@ -504,8 +505,8 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         }
         return result;
     }
-    
-    
+
+
     if (connect->sourceStreamId != streamId)
     {
         ml_log_error("Received frame for unknown source stream %d in copy connect\n", streamId);
@@ -513,7 +514,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
     }
 
     /* ask sink to allocate buffer for decoded frame */
-    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize, 
+    result = msk_get_stream_buffer(connect->sink, connect->sinkStreamId, connect->sinkBufferSize,
         &connect->sinkBuffer);
     if (!result)
     {
@@ -521,20 +522,20 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         return 0;
     }
 
-    
+
     /* signal to ddc_sync at later time that we have received a frame to decode and send */
     connect->frameWasReceived = 1;
-    
-    
+
+
     if (!connect->useWorkerThread)
     {
         result = decode_and_send_const(connect, buffer, bufferSize);
     }
     else
     {
-        
+
         /* check that the worker isn't busy */
-    
+
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         if (connect->workerIsBusy)
         {
@@ -542,15 +543,15 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
             result = 0;
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
-        
+
         if (result != 1)
         {
             return result;
         }
-    
-        
+
+
         /* signal worker that a new frame is ready */
-    
+
         PTHREAD_MUTEX_LOCK(&connect->workerMutex);
         connect->frameIsReady = 1;
         status = pthread_cond_signal(&connect->frameIsReadyCond);
@@ -561,7 +562,7 @@ static int ddc_receive_frame_const(void* data, int streamId, const unsigned char
         }
         PTHREAD_MUTEX_UNLOCK(&connect->workerMutex);
     }
-    
+
     return result;
 }
 
@@ -571,29 +572,29 @@ int dnxhd_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
 {
     StreamInfo decodedStreamInfo;
     int result;
-    
+
     if (streamInfo->type != PICTURE_STREAM_TYPE ||
         streamInfo->format != AVID_DNxHD_FORMAT)
     {
         return 0;
     }
-    
+
     decodedStreamInfo = *streamInfo;
     decodedStreamInfo.format = YUV422_FORMAT;
 
     result = msk_accept_stream(sink, &decodedStreamInfo);
-    
+
     return result;
 }
 
-int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId, 
+int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, int numFFMPEGThreads, int useWorkerThread, StreamConnect** connect)
 {
     DNxHDDecodeStreamConnect* newConnect;
     StreamInfo decodedStreamInfo;
     int result;
 
-    /* register stream with sink */    
+    /* register stream with sink */
     if (streamInfo->format == AVID_DNxHD_FORMAT)
     {
         decodedStreamInfo = *streamInfo;
@@ -601,34 +602,34 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    
+
     if (!msk_register_stream(sink, sinkStreamId, &decodedStreamInfo))
     {
         /* could have failed if max streams exceeded for example */
         return 0;
     }
 
-    
+
     CALLOC_ORET(newConnect, DNxHDDecodeStreamConnect, 1);
-    
+
     newConnect->useWorkerThread = useWorkerThread;
     newConnect->decodedFormat = decodedStreamInfo.format;
     newConnect->dnxhdDataSize = 606208;
-    
+
     if ((newConnect->dnxhdData = (unsigned char*)calloc(
-        newConnect->dnxhdDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */, 
+        newConnect->dnxhdDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */,
         sizeof(unsigned char))) == NULL)
     {
         ml_log_error("Failed to allocate memory\n");
         goto fail;
     }
-    
+
     newConnect->sink = sink;
     newConnect->sourceStreamId = sourceStreamId;
     newConnect->sinkStreamId = sinkStreamId;
     newConnect->streamInfo = *streamInfo;
     newConnect->sinkBufferSize = streamInfo->width * streamInfo->height * 2;
-    
+
     newConnect->streamConnect.data = newConnect;
     newConnect->streamConnect.get_source_listener = ddc_get_source_listener;
     newConnect->streamConnect.sync = ddc_sync;
@@ -640,32 +641,32 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     newConnect->sourceListener.deallocate_buffer = ddc_deallocate_buffer;
     newConnect->sourceListener.receive_frame = ddc_receive_frame;
     newConnect->sourceListener.receive_frame_const = ddc_receive_frame_const;
-    
-    
-    
+
+
+
     /* create DNxHD decoder */
 
     av_register_all();
-    
+
     CHK_OFAIL(create_dnxhd_decoder(streamInfo->format, streamInfo->width, streamInfo->height,
         numFFMPEGThreads, &newConnect->decoder));
-        
+
 
     /* create worker thread */
-    
+
     if (useWorkerThread)
     {
         CHK_OFAIL(init_mutex(&newConnect->workerMutex));
         CHK_OFAIL(init_cond_var(&newConnect->frameIsReadyCond));
         CHK_OFAIL(init_cond_var(&newConnect->workerIsBusyCond));
-        
+
         CHK_OFAIL(create_joinable_thread(&newConnect->workerThreadId, worker_thread, newConnect));
     }
-    
-    
+
+
     *connect = &newConnect->streamConnect;
     return 1;
-    
+
 fail:
     ddc_close(newConnect);
     return 0;

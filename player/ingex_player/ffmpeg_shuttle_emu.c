@@ -1,9 +1,10 @@
 /*
- * $Id: ffmpeg_shuttle_emu.c,v 1.2 2008/10/29 17:47:41 john_f Exp $
+ * $Id: ffmpeg_shuttle_emu.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,11 +46,11 @@
         fprintf(stderr, "%s failed in %s:%d\n", #cond, __FILE__, __LINE__); \
     }
 
-    
+
 static void listener(void* data, ShuttleEvent* event)
 {
     EmulateKey* emu = (EmulateKey*)data;
-    
+
     switch (event->type)
     {
         case SH_KEY_EVENT:
@@ -77,7 +78,7 @@ static void listener(void* data, ShuttleEvent* event)
                     break;
             }
             break;
-            
+
         case SH_SHUTTLE_EVENT:
             if (event->value.shuttle.clockwise)
             {
@@ -90,7 +91,7 @@ static void listener(void* data, ShuttleEvent* event)
                 CHECK(emu_key(emu, XK_Down, 0));
             }
             break;
-            
+
         case SH_JOG_EVENT:
             if (event->value.jog.clockwise)
             {
@@ -105,25 +106,25 @@ static void listener(void* data, ShuttleEvent* event)
             break;
     }
 }
-    
-    
+
+
 int main (int argc, const char** argv)
 {
     ShuttleInput* shuttle;
     EmulateKey* emu;
 
-    
+
     CHECK_FATAL(create_emu(&emu));
-    
+
     CHECK_FATAL(shj_open_shuttle(&shuttle));
     CHECK_FATAL(register_listener(shuttle, listener, (void *)emu));
-    
+
     shj_start_shuttle(shuttle);
-    
+
     shj_close_shuttle(&shuttle);
     free_emu(&emu);
-    
-    
+
+
     return 0;
 }
 

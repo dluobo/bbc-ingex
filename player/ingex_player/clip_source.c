@@ -1,9 +1,10 @@
 /*
- * $Id: clip_source.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: clip_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +27,7 @@
 #include <string.h>
 
 #include "clip_source.h"
+#include "utils.h"
 #include "logging.h"
 #include "macros.h"
 
@@ -34,9 +36,10 @@ struct ClipSource
 {
     int64_t start;
     int64_t duration;
-    
+    Rational frameRate;
+
     MediaSource mediaSource;
-    
+
     MediaSource* targetSource;
 };
 
@@ -66,7 +69,7 @@ static int cps_finalise_blank_source(void* data, const StreamInfo* streamInfo)
 static int cps_get_num_streams(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     return msc_get_num_streams(clipSource->targetSource);
 }
 
@@ -75,6 +78,17 @@ static int cps_get_stream_info(void* data, int streamIndex, const StreamInfo** s
     ClipSource* clipSource = (ClipSource*)data;
 
     return msc_get_stream_info(clipSource->targetSource, streamIndex, streamInfo);
+}
+
+static void cps_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    ClipSource* clipSource = (ClipSource*)data;
+
+    msc_set_frame_rate_or_disable(clipSource->targetSource, frameRate);
+
+    clipSource->start = convert_length(clipSource->start, &clipSource->frameRate, frameRate);
+    clipSource->duration = convert_length(clipSource->duration, &clipSource->frameRate, frameRate);
+    clipSource->frameRate = *frameRate;
 }
 
 static int cps_disable_stream(void* data, int streamIndex)
@@ -101,7 +115,7 @@ static int cps_stream_is_disabled(void* data, int streamIndex)
 static int cps_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceListener* listener)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         /* check the position is within the clip boundaries */
@@ -129,7 +143,7 @@ static int cps_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             return -1;
         }
     }
-    
+
     return msc_read_frame(clipSource->targetSource, frameInfo, listener);
 }
 
@@ -143,7 +157,7 @@ static int cps_is_seekable(void* data)
 static int cps_seek(void* data, int64_t position)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         /* check the position is within the clip boundaries */
@@ -158,7 +172,7 @@ static int cps_seek(void* data, int64_t position)
     {
         return msc_seek(clipSource->targetSource, clipSource->start + position);
     }
-    
+
     return msc_seek(clipSource->targetSource, position);
 }
 
@@ -173,33 +187,33 @@ static int cps_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
     {
         originalPosition = -1; /* unknown */
     }
-    
-    
+
+
     int result = msc_seek_timecode(clipSource->targetSource, timecode, type, subType);
     if (originalPosition < 0 || result != 0)
     {
         return result;
     }
-    
+
     /* check the seek is within the clip boundaries */
-    
+
     if (!msc_get_position(clipSource->targetSource, &position))
     {
         /* TODO: what now? */
         /* assume outside - go back to original position */
         msc_seek(clipSource->targetSource, originalPosition);
-        
+
         return -1;
     }
-    
+
     if (clipSource->duration >= 0)
     {
-        if (position < clipSource->start || 
+        if (position < clipSource->start ||
             position > clipSource->start + clipSource->duration)
         {
             /* outside - go back to original position */
             msc_seek(clipSource->targetSource, originalPosition);
-            
+
             return -1;
         }
     }
@@ -209,18 +223,18 @@ static int cps_seek_timecode(void* data, const Timecode* timecode, TimecodeType 
         {
             /* outside - go back to original position */
             msc_seek(clipSource->targetSource, originalPosition);
-            
+
             return -1;
         }
     }
-    
+
     return result;
 }
 
 static int cps_get_length(void* data, int64_t* length)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         int64_t targetLength;
@@ -228,7 +242,7 @@ static int cps_get_length(void* data, int64_t* length)
         {
             return 0;
         }
-        
+
         *length = targetLength - clipSource->start;
         *length = (*length > clipSource->duration) ? clipSource->duration : *length;
         *length = (*length < 0) ? 0 : *length;
@@ -241,7 +255,7 @@ static int cps_get_length(void* data, int64_t* length)
         {
             return 0;
         }
-        
+
         *length = targetLength - clipSource->start;
         *length = (*length < 0) ? 0 : *length;
         return 1;
@@ -253,7 +267,7 @@ static int cps_get_length(void* data, int64_t* length)
 static int cps_get_position(void* data, int64_t* position)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         int64_t targetPosition;
@@ -261,7 +275,7 @@ static int cps_get_position(void* data, int64_t* position)
         {
             return 0;
         }
-        
+
         *position = targetPosition - clipSource->start;
         *position = (*position > clipSource->duration) ? clipSource->duration : *position;
         *position = (*position < 0) ? 0 : *position;
@@ -274,7 +288,7 @@ static int cps_get_position(void* data, int64_t* position)
         {
             return 0;
         }
-        
+
         *position = targetPosition - clipSource->start;
         *position = (*position < 0) ? 0 : *position;
         return 1;
@@ -286,7 +300,7 @@ static int cps_get_position(void* data, int64_t* position)
 static int cps_get_available_length(void* data, int64_t* length)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         int64_t targetAvailableLength;
@@ -294,11 +308,11 @@ static int cps_get_available_length(void* data, int64_t* length)
         {
             return 0;
         }
-        
-        *length = targetAvailableLength - clipSource->start; 
+
+        *length = targetAvailableLength - clipSource->start;
         *length = (*length > clipSource->duration) ? clipSource->duration : *length;
         *length = (*length < 0) ? 0 : *length;
-        
+
         return 1;
     }
     else if (clipSource->start > 0)
@@ -308,10 +322,10 @@ static int cps_get_available_length(void* data, int64_t* length)
         {
             return 0;
         }
-        
-        *length = targetAvailableLength - clipSource->start; 
+
+        *length = targetAvailableLength - clipSource->start;
         *length = (*length < 0) ? 0 : *length;
-        
+
         return 1;
     }
 
@@ -321,94 +335,96 @@ static int cps_get_available_length(void* data, int64_t* length)
 static int cps_eof(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (clipSource->duration >= 0)
     {
         if (msc_eof(clipSource->targetSource))
         {
             return 1;
         }
-        
+
         int64_t position;
         if (!msc_get_position(clipSource->targetSource, &position))
         {
             return 0;
         }
-        
+
         return position >= clipSource->start + clipSource->duration;
     }
-    
+
     return msc_eof(clipSource->targetSource);
 }
 
 static void cps_set_source_name(void* data, const char* name)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
-    msc_set_source_name(clipSource->targetSource, name);    
+
+    msc_set_source_name(clipSource->targetSource, name);
 }
 
 static void cps_set_clip_id(void* data, const char* id)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     msc_set_clip_id(clipSource->targetSource, id);
 }
 
 static void cps_close(void* data)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     SAFE_FREE(&clipSource);
 }
 
 static int cps_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
 {
     ClipSource* clipSource = (ClipSource*)data;
-    
+
     return msc_get_buffer_state(clipSource->targetSource, numBuffers, numBuffersFilled);
-}    
+}
 
 static int64_t cps_convert_position(void* data, int64_t position, MediaSource* childSource)
 {
     ClipSource* clipSource = (ClipSource*)data;
     int64_t childPosition = position;
-    
+
     if (childSource != &clipSource->mediaSource)
     {
         childPosition = msc_convert_position(clipSource->targetSource, position, childSource);
     }
-    
+
     return childPosition - clipSource->start;
-}    
+}
 
 
-int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipSource** clipSource)
+int cps_create(MediaSource* targetSource, const Rational* frameRate, int64_t start, int64_t duration, ClipSource** clipSource)
 {
     ClipSource* newClipSource;
-    
+
     if (start > 0 && !msc_seek(targetSource, start))
     {
-        ml_log_warn("Failed to seek to start of the clip\n"); 
+        ml_log_warn("Failed to seek to start of the clip\n");
     }
-    
+
     CALLOC_ORET(newClipSource, ClipSource, 1);
-    
+
     newClipSource->targetSource = targetSource;
     newClipSource->start = (start < 0) ? 0 : start;
     newClipSource->duration = duration;
-    
+    newClipSource->frameRate = *frameRate; /* note: frameRate could be 0/0 */
+
     newClipSource->mediaSource.data = newClipSource;
     newClipSource->mediaSource.is_complete = cps_is_complete;
     newClipSource->mediaSource.post_complete = cps_post_complete;
     newClipSource->mediaSource.finalise_blank_source = cps_finalise_blank_source;
     newClipSource->mediaSource.get_num_streams = cps_get_num_streams;
     newClipSource->mediaSource.get_stream_info = cps_get_stream_info;
+    newClipSource->mediaSource.set_frame_rate_or_disable = cps_set_frame_rate_or_disable;
     newClipSource->mediaSource.disable_stream = cps_disable_stream;
     newClipSource->mediaSource.disable_audio = cps_disable_audio;
     newClipSource->mediaSource.stream_is_disabled = cps_stream_is_disabled;
@@ -425,7 +441,7 @@ int cps_create(MediaSource* targetSource, int64_t start, int64_t duration, ClipS
     newClipSource->mediaSource.close = cps_close;
     newClipSource->mediaSource.get_buffer_state = cps_get_buffer_state;
     newClipSource->mediaSource.convert_position = cps_convert_position;
-    
+
     *clipSource = newClipSource;
     return 1;
 }

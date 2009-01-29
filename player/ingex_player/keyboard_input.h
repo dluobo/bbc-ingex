@@ -1,9 +1,10 @@
 /*
- * $Id: keyboard_input.h,v 1.4 2008/11/07 14:25:25 philipn Exp $
+ * $Id: keyboard_input.h,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +27,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -39,7 +40,7 @@ extern "C"
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     void (*key_pressed)(void* data, int key, int modifier);
     void (*key_released)(void* data, int key, int modifier);
 } KeyboardInputListener;
@@ -47,7 +48,7 @@ typedef struct
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     void (*set_listener)(void* data, KeyboardInputListener* listener);
     void (*unset_listener)(void* data);
     void (*close)(void* data);

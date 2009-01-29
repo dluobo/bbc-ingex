@@ -1,9 +1,10 @@
 /*
- * $Id: video_switch_sink.c,v 1.8 2008/12/05 16:47:09 philipn Exp $
+ * $Id: video_switch_sink.c,v 1.9 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,17 +46,17 @@ typedef struct VideoStreamElement
 {
     struct VideoStreamElement* next;
     struct VideoStreamElement* prev;
-    
+
     int index; /* used to limit number of streams in split view */
     int streamId;
     StreamInfo streamInfo;
-    
+
     int sourceNameEventStreamIndex;
     char sourceName[64];
 } VideoStreamElement;
 
 
-typedef struct 
+typedef struct
 {
     VideoSwitchSplit videoSwitchSplit;
     int splitCount;
@@ -65,24 +66,24 @@ typedef struct
     int masterTimecodeIndex;
     int masterTimecodeType;
     int masterTimecodeSubType;
-    
+
     int showSourceName;
 
     MediaSink* targetSink;
 
-    VideoSwitchSink switchSink; 
+    VideoSwitchSink switchSink;
     MediaSink sink;
-    
+
     /* targetSinkListener listens to target sink and forwards to the switch sink listener */
     MediaSinkListener targetSinkListener;
     MediaSinkListener* switchListener;
-    
+
     VideoStreamElement streams;
     VideoStreamElement* firstInputStream;
     VideoStreamElement* splitStream;
     VideoStreamElement* currentStream;
     char currentSourceName[64];
-    
+
     pthread_mutex_t nextCurrentStreamMutex;
     VideoStreamElement* nextCurrentStream;
     int disableSwitching;
@@ -92,10 +93,10 @@ typedef struct
 
     unsigned char* splitWorkspace[MAX_SPLITS];
     unsigned char* splitInputBuffer[MAX_SPLITS];
-    unsigned int splitInputBufferSize; 
+    unsigned int splitInputBufferSize;
     YUV_frame splitFrameIn[MAX_SPLITS];
     unsigned char* splitOutputBuffer;
-    unsigned int splitOutputBufferSize; 
+    unsigned int splitOutputBufferSize;
     YUV_frame splitFrameOut;
     formats yuvFormat;
     int splitOutputWidth;
@@ -106,14 +107,14 @@ typedef struct
     int haveCheckedFirstInputStream;
     int haveAcceptedFirstInputStream;
     int haveSplitOutputBuffer;
-    
+
     MediaSourceStreamMap eventStreamMap;
     int eventStreams[64]; /* size should be == MediaSourceStreamMap::streams array */
     int numEventStreams;
-    
+
     unsigned char* eventBuffer;
     unsigned int eventBufferSize;
-    
+
     VideoSwitchDatabase* database;
 } DefaultVideoSwitch;
 
@@ -133,12 +134,12 @@ static void set_source_name(VideoStreamElement* ele, const char* name)
 static int add_event_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo* streamInfo)
 {
     VideoStreamElement* ele;
-    
+
     if (!msc_add_stream_to_map(&swtch->eventStreamMap, streamId, streamInfo->sourceId))
     {
         return 0;
     }
-    
+
     if (swtch->numEventStreams + 1 > (int)(sizeof(swtch->eventStreams) / sizeof(int)))
     {
         ml_log_error("(code limit) Number event streams exceeds maximum (%d) expected\n", sizeof(swtch->eventStreams) / sizeof(int));
@@ -146,7 +147,7 @@ static int add_event_stream(DefaultVideoSwitch* swtch, int streamId, const Strea
     }
     swtch->eventStreams[swtch->numEventStreams] = streamId;
     swtch->numEventStreams++;
-    
+
     ele = swtch->firstInputStream;
     while (ele != NULL)
     {
@@ -155,10 +156,10 @@ static int add_event_stream(DefaultVideoSwitch* swtch, int streamId, const Strea
         {
             ele->sourceNameEventStreamIndex = streamId;
         }
-        
+
         ele = ele->next;
     }
-    
+
     return 1;
 }
 
@@ -166,7 +167,7 @@ static void associate_event_stream(DefaultVideoSwitch* swtch, VideoStreamElement
 {
     int i;
     int sourceId;
-    
+
     for (i = 0; i < swtch->numEventStreams; i++)
     {
         if (msc_get_source_id(&swtch->eventStreamMap, swtch->eventStreams[i], &sourceId) &&
@@ -181,7 +182,7 @@ static void associate_event_stream(DefaultVideoSwitch* swtch, VideoStreamElement
 static void process_event(DefaultVideoSwitch* swtch, int eventStreamId, const unsigned char* eventBuffer)
 {
     int numEvents = svt_read_num_events(eventBuffer);
-    
+
     int i;
     SourceEvent event;
     VideoStreamElement* ele;
@@ -196,30 +197,30 @@ static void process_event(DefaultVideoSwitch* swtch, int eventStreamId, const un
                 if (ele->sourceNameEventStreamIndex == eventStreamId)
                 {
                     set_source_name(ele, event.value.nameUpdate.name);
-                    
+
                     ml_log_info("Updated stream %d name to '%s'\n", ele->streamId, ele->sourceName);
                 }
-                
+
                 ele = ele->next;
             }
         }
     }
 }
 
-static void fit_image(int imageWidth, int imageHeight, int windowWidth, int windowHeight, 
+static void fit_image(int imageWidth, int imageHeight, int windowWidth, int windowHeight,
     int posX, int posY, StreamFormat streamFormat, const unsigned char* input, unsigned char* output)
 {
     int i, j;
-    
+
     if (streamFormat == UYVY_FORMAT)
     {
         const unsigned char* inputPtr = input;
         unsigned char* outputPtr;
-        
+
         for (i = 0; i < imageHeight; i++)
         {
             outputPtr = output + ((posY + i) * windowWidth + posX) * 2;
-            
+
             for (j = 0; j < imageWidth; j += 2)
             {
                 *outputPtr++ = *inputPtr++;
@@ -237,13 +238,13 @@ static void fit_image(int imageWidth, int imageHeight, int windowWidth, int wind
         unsigned char* yOutput;
         unsigned char* uOutput;
         unsigned char* vOutput;
-        
+
         for (i = 0; i < imageHeight; i++)
         {
             yOutput = output + (posY + i) * windowWidth + posX;
             uOutput = output + windowWidth * windowHeight + ((posY + i) * windowWidth + posX) / 2;
             vOutput = output + windowWidth * windowHeight * 3 / 2 + ((posY + i) * windowWidth + posX) / 2;
-            
+
             for (j = 0; j < imageWidth; j += 2)
             {
                 *yOutput++ = *yInput++;
@@ -261,13 +262,13 @@ static void fit_image(int imageWidth, int imageHeight, int windowWidth, int wind
         unsigned char* yOutput;
         unsigned char* uOutput;
         unsigned char* vOutput;
-        
+
         for (i = 0; i < imageHeight; i++)
         {
             yOutput = output + (posY + i) * windowWidth + posX;
             uOutput = output + windowWidth * windowHeight + ((posY + i) * windowWidth / 2 + posX) / 2;
             vOutput = output + windowWidth * windowHeight * 5 / 4 + ((posY + i) * windowWidth / 2 + posX) / 2;
-            
+
             for (j = 0; j < imageWidth; j += 2)
             {
                 /* copy input */
@@ -287,7 +288,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
 {
     int selectedBox[9];
     int internalSelectedBox[9];
-    
+
     switch (swtch->videoSwitchSplit)
     {
         case QUAD_SPLIT_VIDEO_SWITCH:
@@ -295,41 +296,41 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
             selectedBox[1] = 0 + (swtch->splitOutputHeight / 2) * ((swtch->currentStream->index - 1) / 2);
             selectedBox[2] = (swtch->splitOutputWidth / 2) + (swtch->splitOutputWidth / 2) * ((swtch->currentStream->index - 1) % 2);
             selectedBox[3] = (swtch->splitOutputHeight / 2) + (swtch->splitOutputHeight / 2) * ((swtch->currentStream->index - 1) / 2);
-            
+
             internalSelectedBox[0] = selectedBox[0] + swtch->borderWidth;
             internalSelectedBox[1] = selectedBox[1] + swtch->borderHeight;
             internalSelectedBox[2] = selectedBox[2] - swtch->borderWidth;
             internalSelectedBox[3] = selectedBox[3] - swtch->borderHeight;
             break;
-            
+
         case NONA_SPLIT_VIDEO_SWITCH:
             selectedBox[0] = 0 + (swtch->splitOutputWidth / 3) * ((swtch->currentStream->index - 1) % 3);
             selectedBox[1] = 0 + (swtch->splitOutputHeight / 3) * ((swtch->currentStream->index - 1) / 3);
             selectedBox[2] = (swtch->splitOutputWidth / 3) + (swtch->splitOutputWidth / 3) * ((swtch->currentStream->index - 1) % 3);
             selectedBox[3] = (swtch->splitOutputHeight / 3) + (swtch->splitOutputHeight / 3) * ((swtch->currentStream->index - 1) / 3);
-            
+
             internalSelectedBox[0] = selectedBox[0] + swtch->borderWidth;
             internalSelectedBox[1] = selectedBox[1] + swtch->borderHeight;
             internalSelectedBox[2] = selectedBox[2] - swtch->borderWidth;
             internalSelectedBox[3] = selectedBox[3] - swtch->borderHeight;
             break;
-            
+
         default:
             assert(0);
             return;
     }
-    
+
     if (swtch->firstInputStream->streamInfo.format == UYVY_FORMAT)
     {
         int xPos, yPos;
         unsigned char* uyvy;
-        
+
         for (yPos = selectedBox[1]; yPos < selectedBox[3]; yPos++)
         {
             if (yPos < internalSelectedBox[1] || yPos >= internalSelectedBox[3])
             {
                 /* top and bottom borders */
-                
+
                 uyvy = swtch->splitOutputBuffer + yPos * swtch->splitOutputWidth * 2 + selectedBox[0] * 2;
                 for (xPos = selectedBox[0]; xPos < selectedBox[2]; xPos += 2)
                 {
@@ -342,7 +343,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
             else
             {
                 /* left border */
-                
+
                 uyvy = swtch->splitOutputBuffer + yPos * swtch->splitOutputWidth * 2 + selectedBox[0] * 2;
                 for (xPos = selectedBox[0]; xPos < internalSelectedBox[0]; xPos += 2)
                 {
@@ -353,7 +354,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
                 }
 
                 /* right border */
-                
+
                 uyvy = swtch->splitOutputBuffer + yPos * swtch->splitOutputWidth * 2 + internalSelectedBox[2] * 2;
                 for (xPos = internalSelectedBox[2]; xPos < selectedBox[2]; xPos += 2)
                 {
@@ -374,13 +375,13 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
         unsigned char* y;
         unsigned char* u;
         unsigned char* v;
-        
+
         for (yPos = selectedBox[1]; yPos < selectedBox[3]; yPos++)
         {
             if (yPos < internalSelectedBox[1] || yPos >= internalSelectedBox[3])
             {
                 /* top and bottom borders */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + selectedBox[0];
                 u = uPlane + yPos * swtch->splitOutputWidth / 2 + selectedBox[0] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 2 + selectedBox[0] / 2;
@@ -397,7 +398,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
             else
             {
                 /* left border */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + selectedBox[0];
                 u = uPlane + yPos * swtch->splitOutputWidth / 2 + selectedBox[0] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 2 + selectedBox[0] / 2;
@@ -412,7 +413,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
                 }
 
                 /* right border */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + internalSelectedBox[2];
                 u = uPlane + yPos * swtch->splitOutputWidth / 2 + internalSelectedBox[2] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 2 + internalSelectedBox[2] / 2;
@@ -437,13 +438,13 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
         unsigned char* y;
         unsigned char* u;
         unsigned char* v;
-        
+
         for (yPos = selectedBox[1]; yPos < selectedBox[3]; yPos++)
         {
             if (yPos < internalSelectedBox[1] || yPos >= internalSelectedBox[3])
             {
                 /* top and bottom borders */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + selectedBox[0];
                 u = uPlane + yPos * swtch->splitOutputWidth / 4 + selectedBox[0] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 4 + selectedBox[0] / 2;
@@ -460,7 +461,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
             else
             {
                 /* left border */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + selectedBox[0];
                 u = uPlane + yPos * swtch->splitOutputWidth / 4 + selectedBox[0] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 4 + selectedBox[0] / 2;
@@ -475,7 +476,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
                 }
 
                 /* right border */
-                
+
                 y = yPlane + yPos * swtch->splitOutputWidth + internalSelectedBox[2];
                 u = uPlane + yPos * swtch->splitOutputWidth / 4 + internalSelectedBox[2] / 2;
                 v = vPlane + yPos * swtch->splitOutputWidth / 4 + internalSelectedBox[2] / 2;
@@ -496,7 +497,7 @@ static void set_split_select_background(DefaultVideoSwitch* swtch)
 static void get_output_stream_info(DefaultVideoSwitch* swtch, const StreamInfo* streamInfo, StreamInfo* outputStreamInfo)
 {
     *outputStreamInfo = *streamInfo;
-    
+
     if (swtch->prescaledSplit)
     {
         switch (swtch->videoSwitchSplit)
@@ -521,7 +522,7 @@ static void get_output_stream_info(DefaultVideoSwitch* swtch, const StreamInfo* 
         outputStreamInfo->width = streamInfo->width;
         outputStreamInfo->height = streamInfo->height;
     }
-    
+
 }
 
 static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo* streamInfo)
@@ -545,7 +546,7 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
         swtch->nextCurrentStream = ele;
         return 1;
     }
-    
+
     /* move to end */
     while (ele->next != NULL)
     {
@@ -554,7 +555,7 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
 
     /* create element */
     CALLOC_ORET(newEle, VideoStreamElement, 1);
-    
+
     /* append */
     newEle->prev = ele;
     newEle->index = ele->index + 1;
@@ -566,9 +567,9 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
     if (swtch->videoSwitchSplit != NO_SPLIT_VIDEO_SWITCH && swtch->splitStream == NULL)
     {
         /* initialise the split stream */
-        
+
         /* TODO: allow for different size inputs */
-        
+
         /* allocate the quad split input buffer and initialise the YUV_lib frame for the input */
         if (streamInfo->format == UYVY_FORMAT)
         {
@@ -589,14 +590,14 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
         {
             ml_log_error("Video format not supported: %d\n", streamInfo->format);
         }
-        
+
         for (i = 0; i < swtch->splitCount; i++)
         {
             MALLOC_OFAIL(swtch->splitInputBuffer[i], unsigned char, swtch->splitInputBufferSize);
-            YUV_frame_from_buffer(&swtch->splitFrameIn[i], swtch->splitInputBuffer[i], 
+            YUV_frame_from_buffer(&swtch->splitFrameIn[i], swtch->splitInputBuffer[i],
                 streamInfo->width, streamInfo->height, swtch->yuvFormat);
         }
-        
+
         /* initialise the split work buffers */
         get_output_stream_info(swtch, streamInfo, &outputStreamInfo);
         swtch->splitOutputWidth = outputStreamInfo.width;
@@ -614,20 +615,20 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
         {
             swtch->splitOutputBufferSize = swtch->splitOutputWidth * swtch->splitOutputHeight * 3 / 2;
         }
-        
+
         for (i = 0; i < swtch->splitCount; i++)
         {
             MALLOC_OFAIL(swtch->splitWorkspace[i], unsigned char, swtch->splitOutputWidth * 3);
         }
 
-        
+
         /* border widths */
         swtch->borderWidth = (swtch->splitOutputWidth / 500) * 4;
         swtch->borderWidth = (swtch->borderWidth == 0) ? 4 : swtch->borderWidth;
         swtch->borderHeight = (swtch->splitOutputHeight / 500) * 4;
         swtch->borderHeight = (swtch->borderHeight == 0) ? 4 : swtch->borderHeight;
-        
-        
+
+
         /* split stream is the list root */
         swtch->splitStream = &swtch->streams;
         swtch->firstInputStream = newEle;
@@ -642,11 +643,11 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
         swtch->nextCurrentStream = swtch->currentStream;
     }
     ele->next = newEle;
-    
+
     assert(swtch->firstInputStream != NULL);
-    
+
     return 1;
-    
+
 fail:
     SAFE_FREE(&newEle);
     return 0;
@@ -697,7 +698,7 @@ static int get_split_index(DefaultVideoSwitch* swtch, int streamId)
                 /* not part of the split */
                 return 0;
             }
-          
+
         }
         ele = ele->next;
     }
@@ -709,7 +710,7 @@ static int get_split_index(DefaultVideoSwitch* swtch, int streamId)
 static void qvs_frame_displayed(void* data, const FrameInfo* frameInfo)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
-    
+
     msl_frame_displayed(swtch->switchListener, frameInfo);
 }
 
@@ -746,7 +747,7 @@ static void qvs_unregister_listener(void* data, MediaSinkListener* listener)
     {
         swtch->switchListener = NULL;
     }
-    
+
     msk_unregister_listener(swtch->targetSink, &swtch->targetSinkListener);
 }
 
@@ -755,20 +756,20 @@ static int qvs_accept_stream(void* data, const StreamInfo* streamInfo)
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     StreamInfo outputStreamInfo;
 
-    if (streamInfo->type == PICTURE_STREAM_TYPE && 
-        (streamInfo->format == UYVY_FORMAT || 
+    if (streamInfo->type == PICTURE_STREAM_TYPE &&
+        (streamInfo->format == UYVY_FORMAT ||
             streamInfo->format == YUV422_FORMAT ||
             streamInfo->format == YUV420_FORMAT))
     {
         get_output_stream_info(swtch, streamInfo, &outputStreamInfo);
         return msk_accept_stream(swtch->targetSink, &outputStreamInfo);
     }
-    else if (streamInfo->type == EVENT_STREAM_TYPE && 
+    else if (streamInfo->type == EVENT_STREAM_TYPE &&
         streamInfo->format == SOURCE_EVENT_FORMAT)
     {
         return 1;
     }
-    
+
     return msk_accept_stream(swtch->targetSink, streamInfo);
 }
 
@@ -777,15 +778,15 @@ static int qvs_register_stream(void* data, int streamId, const StreamInfo* strea
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     StreamInfo outputStreamInfo;
 
-    if (streamInfo->type == PICTURE_STREAM_TYPE && 
-        (streamInfo->format == UYVY_FORMAT || 
+    if (streamInfo->type == PICTURE_STREAM_TYPE &&
+        (streamInfo->format == UYVY_FORMAT ||
             streamInfo->format == YUV422_FORMAT ||
             streamInfo->format == YUV420_FORMAT))
     {
         if (swtch->firstInputStream == NULL)
         {
             get_output_stream_info(swtch, streamInfo, &outputStreamInfo);
-            
+
             /* if sink accepts this stream then it is the first input stream */
             if (msk_register_stream(swtch->targetSink, streamId, &outputStreamInfo))
             {
@@ -803,16 +804,16 @@ static int qvs_register_stream(void* data, int streamId, const StreamInfo* strea
                 return add_stream(swtch, streamId, streamInfo);
             }
         }
-        
+
         return 0;
     }
-    else if (streamInfo->type == EVENT_STREAM_TYPE && 
+    else if (streamInfo->type == EVENT_STREAM_TYPE &&
         streamInfo->format == SOURCE_EVENT_FORMAT)
     {
         return add_event_stream(swtch, streamId, streamInfo);
     }
 
-    
+
     return msk_register_stream(swtch->targetSink, streamId, streamInfo);
 }
 
@@ -841,7 +842,7 @@ static int qvs_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
         {
             if (!swtch->haveCheckedFirstInputStream)
             {
-                swtch->haveAcceptedFirstInputStream = msk_accept_stream_frame(swtch->targetSink, 
+                swtch->haveAcceptedFirstInputStream = msk_accept_stream_frame(swtch->targetSink,
                     swtch->firstInputStream->streamId, frameInfo);
                 swtch->haveCheckedFirstInputStream = 1;
             }
@@ -851,7 +852,7 @@ static int qvs_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
         {
             if (!swtch->haveCheckedFirstInputStream)
             {
-                swtch->haveAcceptedFirstInputStream = msk_accept_stream_frame(swtch->targetSink, 
+                swtch->haveAcceptedFirstInputStream = msk_accept_stream_frame(swtch->targetSink,
                     swtch->firstInputStream->streamId, frameInfo);
                 swtch->haveCheckedFirstInputStream = 1;
             }
@@ -883,22 +884,22 @@ static int qvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                 /* check the buffer size */
                 if (swtch->splitInputBufferSize != bufferSize)
                 {
-                    fprintf(stderr, "Requested buffer size (%d) != split buffer size (%d)\n", 
+                    fprintf(stderr, "Requested buffer size (%d) != split buffer size (%d)\n",
                         bufferSize, swtch->splitInputBufferSize);
                     return 0;
                 }
-                
-                CHK_ORET(msk_get_stream_buffer(swtch->targetSink, swtch->firstInputStream->streamId, 
+
+                CHK_ORET(msk_get_stream_buffer(swtch->targetSink, swtch->firstInputStream->streamId,
                     swtch->splitOutputBufferSize, &swtch->splitOutputBuffer));
-                    
+
                 /* initialise the YUV_lib frame for the sink buffer */
-                YUV_frame_from_buffer(&swtch->splitFrameOut, swtch->splitOutputBuffer, 
+                YUV_frame_from_buffer(&swtch->splitFrameOut, swtch->splitOutputBuffer,
                     swtch->splitOutputWidth, swtch->splitOutputHeight, swtch->yuvFormat);
 
                 /* always clear the frame, eg. to prevent video from non-split showing through
                 after a switch or a disabled OSD */
                 clear_YUV_frame(&swtch->splitFrameOut);
-                
+
                 swtch->haveSplitOutputBuffer = 1;
             }
 
@@ -910,7 +911,7 @@ static int qvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                 assert(0);
                 return 0;
             }
-            
+
             *buffer = swtch->splitInputBuffer[splitIndex - 1];
             return 1;
         }
@@ -923,7 +924,7 @@ static int qvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                 /* always clear the output frame, eg. to prevent video from non-split showing through
                 after a switch or a disabled OSD */
                 fill_black(swtch->firstInputStream->streamInfo.format, swtch->splitOutputWidth, swtch->splitOutputHeight, swtch->splitOutputBuffer);
-                
+
                 *buffer = swtch->splitInputBuffer[0];
                 return 1;
             }
@@ -932,7 +933,7 @@ static int qvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
                 return msk_get_stream_buffer(swtch->targetSink, swtch->firstInputStream->streamId, bufferSize, buffer);
             }
         }
-        
+
         /* shouldn't be here if qvs_accept_stream_frame was called */
         assert(0);
         return 0;
@@ -942,7 +943,7 @@ static int qvs_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
         if (swtch->eventBufferSize < bufferSize)
         {
             SAFE_FREE(&swtch->eventBuffer);
-            
+
             CALLOC_ORET(swtch->eventBuffer, unsigned char, bufferSize);
             swtch->eventBufferSize = bufferSize;
         }
@@ -960,7 +961,7 @@ static int qvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     int splitIndex;
     int hPos, vPos;
-    
+
     if (is_switchable_stream(swtch, streamId))
     {
         if (swtch->showSplitSelect || swtch->currentStream == swtch->splitStream)
@@ -971,7 +972,7 @@ static int qvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
                 ml_log_error("Buffer size (%d) != split data size (%d)\n", bufferSize, swtch->splitInputBufferSize);
                 return 0;
             }
-            
+
             /* do split */
             splitIndex = get_split_index(swtch, streamId);
             if (splitIndex < 1 || splitIndex > swtch->splitCount)
@@ -987,66 +988,66 @@ static int qvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
                     {
                         hPos = (splitIndex == 1 || splitIndex == 3) ? 0 : swtch->splitOutputWidth / 2;
                         vPos = (splitIndex == 1 || splitIndex == 2) ? 0 : swtch->splitOutputHeight / 2;
-                        
+
                         fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                             swtch->splitOutputWidth, swtch->splitOutputHeight,
                             hPos, vPos,
-                            swtch->firstInputStream->streamInfo.format, 
+                            swtch->firstInputStream->streamInfo.format,
                             swtch->splitInputBuffer[splitIndex - 1], swtch->splitOutputBuffer);
                     }
                     else
                     {
                         hPos = (splitIndex == 1 || splitIndex == 3) ? 0 : swtch->firstInputStream->streamInfo.width / 2;
                         vPos = (splitIndex == 1 || splitIndex == 2) ? 0 : swtch->firstInputStream->streamInfo.height / 2;
-    
-                        small_pic(&swtch->splitFrameIn[splitIndex - 1], 
+
+                        small_pic(&swtch->splitFrameIn[splitIndex - 1],
                             &swtch->splitFrameOut,
-                            hPos, 
+                            hPos,
                             vPos,
                             2,
                             2,
                             1, /* TODO: don't hardcode interlaces flag */
-                            swtch->applySplitFilter, 
-                            swtch->applySplitFilter, 
+                            swtch->applySplitFilter,
+                            swtch->applySplitFilter,
                             swtch->splitWorkspace[splitIndex - 1]);
                     }
                     break;
-                    
+
                 case NONA_SPLIT_VIDEO_SWITCH:
                     if (swtch->prescaledSplit)
                     {
                         hPos = ((splitIndex - 1) % 3) * swtch->splitOutputWidth / 3;
                         vPos = ((splitIndex - 1) / 3) * swtch->splitOutputHeight / 3;
-                        
+
                         fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                             swtch->splitOutputWidth, swtch->splitOutputHeight,
                             hPos, vPos,
-                            swtch->firstInputStream->streamInfo.format, 
+                            swtch->firstInputStream->streamInfo.format,
                             swtch->splitInputBuffer[splitIndex - 1], swtch->splitOutputBuffer);
                     }
                     else
                     {
                         hPos = ((splitIndex - 1) % 3) * swtch->firstInputStream->streamInfo.width / 3;
                         vPos = ((splitIndex - 1) / 3) * swtch->firstInputStream->streamInfo.height / 3;
-    
-                        small_pic(&swtch->splitFrameIn[splitIndex - 1], 
+
+                        small_pic(&swtch->splitFrameIn[splitIndex - 1],
                             &swtch->splitFrameOut,
-                            hPos, 
+                            hPos,
                             vPos,
                             3,
                             3,
                             1, /* TODO: don't hardcode interlaces flag */
-                            swtch->applySplitFilter, 
-                            swtch->applySplitFilter, 
+                            swtch->applySplitFilter,
+                            swtch->applySplitFilter,
                             swtch->splitWorkspace[splitIndex - 1]);
                     }
                     break;
-                    
+
                 default:
                     assert(0);
                     return 0;
             }
-            
+
             /* we don't send the quad split until complete_frame is called */
             return 1;
         }
@@ -1056,11 +1057,11 @@ static int qvs_receive_stream_frame(void* data, int streamId, unsigned char* buf
             {
                 hPos = (swtch->splitOutputWidth - swtch->firstInputStream->streamInfo.width) / 2;
                 vPos = (swtch->splitOutputHeight - swtch->firstInputStream->streamInfo.height) / 2;
-                
+
                 fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                     swtch->splitOutputWidth, swtch->splitOutputHeight,
                     hPos, vPos,
-                    swtch->firstInputStream->streamInfo.format, 
+                    swtch->firstInputStream->streamInfo.format,
                     buffer, swtch->splitOutputBuffer);
 
                 return msk_receive_stream_frame(swtch->targetSink, swtch->firstInputStream->streamId, swtch->splitOutputBuffer, swtch->splitOutputBufferSize);
@@ -1107,25 +1108,25 @@ static int qvs_receive_stream_frame_const(void* data, int streamId, const unsign
             /* allocate the output buffer if we haven't done so already */
             if (!swtch->haveSplitOutputBuffer)
             {
-                CHK_ORET(msk_get_stream_buffer(swtch->targetSink, swtch->firstInputStream->streamId, 
+                CHK_ORET(msk_get_stream_buffer(swtch->targetSink, swtch->firstInputStream->streamId,
                     bufferSize, &swtch->splitOutputBuffer));
-                    
+
                 /* initialise the YUV_lib frame for the sink buffer */
-                YUV_frame_from_buffer(&swtch->splitFrameOut, swtch->splitOutputBuffer, 
+                YUV_frame_from_buffer(&swtch->splitFrameOut, swtch->splitOutputBuffer,
                     swtch->splitOutputWidth, swtch->splitOutputHeight, swtch->yuvFormat);
 
                 /* always clear the frame, eg. to prevent video from non-quad showing through
                 after a switch or a disabled OSD */
                 clear_YUV_frame(&swtch->splitFrameOut);
-                
+
                 swtch->haveSplitOutputBuffer = 1;
             }
-            
+
             /* initialise the input YUV frame. We know small_pic will not modify the buffer,
             so we can cast buffer to non-const */
-            YUV_frame_from_buffer(&inputFrame, (void*)buffer, swtch->firstInputStream->streamInfo.width, 
+            YUV_frame_from_buffer(&inputFrame, (void*)buffer, swtch->firstInputStream->streamInfo.width,
                 swtch->firstInputStream->streamInfo.height, swtch->yuvFormat);
-                
+
             /* do split */
             splitIndex = get_split_index(swtch, streamId);
             if (splitIndex < 1 || splitIndex > swtch->splitCount)
@@ -1141,66 +1142,66 @@ static int qvs_receive_stream_frame_const(void* data, int streamId, const unsign
                     {
                         hPos = (splitIndex == 1 || splitIndex == 3) ? 0 : swtch->splitOutputWidth / 2;
                         vPos = (splitIndex == 1 || splitIndex == 2) ? 0 : swtch->splitOutputHeight / 2;
-                        
+
                         fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                             swtch->splitOutputWidth, swtch->splitOutputHeight,
                             hPos, vPos,
-                            swtch->firstInputStream->streamInfo.format, 
+                            swtch->firstInputStream->streamInfo.format,
                             buffer, swtch->splitOutputBuffer);
                     }
                     else
                     {
                         hPos = (splitIndex == 1 || splitIndex == 3) ? 0 : swtch->firstInputStream->streamInfo.width / 2;
                         vPos = (splitIndex == 1 || splitIndex == 2) ? 0 : swtch->firstInputStream->streamInfo.height / 2;
-    
-                        small_pic(&inputFrame, 
+
+                        small_pic(&inputFrame,
                             &swtch->splitFrameOut,
-                            hPos, 
+                            hPos,
                             vPos,
                             2,
                             2,
-                            1, /* TODO: don't hardcode interlaced flag */ 
-                            swtch->applySplitFilter, 
-                            swtch->applySplitFilter, 
+                            1, /* TODO: don't hardcode interlaced flag */
+                            swtch->applySplitFilter,
+                            swtch->applySplitFilter,
                             swtch->splitWorkspace[splitIndex - 1]);
                     }
                     break;
-                    
+
                 case NONA_SPLIT_VIDEO_SWITCH:
                     if (swtch->prescaledSplit)
                     {
                         hPos = ((splitIndex - 1) % 3) * swtch->splitOutputWidth / 3;
                         vPos = ((splitIndex - 1) / 3) * swtch->splitOutputHeight / 3;
-                        
+
                         fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                             swtch->splitOutputWidth, swtch->splitOutputHeight,
                             hPos, vPos,
-                            swtch->firstInputStream->streamInfo.format, 
+                            swtch->firstInputStream->streamInfo.format,
                             buffer, swtch->splitOutputBuffer);
                     }
                     else
                     {
                         hPos = ((splitIndex - 1) % 3) * swtch->firstInputStream->streamInfo.width / 3;
                         vPos = ((splitIndex - 1) / 3) * swtch->firstInputStream->streamInfo.height / 3;
-    
-                        small_pic(&inputFrame, 
+
+                        small_pic(&inputFrame,
                             &swtch->splitFrameOut,
-                            hPos, 
+                            hPos,
                             vPos,
                             3,
                             3,
-                            1, /* TODO: don't hardcode interlaced flag */ 
-                            swtch->applySplitFilter, 
-                            swtch->applySplitFilter, 
+                            1, /* TODO: don't hardcode interlaced flag */
+                            swtch->applySplitFilter,
+                            swtch->applySplitFilter,
                             swtch->splitWorkspace[splitIndex - 1]);
                     }
                     break;
-                    
+
                 default:
                     assert(0);
                     return 0;
             }
-            
+
             /* we don't send the quad split until complete_frame is called */
             return 1;
         }
@@ -1210,11 +1211,11 @@ static int qvs_receive_stream_frame_const(void* data, int streamId, const unsign
             {
                 hPos = (swtch->splitOutputWidth - swtch->firstInputStream->streamInfo.width) / 2;
                 vPos = (swtch->splitOutputHeight - swtch->firstInputStream->streamInfo.height) / 2;
-                
+
                 fit_image(swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                     swtch->splitOutputWidth, swtch->splitOutputHeight,
                     hPos, vPos,
-                    swtch->firstInputStream->streamInfo.format, 
+                    swtch->firstInputStream->streamInfo.format,
                     buffer, swtch->splitOutputBuffer);
 
                 return msk_receive_stream_frame_const(swtch->targetSink, swtch->firstInputStream->streamId, swtch->splitOutputBuffer, swtch->splitOutputBufferSize);
@@ -1250,8 +1251,8 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
     VideoStreamElement* ele;
     float fontScale;
     char labelText[32];
-    
-    
+
+
     if (swtch->firstInputStream != NULL)  /* only if there is a video stream */
     {
         /* send updates to database */
@@ -1259,23 +1260,23 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
         {
             if ((swtch->haveSwitched ||
                     strcmp(swtch->currentSourceName, swtch->currentStream->sourceName) != 0) &&
-                select_frame_timecode(frameInfo, swtch->masterTimecodeIndex, swtch->masterTimecodeType, 
+                select_frame_timecode(frameInfo, swtch->masterTimecodeIndex, swtch->masterTimecodeType,
                     swtch->masterTimecodeSubType, &timecode))
             {
-                vsd_append_entry(swtch->database, swtch->currentStream->streamId, 
+                vsd_append_entry(swtch->database, swtch->currentStream->streamId,
                     swtch->currentStream->sourceName, &timecode);
-                    
+
                 strncpy(swtch->currentSourceName, swtch->currentStream->sourceName, sizeof(swtch->currentSourceName) - 1);
             }
         }
-    
+
         /* resets */
         swtch->haveCheckedFirstInputStream = 0;
         swtch->haveAcceptedFirstInputStream = 0;
         swtch->haveSplitOutputBuffer = 0;
         swtch->disableSwitching = 0;
         swtch->haveSwitched = 0;
-        
+
         /* send the split buffer */
         if (swtch->showSplitSelect || swtch->currentStream == swtch->splitStream)
         {
@@ -1284,15 +1285,15 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
                 /* clear frame but also highlight selected stream with green border */
                 set_split_select_background(swtch);
             }
-    
-            if (!msk_receive_stream_frame(swtch->targetSink, swtch->firstInputStream->streamId, 
+
+            if (!msk_receive_stream_frame(swtch->targetSink, swtch->firstInputStream->streamId,
                 swtch->splitOutputBuffer, swtch->splitOutputBufferSize))
             {
                 ml_log_error("Failed to send video switch split to sink\n");
                 return 0;
             }
         }
-    
+
         /* set source name label(s) */
         if (swtch->showSourceName)
         {
@@ -1306,12 +1307,12 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
                         ele = ele->next;
                         continue;
                     }
-                    
+
                     /* max length is 32 characters */
                     strncpy(labelText, ele->sourceName, sizeof(labelText) - 1);
                     labelText[sizeof(labelText) - 1] = '\0';
-                    
-                    
+
+
                     switch (swtch->videoSwitchSplit)
                     {
                         case QUAD_SPLIT_VIDEO_SWITCH:
@@ -1321,7 +1322,7 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
                             h = swtch->firstInputStream->streamInfo.height / 2;
                             fontScale = swtch->firstInputStream->streamInfo.height / 576.0 / 2.0;
                             break;
-                            
+
                         case NONA_SPLIT_VIDEO_SWITCH:
                             hPos = ((ele->index - 1) % 3) * swtch->firstInputStream->streamInfo.width / 3;
                             vPos = ((ele->index - 1) / 3) * swtch->firstInputStream->streamInfo.height / 3;
@@ -1329,52 +1330,52 @@ static int qvs_complete_frame(void* data, const FrameInfo* frameInfo)
                             h = swtch->firstInputStream->streamInfo.height / 3;
                             fontScale = swtch->firstInputStream->streamInfo.height / 576.0 / 3.0;
                             break;
-                            
+
                         default:
                             assert(0);
                             return 0;
                     }
-        
+
                     xPos = hPos + w / 2;
                     yPos = vPos + h * 19 / 20;
                     if (yPos + 32 > vPos + h)
                     {
                         yPos = vPos + h - 32;
                     }
-                    osd_set_label(msk_get_osd(swtch->targetSink), xPos, yPos, 
+                    osd_set_label(msk_get_osd(swtch->targetSink), xPos, yPos,
                         swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                         48 * fontScale, LIGHT_WHITE_COLOUR, 40, labelText);
-                    
+
                     ele = ele->next;
                 }
-                
+
             }
             else if (swtch->currentStream != NULL)
             {
                 /* max length is 32 characters */
                 strncpy(labelText, swtch->currentStream->sourceName, sizeof(labelText) - 1);
                 labelText[sizeof(labelText) - 1] = '\0';
-                
+
                 hPos = 0;
                 vPos = 0;
                 w = swtch->currentStream->streamInfo.width;
                 h = swtch->currentStream->streamInfo.height;
-                
+
                 fontScale = swtch->currentStream->streamInfo.height / 576.0;
-                
+
                 xPos = hPos + w / 2;
                 yPos = vPos + h * 19 / 20;
                 if (yPos + 32 > vPos + h)
                 {
                     yPos = vPos + h - 32;
                 }
-                osd_set_label(msk_get_osd(swtch->targetSink), xPos, yPos,  
+                osd_set_label(msk_get_osd(swtch->targetSink), xPos, yPos,
                     swtch->firstInputStream->streamInfo.width, swtch->firstInputStream->streamInfo.height,
                     48 * fontScale, LIGHT_WHITE_COLOUR, 40, labelText);
             }
         }
     }
-    
+
     return msk_complete_frame(swtch->targetSink, frameInfo);
 }
 
@@ -1391,7 +1392,7 @@ static void qvs_cancel_frame(void* data)
         swtch->disableSwitching = 0;
         swtch->haveSwitched = 0;
     }
-    
+
     msk_cancel_frame(swtch->targetSink);
 }
 
@@ -1401,49 +1402,49 @@ static OnScreenDisplay* qvs_get_osd(void* data)
 
     return msk_get_osd(swtch->targetSink);
 }
-    
+
 static VideoSwitchSink* qvs_get_video_switch(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return &swtch->switchSink;
 }
-    
+
 static AudioSwitchSink* qvs_get_audio_switch(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return msk_get_audio_switch(swtch->targetSink);
 }
-    
+
 static HalfSplitSink* qvs_get_half_split(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return msk_get_half_split(swtch->targetSink);
 }
-    
+
 static FrameSequenceSink* qvs_get_frame_sequence(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return msk_get_frame_sequence(swtch->targetSink);
 }
-    
+
 static int qvs_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return msk_get_buffer_state(swtch->targetSink, numBuffers, numBuffersFilled);
 }
-    
+
 static int qvs_mute_audio(void* data, int mute)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
 
     return msk_mute_audio(swtch->targetSink, mute);
 }
-    
+
 static void qvs_close(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
@@ -1455,9 +1456,9 @@ static void qvs_close(void* data)
     {
         return;
     }
-    
+
     msk_close(swtch->targetSink);
-    
+
     ele = swtch->streams.next;
     while (ele != NULL)
     {
@@ -1465,17 +1466,17 @@ static void qvs_close(void* data)
         SAFE_FREE(&ele);
         ele = nextEle;
     }
-    
+
     for (i = 0; i < MAX_SPLITS; i++)
     {
         SAFE_FREE(&swtch->splitInputBuffer[i]);
         SAFE_FREE(&swtch->splitWorkspace[i]);
     }
-    
+
     destroy_mutex(&swtch->nextCurrentStreamMutex);
-    
+
     SAFE_FREE(&swtch->eventBuffer);
-    
+
     SAFE_FREE(&swtch);
 }
 
@@ -1495,15 +1496,15 @@ static int qvs_reset_or_close(void* data)
         ele = nextEle;
     }
     memset(&swtch->streams, 0, sizeof(VideoStreamElement));
-    
+
     swtch->firstInputStream = NULL;
     swtch->splitStream = NULL;
     swtch->currentStream = NULL;
-    
+
     swtch->nextCurrentStream = NULL;
     swtch->disableSwitching = 0;
     swtch->haveSwitched = 0;
-    
+
     for (i = 0; i < MAX_SPLITS; i++)
     {
         SAFE_FREE(&swtch->splitInputBuffer[i]);
@@ -1511,11 +1512,11 @@ static int qvs_reset_or_close(void* data)
         memset(&swtch->splitFrameIn[i], 0, sizeof(YUV_frame));
     }
     swtch->splitOutputBuffer = NULL;
-    
+
     swtch->haveCheckedFirstInputStream = 0;
     swtch->haveAcceptedFirstInputStream = 0;
     swtch->haveSplitOutputBuffer = 0;
-    
+
     result = msk_reset_or_close(swtch->targetSink);
     if (result != 1)
     {
@@ -1526,9 +1527,9 @@ static int qvs_reset_or_close(void* data)
         }
         goto fail;
     }
-    
+
     return 1;
-    
+
 fail:
     qvs_close(data);
     return 2;
@@ -1538,7 +1539,7 @@ fail:
 static MediaSink* qvs_get_media_sink(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
-    
+
     return &swtch->sink;
 }
 
@@ -1546,15 +1547,15 @@ static int qvs_switch_next_video(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     int haveSwitched = 0;
-    
+
     if (swtch->nextCurrentStream == NULL)
     {
         return 0;
     }
-    
+
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
-    if (swtch->nextCurrentStream->next != NULL && 
-        (!(swtch->splitSelect && swtch->showSplitSelect) || 
+    if (swtch->nextCurrentStream->next != NULL &&
+        (!(swtch->splitSelect && swtch->showSplitSelect) ||
             swtch->nextCurrentStream->next->index <= swtch->splitCount))
     {
         swtch->nextCurrentStream = swtch->nextCurrentStream->next;
@@ -1562,12 +1563,12 @@ static int qvs_switch_next_video(void* data)
         haveSwitched = 1;
     }
     PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentStreamMutex);
-    
+
     if (haveSwitched)
     {
         msl_refresh_required(swtch->switchListener);
     }
-    
+
     return haveSwitched;
 }
 
@@ -1575,12 +1576,12 @@ static int qvs_switch_prev_video(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     int haveSwitched = 0;
-    
+
     if (swtch->nextCurrentStream == NULL)
     {
         return 0;
     }
-    
+
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
     if (swtch->nextCurrentStream->prev != NULL &&
         swtch->nextCurrentStream != swtch->firstInputStream)
@@ -1595,7 +1596,7 @@ static int qvs_switch_prev_video(void* data)
     {
         msl_refresh_required(swtch->switchListener);
     }
-    
+
     return haveSwitched;
 }
 
@@ -1604,7 +1605,7 @@ static int qvs_switch_video(void* data, int index)
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     VideoStreamElement* ele;
     int haveSwitched = 0;
-    
+
     if (swtch->nextCurrentStream == NULL || index < 0)
     {
         return 0;
@@ -1614,7 +1615,7 @@ static int qvs_switch_video(void* data, int index)
         /* currently showing the split select and the stream is beyond the streams shown in the split select */
         return 0;
     }
-    
+
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
     if (index == 0 && swtch->splitSelect)
     {
@@ -1647,19 +1648,19 @@ static int qvs_switch_video(void* data, int index)
         }
     }
     PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentStreamMutex);
-    
+
     if (haveSwitched)
     {
         msl_refresh_required(swtch->switchListener);
     }
-    
+
     return haveSwitched;
 }
 
 static void qvs_show_source_name(void* data, int enable)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
-    
+
     if (swtch->showSourceName != enable)
     {
         swtch->showSourceName = enable;
@@ -1670,7 +1671,7 @@ static void qvs_show_source_name(void* data, int enable)
 static void qvs_toggle_show_source_name(void* data)
 {
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
-    
+
     swtch->showSourceName = !swtch->showSourceName;
 
     msl_refresh_required(swtch->switchListener);
@@ -1681,7 +1682,7 @@ static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int 
     DefaultVideoSwitch* swtch = (DefaultVideoSwitch*)data;
     int subImageWidth;
     int subImageHeight;
-    
+
     /* if showing video from a single source then return the current source index */
     if (swtch->videoSwitchSplit == NO_SPLIT_VIDEO_SWITCH ||
         (!swtch->showSplitSelect && swtch->currentStream != swtch->splitStream))
@@ -1696,14 +1697,14 @@ static int qvs_get_video_index(void* data, int imageWidth, int imageHeight, int 
         *index = swtch->currentStream->index;
         return 1;
     }
-    
+
     /* return the index of the source showing at xPos and yPos */
     switch (swtch->videoSwitchSplit)
     {
         case QUAD_SPLIT_VIDEO_SWITCH:
             subImageWidth = imageWidth / 2;
             subImageHeight = imageHeight / 2;
-            
+
             *index = 1 /* 0 is the split index */ + (yPos / subImageHeight) * 2 + (xPos / subImageWidth);
             break;
         case NONA_SPLIT_VIDEO_SWITCH:
@@ -1727,9 +1728,9 @@ static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
     int result = 0;
     int showSplitSelect;
     VideoStreamElement* currentStream;
-    
+
     PTHREAD_MUTEX_LOCK(&swtch->nextCurrentStreamMutex);
-    
+
     if (!swtch->disableSwitching)
     {
         /* Note: it is still possible that next... changes after this function call and
@@ -1743,7 +1744,7 @@ static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
         currentStream = swtch->currentStream;
         showSplitSelect = swtch->showSplitSelect;
     }
-    
+
     if (currentStream != NULL)
     {
         if (!showSplitSelect && currentStream == swtch->splitStream)
@@ -1761,9 +1762,9 @@ static int qvs_get_first_active_clip_id(void* data, char* clipId, int* sourceId)
             result = 1;
         }
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&swtch->nextCurrentStreamMutex);
-    
+
     return result;
 }
 
@@ -1773,14 +1774,14 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     VideoSwitchSink** swtch)
 {
     DefaultVideoSwitch* newSwitch;
-    
+
     CALLOC_ORET(newSwitch, DefaultVideoSwitch, 1);
-    
+
     newSwitch->showSourceName = 0;
     newSwitch->showSplitSelect = splitSelect;
     newSwitch->nextShowSplitSelect = splitSelect;
     newSwitch->prescaledSplit = prescaledSplit;
-    
+
     newSwitch->videoSwitchSplit = split;
     switch (split)
     {
@@ -1804,11 +1805,11 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->masterTimecodeIndex = masterTimecodeIndex;
     newSwitch->masterTimecodeType = masterTimecodeType;
     newSwitch->masterTimecodeSubType = masterTimecodeSubType;
-    
+
     newSwitch->targetSink = sink;
 
     newSwitch->haveSwitched = 1; /* force clear of quad split frame */
-    
+
     newSwitch->switchSink.data = newSwitch;
     newSwitch->switchSink.get_media_sink = qvs_get_media_sink;
     newSwitch->switchSink.switch_next_video = qvs_switch_next_video;
@@ -1818,12 +1819,12 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->switchSink.toggle_show_source_name = qvs_toggle_show_source_name;
     newSwitch->switchSink.get_video_index = qvs_get_video_index;
     newSwitch->switchSink.get_first_active_clip_id = qvs_get_first_active_clip_id;
-    
+
     newSwitch->targetSinkListener.data = newSwitch;
     newSwitch->targetSinkListener.frame_displayed = qvs_frame_displayed;
     newSwitch->targetSinkListener.frame_dropped = qvs_frame_dropped;
     newSwitch->targetSinkListener.refresh_required = qvs_refresh_required;
-    
+
     newSwitch->sink.data = newSwitch;
     newSwitch->sink.register_listener = qvs_register_listener;
     newSwitch->sink.unregister_listener = qvs_unregister_listener;
@@ -1844,15 +1845,15 @@ int qvs_create_video_switch(MediaSink* sink, VideoSwitchSplit split, int applySp
     newSwitch->sink.mute_audio = qvs_mute_audio;
     newSwitch->sink.reset_or_close = qvs_reset_or_close;
     newSwitch->sink.close = qvs_close;
-    
+
     CHK_OFAIL(init_mutex(&newSwitch->nextCurrentStreamMutex));
-    
+
     msc_init_stream_map(&newSwitch->eventStreamMap);
-    
-    
+
+
     *swtch = &newSwitch->switchSink;
     return 1;
-    
+
 fail:
     qvs_close(newSwitch);
     return 0;

@@ -1,9 +1,8 @@
 /*
- * $Id: Macros.h,v 1.2 2008/10/29 17:49:55 john_f Exp $
+ * $Id: Macros.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
- *
- *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,14 +37,14 @@
     { \
         THROW_EXCEPTION(("'%s' failed\n", #cmd)); \
     }
-    
+
 #define CHK_OTHROW_MSG(cmd, err) \
     if (!(cmd)) \
     { \
         THROW_EXCEPTION(err); \
     }
-    
-    
+
+
 #define SAFE_DELETE(var) \
     delete *var; \
     *var = 0;
@@ -54,7 +53,5 @@
     delete [] *var; \
     *var = 0;
 
-    
+
 #endif
-
-

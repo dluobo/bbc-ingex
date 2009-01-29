@@ -1,10 +1,11 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.7 2008/11/06 19:56:56 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Stuart Cunningham
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,17 +68,14 @@
         VLC_FOURCC( i & 0xff, (i >> 8) & 0xff, (i >> 16) & 0xff, \
                     (i >> 24) & 0xff )
 
-                    
+
 #define MAX_TIMECODES               64
 
-/* frame rate control if the display get behind by 1/2 frame (40 * 1000 / 2)*/
-#define MAX_FRAME_RATE_SLIPPAGE     20000
 
-
-typedef struct 
+typedef struct
 {
     struct X11XVDisplaySink* sink;
-    
+
     MediaSinkFrame sinkFrame;
 
     unsigned char* inputBuffer;
@@ -85,7 +83,7 @@ typedef struct
 
     unsigned char* scaleInputBuffer;
     unsigned char* scaleWorkspace;
-    
+
     XvImage* yuv_image;
     XShmSegmentInfo yuv_shminfo;
 
@@ -102,24 +100,24 @@ struct X11XVDisplaySink
     /* common X11 structure */
     X11Common x11Common;
     int displayInitialised;
-    int displayInitFailed;    
-    
+    int displayInitFailed;
+
     /* media sink interface */
     MediaSink mediaSink;
-    
+
     /* on screen display */
     OnScreenDisplay* osd;
     OSDListener osdListener;
     int osdInitialised;
-    
+
     /* listener for sink events */
     MediaSinkListener* listener;
-    
+
 
     /* display stuff */
     int xvport;
     int useSharedMemory;
-    
+
     /* image characteristics */
     int32_t frameFormat;
     StreamFormat inputVideoFormat;
@@ -137,14 +135,14 @@ struct X11XVDisplaySink
     int swScale;
     int initialDisplayWidth;
     int initialDisplayHeight;
-    
-    
+
+
     /* video input data */
     X11DisplayFrame* frame;
-    
+
     /* used for rate control */
     struct timeval lastFrameTime;
-    
+
     /* set if sink was reset */
     int haveReset;
 };
@@ -340,20 +338,20 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     double wFactor;
     int widthForAspectRatio;
     int heightForAspectRatio;
-    
+
     if (sink->displayInitialised)
     {
         return 1;
     }
-    
+
     CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
 
-    sink->inputWidth = streamInfo->width;   
+    sink->inputWidth = streamInfo->width;
     sink->inputHeight = streamInfo->height;
-    
-    sink->width = sink->inputWidth / sink->swScale;   
+
+    sink->width = sink->inputWidth / sink->swScale;
     sink->height = sink->inputHeight / sink->swScale;
-    
+
     if (streamInfo->format == UYVY_FORMAT)
     {
         sink->outputYUVFormat = UYVY;
@@ -372,14 +370,14 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         /* format is converted to UYVY */
         sink->outputYUVFormat = UYVY;
     }
-    
+
     if (streamInfo->aspectRatio.num > 0 && streamInfo->aspectRatio.den > 0)
     {
         sink->aspectRatio = streamInfo->aspectRatio;
 
         /* TODO: we shouldn't assume 702 for 720x576/592 */
         if (sink->aspectRatio.num == 4 && sink->aspectRatio.den == 3 &&
-            sink->width == 720 && 
+            sink->width == 720 &&
             (sink->height == 576 || sink->height == 592))
         {
             widthForAspectRatio = 702;
@@ -388,7 +386,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         {
             widthForAspectRatio = sink->width;
         }
-        
+
         if (sink->width == 720 && sink->height == 592)
         {
             /* don't include the VBI */
@@ -398,41 +396,41 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         {
             heightForAspectRatio = sink->height;
         }
-        
+
         if (sink->pixelAspectRatio.num <= 0 || sink->pixelAspectRatio.den <= 0)
         {
             CHK_OFAIL(x11c_get_screen_dimensions(&sink->x11Common, &screenWidth, &screenHeight));
 
-            /* take into account monitor pixel aspect ratio, 
+            /* take into account monitor pixel aspect ratio,
             intended output aspect ratio (sink->aspectRatio)
             and the image dimensions (sink->width and sink->height) */
-            
+
             if (sink->monitorAspectRatio.num > 0 && sink->monitorAspectRatio.den > 0)
             {
-                wFactor = (sink->monitorAspectRatio.den * screenWidth * sink->aspectRatio.num * heightForAspectRatio) / 
+                wFactor = (sink->monitorAspectRatio.den * screenWidth * sink->aspectRatio.num * heightForAspectRatio) /
                         (double)(sink->monitorAspectRatio.num * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
             }
             else
             {
                 /* assume 4:3 monitor aspect ratio */
-                wFactor = (3 * screenWidth * sink->aspectRatio.num * heightForAspectRatio) / 
+                wFactor = (3 * screenWidth * sink->aspectRatio.num * heightForAspectRatio) /
                         (double)(4 * screenHeight * sink->aspectRatio.den * widthForAspectRatio);
             }
         }
         else
         {
-            /* take into account monitor pixel aspect ratio, 
+            /* take into account monitor pixel aspect ratio,
             intended output aspect ratio (sink->aspectRatio)
             and the image dimensions (sink->width and sink->height) */
-            wFactor = (sink->pixelAspectRatio.den * sink->aspectRatio.num * heightForAspectRatio) / 
+            wFactor = (sink->pixelAspectRatio.den * sink->aspectRatio.num * heightForAspectRatio) /
                     (double)(sink->pixelAspectRatio.num * sink->aspectRatio.den * widthForAspectRatio);
         }
-        
-        
+
+
         /* scale in horizontal direction only to avoid dealing with interlacing */
         sink->initialDisplayWidth = (int)(wFactor * sink->width);
         sink->initialDisplayHeight = sink->height;
-        
+
         sink->initialDisplayWidth *= sink->scale;
         sink->initialDisplayHeight *= sink->scale;
     }
@@ -440,7 +438,7 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     {
         sink->aspectRatio.num = 4;
         sink->aspectRatio.den = 3;
-        
+
         sink->initialDisplayWidth = sink->width;
         sink->initialDisplayHeight = sink->height;
     }
@@ -466,8 +464,8 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         sink->frameSize = sink->width * sink->height * 3 / 2;
         sink->outputVideoFormat = streamInfo->format;
     }
-    
-    
+
+
     /* Check that we have access to an XVideo port providing this chroma    */
     /* Commonly supported chromas: YV12, I420, YUY2, YUY2                   */
     sink->xvport = XVideoGetPort(sink->x11Common.windowInfo.display, sink->frameFormat, -1);
@@ -476,16 +474,16 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
         ml_log_error("Cannot find an xv port for requested video format\n");
         goto fail;
     }
-    
+
     /* check if we can use shared memory */
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
-    
+
     CHK_OFAIL(x11c_init_window(&sink->x11Common, sink->initialDisplayWidth, sink->initialDisplayHeight, sink->width, sink->height));
 
     sink->displayInitialised = 1;
     sink->displayInitFailed = 0;
     return 1;
-    
+
 fail:
     sink->displayInitialised = 0;
     sink->displayInitFailed = 1;
@@ -505,6 +503,12 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
     YUV_frame inputFrame;
     YUV_frame outputFrame;
     unsigned char* convertOutputBuffer;
+    int frameDurationMsec;
+    int frameSlippage;
+
+    frameDurationMsec = (int)(1000 * frameInfo->frameRate.den / (double)(frameInfo->frameRate.num));
+    frameSlippage = frameDurationMsec * 1000 / 2; /* half a frame */
+
 
     if (frame->videoIsPresent)
     {
@@ -521,7 +525,7 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
                 /* no scale afterwards */
                 convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
             }
-            
+
             yuv444_to_uyvy(sink->inputWidth, sink->inputHeight, frame->inputBuffer, convertOutputBuffer);
         }
         else if (sink->inputVideoFormat == YUV422_FORMAT)
@@ -536,7 +540,7 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
                 /* no scale afterwards */
                 convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
             }
-            
+
             yuv422_to_uyvy_2(sink->inputWidth, sink->inputHeight, 0, frame->inputBuffer, convertOutputBuffer);
         }
         else
@@ -548,28 +552,28 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
         /* scale image */
         if (sink->swScale != 1)
         {
-            YUV_frame_from_buffer(&inputFrame, (void*)convertOutputBuffer, 
+            YUV_frame_from_buffer(&inputFrame, (void*)convertOutputBuffer,
                 sink->inputWidth, sink->inputHeight, sink->outputYUVFormat);
-                
-            YUV_frame_from_buffer(&outputFrame, (void*)(unsigned char*)frame->yuv_image->data, 
+
+            YUV_frame_from_buffer(&outputFrame, (void*)(unsigned char*)frame->yuv_image->data,
                 sink->width, sink->height, sink->outputYUVFormat);
-                
-            small_pic(&inputFrame, 
+
+            small_pic(&inputFrame,
                 &outputFrame,
-                0, 
+                0,
                 0,
                 sink->swScale,
                 sink->swScale,
-                1, 
-                1, 
-                1, 
+                1,
+                1,
+                1,
                 frame->scaleWorkspace);
         }
-        
+
         /* add OSD to frame */
         if (sink->osd != NULL && sink->osdInitialised)
         {
-            if (!osd_add_to_image(sink->osd, frameInfo, (unsigned char*)frame->yuv_image->data, 
+            if (!osd_add_to_image(sink->osd, frameInfo, (unsigned char*)frame->yuv_image->data,
                 frame->yuv_image->width, frame->yuv_image->height))
             {
                 ml_log_error("Failed to add OSD to frame\n");
@@ -577,29 +581,29 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
             }
         }
 
-        /* wait until it is time to display this frame (@ 25 fps) */
+        /* wait until it is time to display this frame */
         gettimeofday(&timeNow, NULL);
         durationSlept = 0;
         if (frameInfo->rateControl)
         {
-            durationSlept = sleep_diff(40 * 1000, &timeNow, &sink->lastFrameTime);
+            durationSlept = sleep_diff(frameDurationMsec * 1000, &timeNow, &sink->lastFrameTime);
         }
-        
+
         /* adjust the display width/height if the window has been resized */
         windowWidth = sink->x11Common.windowWidth;
         windowHeight = sink->x11Common.windowHeight;
-        
+
         scaleFactorX = windowWidth / (float)(sink->initialDisplayWidth);
         scaleFactorY = windowHeight / (float)(sink->initialDisplayHeight);
         scaleFactor = (scaleFactorX < scaleFactorY) ? scaleFactorX : scaleFactorY;
-        
+
         sink->x11Common.displayWidth = sink->initialDisplayWidth * scaleFactor;
         sink->x11Common.displayHeight = sink->initialDisplayHeight * scaleFactor;
-        
-        
+
+
         if (sink->useSharedMemory)
         {
-            XvShmPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window, 
+            XvShmPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window,
                 sink->x11Common.windowInfo.gc, frame->yuv_image,
                 0, 0, frame->yuv_image->width, frame->yuv_image->height,
                 0, 0, sink->x11Common.displayWidth, sink->x11Common.displayHeight,
@@ -607,31 +611,31 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
         }
         else
         {
-            XvPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window, 
+            XvPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window,
                 sink->x11Common.windowInfo.gc, frame->yuv_image,
                 0, 0, frame->yuv_image->width, frame->yuv_image->height,
                 0, 0, sink->x11Common.displayWidth, sink->x11Common.displayHeight);
         }
-                      
+
         x11c_process_events(&sink->x11Common, 1);
-        
-    
+
+
         /* report that a new frame has been displayed */
         msl_frame_displayed(sink->listener, frameInfo);
 
-        
-        /* set the time that this frame was displayed */        
+
+        /* set the time that this frame was displayed */
         if (frameInfo->rateControl)
         {
-            if (durationSlept < - MAX_FRAME_RATE_SLIPPAGE)
+            if (durationSlept < - frameSlippage)
             {
-                /* reset rate control when slipped by more than MAX_FRAME_RATE_SLIPPAGE */
+                /* reset rate control when slipped by more than frameSlippage */
                 sink->lastFrameTime = timeNow;
             }
             else
             {
                 /* set what the frame's display time should have been */
-                requiredUsec = sink->lastFrameTime.tv_sec * 1000000 + sink->lastFrameTime.tv_usec + 40 * 1000;
+                requiredUsec = sink->lastFrameTime.tv_sec * 1000000 + sink->lastFrameTime.tv_usec + frameDurationMsec * 1000;
                 sink->lastFrameTime.tv_usec = requiredUsec % 1000000;
                 sink->lastFrameTime.tv_sec = requiredUsec / 1000000;
             }
@@ -645,10 +649,10 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
     {
         gettimeofday(&sink->lastFrameTime, NULL);
     }
-        
-    
+
+
     reset_streams(frame);
-    
+
     return 1;
 }
 
@@ -657,7 +661,7 @@ static int init_frame(X11DisplayFrame* frame)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)frame->sink;
     int result = 1;
-    
+
     PTHREAD_MUTEX_LOCK(&sink->x11Common.eventMutex)
 
     if (sink->inputVideoFormat == YUV444_FORMAT)
@@ -689,7 +693,7 @@ static int init_frame(X11DisplayFrame* frame)
     else if (sink->swScale != 1)
     {
         /* buffer for software scaling */
-        
+
         if (sink->inputVideoFormat == UYVY_FORMAT)
         {
             frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2;
@@ -710,7 +714,7 @@ static int init_frame(X11DisplayFrame* frame)
             sink->frameFormat, NULL, sink->width, sink->height, &frame->yuv_shminfo);
         if (frame->yuv_image->data_size != sink->frameSize)
         {
-            ml_log_error("XV frame size %d does not match required frame size %d\n", 
+            ml_log_error("XV frame size %d does not match required frame size %d\n",
                 frame->yuv_image->data_size, sink->frameSize);
             result = 0;
         }
@@ -721,7 +725,7 @@ static int init_frame(X11DisplayFrame* frame)
             frame->yuv_image->data = (char*)shmat(frame->yuv_shminfo.shmid, 0, 0);
             frame->yuv_shminfo.shmaddr = frame->yuv_image->data;
             frame->yuv_shminfo.readOnly = False;
-        
+
             result = XShmAttach(sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
             if (result)
             {
@@ -736,11 +740,11 @@ static int init_frame(X11DisplayFrame* frame)
     }
     else
     {
-        frame->yuv_image = XvCreateImage(sink->x11Common.windowInfo.display, sink->xvport, sink->frameFormat, 
+        frame->yuv_image = XvCreateImage(sink->x11Common.windowInfo.display, sink->xvport, sink->frameFormat,
             NULL, sink->width, sink->height);
         if (frame->yuv_image->data_size != sink->frameSize)
         {
-            ml_log_error("XV frame size %d does not match required frame size %d\n", 
+            ml_log_error("XV frame size %d does not match required frame size %d\n",
                 frame->yuv_image->data_size, sink->frameSize);
             result = 0;
         }
@@ -754,21 +758,21 @@ static int init_frame(X11DisplayFrame* frame)
 
     /* input buffer == output if no scaling and no conversion */
     if (sink->inputVideoFormat != YUV444_FORMAT &&
-        sink->inputVideoFormat != YUV422_FORMAT && 
+        sink->inputVideoFormat != YUV422_FORMAT &&
         sink->swScale == 1)
     {
         frame->inputBufferSize = frame->yuv_image->data_size;
         frame->inputBuffer = (unsigned char*)frame->yuv_image->data;
     }
-    
-    
+
+
     PTHREAD_MUTEX_UNLOCK(&sink->x11Common.eventMutex)
-    
+
     if (!result)
     {
         return 0;
     }
-    
+
     return 1;
 }
 
@@ -777,7 +781,7 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
     X11XVDisplaySink* sink = (X11XVDisplaySink*)frame->sink;
     StreamInfo outputStreamInfo;
-    
+
     /* this should've been checked, but we do it here anyway */
     if (!xvsk_accept_stream(sink, streamInfo))
     {
@@ -792,7 +796,7 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
             /* only 1 video stream supported */
             return 0;
         }
-        
+
         if (sink->displayInitFailed)
         {
             /* if it failed before then don't try agin */
@@ -809,16 +813,16 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
             /* TODO: allow dimensions to change */
             if (sink->inputWidth != streamInfo->width || sink->inputHeight != streamInfo->height)
             {
-                ml_log_error("Image dimensions, %dx%d, does not match previous dimensions %dx%d\n", 
+                ml_log_error("Image dimensions, %dx%d, does not match previous dimensions %dx%d\n",
                     streamInfo->width, streamInfo->height, sink->inputWidth, sink->inputHeight);
                 return 0;
             }
         }
-        
+
         if (sink->osd != NULL && !sink->osdInitialised)
         {
             outputStreamInfo = *streamInfo;
-            
+
             /* YUV422 and YUV444 are converted to UYVY */
             if (streamInfo->format == YUV422_FORMAT ||
                 streamInfo->format == YUV444_FORMAT)
@@ -829,55 +833,55 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
             /* sw scale changes the output dimensions */
             outputStreamInfo.width = sink->width;
             outputStreamInfo.height = sink->height;
-            
+
             CHK_ORET(osd_initialise(sink->osd, &outputStreamInfo, &sink->aspectRatio));
             sink->osdInitialised = 1;
         }
-        
+
         if (frame->yuv_image == NULL)
         {
             CHK_ORET(init_frame(frame));
         }
-        
+
         frame->streamId = streamId;
     }
     else
     {
         return 0;
     }
-    
+
     return 1;
 }
 
 static void xvskf_reset(void* data)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     reset_streams(frame);
 }
 
 static int xvskf_accept_stream_frame(void* data, int streamId, const FrameInfo* frameInfo)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     if (streamId == frame->streamId)
     {
         return 1;
     }
-    
+
     return 0;
 }
 
 static int xvskf_allocate_stream_buffer(void* data, int streamId, unsigned int bufferSize, unsigned char** buffer)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     if (streamId != frame->streamId)
     {
         ml_log_error("Can't return display sink buffer for unknown stream %d \n", streamId);
         return 0;
     }
-    
+
 
     if ((unsigned int)frame->inputBufferSize != bufferSize)
     {
@@ -885,20 +889,20 @@ static int xvskf_allocate_stream_buffer(void* data, int streamId, unsigned int b
         return 0;
     }
     *buffer = frame->inputBuffer;
-    
+
     return 1;
 }
 
 static int xvskf_set_is_present(void* data, int streamId)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     if (streamId != frame->streamId)
     {
         ml_log_error("Can't write frame for display sink buffer for unknown stream %d \n", streamId);
         return 0;
     }
-    
+
     frame->videoIsPresent = 1;
 
     return 1;
@@ -907,7 +911,7 @@ static int xvskf_set_is_present(void* data, int streamId)
 static int xvskf_complete_frame(void* data, const OnScreenDisplayState* osdState, const FrameInfo* frameInfo)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     osd_set_state(osds_get_osd(frame->osdState), osdState);
     frame->frameInfo = *frameInfo;
     return 1;
@@ -916,7 +920,7 @@ static int xvskf_complete_frame(void* data, const OnScreenDisplayState* osdState
 static void xvskf_free(void* data)
 {
     X11DisplayFrame* frame = (X11DisplayFrame*)data;
-    
+
     if (frame == NULL)
     {
         return;
@@ -933,7 +937,7 @@ static void xvskf_free(void* data)
             }
             SAFE_FREE(&frame->scaleInputBuffer);
             SAFE_FREE(&frame->scaleWorkspace);
-            
+
             if (frame->sink->useSharedMemory)
             {
                 XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
@@ -946,23 +950,23 @@ static void xvskf_free(void* data)
             XFree(frame->yuv_image);
         }
     }
-    
+
     osds_free(&frame->osdState);
-    
+
     SAFE_FREE(&frame);
 }
 
 static int allocate_frame(X11XVDisplaySink* sink, X11DisplayFrame** frame)
 {
     X11DisplayFrame* newFrame = NULL;
-    
+
     CALLOC_ORET(newFrame, X11DisplayFrame, 1);
 
     CHK_OFAIL(osds_create(&newFrame->osdState));
-    
+
     newFrame->sink = sink;
     newFrame->streamId = -1;
-    
+
     newFrame->sinkFrame.data = newFrame;
     newFrame->sinkFrame.register_stream = xvskf_register_stream;
     newFrame->sinkFrame.reset = xvskf_reset;
@@ -971,10 +975,10 @@ static int allocate_frame(X11XVDisplaySink* sink, X11DisplayFrame** frame)
     newFrame->sinkFrame.set_is_present = xvskf_set_is_present;
     newFrame->sinkFrame.complete_frame = xvskf_complete_frame;
     newFrame->sinkFrame.free = xvskf_free;
-    
+
     *frame = newFrame;
     return 1;
-    
+
 fail:
     xvskf_free(newFrame);
     return 0;
@@ -987,7 +991,7 @@ static int xvsk_register_listener(void* data, MediaSinkListener* listener)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
 
-    sink->listener = listener;    
+    sink->listener = listener;
     sink->x11Common.sinkListener = listener;
     return 1;
 }
@@ -1010,7 +1014,7 @@ static int xvsk_accept_stream(void* data, const StreamInfo* streamInfo)
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
         streamInfo->width > 0 &&
         streamInfo->height > 0 &&
-        (streamInfo->format == UYVY_FORMAT || 
+        (streamInfo->format == UYVY_FORMAT ||
              streamInfo->format == YUV422_FORMAT ||
              streamInfo->format == YUV420_FORMAT ||
              streamInfo->format == YUV444_FORMAT))
@@ -1032,7 +1036,7 @@ static int xvsk_register_stream(void* data, int streamId, const StreamInfo* stre
     {
         CHK_ORET(allocate_frame(sink, &sink->frame));
     }
-    
+
     return xvskf_register_stream(sink->frame, streamId, streamInfo);
 }
 
@@ -1079,7 +1083,7 @@ static void xvsk_cancel_frame(void* data)
 static OnScreenDisplay* xvsk_get_osd(void* data)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
-    
+
     return sink->osd;
 }
 
@@ -1087,9 +1091,9 @@ static int xvsk_allocate_frame(void* data, MediaSinkFrame** frame)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
     X11DisplayFrame* x11Frame = NULL;
-    
+
     CHK_ORET(allocate_frame(sink, &x11Frame));
-    
+
     *frame = &x11Frame->sinkFrame;
     return 1;
 }
@@ -1098,7 +1102,7 @@ static int xvsk_complete_sink_frame(void* data, const MediaSinkFrame* frame)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
     X11DisplayFrame* x11Frame = (X11DisplayFrame*)frame->data;
-   
+
     if (sink->osd != NULL)
     {
         if (osd_set_state(sink->osd, x11Frame->osdState))
@@ -1106,34 +1110,34 @@ static int xvsk_complete_sink_frame(void* data, const MediaSinkFrame* frame)
             msl_refresh_required(sink->listener);
         }
     }
-    
+
     return display_frame(sink, x11Frame, &x11Frame->frameInfo);
 }
 
 static void xvsk_close(void* data)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
-    /* free before x11c_clear */    
+
+    /* free before x11c_clear */
     xvskf_free(sink->frame);
-    
+
     if (sink->osd != NULL)
     {
         osd_free(sink->osd);
         sink->osd = NULL;
     }
-    
+
     if (sink->xvport >= 0 && sink->x11Common.windowInfo.display != NULL)
     {
         XVideoReleasePort(sink->x11Common.windowInfo.display, sink->xvport);
     }
     x11c_clear(&sink->x11Common);
-    
+
     SAFE_FREE(&sink);
 }
 
@@ -1145,10 +1149,10 @@ static int xvsk_reset_or_close(void* data)
 
     sink->haveReset = 1;
 
-    /* free before reseting x11 */    
+    /* free before reseting x11 */
     xvskf_free(sink->frame);
     sink->frame = NULL;
-    
+
     if (!x11c_reset(&sink->x11Common))
     {
         goto fail;
@@ -1163,7 +1167,7 @@ static int xvsk_reset_or_close(void* data)
     sink->osdInitialised = 0;
 
     gettimeofday(&sink->lastFrameTime, NULL);
-    
+
     /* display a blank frame */
     if (sink->displayInitialised)
     {
@@ -1181,21 +1185,21 @@ static int xvsk_reset_or_close(void* data)
             {
                 fill_black(sink->inputVideoFormat, sink->inputWidth, sink->inputHeight, blankFrame->inputBuffer);
                 blankFrame->videoIsPresent = 1;
-                
+
                 memset(&blankFrameInfo, 0, sizeof(FrameInfo));
                 if (!display_frame(sink, blankFrame, &blankFrameInfo))
                 {
                     ml_log_warn("Failed to display blank frame at reset\n");
                 }
             }
-            
+
             xvskf_free(blankFrame);
             blankFrame = NULL;
         }
     }
-    
+
     return 1;
-    
+
 fail:
     xvsk_close(data);
     return 2;
@@ -1205,14 +1209,14 @@ fail:
 static void xvsk_refresh_required(void* data)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
-    
+
     msl_refresh_required(sink->listener);
 }
 
 static void xvsk_osd_screen_changed(void* data, OSDScreen screen)
 {
     X11XVDisplaySink* sink = (X11XVDisplaySink*)data;
-    
+
     msl_osd_screen_changed(sink->listener, screen);
 }
 
@@ -1220,16 +1224,16 @@ static void xvsk_osd_screen_changed(void* data, OSDScreen screen)
 int xvsk_check_is_available()
 {
     Display* display = NULL;
-    
+
     /* open display */
     if ((display = XOpenDisplay(NULL)) == NULL)
     {
         return 0;
     }
-    
+
     /* open XV port */
     int port;
-    
+
     /* try UYVY */
     int32_t frameFormat = X11_FOURCC('U','Y','V','Y');
     if ((port = XVideoGetPort(display, frameFormat, -1)) < 0)
@@ -1238,7 +1242,7 @@ int xvsk_check_is_available()
         return 0;
     }
     XVideoReleasePort(display, port);
-    
+
     /* try YUV420 */
     frameFormat = X11_FOURCC('I','4','2','0');
     if ((port = XVideoGetPort(display, frameFormat, -1)) < 0)
@@ -1247,18 +1251,18 @@ int xvsk_check_is_available()
         return 0;
     }
     XVideoReleasePort(display, port);
-    
+
     XCloseDisplay(display);
-    
+
     return 1;
 }
 
 
-int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
+int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio,
     const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11XVDisplaySink** sink)
 {
     X11XVDisplaySink* newSink;
-    
+
     CALLOC_ORET(newSink, X11XVDisplaySink, 1);
 
     newSink->xvport = -1;
@@ -1297,21 +1301,21 @@ int xvsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRat
         newSink->osdListener.data = newSink;
         newSink->osdListener.refresh_required = xvsk_refresh_required;
         newSink->osdListener.osd_screen_changed = xvsk_osd_screen_changed;
-        
+
         osd_set_listener(newSink->osd, &newSink->osdListener);
     }
-    
+
     CHK_OFAIL(x11c_initialise(&newSink->x11Common, reviewDuration, newSink->osd, windowInfo));
 
     gettimeofday(&newSink->lastFrameTime, NULL);
-    
+
     *sink = newSink;
     return 1;
-    
+
 fail:
     xvsk_close(newSink);
     return 0;
-    
+
 }
 
 void xvsk_set_media_control(X11XVDisplaySink* sink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control)

@@ -1,9 +1,10 @@
 /*
- * $Id: media_source.c,v 1.5 2008/10/29 17:47:42 john_f Exp $
+ * $Id: media_source.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +68,7 @@ int sdl_receive_frame_const(MediaSourceListener* listener, int streamId, const u
 {
     unsigned char* nonconstBuffer = NULL;
     int result;
-    
+
     if (listener && listener->receive_frame_const)
     {
         return listener->receive_frame_const(listener->data, streamId, buffer, bufferSize);
@@ -128,6 +129,14 @@ int msc_get_stream_info(MediaSource* source, int streamIndex, const StreamInfo**
         return source->get_stream_info(source->data, streamIndex, streamInfo);
     }
     return 0;
+}
+
+void msc_set_frame_rate_or_disable(MediaSource* source, const Rational* frameRate)
+{
+    if (source && source->set_frame_rate_or_disable)
+    {
+        source->set_frame_rate_or_disable(source->data, frameRate);
+    }
 }
 
 int msc_disable_stream(MediaSource* source, int streamIndex)
@@ -274,7 +283,7 @@ void msc_set_clip_id(MediaSource* source, const char* id)
 int msc_create_id()
 {
     static int id = 0;
-    
+
     return id++;
 }
 
@@ -287,7 +296,7 @@ void msc_init_stream_map(MediaSourceStreamMap* map)
 int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId)
 {
     int i;
-    
+
     for (i = 0; i < map->numStreams; i++)
     {
         if (map->streams[i].streamId == streamId)
@@ -296,7 +305,7 @@ int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId)
             return 1;
         }
     }
-    
+
     if (map->numStreams + 1 < (int)(sizeof(map->streams) / sizeof(int)))
     {
         map->streams[map->numStreams].sourceId = sourceId;
@@ -308,14 +317,14 @@ int msc_add_stream_to_map(MediaSourceStreamMap* map, int streamId, int sourceId)
         ml_log_error("Number streams exceeds maximum (%d) expected\n", sizeof(map->streams) / sizeof(int));
         return 0;
     }
-    
+
     return 1;
 }
 
 int msc_get_source_id(MediaSourceStreamMap* map, int streamId, int* sourceId)
 {
     int i;
-    
+
     for (i = 0; i < map->numStreams; i++)
     {
         if (map->streams[i].streamId == streamId)
@@ -324,7 +333,7 @@ int msc_get_source_id(MediaSourceStreamMap* map, int streamId, int* sourceId)
             return 1;
         }
     }
-    
+
     return 0;
 }
 

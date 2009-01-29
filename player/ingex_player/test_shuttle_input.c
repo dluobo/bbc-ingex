@@ -1,9 +1,10 @@
 /*
- * $Id: test_shuttle_input.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: test_shuttle_input.c,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,42 +36,42 @@
         exit(1); \
     }
 
-    
+
 static void listener(void* data, ShuttleEvent* event)
 {
     switch (event->type)
     {
         case SH_KEY_EVENT:
-            printf("Key: number = %u, is pressed = %d\n", event->value.key.number, 
-                event->value.key.isPressed); 
+            printf("Key: number = %u, is pressed = %d\n", event->value.key.number,
+                event->value.key.isPressed);
             break;
         case SH_SHUTTLE_EVENT:
-            printf("Shuttle: is clockwise = %d, speed = %u\n", event->value.shuttle.clockwise, 
-                event->value.shuttle.speed); 
+            printf("Shuttle: is clockwise = %d, speed = %u\n", event->value.shuttle.clockwise,
+                event->value.shuttle.speed);
             break;
         case SH_JOG_EVENT:
             printf("Jog: is clockwise = %d, position = %d\n", event->value.jog.clockwise,
-                 event->value.jog.position); 
+                 event->value.jog.position);
             break;
         default:
             fprintf(stderr, "Unknown event type %d\n", event->type);
     }
 }
-    
-    
+
+
 int main (int argc, const char** argv)
 {
     ShuttleInput* shuttle;
 
-    
+
     CHECK_FATAL(shj_open_shuttle(&shuttle));
     CHECK_FATAL(register_listener(shuttle, listener, NULL));
-    
+
     shj_start_shuttle(shuttle);
-    
+
     shj_close_shuttle(&shuttle);
-    
-    
+
+
     return 0;
 }
 

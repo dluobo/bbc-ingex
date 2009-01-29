@@ -1,9 +1,10 @@
 /*
- * $Id: macros.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: macros.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -64,7 +65,7 @@ extern "C"
         cmd; \
     }
 
-    
+
 /* memory allocations with check */
 #define CALLOC_ORET(data, type, size) \
     CHK_ORET((data = (type*)calloc(sizeof(type), size)) != NULL);
@@ -95,10 +96,10 @@ extern "C"
     }
 
 
-/* Helpers for logging 
+/* Helpers for logging
 e.g. ml_log_error("Some error %d" LOG_LOC_FORMAT, x, LOG_LOC_PARAMS); */
 #define LOG_LOC_FORMAT      ", in %s:%d\n"
-#define LOG_LOC_PARAMS      __FILE__, __LINE__      
+#define LOG_LOC_PARAMS      __FILE__, __LINE__
 
 
 /* pthreads */
@@ -107,29 +108,29 @@ e.g. ml_log_error("Some error %d" LOG_LOC_FORMAT, x, LOG_LOC_PARAMS); */
     { \
         ml_log_error("pthread_mutex_lock failed" LOG_LOC_FORMAT, LOG_LOC_PARAMS); \
     }
-    
+
 #define PTHREAD_MUTEX_UNLOCK(x) \
     if (pthread_mutex_unlock( x ) != 0 ) \
     { \
         ml_log_error("pthread_mutex_unlock failed" LOG_LOC_FORMAT, LOG_LOC_PARAMS); \
     }
-    
+
 #define PTHREAD_COND_WAIT(x) \
     if (pthread_cond_wait( x ) != 0 ) \
     { \
         ml_log_error("pthread_cond_wait failed" LOG_LOC_FORMAT, LOG_LOC_PARAMS); \
     }
-    
+
 #define PTHREAD_COND_SIGNAL(x) \
     if (pthread_cond_signal( x ) != 0 ) \
     { \
         ml_log_error("pthread_cond_signal failed" LOG_LOC_FORMAT, LOG_LOC_PARAMS); \
     }
-    
+
 
 
 /* 64-bit printf formatting */
-    
+
 #if defined(__x86_64__)
 #define PFi64 "ld"
 #define PFu64 "lu"
@@ -139,7 +140,7 @@ e.g. ml_log_error("Some error %d" LOG_LOC_FORMAT, x, LOG_LOC_PARAMS); */
 #define PFu64 "llu"
 #define PFoff "lld"
 #endif
-    
+
 
 
 

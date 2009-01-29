@@ -1,9 +1,10 @@
 /*
- * $Id: shuttle_input.c,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: shuttle_input.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,32 +41,32 @@
 #include "macros.h"
 
 
-/* Note: the Contour ShuttlePro jog control does not produce an event at position 0. 
-         If you move 1 step from position 1 anti-clockwise you will get no 
-         response (event), and the same happens from 255 clockwise. 
-         
+/* Note: the Contour ShuttlePro jog control does not produce an event at position 0.
+         If you move 1 step from position 1 anti-clockwise you will get no
+         response (event), and the same happens from 255 clockwise.
+
          This problem also affects the shuttle control, where a return to the neutral position
          fails to produce an event
-         
+
          The cause is the following line in the linux kernel source code,
          drivers/input/input.c, line 129 (see http://lxr.linux.no/source/drivers/input/input.c#L129)):
-            
+
                  case EV_REL:
 
                          if (code > REL_MAX || !test_bit(code, dev->relbit) || (value == 0))
                                  return;
- 
+
                          break;
-         
+
          The "value == 0" prevents events from being sent when the jog is at position 0, ie. when
          the jog is at position 0 the value == 0
-         
+
          Another unfortunate thing is that hiddev interface is disabled for USB input applications.
-         
-         One solution would be to patch the kernel with a contour design shuttle pro hack, 
-         similar to what is already being done in the hidinput_hid_event function 
+
+         One solution would be to patch the kernel with a contour design shuttle pro hack,
+         similar to what is already being done in the hidinput_hid_event function
          in drivers/usb/input/hid-input.c
-         
+
          */
 
 
@@ -87,7 +88,7 @@
 #define MAX_SHUTTLE_VALUE       7
 
 /* some number > max number of events we expect (all keys + jog + shuttle + sync = 17) before a sync event */
-#define EVENT_BUFFER_SIZE       32 
+#define EVENT_BUFFER_SIZE       32
 
 /* wait 4 seconds before trying to reopen the shuttle device */
 #define DEVICE_REOPEN_WAIT      (4000 * 1000)
@@ -123,7 +124,7 @@ struct ShuttleInput
 
 static const char* g_eventDeviceTemplate = "/dev/input/event%d";
 
-static const ShuttleData g_supportedShuttles[] = 
+static const ShuttleData g_supportedShuttles[] =
 {
     {0x0b33, 0x0010, "Contour ShuttlePro"},
     {0x0b33, 0x0030, "Contour ShuttlePro V2"}
@@ -136,7 +137,7 @@ static const size_t g_supportedShuttlesSize = sizeof(g_supportedShuttles) / size
 static int get_num_events(struct input_event* events, int numEvents)
 {
     int i;
-    
+
     for (i = 0; i < numEvents; i++)
     {
         if (events[i].type == EV_SYN)
@@ -144,7 +145,7 @@ static int get_num_events(struct input_event* events, int numEvents)
             return i + 1;
         }
     }
-    
+
     return 0;
 }
 
@@ -158,7 +159,7 @@ static int handle_silence(ShuttleInput* shuttle, ShuttleEvent* outEvent)
         outEvent->type = SH_SHUTTLE_EVENT;
         outEvent->value.shuttle.clockwise = 1;
         outEvent->value.shuttle.speed = 0;
-        
+
         shuttle->prevShuttleShuttleEvent = outEvent->value.shuttle;
         shuttle->checkShuttleValue = 0;
         return 1;
@@ -175,12 +176,12 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
     int i;
     int haveJogEvent;
 
-    
+
     switch (inEvent->type)
     {
         /* synchronization event */
         case EV_SYN:
-        
+
             /* assume shuttle is back in neutral if we receive 2 synchronization events
                with no shuttle event in-between */
 
@@ -192,7 +193,7 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                     outEvent->type = SH_SHUTTLE_EVENT;
                     outEvent->value.shuttle.clockwise = 1;
                     outEvent->value.shuttle.speed = 0;
-                    
+
                     shuttle->prevShuttleShuttleEvent = outEvent->value.shuttle;
                     shuttle->checkShuttleValue = 0;
                     haveOutEvent = 1;
@@ -208,7 +209,7 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                 shuttle->checkShuttleValue = 0;
             }
             break;
-            
+
         /* key event */
         case EV_KEY:
             if (inEvent->code >= KEY_CODE_MIN && inEvent->code <= KEY_CODE_MAX)
@@ -219,8 +220,8 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                 haveOutEvent = 1;
             }
             break;
-            
-        /* Jog or Shuttle event */            
+
+        /* Jog or Shuttle event */
         case EV_REL:
 
             /* ignore jog events occurrences that occur directly after shuttle events
@@ -232,8 +233,8 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                 shuttle->prevJogValue = inEvent->value;
                 break;
             }
-            
-                
+
+
             /* Jog event */
             if (inEvent->code == REL_DIAL)
             {
@@ -243,7 +244,7 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                     ml_log_info("Jog is no longer in position 0\n");
                     shuttle->jogIsAtPosition0 = 0;
                 }
-                
+
                 outEvent->type = SH_JOG_EVENT;
                 if (inEvent->value == shuttle->prevJogValue + 1 ||
                     (inEvent->value == 1 && shuttle->prevJogValue >= UNPATCHED_MAX_JOG_VALUE))
@@ -255,7 +256,7 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                 {
                     outEvent->value.jog.clockwise = 0;
                 }
-                /* handle missed events (is this possible?) */ 
+                /* handle missed events (is this possible?) */
                 else if (inEvent->value > shuttle->prevJogValue)
                 {
                     outEvent->value.jog.clockwise = 1;
@@ -265,16 +266,16 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                     outEvent->value.jog.clockwise = 0;
                 }
                 outEvent->value.jog.position = inEvent->value;
-                
+
                 shuttle->prevJogValue = inEvent->value;
                 haveOutEvent = 1;
             }
-            
+
             /* Shuttle event */
             else if (inEvent->code == REL_WHEEL)
             {
                 shuttle->checkShuttleValue = 0;
-                
+
                 outEvent->type = SH_SHUTTLE_EVENT;
                 outEvent->value.shuttle.clockwise = inEvent->value >= 0;
                 outEvent->value.shuttle.speed = abs(inEvent->value);
@@ -283,7 +284,7 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
 
                 /* change behaviour to (try) compensate for fact that return to neutral shuttle
                 events do not occur when the jog is at position 0 */
-                haveJogEvent = 0;                    
+                haveJogEvent = 0;
                 for (i = 0; i < numEvents; i++)
                 {
                     if (inEvents[i].type == EV_REL && inEvent[i].code == REL_DIAL)
@@ -292,19 +293,19 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
                         break;
                     }
                 }
-                if (!haveJogEvent) 
+                if (!haveJogEvent)
                 {
                     if (!shuttle->jogIsAtPosition0)
                     {
                         ml_log_warn("Jog is in position 0 - please rotate\n");
                         shuttle->jogIsAtPosition0 = 1;
                     }
-                    
+
                     /* inEvent value 0 and 1 are taken to be speed 0. A value
                     equal 1 will then trigger the speed to drop back to 0.
                     Also, jumps in speed will also trigger it
-                    handle_silence() will deal with the case where speed value 1 is skipped */ 
-                    if (outEvent->value.shuttle.speed <= 1 || 
+                    handle_silence() will deal with the case where speed value 1 is skipped */
+                    if (outEvent->value.shuttle.speed <= 1 ||
                         (shuttle->prevShuttleShuttleEvent.speed > outEvent->value.shuttle.speed + 1))
                     {
                         outEvent->value.shuttle.speed = 0;
@@ -333,10 +334,10 @@ static int handle_event(ShuttleInput* shuttle, struct input_event* inEvents, int
             }
 
             break;
-            
+
     }
-    
-    
+
+
     return haveOutEvent;
 }
 
@@ -355,12 +356,12 @@ static int open_shuttle_device(ShuttleInput* shuttle)
         close(shuttle->fd);
         shuttle->fd = -1;
     }
-    
+
     /* go through the event devices and check whether it is a supported shuttle */
     for (i = 0; i < EVENT_DEV_INDEX_MAX; i++)
     {
         sprintf(eventDevName, g_eventDeviceTemplate, i);
-        
+
         if ((fd = open(eventDevName, O_RDONLY)) != -1)
         {
             /* get the device information */
@@ -380,17 +381,17 @@ static int open_shuttle_device(ShuttleInput* shuttle)
                             shuttle->shuttleData = &g_supportedShuttles[j];
                             return 1;
                         }
-                        
+
                         /* failed to grab device */
                         break;
                     }
                 }
             }
-            
+
             close(fd);
         }
     }
-    
+
     return 0;
 }
 
@@ -401,17 +402,17 @@ int shj_open_shuttle(ShuttleInput** shuttle)
 
     CALLOC_ORET(newShuttle, ShuttleInput, 1);
     newShuttle->fd = -1;
-    
+
     if (!open_shuttle_device(newShuttle))
     {
         ml_log_warn("Failed to open jog-shuttle device for exclusive access - will try again later\n");
     }
-    
+
     CHK_OFAIL(init_mutex(&newShuttle->listenerMutex));
-    
+
     *shuttle = newShuttle;
     return 1;
-    
+
 fail:
     shj_close_shuttle(&newShuttle);
     return 0;
@@ -421,10 +422,10 @@ int shj_register_listener(ShuttleInput* shuttle, shuttle_listener listener, void
 {
     int i;
     ShuttleListener shutListen;
-    
+
     shutListen.data = data;
     shutListen.func = listener;
-    
+
     PTHREAD_MUTEX_LOCK(&shuttle->listenerMutex)
 
     for (i = 0; i < MAX_LISTENERS; i++)
@@ -437,16 +438,16 @@ int shj_register_listener(ShuttleInput* shuttle, shuttle_listener listener, void
     }
 
     PTHREAD_MUTEX_UNLOCK(&shuttle->listenerMutex)
-    
+
     return i != MAX_LISTENERS; /* i == MAX_LISTENERS if max listeners exceeded */
 }
 
 void shj_unregister_listener(ShuttleInput* shuttle, shuttle_listener listener)
 {
     int i;
-    
+
     PTHREAD_MUTEX_LOCK(&shuttle->listenerMutex)
-    
+
     for (i = 0; i < MAX_LISTENERS; i++)
     {
         if (shuttle->listeners[i].func == listener)
@@ -461,7 +462,7 @@ void shj_unregister_listener(ShuttleInput* shuttle, shuttle_listener listener)
 
 void shj_start_shuttle(ShuttleInput* shuttle)
 {
-    struct input_event inEvent[EVENT_BUFFER_SIZE]; 
+    struct input_event inEvent[EVENT_BUFFER_SIZE];
     ShuttleEvent outEvent;
     int i, j;
     fd_set rfds;
@@ -475,7 +476,7 @@ void shj_start_shuttle(ShuttleInput* shuttle)
     int selectCount;
     int waitTime;
 
-    
+
     numEvents = 0;
     eventsOffset = 0;
     selectCount = 0;
@@ -496,14 +497,14 @@ void shj_start_shuttle(ShuttleInput* shuttle)
                 continue;
             }
         }
-        
+
         FD_ZERO(&rfds);
         FD_SET(shuttle->fd, &rfds);
         /* TODO: is there a way to find out how many sec between sync events? */
         tv.tv_sec = 0;
         tv.tv_usec = 50000; /* 1/20 second */
-            
-        
+
+
         retval = select(shuttle->fd + 1, &rfds, NULL, NULL, &tv);
         selectCount++;
 
@@ -525,10 +526,10 @@ void shj_start_shuttle(ShuttleInput* shuttle)
             {
                 /* something is wrong. */
                 /* Close the device and try open again after waiting */
-                
+
                 close(shuttle->fd);
                 shuttle->fd = -1;
-                
+
                 waitTime = DEVICE_REOPEN_WAIT;
                 while (!shuttle->stopped && waitTime > 0)
                 {
@@ -541,13 +542,13 @@ void shj_start_shuttle(ShuttleInput* shuttle)
         else if (retval)
         {
             selectCount = 0;
-            
+
             numRead = read(shuttle->fd, &inEvent[eventsOffset], (EVENT_BUFFER_SIZE - eventsOffset) * sizeof(struct input_event));
             if (numRead > 0)
             {
                 numEvents += numRead / sizeof(struct input_event);
                 eventsOffset += numRead / sizeof(struct input_event);
-                
+
                 /* process the events if there is a sync event */
                 processOffset = 0;
                 if (numEvents == EVENT_BUFFER_SIZE)
@@ -596,10 +597,10 @@ void shj_start_shuttle(ShuttleInput* shuttle)
             {
                 /* num read zero indicates end-of-file, ie. the shuttle device was unplugged */
                 /* close the device and try open again after waiting */
-                
+
                 close(shuttle->fd);
                 shuttle->fd = -1;
-                
+
                 waitTime = DEVICE_REOPEN_WAIT;
                 while (!shuttle->stopped && waitTime > 0)
                 {
@@ -612,7 +613,7 @@ void shj_start_shuttle(ShuttleInput* shuttle)
         else if (selectCount > 80) /* > 4 seconds */
         {
             selectCount = 0;
-            
+
             /* a timeout > 4 seconds means we are in jog position 0 where no events are sent */
 
             /* flush the events */
@@ -632,11 +633,11 @@ void shj_start_shuttle(ShuttleInput* shuttle)
                     PTHREAD_MUTEX_UNLOCK(&shuttle->listenerMutex)
                 }
             }
-            
+
             numEvents = 0;
             eventsOffset = 0;
 
-            /* handle silence */            
+            /* handle silence */
             if (handle_silence(shuttle, &outEvent))
             {
                 /* call the listeners */
@@ -665,7 +666,7 @@ void shj_start_shuttle(ShuttleInput* shuttle)
             }
             PTHREAD_MUTEX_UNLOCK(&shuttle->listenerMutex)
         }
-        
+
     }
 }
 
@@ -675,21 +676,21 @@ void shj_close_shuttle(ShuttleInput** shuttle)
     {
         return;
     }
-    
-    if ((*shuttle)->fd)
+
+    if ((*shuttle)->fd >= 0)
     {
         close((*shuttle)->fd);
     }
-    
+
     destroy_mutex(&(*shuttle)->listenerMutex);
-    
+
     SAFE_FREE(shuttle);
 }
 
 void shj_stop_shuttle(void* arg)
 {
     ShuttleInput* shuttle = (ShuttleInput*)arg;
-    
+
     shuttle->stopped = 1;
 }
 

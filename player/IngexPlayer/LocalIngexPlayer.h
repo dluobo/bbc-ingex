@@ -1,9 +1,9 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.11 2008/12/05 16:49:47 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.12 2009/01/29 07:10:26 stuart_hc Exp $
  *
- *
- *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
+ * Modifications: Matthew Marks
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,11 +33,11 @@
 namespace prodauto
 {
 
-    
+
 class LocalIngexPlayerState;
 
 
-typedef enum PlayerOutputType
+typedef enum
 {
     /* playout to SDI via DVS card */
     DVS_OUTPUT = 1,
@@ -53,7 +53,7 @@ typedef enum PlayerOutputType
     DUAL_DVS_X11_OUTPUT,
     /* playout to both SDI and X11 X video extension window */
     DUAL_DVS_X11_XV_OUTPUT
-};
+} PlayerOutputType;
 
 typedef enum
 {
@@ -77,9 +77,9 @@ typedef struct
 
 /* options for each PlayerInputType are as follows:
 
-    MXF_INPUT: 
+    MXF_INPUT:
         none
-    
+
     RAW_INPUT:
         "stream_type": "picture", "sound", "timecode" or "event"  (default "picture")
         "stream_format": "uyvy", "yuv422", "yuv420", "yuv411", "pcm", "timecode"  (default "uyvy")
@@ -92,90 +92,87 @@ typedef struct
         "sampling rate": "<numerator>/<denominator>" (default 48000/1)
         "num_channels": <num>  (default 1)
         "bits_per_sample": <bps>  (default 16)
-    
+
     DV_INPUT:
         none
-        
+
     FFMPEG_INPUT:
         "num_ffmpeg_threads" <num> (default 0)
-        
+
     SHM_INPUT:
         none
-        
+
     UDP_INPUT:
         none
-        
+
     BBALLS_INPUT:
         same as RAW_INPUT
         "num_balls": <num> (default 5)
-        
+
     BLANK_INPUT:
         same as RAW_INPUT
-        
+
     CLAPPER_INPUT:
         same as RAW_INPUT, but video only
-*/    
+*/
 
 
 /* IngexPlayer that runs locally on the machine */
 class LocalIngexPlayer : public IngexPlayer
 {
 public:
-    LocalIngexPlayer(PlayerOutputType outputType, VideoSwitchSplit videoSplit, int numFFMPEGThreads, 
+    LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType, VideoSwitchSplit videoSplit, int numFFMPEGThreads,
         bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
-        int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio, 
+        int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio,
         Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale,
         bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel,
         bool enableAudioSwitch);
-    LocalIngexPlayer(PlayerOutputType outputType);
-    
+    LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType);
+
     virtual ~LocalIngexPlayer();
-    
+
 
     std::string getVersion();
     std::string getBuildTimestamp();
 
-    
+
     /* returns true if a DVS card is available for output */
     bool dvsCardIsAvailable();
     bool dvsCardIsAvailable(int card, int channel);
-    
-    
+
+
     /* e.g. set the window-id when used as a browser plugin */
     void setWindowInfo(const X11WindowInfo* windowInfo);
-    
+
     /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
     void setOutputType(PlayerOutputType outputType, float scale);
     void setDVSTarget(int card, int channel);
-    
+
     /* returns the output type used */
     PlayerOutputType getOutputType();
     /* same as getOutputType(), except it returns the actual output type if an auto type is used */
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
     PlayerOutputType getActualOutputType();
-    
+
     /* sets the video split type (see ingex_player/video_switch_sink.h for enum values) when start() is called again */
     void setVideoSplit(VideoSwitchSplit videoSplit);
-    
+
     /* disables/enables the on screen display in the SDI output */
     void setSDIOSDEnable(bool enable);
-    
-    
+
+
     /* will reset the player and display blank video on the output - returns false if a reset fails and
        the player will be closed */
     bool reset();
-    
+
     /* will stop the player and close the X11 window */
     bool close();
-    
-    
+
+
     /* opens the files/sources and start playing. The opened parameter indicates for each file/source whether
     it was successfully opened or not */
     virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition);
-    
-    /* functions inherited from IngexPlayerListenerRegistry */
-    virtual bool registerListener(IngexPlayerListener* listener);
-    virtual bool unregisterListener(IngexPlayerListener* listener);
+
 
     /* functions inherited from IngexPlayer */
     virtual bool setX11WindowName(std::string name);
@@ -208,21 +205,17 @@ public:
     virtual bool reviewStart(int64_t duration);
     virtual bool reviewEnd(int64_t duration);
     virtual bool review(int64_t duration);
-    
 
-    /* allowing access for C callback functions */
-    pthread_rwlock_t _listenersRWLock;
-    std::vector<IngexPlayerListener*> _listeners;
-    
+
 private:
-    void initialise();
+    void initialise(IngexPlayerListenerRegistry* listenerRegistry);
 
     /* returns true if a X11 XV output is available */
     bool x11XVIsAvailable();
 
     bool setOrCreateX11Window();
     void closeLocalX11Window();
-    
+
 
     PlayerOutputType _nextOutputType;
     PlayerOutputType _outputType;
@@ -256,13 +249,13 @@ private:
 
     pthread_rwlock_t _playStateRWLock;
     LocalIngexPlayerState* _playState;
-    
+
     MediaPlayerListener _mediaPlayerListener;
     X11WindowListener _x11WindowListener;
     KeyboardInputListener _x11KeyListener;
     ProgressBarInputListener _x11ProgressBarListener;
     MouseInputListener _x11MouseListener;
-    
+
     StreamInfo _videoStreamInfo;
 };
 
@@ -272,6 +265,3 @@ private:
 
 
 #endif
-
-
-

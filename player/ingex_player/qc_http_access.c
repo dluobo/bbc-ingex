@@ -1,9 +1,10 @@
 /*
- * $Id: qc_http_access.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_http_access.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +35,7 @@
 
 #if !defined(HAVE_SHTTPD)
 
-int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory, 
+int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory,
     const char* reportDirectory, QCHTTPAccess** access)
 {
     return 0;
@@ -60,10 +61,10 @@ struct QCHTTPAccess
 {
     char* cacheDirectory;
     char* reportDirectory;
-    
+
     pthread_t httpThreadId;
     int stopped;
-    
+
     struct shttpd_ctx* ctx;
 };
 
@@ -86,8 +87,8 @@ static const char* g_qcReportFramed =
     "</html>\n"
     "\n"
     "";
-    
-static const char* qc_qcReportControl = 
+
+static const char* qc_qcReportControl =
     "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
     "<html>\n"
     "<head>\n"
@@ -223,12 +224,12 @@ static const char* qc_qcReportControl =
     "</html>\n"
     "\n"
     "";
-    
-    
-static const char* g_qcReportCommentStartMarker = "<!-- COMMENT START MARKER -->";    
-static const char* g_qcReportCommentEndMarker = "<!-- COMMENT END MARKER -->";    
 
-static const char* g_qcReportCommentHTML = 
+
+static const char* g_qcReportCommentStartMarker = "<!-- COMMENT START MARKER -->";
+static const char* g_qcReportCommentEndMarker = "<!-- COMMENT END MARKER -->";
+
+static const char* g_qcReportCommentHTML =
     "\n"
     "<br/>\n"
     "<table id=\"t4\" class=\"results\">\n"
@@ -243,11 +244,11 @@ static const char* g_qcReportCommentHTML =
 
 static const char* q_sessionCommentsHeaderStart = "# Comments";
 
-static const char* q_sessionCommentsHeader = 
+static const char* q_sessionCommentsHeader =
     "# Comments, , , , , , , ,\n"
     "# , , , , , , , ,\n";
 
-    
+
 
 static int update_qc_report(QCHTTPAccess* access, const char* reportName, const char* comments)
 {
@@ -266,10 +267,10 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
     int commentsLen;
     int startMarkerLen = strlen(g_qcReportCommentStartMarker);
     int endMarkerLen = strlen(g_qcReportCommentEndMarker);
-    
-    
+
+
     /* open files */
-    
+
     strcpy(reportFilename, access->reportDirectory);
     strcat_separator(reportFilename);
     strcat(reportFilename, reportName);
@@ -280,7 +281,7 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
         ml_log_error("Failed to open QC report '%s': %s\n", reportFilename, strerror(errno));
         goto fail;
     }
-    
+
     modifiedReportFd = mkstemp(tempFilename);
     if (modifiedReportFd == -1)
     {
@@ -294,25 +295,25 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
         goto fail;
     }
     modifiedReportFd = -1;
-    
-    
+
+
     /* update report */
-    
+
     while ((c = fgetc(originalReport)) != EOF)
     {
         switch (state)
         {
-            /* copy until the start of the comments sections and then insert 
+            /* copy until the start of the comments sections and then insert
             the modified comments html */
             case 0:
                 fputc(c, modifiedReport);
-                
+
                 if (c == g_qcReportCommentStartMarker[startMarkerIndex])
                 {
                     if (startMarkerIndex + 1 == startMarkerLen)
                     {
                         fputc('\n', modifiedReport);
-                        
+
                         /* copy the new comments section with html escaped comments */
                         templateLen = strlen(g_qcReportCommentHTML);
                         for (i = 0; i < templateLen; i++)
@@ -348,7 +349,7 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
                                         }
                                     }
                                 }
-                                
+
                                 i += 2;
                             }
                             else
@@ -356,7 +357,7 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
                                 fputc(g_qcReportCommentHTML[i], modifiedReport);
                             }
                         }
-                        
+
                         state = 1;
                     }
                     else
@@ -368,9 +369,9 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
                 {
                     startMarkerIndex = 0;
                 }
-                
+
                 break;
-                
+
             /* seek to the end of the original comments section */
             case 1:
                 if (c == g_qcReportCommentEndMarker[endMarkerIndex])
@@ -389,38 +390,38 @@ static int update_qc_report(QCHTTPAccess* access, const char* reportName, const 
                 {
                     endMarkerIndex = 0;
                 }
-                
+
                 break;
-                
+
             /* copy the data after the comments section */
             case 2:
                 fputc(c, modifiedReport);
                 break;
         }
     }
-    
+
     fclose(originalReport);
     originalReport = 0;
     fclose(modifiedReport);
     modifiedReport = 0;
 
-    
+
     /* replace the original report with the modified report */
-    
+
     strcpy(copyCommand, "cp ");
     strcat(copyCommand, tempFilename);
     strcat(copyCommand, " \"");
     strcat(copyCommand, reportFilename);
     strcat(copyCommand, "\"");
-    
+
     if (system(copyCommand) != 0)
     {
         ml_log_error("Failed to replace report with modified report ('%s'): %s", copyCommand, strerror(errno));
         goto fail;
     }
-    
+
     return 1;
-    
+
 fail:
     if (originalReport != NULL)
     {
@@ -449,13 +450,13 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
     int startOfLine = 1;
     long filePos;
     int fd = -1;
-    
-    
+
+
     /* update the session file in the cache */
-    
-    
+
+
     /* open the file */
-    
+
     strcpy(sessionFilename, access->cacheDirectory);
     strcat_separator(sessionFilename);
     strcat(sessionFilename, carrierName);
@@ -468,13 +469,13 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
         ml_log_error("Failed to open session file '%s' for update: %s\n", sessionFilename, strerror(errno));
         goto fail;
     }
-    
-    
+
+
     /* find the comments section */
-    
+
     while ((c = fgetc(sessionFile)) != EOF)
     {
-        if ((startOfLine || commentsHeaderIndex > 0) && 
+        if ((startOfLine || commentsHeaderIndex > 0) &&
             c == q_sessionCommentsHeaderStart[commentsHeaderIndex])
         {
             if (commentsHeaderIndex + 1 == commentsHeaderStartLen)
@@ -492,7 +493,7 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
         {
             commentsHeaderIndex = 0;
         }
-        
+
         if (c == '\n')
         {
             startOfLine = 1;
@@ -502,7 +503,7 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
             startOfLine = 0;
         }
     }
-    
+
     /* write the comments header and comments */
 
     /* write a newline if the comments section was not found and the last char was not a newline */
@@ -511,19 +512,19 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
         fputc('\n', sessionFile);
     }
     fprintf(sessionFile, "%s%s", q_sessionCommentsHeader, comments);
-    
-    
-    /* truncate the file */ 
+
+
+    /* truncate the file */
     filePos = ftell(sessionFile);
     fd = fileno(sessionFile);
     ftruncate(fd, filePos);
-    
-    
+
+
     fclose(sessionFile);
     sessionFile = NULL;
-    
-    
-    
+
+
+
     /* backup session file */
 
     strcpy(backupDirectory, access->reportDirectory);
@@ -531,21 +532,21 @@ static int update_session_files(QCHTTPAccess* access, const char* sessionName, c
     strcat(backupDirectory, carrierName);
     strcat(backupDirectory, "_backup");
     strcat_separator(backupDirectory);
-    
+
     strcpy(copyCommand, "cp \"");
     strcat(copyCommand, sessionFilename);
     strcat(copyCommand, "\" \"");
     strcat(copyCommand, backupDirectory);
     strcat(copyCommand, "\"");
-    
+
     if (system(copyCommand) != 0)
     {
         ml_log_error("Failed to copy session file ('%s') for backup: %s", copyCommand, strerror(errno));
         goto fail;
     }
-    
+
     return 1;
-    
+
 fail:
     if (sessionFile != NULL)
     {
@@ -565,14 +566,14 @@ static int get_query_value(struct shttpd_arg* arg, const char* name, char* value
     {
         return 0;
     }
-    
+
     int result = shttpd_get_var(name, queryString, strlen(queryString), value, valueSize);
     if (result < 0 || result == valueSize)
     {
         return 0;
     }
     value[valueSize - 1] = '\0';
-    
+
     return 1;
 }
 
@@ -584,7 +585,7 @@ static int get_post_value(struct shttpd_arg* arg, const char* name, char* value,
         return 0;
     }
     value[valueSize - 1] = '\0';
-    
+
     return 1;
 }
 
@@ -612,13 +613,13 @@ static void http_qcreport_framed_page(struct shttpd_arg* arg)
     int pageLen;
     int pageIndex;
 
-    
+
     if (!get_query_value(arg, "report", reportName, sizeof(reportName)))
     {
         send_bad_request(arg, "Missing 'report' parameter");
         return;
     }
-    
+
     if (!get_query_value(arg, "session", sessionName, sizeof(sessionName)))
     {
         send_bad_request(arg, "Missing 'session' parameter");
@@ -630,10 +631,10 @@ static void http_qcreport_framed_page(struct shttpd_arg* arg)
         send_bad_request(arg, "Missing 'carrier' parameter");
         return;
     }
-    
-    
+
+
     /* fill in frames page template */
-    
+
     templateLen = strlen(g_qcReportFramed);
     pageLen = sizeof(page) - 1;
     pageIndex = 0;
@@ -658,7 +659,7 @@ static void http_qcreport_framed_page(struct shttpd_arg* arg)
                 strcpy(&page[pageIndex], carrierName);
                 pageIndex += strlen(carrierName);
             }
-            
+
             i += 2;
         }
         else
@@ -668,13 +669,13 @@ static void http_qcreport_framed_page(struct shttpd_arg* arg)
         }
     }
     page[pageLen] = '\0';
-    
+
 
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
     shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/html");
-    
+
     shttpd_printf(arg, "%s", page);
-    
+
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
 }
 
@@ -683,30 +684,30 @@ static void http_qcreport_control_page(struct shttpd_arg* arg)
     char reportName[256];
     char sessionName[256];
     char carrierName[256];
-    
+
     if (!get_query_value(arg, "report", reportName, sizeof(reportName)))
     {
         send_bad_request(arg, "Missing 'report' parameter");
         return;
     }
-    
+
     if (!get_query_value(arg, "session", sessionName, sizeof(sessionName)))
     {
         send_bad_request(arg, "Missing 'session' parameter");
         return;
     }
-    
+
     if (!get_query_value(arg, "carrier", carrierName, sizeof(carrierName)))
     {
         send_bad_request(arg, "Missing 'carrier' parameter");
         return;
     }
-    
+
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
     shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/html");
-    
+
     shttpd_printf(arg, "%s", qc_qcReportControl);
-    
+
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
 }
 
@@ -725,12 +726,12 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
         send_bad_request(arg, "Missing 'report' parameter");
         return;
     }
-    
+
     strcpy(filename, access->reportDirectory);
     strcat_separator(filename);
     strcat(filename, report);
-    
-    
+
+
     reportFile = fopen(filename, "rb");
     if (reportFile == NULL)
     {
@@ -752,7 +753,7 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
     }
 
     outNumBytes = arg->out.num_bytes; /* store to allow recovery when an error occurs */
-	if (state == 0) 
+	if (state == 0)
     {
         shttpd_printf(arg, "HTTP/1.1 200 OK\r\n");
         shttpd_printf(arg, "Content-Type: %s\r\n\r\n", "text/html");
@@ -762,7 +763,7 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
     if (numRead == 0 && ferror(reportFile) != 0)
     {
         arg->out.num_bytes = outNumBytes; /* restore original */
-        
+
         if (state == 0)
         {
             send_server_error(arg, "Failed to read report file");
@@ -777,10 +778,10 @@ static void http_qcreport_report_page(struct shttpd_arg* arg)
     arg->out.num_bytes += numRead;
     state += numRead;
 
-    
+
     fclose(reportFile);
 
-    
+
 	arg->state = (void *)state;
     if (numRead < arg->out.len)
     {
@@ -795,7 +796,7 @@ static void http_qcreport_comments_update_page(struct shttpd_arg* arg)
     char sessionName[256];
     char carrierName[256];
     char comments[MAX_SESSION_COMMENTS_SIZE];
-    
+
     const char* requestMethod = shttpd_get_env(arg, "REQUEST_METHOD");
     if (strcmp(requestMethod, "POST") != 0)
     {
@@ -809,25 +810,25 @@ static void http_qcreport_comments_update_page(struct shttpd_arg* arg)
         return;
     }
 
-    
+
     if (!get_post_value(arg, "comments", comments, MAX_SESSION_COMMENTS_SIZE))
     {
         send_bad_request(arg, "Missing 'comments' parameter");
         return;
     }
-    
+
     if (!get_post_value(arg, "report", reportName, sizeof(reportName)))
     {
         send_bad_request(arg, "Missing 'report' parameter");
         return;
     }
-    
+
     if (!get_post_value(arg, "session", sessionName, sizeof(sessionName)))
     {
         send_bad_request(arg, "Missing 'session' parameter");
         return;
     }
-    
+
     if (!get_post_value(arg, "carrier", carrierName, sizeof(carrierName)))
     {
         send_bad_request(arg, "Missing 'carrier' parameter");
@@ -840,9 +841,9 @@ static void http_qcreport_comments_update_page(struct shttpd_arg* arg)
         send_server_error(arg, "Failed to update files");
         return;
     }
-    
+
     shttpd_printf(arg, "HTTP/1.1 200 OK\r\n\r\n");
-    
+
 	arg->flags |= SHTTPD_END_OF_OUTPUT;
 }
 
@@ -855,26 +856,26 @@ static void* http_thread(void* arg)
     {
         shttpd_poll(access->ctx, 1000);
     }
- 
+
     shttpd_fini(access->ctx);
-    
+
     pthread_exit((void*) 0);
 }
 
 
 
-int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory, 
+int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory,
     const char* reportDirectory, QCHTTPAccess** access)
 {
     QCHTTPAccess* newAccess;
-    
+
     CALLOC_ORET(newAccess, QCHTTPAccess, 1);
-    
+
     CALLOC_OFAIL(newAccess->cacheDirectory, char, strlen(cacheDirectory) + 1);
     strcpy(newAccess->cacheDirectory, cacheDirectory);
     CALLOC_OFAIL(newAccess->reportDirectory, char, strlen(reportDirectory) + 1);
     strcpy(newAccess->reportDirectory, reportDirectory);
-    
+
     CHK_OFAIL((newAccess->ctx = shttpd_init(NULL, "document_root", reportDirectory, NULL)) != NULL);
     shttpd_register_uri(newAccess->ctx, "/qcreport/framed.html", &http_qcreport_framed_page, newAccess);
     shttpd_register_uri(newAccess->ctx, "/qcreport/control.html", &http_qcreport_control_page, newAccess);
@@ -883,11 +884,11 @@ int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDi
     CHK_OFAIL(shttpd_listen(newAccess->ctx, port, 0));
 
     CHK_OFAIL(create_joinable_thread(&newAccess->httpThreadId, http_thread, newAccess));
-    
-    
+
+
     *access = newAccess;
     return 1;
-    
+
 fail:
     qch_free_qc_http_access(&newAccess);
     return 0;
@@ -899,13 +900,13 @@ void qch_free_qc_http_access(QCHTTPAccess** access)
     {
         return;
     }
-    
+
     (*access)->stopped = 1;
     join_thread(&(*access)->httpThreadId, NULL, NULL);
-    
+
     SAFE_FREE(&(*access)->cacheDirectory);
     SAFE_FREE(&(*access)->reportDirectory);
-    
+
     SAFE_FREE(access);
 }
 

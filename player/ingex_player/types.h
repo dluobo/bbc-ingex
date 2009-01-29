@@ -1,9 +1,10 @@
 /*
- * $Id: types.h,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: types.h,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,14 +48,14 @@ typedef enum
     ORANGE_COLOUR
 } Colour;
 
-typedef struct 
+typedef struct
 {
     unsigned char Y;
     unsigned char U;
     unsigned char V;
 } YUVColours;
 
-static const YUVColours g_rec601YUVColours[] = 
+static const YUVColours g_rec601YUVColours[] =
 {
     {235, 128, 128},    /* WHITE_COLOUR */
     {210, 128, 128},    /* LIGHT_WHITE_COLOUR */
@@ -76,6 +77,7 @@ typedef struct
 } Rational;
 
 static const Rational g_palFrameRate = {25, 1};
+static const Rational g_ntscFrameRate = {30000, 1001};
 static const Rational g_profAudioSamplingRate = {48000, 1};
 
 typedef struct

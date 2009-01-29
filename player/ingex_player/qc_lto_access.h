@@ -1,9 +1,10 @@
 /*
- * $Id: qc_lto_access.h,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_lto_access.h,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,13 +32,13 @@
 typedef struct QCLTOAccess QCLTOAccess;
 
 
-int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract, 
+int qla_create_qc_lto_access(const char* cacheDirectory, QCLTOExtract* extract,
     const char* deleteScriptName, const char* deleteScriptOptions, QCLTOAccess** access);
 void qla_free_qc_lto_access(QCLTOAccess** access);
 
 int qla_connect_to_player(QCLTOAccess* access, MediaPlayer* player);
 
-int qla_get_file_to_play(QCLTOAccess* access, char directory[FILENAME_MAX], char name[FILENAME_MAX], 
+int qla_get_file_to_play(QCLTOAccess* access, char directory[FILENAME_MAX], char name[FILENAME_MAX],
     char sessionName[FILENAME_MAX]);
 
 void qla_set_current_session_name(QCLTOAccess* access, const char* sessionName);

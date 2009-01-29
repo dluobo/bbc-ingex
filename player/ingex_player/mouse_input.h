@@ -1,9 +1,10 @@
 /*
- * $Id: mouse_input.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: mouse_input.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +27,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -34,14 +35,14 @@ extern "C"
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     void (*click)(void* data, int imageWidth, int imageHeight, int xPos, int yPos);
 } MouseInputListener;
 
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     void (*set_listener)(void* data, MouseInputListener* listener);
     void (*unset_listener)(void* data);
     void (*close)(void* data);

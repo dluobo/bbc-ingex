@@ -1,9 +1,10 @@
 /*
- * $Id: media_sink.h,v 1.5 2008/11/07 14:26:03 philipn Exp $
+ * $Id: media_sink.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -45,7 +46,7 @@ typedef int (*sink_read_frame_func)(void* data, struct MediaSink* sink);
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     /* a new frame has been displayed */
     void (*frame_displayed)(void* data, const FrameInfo* frameInfo);
 
@@ -63,22 +64,22 @@ struct MediaSink
 {
     void* data; /* passed as parameter to functions */
 
-    
+
     /* register a listener. Only 1 listener supported (TODO: support > 1) */
     int (*register_listener)(void* data, MediaSinkListener* listener);
     void (*unregister_listener)(void* data, MediaSinkListener* listener);
-    
+
     /* return 1 if the stream type is accepted by the media sink */
     int (*accept_stream)(void* data, const StreamInfo* streamInfo);
-    
+
     /* note: register stream will still fail even if accept_stream returned 1,
        eg. there is a limit on the number of streams */
     int (*register_stream)(void* data, int streamId, const StreamInfo* streamInfo);
-    
+
 
     /* return 1 if the stream data is accepted by the media sink */
     int (*accept_stream_frame)(void* data, int streamId, const FrameInfo* frameInfo);
-    
+
     /* return buffer for writing stream data to */
     /* note: this function can be called multiple times prior to receive_frame... */
     /* this function is not called when receive_stream_frame_const() is called below */
@@ -95,37 +96,37 @@ struct MediaSink
 
     /* try reset and return 1, otherwise close and return 2, otherwise return 0 */
     int (*reset_or_close)(void* data);
-    
+
     /* for sinks that are buffered */
     int (*allocate_frame)(void* data, MediaSinkFrame** frame);
     int (*complete_sink_frame)(void* data, const MediaSinkFrame* frame);
-    
+
     /* buffer sink */
     int (*get_buffer_state)(void* data, int* numBuffers, int* numBuffersFilled);
 
     void (*close)(void* data);
 
-    
+
     /* on screen display */
     OnScreenDisplay* (*get_osd)(void* data);
-    
-    
+
+
     /* video switch */
     VideoSwitchSink* (*get_video_switch)(void* data);
-    
-    
+
+
     /* audio switch */
     AudioSwitchSink* (*get_audio_switch)(void* data);
-    
-    
+
+
     /* half-split */
     HalfSplitSink* (*get_half_split)(void* data);
-    
-    
+
+
     /* frame sequence */
     FrameSequenceSink* (*get_frame_sequence)(void* data);
-    
-    
+
+
     /* audio output sinks */
     int (*mute_audio)(void* data, int mute);
 };
@@ -151,7 +152,7 @@ int msk_register_stream(MediaSink* sink, int streamId, const StreamInfo* streamI
 int msk_accept_stream_frame(MediaSink* sink, int streamId, const FrameInfo* frameInfo);
 int msk_get_stream_buffer(MediaSink* sink, int streamId, unsigned int bufferSize, unsigned char** buffer);
 int msk_receive_stream_frame(MediaSink* sink, int streamId, unsigned char* buffer, unsigned int bufferSize);
-/* msk_receive_stream_frame_const will call msk_get_stream_buffer and msk_receive_stream_frame 
+/* msk_receive_stream_frame_const will call msk_get_stream_buffer and msk_receive_stream_frame
 if receive_stream_frame_const is not supported */
 int msk_receive_stream_frame_const(MediaSink* sink, int streamId, const unsigned char* buffer, unsigned int bufferSize);
 int msk_complete_frame(MediaSink* sink, const FrameInfo* frameInfo);
@@ -168,17 +169,17 @@ int msk_get_buffer_state(MediaSink* sink, int* numBuffers, int* numBuffersFilled
 int msk_reset_or_close(MediaSink* sink);
 void msk_close(MediaSink* sink);
 
-OnScreenDisplay* msk_get_osd(MediaSink* sink);    
+OnScreenDisplay* msk_get_osd(MediaSink* sink);
 
-VideoSwitchSink* msk_get_video_switch(MediaSink* sink);    
+VideoSwitchSink* msk_get_video_switch(MediaSink* sink);
 
-AudioSwitchSink* msk_get_audio_switch(MediaSink* sink);    
+AudioSwitchSink* msk_get_audio_switch(MediaSink* sink);
 
-HalfSplitSink* msk_get_half_split(MediaSink* sink);    
+HalfSplitSink* msk_get_half_split(MediaSink* sink);
 
-FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink);    
+FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink);
 
-int msk_mute_audio(MediaSink* sink, int mute);    
+int msk_mute_audio(MediaSink* sink, int mute);
 
 
 #ifdef __cplusplus

@@ -1,9 +1,10 @@
 /*
- * $Id: mouse_input_connect.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: mouse_input_connect.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,20 +43,20 @@ static void mic_click(void* data, int imageWidth, int imageHeight, int xPos, int
 {
     MouseConnect* connect = (MouseConnect*)data;
     int index;
-    
+
     if (vsw_get_video_index(connect->videoSwitch, imageWidth, imageHeight, xPos, yPos, &index))
     {
         mc_switch_video(connect->control, index);
     }
 }
 
-int mic_create_mouse_connect(MediaControl* control, VideoSwitchSink* videoSwitch, 
+int mic_create_mouse_connect(MediaControl* control, VideoSwitchSink* videoSwitch,
     MouseInput* input, MouseConnect** connect)
 {
     MouseConnect* newConnect;
 
     CALLOC_ORET(newConnect, MouseConnect, 1);
-    
+
     newConnect->control = control;
     newConnect->videoSwitch = videoSwitch;
     newConnect->input = input;
@@ -64,7 +65,7 @@ int mic_create_mouse_connect(MediaControl* control, VideoSwitchSink* videoSwitch
     newConnect->listener.click = mic_click;
 
     mip_set_listener(input, &newConnect->listener);
-    
+
     *connect = newConnect;
     return 1;
 }
@@ -75,9 +76,9 @@ void mic_free_mouse_connect(MouseConnect** connect)
     {
         return;
     }
-    
+
     mip_unset_listener((*connect)->input);
-    
+
     SAFE_FREE(connect);
 }
 

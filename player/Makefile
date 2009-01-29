@@ -1,9 +1,10 @@
 #
-# $Id: Makefile,v 1.2 2008/11/06 11:30:09 john_f Exp $
+# $Id: Makefile,v 1.3 2009/01/29 07:10:25 stuart_hc Exp $
 #
 # Makefile for building Ingex player and related libraries and utilities
 #
-# Copyright (C) 2008  BBC Research, Stuart Cunningham <stuart_hc@users.sourceforge.net>
+# Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+# Author: Stuart Cunningham
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License

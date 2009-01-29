@@ -1,9 +1,10 @@
 /*
- * $Id: dual_sink.c,v 1.8 2008/11/06 19:56:56 john_f Exp $
+ * $Id: dual_sink.c,v 1.9 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,14 +40,14 @@
 typedef struct _X11Info
 {
     struct _X11Info* next;
-    
+
     int streamId;
     int acceptedFrame;
     unsigned char* buffer;
     unsigned int bufferSize;
 } X11Info;
 
-struct DualSink 
+struct DualSink
 {
     int reviewDuration;
     int dvsCard;
@@ -57,22 +58,22 @@ struct DualSink
     int disableSDIOSD;
     int disableX11OSD;
     int fitVideo;
-    
+
     MediaSink mediaSink;
     OnScreenDisplay dualOSD;
 
     MediaSinkListener* listener;
-    
+
     /* don't delete these; delete x11Sink instead */
-    BufferedMediaSink* x11BufferedSink; 
+    BufferedMediaSink* x11BufferedSink;
     X11XVDisplaySink* x11XVDisplaySink;
     X11DisplaySink* x11DisplaySink;
-    
+
     MediaSink* x11Sink;
     MediaSinkListener x11Listener; /* listen for refresh required events */
-    MediaSink* dvsSink; 
-    DVSSink* dvsDVSSink; 
-    
+    MediaSink* dvsSink;
+    DVSSink* dvsDVSSink;
+
     X11Info x11Info;
 };
 
@@ -81,17 +82,17 @@ struct DualSink
 static int check_dvs_is_open(DualSink* dualSink)
 {
     DVSSink* dvsSink = NULL;
-    
+
     if (dualSink->dvsSink != NULL)
     {
         return 1;
     }
 
-    CHK_ORET(dvs_open(dualSink->dvsCard, dualSink->dvsChannel, dualSink->sdiVITCSource, 
-        dualSink->extraSDIVITCSource, dualSink->numBuffers, 
+    CHK_ORET(dvs_open(dualSink->dvsCard, dualSink->dvsChannel, dualSink->sdiVITCSource,
+        dualSink->extraSDIVITCSource, dualSink->numBuffers,
         dualSink->disableSDIOSD, dualSink->fitVideo, &dvsSink));
     dualSink->dvsSink = dvs_get_media_sink(dvsSink);
-    
+
     return 1;
 }
 
@@ -100,7 +101,7 @@ static int add_x11_info(DualSink* dualSink, int streamId)
     X11Info* info = &dualSink->x11Info;
     X11Info* prevInfo = NULL;
     X11Info* newInfo = NULL;
-    
+
     /* if already exists then return */
     while (info != NULL)
     {
@@ -108,7 +109,7 @@ static int add_x11_info(DualSink* dualSink, int streamId)
         {
             return 1;
         }
-        
+
         prevInfo = info;
         info = info->next;
     }
@@ -132,14 +133,14 @@ static void free_x11_info(DualSink* dualSink)
 {
     X11Info* info = dualSink->x11Info.next;
     X11Info* nextInfo = NULL;
-    
+
     while (info != NULL)
     {
         nextInfo = info->next;
         SAFE_FREE(&info);
         info = nextInfo;
-    } 
-    
+    }
+
     dualSink->x11Info.streamId = -1;
     dualSink->x11Info.next = NULL;
 }
@@ -147,20 +148,20 @@ static void free_x11_info(DualSink* dualSink)
 static void reset_x11_info(DualSink* dualSink)
 {
     X11Info* info = dualSink->x11Info.next;
-    
+
     while (info != NULL)
     {
         info->acceptedFrame = 0;
         info->buffer = NULL;
         info->bufferSize = 0;
         info = info->next;
-    } 
+    }
 }
 
 static X11Info* get_x11_info(DualSink* dualSink, int streamId)
 {
     X11Info* info = &dualSink->x11Info;
-    
+
     while (info != NULL)
     {
         if (info->streamId == streamId)
@@ -169,7 +170,7 @@ static X11Info* get_x11_info(DualSink* dualSink, int streamId)
         }
         info = info->next;
     }
-    
+
     return NULL;
 }
 
@@ -178,24 +179,24 @@ static int dusk_osd_create_menu_model(void* data, OSDMenuModel** menu)
 {
     DualSink* dualSink = (DualSink*)data;
     int result = 0;
-    
+
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_create_menu_model(msk_get_osd(dualSink->dvsSink), menu);
     if (!result)
     {
         result = osd_create_menu_model(msk_get_osd(dualSink->x11Sink), menu);
     }
-    
+
     return result;
 }
 
 static void dusk_osd_free_menu_model(void* data, OSDMenuModel** menu)
 {
     DualSink* dualSink = (DualSink*)data;
-    
+
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     if (*menu != NULL)
     {
         osd_free_menu_model(msk_get_osd(dualSink->dvsSink), menu);
@@ -214,15 +215,15 @@ static void dusk_osd_free_menu_model(void* data, OSDMenuModel** menu)
 static void dusk_osd_set_active_menu_model(void* data, int updateMask, OSDMenuModel* menu)
 {
     DualSink* dualSink = (DualSink*)data;
-    
+
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     if ((updateMask << 1) >> 1 != updateMask)
     {
         ml_log_error("Update mask for setting active menu model is too large in the dual sink\n");
         return;
     }
-    
+
     /* DVS responds to updates masked by updateMask, X11 responds to updates masked by updateMask << 1 */
     osd_set_active_menu_model(msk_get_osd(dualSink->dvsSink), updateMask, menu);
     osd_set_active_menu_model(msk_get_osd(dualSink->x11Sink), updateMask << 1, menu);
@@ -234,10 +235,10 @@ static int dusk_osd_set_screen(void* data, OSDScreen screen)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_set_screen(msk_get_osd(dualSink->dvsSink), screen);
     result = osd_set_screen(msk_get_osd(dualSink->x11Sink), screen) || result;
-    
+
     return result;
 }
 
@@ -247,10 +248,10 @@ static int dusk_osd_next_screen(void* data)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_next_screen(msk_get_osd(dualSink->dvsSink));
     result = osd_next_screen(msk_get_osd(dualSink->x11Sink)) || result;
-    
+
     return result;
 }
 
@@ -259,9 +260,9 @@ static int dusk_osd_get_screen(void* data, OSDScreen* screen)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-   
+
     if (msk_get_osd(dualSink->dvsSink) != NULL)
-    { 
+    {
         return osd_get_screen(msk_get_osd(dualSink->dvsSink), screen);
     }
     else
@@ -276,10 +277,10 @@ static int dusk_osd_next_timecode(void* data)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_next_timecode(msk_get_osd(dualSink->dvsSink));
     result = osd_next_timecode(msk_get_osd(dualSink->x11Sink)) || result;
-    
+
     return result;
 }
 
@@ -289,10 +290,10 @@ static int dusk_osd_set_timecode(void* data, int index, int type, int subType)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_set_timecode(msk_get_osd(dualSink->dvsSink), index, type, subType);
     result = osd_set_timecode(msk_get_osd(dualSink->x11Sink), index, type, subType) || result;
-    
+
     return result;
 }
 
@@ -302,10 +303,10 @@ static int dusk_osd_set_play_state(void* data, OSDPlayState state, int value)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_set_play_state(msk_get_osd(dualSink->x11Sink), state, value);
     result = osd_set_play_state(msk_get_osd(dualSink->dvsSink), state, value) || result;
-    
+
     return result;
 }
 
@@ -315,10 +316,10 @@ static int dusk_osd_set_state(void* data, const OnScreenDisplayState* state)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_set_state(msk_get_osd(dualSink->x11Sink), state);
     result = osd_set_state(msk_get_osd(dualSink->dvsSink), state) || result;
-    
+
     return result;
 }
 
@@ -327,7 +328,7 @@ static void dusk_osd_set_minimum_audio_stream_level(void* data, double level)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_set_minimum_audio_stream_level(msk_get_osd(dualSink->x11Sink), level);
     osd_set_minimum_audio_stream_level(msk_get_osd(dualSink->dvsSink), level);
 }
@@ -337,7 +338,7 @@ static void dusk_osd_set_audio_lineup_level(void* data, float level)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_set_audio_lineup_level(msk_get_osd(dualSink->x11Sink), level);
     osd_set_audio_lineup_level(msk_get_osd(dualSink->dvsSink), level);
 }
@@ -347,7 +348,7 @@ static void dusk_osd_reset_audio_stream_levels(void* data)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_reset_audio_stream_levels(msk_get_osd(dualSink->x11Sink));
     osd_reset_audio_stream_levels(msk_get_osd(dualSink->dvsSink));
 }
@@ -358,7 +359,7 @@ static int dusk_osd_register_audio_stream(void* data, int streamId)
     int result;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     result = osd_register_audio_stream(msk_get_osd(dualSink->x11Sink), streamId);
     result = osd_register_audio_stream(msk_get_osd(dualSink->dvsSink), streamId) || result;
 
@@ -370,7 +371,7 @@ static void dusk_osd_set_audio_stream_level(void* data, int streamId, double lev
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_set_audio_stream_level(msk_get_osd(dualSink->x11Sink), streamId, level);
     osd_set_audio_stream_level(msk_get_osd(dualSink->dvsSink), streamId, level);
 }
@@ -380,7 +381,7 @@ static void dusk_osd_set_audio_level_visibility(void* data, int visible)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_set_audio_level_visibility(msk_get_osd(dualSink->x11Sink), visible);
     osd_set_audio_level_visibility(msk_get_osd(dualSink->dvsSink), visible);
 }
@@ -390,7 +391,7 @@ static void dusk_osd_toggle_audio_level_visibility(void* data)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     osd_toggle_audio_level_visibility(msk_get_osd(dualSink->x11Sink));
     osd_toggle_audio_level_visibility(msk_get_osd(dualSink->dvsSink));
 }
@@ -435,13 +436,13 @@ static void dusk_osd_set_marks_model(void* data, int updateMask, OSDMarksModel* 
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     if ((updateMask << 1) >> 1 != updateMask)
     {
         ml_log_error("Update mask for setting marks model is too large in the dual sink\n");
         return;
     }
-    
+
     /* DVS responds to updates masked by updateMask, X11 responds to updates masked by updateMask << 1 */
     osd_set_marks_model(msk_get_osd(dualSink->x11Sink), updateMask, model);
     osd_set_marks_model(msk_get_osd(dualSink->dvsSink), updateMask << 1, model);
@@ -452,13 +453,13 @@ static void dusk_osd_set_second_marks_model(void* data, int updateMask, OSDMarks
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     if ((updateMask << 1) >> 1 != updateMask)
     {
         ml_log_error("Update mask for setting marks model is too large in the dual sink\n");
         return;
     }
-    
+
     /* DVS responds to updates masked by updateMask, X11 responds to updates masked by updateMask << 1 */
     osd_set_second_marks_model(msk_get_osd(dualSink->x11Sink), updateMask, model);
     osd_set_second_marks_model(msk_get_osd(dualSink->dvsSink), updateMask << 1, model);
@@ -480,7 +481,7 @@ static float dusk_osd_get_position_in_progress_bar(void* data, int x, int y)
 
     CHK_ORETV(check_dvs_is_open(dualSink));
 
-    /* this function only makes sense for the X11 sink */ 
+    /* this function only makes sense for the X11 sink */
     return osd_get_position_in_progress_bar(msk_get_osd(dualSink->x11Sink), x, y);
 }
 
@@ -504,7 +505,7 @@ static void dusk_osd_set_active_progress_bar_marks(void* data, int index)
     osd_set_active_progress_bar_marks(msk_get_osd(dualSink->dvsSink), index);
 }
 
-static void dusk_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+static void dusk_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight,
     int fontSize, Colour colour, int box, const char* label)
 {
     DualSink* dualSink = (DualSink*)data;
@@ -539,15 +540,15 @@ static int dusk_register_listener(void* data, MediaSinkListener* listener)
     int result;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_register_listener(dualSink->x11Sink, &dualSink->x11Listener);
     result = result && msk_register_listener(dualSink->dvsSink, listener);
-    
+
     if (result)
     {
         dualSink->listener = listener;
     }
-    
+
     return result;
 }
 
@@ -556,7 +557,7 @@ static void dusk_unregister_listener(void* data, MediaSinkListener* listener)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     if (dualSink->listener == listener)
     {
         msk_unregister_listener(dualSink->x11Sink, &dualSink->x11Listener);
@@ -571,7 +572,7 @@ static int dusk_accept_stream(void* data, const StreamInfo* streamInfo)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     return msk_accept_stream(dualSink->dvsSink, streamInfo);
 }
 
@@ -581,7 +582,7 @@ static int dusk_register_stream(void* data, int streamId, const StreamInfo* stre
     int result;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_register_stream(dualSink->dvsSink, streamId, streamInfo);
     if (result)
     {
@@ -605,9 +606,9 @@ static int dusk_accept_stream_frame(void* data, int streamId, const FrameInfo* f
     DualSink* dualSink = (DualSink*)data;
     int result;
     X11Info* x11Info = NULL;
-    
+
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_accept_stream_frame(dualSink->dvsSink, streamId, frameInfo);
     if (result)
     {
@@ -628,7 +629,7 @@ static int dusk_get_stream_buffer(void* data, int streamId, unsigned int bufferS
     X11Info* x11Info = NULL;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_get_stream_buffer(dualSink->dvsSink, streamId, bufferSize, buffer);
     if (result)
     {
@@ -652,7 +653,7 @@ static int dusk_receive_stream_frame(void* data, int streamId, unsigned char* bu
     X11Info* x11Info = NULL;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_receive_stream_frame(dualSink->dvsSink, streamId, buffer, bufferSize);
     if (result)
     {
@@ -673,7 +674,7 @@ static int dusk_receive_stream_frame_const(void* data, int streamId, const unsig
     X11Info* x11Info = NULL;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_receive_stream_frame_const(dualSink->dvsSink, streamId, buffer, bufferSize);
     if (result)
     {
@@ -693,7 +694,7 @@ static int dusk_complete_frame(void* data, const FrameInfo* frameInfo)
     int result;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_complete_frame(dualSink->dvsSink, frameInfo);
     msk_complete_frame(dualSink->x11Sink, frameInfo);
 
@@ -707,7 +708,7 @@ static void dusk_cancel_frame(void* data)
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     msk_cancel_frame(dualSink->dvsSink);
     msk_cancel_frame(dualSink->x11Sink);
 
@@ -719,14 +720,14 @@ static int dusk_get_buffer_state(void* data, int* numBuffers, int* numBuffersFil
     DualSink* dualSink = (DualSink*)data;
 
     CHK_ORETV(check_dvs_is_open(dualSink));
-    
+
     return msk_get_buffer_state(dualSink->dvsSink, numBuffers, numBuffersFilled);
 }
 
 static OnScreenDisplay* dusk_get_osd(void* data)
 {
     DualSink* dualSink = (DualSink*)data;
-    
+
     return &dualSink->dualOSD;
 }
 
@@ -736,7 +737,7 @@ static int dusk_mute_audio(void* data, int mute)
     int result;
 
     CHK_ORET(check_dvs_is_open(dualSink));
-    
+
     result = msk_mute_audio(dualSink->dvsSink, mute);
     msk_mute_audio(dualSink->x11Sink, mute);
 
@@ -746,17 +747,17 @@ static int dusk_mute_audio(void* data, int mute)
 static void dusk_close(void* data)
 {
     DualSink* dualSink = (DualSink*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     msk_close(dualSink->x11Sink);
     msk_close(dualSink->dvsSink);
-    
+
     free_x11_info(dualSink);
-    
+
     SAFE_FREE(&dualSink);
 }
 
@@ -764,7 +765,7 @@ static int dusk_reset_or_close(void* data)
 {
     DualSink* dualSink = (DualSink*)data;
     int result;
-    
+
     result = msk_reset_or_close(dualSink->dvsSink);
     if (result == 0) /* failed */
     {
@@ -775,7 +776,7 @@ static int dusk_reset_or_close(void* data)
         /* DVS was closed - we expect this to happen */
         dualSink->dvsSink = NULL;
     }
-    
+
     result = msk_reset_or_close(dualSink->x11Sink);
     if (result != 1) /* not reset */
     {
@@ -785,21 +786,21 @@ static int dusk_reset_or_close(void* data)
         }
         goto fail;
     }
-     
+
     return 1;
-    
+
 fail:
     dusk_close(data);
     return 2;
 }
 
 
-int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers, 
-    int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio, 
+int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extraSDIVITCSource, int numBuffers,
+    int useXV, int disableSDIOSD, int disableX11OSD, const Rational* pixelAspectRatio,
     const Rational* monitorAspectRatio, float scale, int swScale, int fitVideo, X11WindowInfo* windowInfo, DualSink** dualSink)
 {
     DualSink* newDualSink = NULL;
-    
+
     CALLOC_ORET(newDualSink, DualSink, 1);
 
     newDualSink->reviewDuration = reviewDuration;
@@ -811,33 +812,33 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->disableSDIOSD = disableSDIOSD;
     newDualSink->disableX11OSD = disableX11OSD;
     newDualSink->fitVideo = fitVideo;
-    
+
     if (useXV)
     {
-        /* open buffered X11 XV display sink */    
-        CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
+        /* open buffered X11 XV display sink */
+        CHK_OFAIL(xvsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio,
             scale, swScale, windowInfo, &newDualSink->x11XVDisplaySink));
         newDualSink->x11Sink = xvsk_get_media_sink(newDualSink->x11XVDisplaySink);
     }
     else
     {
-        /* open buffered X11 display sink */    
-        CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio, 
+        /* open buffered X11 display sink */
+        CHK_OFAIL(xsk_open(reviewDuration, disableX11OSD, pixelAspectRatio, monitorAspectRatio,
             scale, swScale, windowInfo, &newDualSink->x11DisplaySink));
         newDualSink->x11Sink = xsk_get_media_sink(newDualSink->x11DisplaySink);
     }
 
-    /* open buffered display sink */    
+    /* open buffered display sink */
     CHK_OFAIL(bms_create(&newDualSink->x11Sink, numBuffers, 1, &newDualSink->x11BufferedSink));
     newDualSink->x11Sink = bms_get_sink(newDualSink->x11BufferedSink);
 
-        
-    /* open DVS display sink */    
-    CHK_OFAIL(dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, numBuffers, 
+
+    /* open DVS display sink */
+    CHK_OFAIL(dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, numBuffers,
         disableSDIOSD, fitVideo, &newDualSink->dvsDVSSink));
     newDualSink->dvsSink = dvs_get_media_sink(newDualSink->dvsDVSSink);
-    
-    
+
+
     newDualSink->mediaSink.data = newDualSink;
     newDualSink->mediaSink.register_listener = dusk_register_listener;
     newDualSink->mediaSink.unregister_listener = dusk_unregister_listener;
@@ -889,10 +890,10 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->dualOSD.set_label = dusk_osd_set_label;
 
     newDualSink->x11Info.streamId = -1;
-    
+
     *dualSink = newDualSink;
     return 1;
-    
+
 fail:
     dusk_close(newDualSink);
     return 0;

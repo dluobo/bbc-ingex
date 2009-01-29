@@ -1,9 +1,10 @@
 /*
- * $Id: clapper_source.c,v 1.5 2008/10/29 17:47:41 john_f Exp $
+ * $Id: clapper_source.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +30,7 @@
 #include "YUV_frame.h"
 #include "YUV_text_overlay.h"
 #include "video_conversion.h"
+#include "utils.h"
 #include "types.h"
 #include "logging.h"
 #include "macros.h"
@@ -46,10 +48,13 @@
 #define REL_TICK_HEIGHT             50
 #define REL_FLASH_BAR_HEIGHT        10
 #define FLASH_X_MARGIN              12
-    
+
 
 typedef struct
 {
+    int isPAL; /* otherwise NTSC */
+    int numFramesPerSec;
+
     MediaSource mediaSource;
     StreamInfo videoStreamInfo;
     StreamInfo audioStreamInfo;
@@ -61,20 +66,76 @@ typedef struct
 
     int64_t length;
     int64_t position;
-    
+
     unsigned char* image;
     unsigned int imageSize;
-    
+
     const unsigned char* audioSec;
-    unsigned int audioSecSize;
-    unsigned int audioFrameSize;
+    unsigned int audioFrameSizeSeq[5];
+    unsigned int audioFrameSizeSeqSize;
+    unsigned int audioFrameGroupSamples;
 } ClapperSource;
 
 
 static int16_t g_audioSec[];
-static overlay g_bbcLogo; 
-static overlay g_bbcLargeLogo; 
+static overlay g_bbcLogo;
+static overlay g_bbcLargeLogo;
 
+
+static void set_video_frame_rate(ClapperSource* source, const Rational* frameRate)
+{
+    source->length = convert_length(source->length, &source->videoStreamInfo.frameRate, frameRate);
+    source->position = convert_length(source->position, &source->videoStreamInfo.frameRate, frameRate);
+
+    source->videoStreamInfo.frameRate = *frameRate;
+    source->audioStreamInfo.frameRate = *frameRate;
+
+    source->isPAL = is_pal_frame_rate(frameRate);
+    source->numFramesPerSec = (source->isPAL ? 25 : 30);
+
+    if (source->isPAL)
+    {
+        source->audioFrameSizeSeq[0] = 1920 * 2;
+        source->audioFrameSizeSeqSize = 1;
+        source->audioFrameGroupSamples = 1920;
+    }
+    else
+    {
+        source->audioFrameSizeSeq[0] = 1602 * 2;
+        source->audioFrameSizeSeq[1] = 1601 * 2;
+        source->audioFrameSizeSeq[2] = 1602 * 2;
+        source->audioFrameSizeSeq[3] = 1601 * 2;
+        source->audioFrameSizeSeq[4] = 1602 * 2;
+        source->audioFrameSizeSeqSize = 5;
+        source->audioFrameGroupSamples = 1602 * 3 + 1601 * 2;
+    }
+}
+
+static void get_audio_offset_and_frame_size(ClapperSource* source, unsigned int* frameSize, int* offset)
+{
+    int i;
+    int64_t audioPosition;
+    int indexInSeq;
+
+    indexInSeq = source->position % source->audioFrameSizeSeqSize;
+
+    audioPosition = source->audioFrameGroupSamples * (int64_t)(source->position / source->audioFrameSizeSeqSize);
+    for (i = 0; i < indexInSeq; i++)
+    {
+        audioPosition += source->audioFrameSizeSeq[i] / 2;
+    }
+
+
+    *frameSize = source->audioFrameSizeSeq[indexInSeq];
+    if (source->isPAL)
+    {
+        *offset = (audioPosition % 48000) * 2 /* 16 bit */;
+    }
+    else
+    {
+        *offset = (audioPosition % 48048) * 2 /* 16 bit */;
+    }
+}
 
 static int add_static_image_uyvy(ClapperSource* source)
 {
@@ -96,11 +157,12 @@ static int add_static_image_uyvy(ClapperSource* source)
     float fontScale = source->videoStreamInfo.width / 720.0;
     float tickWidthScale = source->videoStreamInfo.width / 720.0;
     int xMargin;
+    int firstNumber;
+    int lastNumber;
 
     memset(&p_info, 0, sizeof(p_info));
     CHK_ORET(YUV_frame_from_buffer(&yuvFrame, source->image, source->videoStreamInfo.width, source->videoStreamInfo.height, source->yuvFormat) == 1);
 
-    
     barHeight = source->videoStreamInfo.height / REL_PROGRESS_BAR_HEIGHT;
     barHeight = (barHeight < 4) ? 4 : barHeight;
     barHeight += barHeight % 2;
@@ -108,19 +170,19 @@ static int add_static_image_uyvy(ClapperSource* source)
     tickHeight = (tickHeight < 4) ? 4 : tickHeight;
     tickHeight += tickHeight % 2;
     zeroTickHeight = tickHeight * 2;
-    tickDelta = (source->videoStreamInfo.width - 2 * source->videoStreamInfo.width / REL_X_MARGIN) / 25;
-    xMargin = (source->videoStreamInfo.width - 25 * tickDelta) / 2;
-    
+    tickDelta = (source->videoStreamInfo.width - 2 * source->videoStreamInfo.width / REL_X_MARGIN) / source->numFramesPerSec;
+    xMargin = (source->videoStreamInfo.width - source->numFramesPerSec * tickDelta) / 2;
+
     /* black background */
-    
+
     fill_black(source->videoStreamInfo.format, source->videoStreamInfo.width, source->videoStreamInfo.height, source->image);
-    
-    
+
+
     /* ticks */
-    
+
     xPos = xMargin + tickDelta / 2 - (TICK_WIDTH * tickWidthScale) / 2;
     yPos = source->videoStreamInfo.height / 2 + barHeight / 2 + TICK_Y_MARGIN;
-    for (i = 0; i < 25; i++)
+    for (i = 0; i < source->numFramesPerSec; i++)
     {
         imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2) + xPos * 2;
         for (j = 0; j < (TICK_WIDTH * tickWidthScale) / 2; j++)
@@ -130,7 +192,7 @@ static int add_static_image_uyvy(ClapperSource* source)
             *imagePtr1++ = g_rec601YUVColours[GREEN_COLOUR].V;
             *imagePtr1++ = g_rec601YUVColours[GREEN_COLOUR].Y;
         }
-        
+
         xPos += tickDelta;
     }
     imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2);
@@ -138,13 +200,20 @@ static int add_static_image_uyvy(ClapperSource* source)
     {
         yPos++;
         imagePtr2 = source->image + yPos * (source->videoStreamInfo.width * 2);
-        
+
         memcpy(imagePtr2, imagePtr1, source->videoStreamInfo.width * 2);
     }
-    
-    /* zero tick */
-    
-    xPos = xMargin + tickDelta * 13 - tickDelta / 2 - (ZERO_TICK_WIDTH * tickWidthScale) / 2;
+
+    /* zero tick for PAL */
+
+    if (source->isPAL)
+    {
+        xPos = xMargin + tickDelta * 13 - tickDelta / 2 - (ZERO_TICK_WIDTH * tickWidthScale) / 2;
+    }
+    else
+    {
+        xPos = xMargin + tickDelta * 15 - tickDelta / 2 - (ZERO_TICK_WIDTH * tickWidthScale) / 2;
+    }
     yPos = source->videoStreamInfo.height / 2 + barHeight / 2 + TICK_Y_MARGIN;
     imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2) + xPos * 2;
     for (j = 0; j < (ZERO_TICK_WIDTH * tickWidthScale) / 2; j++)
@@ -159,21 +228,31 @@ static int add_static_image_uyvy(ClapperSource* source)
     {
         yPos++;
         imagePtr2 = source->image + yPos * (source->videoStreamInfo.width * 2) + xPos * 2;
-        
+
         memcpy(imagePtr2, imagePtr1, (ZERO_TICK_WIDTH * tickWidthScale) * 2);
     }
-    
-    
+
+
     /* tick labels */
 
     txtY = g_rec601YUVColours[GREEN_COLOUR].Y;
     txtU = g_rec601YUVColours[GREEN_COLOUR].U;
     txtV = g_rec601YUVColours[GREEN_COLOUR].V;
     box = 100;
-    
+
     yPos = source->videoStreamInfo.height / 2 + barHeight / 2 + TICK_Y_MARGIN + tickHeight + 5;
     xPos = xMargin + tickDelta / 2 - (TICK_WIDTH * tickWidthScale);
-    for (i = -12; i < 13; i++)
+    if (source->isPAL)
+    {
+        firstNumber = -12;
+        lastNumber = 12;
+    }
+    else
+    {
+        firstNumber = -14;
+        lastNumber = 15;
+    }
+    for (i = firstNumber; i < lastNumber + 1; i++)
     {
         if (i == 0)
         {
@@ -181,10 +260,10 @@ static int add_static_image_uyvy(ClapperSource* source)
             xPos += tickDelta;
             continue;
         }
-        
+
         sprintf(buf, "%d", i < 0 ? -i : i);
-        if (text_to_overlay(&p_info, &textOverlay, 
-            buf, 
+        if (text_to_overlay(&p_info, &textOverlay,
+            buf,
             source->videoStreamInfo.width, 0,
             0, 0,
             0,
@@ -195,18 +274,18 @@ static int add_static_image_uyvy(ClapperSource* source)
             ml_log_error("Failed to create text overlay\n");
             return 1;
         }
-        
+
         CHK_ORET(add_overlay(&textOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
         free_overlay(&textOverlay);
 
         xPos += tickDelta;
     }
-    
-    
+
+
     /* frames label */
-    
-    if (text_to_overlay(&p_info, &textOverlay, 
-        "frames", 
+
+    if (text_to_overlay(&p_info, &textOverlay,
+        "frames",
         source->videoStreamInfo.width, 0,
         0, 0,
         0,
@@ -217,17 +296,17 @@ static int add_static_image_uyvy(ClapperSource* source)
         ml_log_error("Failed to create text overlay\n");
         return 1;
     }
-    
+
     yPos = source->videoStreamInfo.height / 2 + barHeight / 2 + TICK_Y_MARGIN + tickHeight + fontScale * 14 + 5;
     xPos = xMargin + tickDelta / 2 - (TICK_WIDTH * tickWidthScale);
     CHK_ORET(add_overlay(&textOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
     free_overlay(&textOverlay);
-    
-    
+
+
     /* video/audio late */
 
-    if (text_to_overlay(&p_info, &textOverlay, 
-        "VIDEO LATE", 
+    if (text_to_overlay(&p_info, &textOverlay,
+        "VIDEO LATE",
         source->videoStreamInfo.width, 0,
         0, 0,
         0,
@@ -238,14 +317,14 @@ static int add_static_image_uyvy(ClapperSource* source)
         ml_log_error("Failed to create text overlay\n");
         return 1;
     }
-    
+
     xPos = xMargin + 3 * tickDelta / 2;
     yPos = source->videoStreamInfo.height / 2 + barHeight + TICK_Y_MARGIN + zeroTickHeight * 3;
     CHK_ORET(add_overlay(&textOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
     free_overlay(&textOverlay);
-    
-    if (text_to_overlay(&p_info, &textOverlay, 
-        "AUDIO LATE", 
+
+    if (text_to_overlay(&p_info, &textOverlay,
+        "AUDIO LATE",
         source->videoStreamInfo.width, 0,
         0, 0,
         0,
@@ -256,15 +335,15 @@ static int add_static_image_uyvy(ClapperSource* source)
         ml_log_error("Failed to create text overlay\n");
         return 1;
     }
-    
+
     xPos = source->videoStreamInfo.width - xMargin - tickDelta - textOverlay.w;
     yPos = source->videoStreamInfo.height / 2 + barHeight + TICK_Y_MARGIN + zeroTickHeight * 3;
     CHK_ORET(add_overlay(&textOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
     free_overlay(&textOverlay);
-    
-    
+
+
     /* BBC logo */
-    
+
     if (source->videoStreamInfo.width / 720.0 > 1.5)
     {
         xPos = source->videoStreamInfo.width / 2 - g_bbcLargeLogo.w / 2;
@@ -277,10 +356,10 @@ static int add_static_image_uyvy(ClapperSource* source)
         yPos = source->videoStreamInfo.height / 2 + barHeight + TICK_Y_MARGIN + zeroTickHeight * 4;
         CHK_ORET(add_overlay(&g_bbcLogo, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
     }
-    
-    
+
+
     free_info_rec(&p_info);
-    
+
     return 1;
 }
 
@@ -298,10 +377,10 @@ static void add_green_progress_bar(ClapperSource* source)
     barHeight = source->videoStreamInfo.height / REL_PROGRESS_BAR_HEIGHT;
     barHeight = (barHeight < 4) ? 4 : barHeight;
     barHeight += barHeight % 2;
-    tickDelta = (source->videoStreamInfo.width - 2 * source->videoStreamInfo.width / REL_X_MARGIN) / 25;
-    xMargin = (source->videoStreamInfo.width - 25 * tickDelta) / 2;
-    
-    barPosition = source->position % 25;
+    tickDelta = (source->videoStreamInfo.width - 2 * source->videoStreamInfo.width / REL_X_MARGIN) / source->numFramesPerSec;
+    xMargin = (source->videoStreamInfo.width - source->numFramesPerSec * tickDelta) / 2;
+
+    barPosition = source->position % source->numFramesPerSec;
 
     yPos = source->videoStreamInfo.height / 2 - barHeight / 2;
     yPos += (yPos % 2); /* field 1 */
@@ -327,7 +406,7 @@ static void add_green_progress_bar(ClapperSource* source)
             *imagePtr1++ = g_rec601YUVColours[BLACK_COLOUR].V;
             *imagePtr1++ = g_rec601YUVColours[BLACK_COLOUR].Y;
         }
-        
+
         /* field 2 */
         if (((i - xMargin) / tickDelta) <= barPosition)
         {
@@ -345,7 +424,7 @@ static void add_green_progress_bar(ClapperSource* source)
             *imagePtr2++ = g_rec601YUVColours[BLACK_COLOUR].V;
             *imagePtr2++ = g_rec601YUVColours[BLACK_COLOUR].Y;
         }
-        
+
     }
     imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2);
     for (i = 0; i < barHeight - 2; i += 2)
@@ -367,8 +446,15 @@ static void add_red_flash(ClapperSource* source)
     barHeight = source->videoStreamInfo.height / REL_FLASH_BAR_HEIGHT;
     barHeight = (barHeight < 4) ? 4 : barHeight;
     barHeight += barHeight % 2;
-    
-    flash = (source->position % 25) == 12;
+
+    if (source->isPAL)
+    {
+        flash = (source->position % source->numFramesPerSec) == 12;
+    }
+    else
+    {
+        flash = (source->position % source->numFramesPerSec) == 14;
+    }
 
     yPos = 0;
     imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2) + 2 * FLASH_X_MARGIN;
@@ -393,7 +479,7 @@ static void add_red_flash(ClapperSource* source)
             *imagePtr1++ = g_rec601YUVColours[BLACK_COLOUR].Y;
         }
     }
-    
+
     /* copy line to complete bar */
     imagePtr1 = source->image + yPos * (source->videoStreamInfo.width * 2);
     for (i = 0; i < barHeight - 1; i += 2)
@@ -412,7 +498,7 @@ static int clp_get_num_streams(void* data)
 static int clp_get_stream_info(void* data, int streamIndex, const StreamInfo** streamInfo)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     if (streamIndex == VIDEO_STREAM_INDEX)
     {
         *streamInfo = &source->videoStreamInfo;
@@ -428,14 +514,31 @@ static int clp_get_stream_info(void* data, int streamIndex, const StreamInfo** s
         *streamInfo = &source->audioStreamInfo;
         return 1;
     }
-    
+
     return 0;
+}
+
+static void clp_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    ClapperSource* source = (ClapperSource*)data;
+
+    if ((!is_pal_frame_rate(frameRate) && !is_ntsc_frame_rate(frameRate)) ||
+        (source->videoStreamInfo.isHardFrameRate &&
+            memcmp(frameRate, &source->videoStreamInfo.frameRate, sizeof(*frameRate)) != 0))
+    {
+        msc_disable_stream(&source->mediaSource, VIDEO_STREAM_INDEX);
+        msc_disable_stream(&source->mediaSource, AUDIO_L_STREAM_INDEX);
+        msc_disable_stream(&source->mediaSource, AUDIO_R_STREAM_INDEX);
+        return;
+    }
+
+    set_video_frame_rate(source, frameRate);
 }
 
 static int clp_disable_stream(void* data, int streamIndex)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     if (streamIndex == VIDEO_STREAM_INDEX)
     {
         source->videoIsDisabled = 1;
@@ -451,14 +554,14 @@ static int clp_disable_stream(void* data, int streamIndex)
         source->audioRIsDisabled = 1;
         return 1;
     }
-    
+
     return 0;
 }
 
 static int clp_stream_is_disabled(void* data, int streamIndex)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     if (streamIndex == VIDEO_STREAM_INDEX)
     {
         return source->videoIsDisabled;
@@ -471,55 +574,57 @@ static int clp_stream_is_disabled(void* data, int streamIndex)
     {
         return source->audioRIsDisabled;
     }
-    
+
     return 0;
 }
 
 static int clp_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceListener* listener)
 {
     ClapperSource* source = (ClapperSource*)data;
-    int audioSampleOffset;
-    
+    int audioOffset;
+    unsigned int frameSize;
+
+    get_audio_offset_and_frame_size(source, &frameSize, &audioOffset);
+
+
     if (!source->videoIsDisabled)
     {
         if (sdl_accept_frame(listener, VIDEO_STREAM_INDEX, frameInfo))
         {
             add_green_progress_bar(source);
             add_red_flash(source);
-            
+
             if (!sdl_receive_frame_const(listener, VIDEO_STREAM_INDEX, source->image, source->imageSize))
             {
                 return -1;
             }
         }
     }
-    
+
     if (!source->audioLIsDisabled)
     {
         if (sdl_accept_frame(listener, AUDIO_L_STREAM_INDEX, frameInfo))
         {
-            audioSampleOffset = (source->position % 25) * source->audioFrameSize;
-            if (!sdl_receive_frame_const(listener, AUDIO_L_STREAM_INDEX, &source->audioSec[audioSampleOffset], source->audioFrameSize))
+            if (!sdl_receive_frame_const(listener, AUDIO_L_STREAM_INDEX, &source->audioSec[audioOffset], frameSize))
             {
                 return -1;
             }
         }
     }
-    
+
     if (!source->audioRIsDisabled)
     {
         if (sdl_accept_frame(listener, AUDIO_R_STREAM_INDEX, frameInfo))
         {
-            audioSampleOffset = (source->position % 25) * source->audioFrameSize;
-            if (!sdl_receive_frame_const(listener, AUDIO_R_STREAM_INDEX, &source->audioSec[audioSampleOffset], source->audioFrameSize))
+            if (!sdl_receive_frame_const(listener, AUDIO_R_STREAM_INDEX, &source->audioSec[audioOffset], frameSize))
             {
                 return -1;
             }
         }
     }
-    
+
     source->position++;
-    
+
     return 0;
 }
 
@@ -531,7 +636,7 @@ static int clp_is_seekable(void* data)
 static int clp_seek(void* data, int64_t position)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     source->position = position;
     return 0;
 }
@@ -552,7 +657,7 @@ static int clp_get_position(void* data, int64_t* position)
     {
         return 0;
     }
-    
+
     *position = source->position;
     return 1;
 }
@@ -568,12 +673,12 @@ static int clp_get_available_length(void* data, int64_t* length)
 static int clp_eof(void* data)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     if (source->videoIsDisabled && source->audioLIsDisabled && source->audioRIsDisabled)
     {
         return 0;
     }
-    
+
     if (source->position >= source->length)
     {
         return 1;
@@ -585,47 +690,47 @@ static void clp_set_source_name(void* data, const char* name)
 {
     ClapperSource* source = (ClapperSource*)data;
 
-    add_known_source_info(&source->videoStreamInfo, SRC_INFO_NAME, name);    
-    add_known_source_info(&source->audioStreamInfo, SRC_INFO_NAME, name);    
-}    
+    add_known_source_info(&source->videoStreamInfo, SRC_INFO_NAME, name);
+    add_known_source_info(&source->audioStreamInfo, SRC_INFO_NAME, name);
+}
 
 static void clp_set_clip_id(void* data, const char* id)
 {
     ClapperSource* source = (ClapperSource*)data;
 
-    set_stream_clip_id(&source->videoStreamInfo, id);    
-    set_stream_clip_id(&source->audioStreamInfo, id);    
-}    
+    set_stream_clip_id(&source->videoStreamInfo, id);
+    set_stream_clip_id(&source->audioStreamInfo, id);
+}
 
 static void clp_close(void* data)
 {
     ClapperSource* source = (ClapperSource*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     clear_stream_info(&source->videoStreamInfo);
     clear_stream_info(&source->audioStreamInfo);
-    
+
     SAFE_FREE(&source->image);
-    
+
     SAFE_FREE(&source);
 }
 
 
-int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamInfo, 
+int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamInfo,
     int64_t length, MediaSource** source)
 {
     ClapperSource* newSource = NULL;
 
-    
+
     /* TODO: support YUV422 and YUV420 */
     if (videoStreamInfo->type != PICTURE_STREAM_TYPE ||
-        (videoStreamInfo->format != UYVY_FORMAT))/* &&
-            videoStreamInfo->format != YUV422_FORMAT &&
-            videoStreamInfo->format != YUV420_FORMAT))*/
+        videoStreamInfo->format != UYVY_FORMAT ||
+        (!stream_is_pal_frame_rate(videoStreamInfo) &&
+            !stream_is_ntsc_frame_rate(videoStreamInfo)))
     {
         ml_log_error("Invalid video stream for clapper source\n");
         return 0;
@@ -639,11 +744,13 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
         ml_log_error("Invalid audio stream for clapper source\n");
         return 0;
     }
-    
+
     CALLOC_ORET(newSource, ClapperSource, 1);
-    
+
     newSource->length = length;
-    
+
+    set_video_frame_rate(newSource, &videoStreamInfo->frameRate);
+
     if (videoStreamInfo->format == UYVY_FORMAT)
     {
         newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
@@ -660,14 +767,14 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
         newSource->yuvFormat = I420;
     }
     MALLOC_OFAIL(newSource->image, unsigned char, newSource->imageSize);
-    
-    newSource->audioSecSize = 1920 * 2 * 25;
-    newSource->audioFrameSize = 1920 * 2;
+
     newSource->audioSec = (unsigned char*)g_audioSec;
-    
+
+
     newSource->mediaSource.data = newSource;
     newSource->mediaSource.get_num_streams = clp_get_num_streams;
     newSource->mediaSource.get_stream_info = clp_get_stream_info;
+    newSource->mediaSource.set_frame_rate_or_disable = clp_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = clp_disable_stream;
     newSource->mediaSource.stream_is_disabled = clp_stream_is_disabled;
     newSource->mediaSource.read_frame = clp_read_frame;
@@ -680,21 +787,23 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     newSource->mediaSource.set_source_name = clp_set_source_name;
     newSource->mediaSource.set_clip_id = clp_set_clip_id;
     newSource->mediaSource.close = clp_close;
-    
+
     newSource->videoStreamInfo = *videoStreamInfo;
     newSource->videoStreamInfo.sourceId = msc_create_id();
     newSource->audioStreamInfo = *audioStreamInfo;
+    newSource->audioStreamInfo.frameRate = newSource->videoStreamInfo.frameRate;
+    newSource->audioStreamInfo.isHardFrameRate = newSource->videoStreamInfo.isHardFrameRate;
     newSource->audioStreamInfo.sourceId = newSource->videoStreamInfo.sourceId;
-    
+
     CHK_OFAIL(add_known_source_info(&newSource->videoStreamInfo, SRC_INFO_TITLE, "Clapper test sequence"));
     CHK_OFAIL(add_known_source_info(&newSource->audioStreamInfo, SRC_INFO_TITLE, "Clapper test sequence"));
 
     CHK_OFAIL(add_static_image_uyvy(newSource));
-    
-    
+
+
     *source = &newSource->mediaSource;
     return 1;
-    
+
 fail:
     clp_close(newSource);
     return 0;
@@ -706,7 +815,7 @@ fail:
 
 /* BBC Logo */
 
-static BYTE g_bbcLogoBitMap[] = 
+static BYTE g_bbcLogoBitMap[] =
 {
     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x51,0x00,0x00,0x00,0x00,0x29,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x29,0x00,0x00,0x00,0x00,0x51,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x51,0x00,0x00,0x00,0x00,0x29,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x29,0x00,0x00,0x00,0x00,0x51,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
@@ -778,7 +887,7 @@ static BYTE g_bbcLogoBitMap[] =
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 };
 
-static overlay g_bbcLogo = 
+static overlay g_bbcLogo =
 {
     120,
     34,
@@ -789,7 +898,7 @@ static overlay g_bbcLogo =
 };
 
 
-static BYTE g_bbcLargeLogoBitMap[] = 
+static BYTE g_bbcLargeLogoBitMap[] =
 {
     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x51,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x51,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xa0,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xa0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x51,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x51,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xa0,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
@@ -929,7 +1038,7 @@ static BYTE g_bbcLargeLogoBitMap[] =
     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 };
 
-static overlay g_bbcLargeLogo = 
+static overlay g_bbcLargeLogo =
 {
     240,
     68,
@@ -945,7 +1054,7 @@ static overlay g_bbcLargeLogo =
 
 static int16_t g_audioSec[] =
 {
-    /* frame 1 */
+    /* 25fps frame 1 */
     7,5,4,6,3,5,5,5,2,5,2,4,4,4,5,4,1,3,3,3,
     1,2,2,1,3,1,0,2,1,2,2,-1,2,-1,2,2,2,-1,1,1,
     1,1,-1,2,0,2,2,0,1,-1,0,2,-1,-1,1,0,-1,0,1,2,
@@ -1043,7 +1152,7 @@ static int16_t g_audioSec[] =
     1,2,1,2,0,2,2,-1,2,2,2,0,2,3,0,1,1,0,2,0,
     3,1,3,0,0,0,2,2,1,4,1,0,5,1,2,3,3,1,3,2,
 
-    /* frame 2 */
+    /* 25fps frame 2 */
     2,4,2,3,3,2,1,2,2,2,1,1,-1,-1,1,1,1,0,-3,0,
     -1,-3,2,0,0,2,1,-2,3,0,2,1,3,2,-1,1,0,3,3,2,
     2,2,1,2,-1,3,2,3,2,1,4,3,3,3,2,3,4,3,2,3,
@@ -1141,7 +1250,7 @@ static int16_t g_audioSec[] =
     7,5,6,5,5,7,4,4,5,3,3,4,6,5,3,5,4,4,4,5,
     5,6,4,5,6,6,5,4,6,3,5,7,5,3,7,8,6,7,6,3,
 
-    /* frame 3 */
+    /* 25fps frame 3 */
     6,6,5,4,6,6,4,5,6,5,4,5,4,5,4,3,4,3,3,1,
     4,3,1,1,3,2,1,3,1,0,0,0,-2,1,1,0,1,-1,0,-1,
     -1,0,0,-3,-1,1,-1,2,1,2,1,1,2,3,0,1,1,0,-1,0,
@@ -1239,7 +1348,7 @@ static int16_t g_audioSec[] =
     -1,2,1,1,3,0,0,2,2,2,2,3,1,1,2,1,0,1,3,-1,
     3,0,2,1,0,2,-1,3,2,1,1,2,1,3,3,2,1,1,1,1,
 
-    /* frame 4 */
+    /* 25fps frame 4 */
     1,2,2,-1,0,1,0,-1,3,1,3,5,2,1,4,2,4,2,0,1,
     1,2,3,0,3,1,1,2,2,1,1,1,0,-1,1,2,3,1,0,2,
     2,0,2,1,0,1,1,3,3,1,1,1,3,2,3,2,3,5,3,4,
@@ -1337,7 +1446,7 @@ static int16_t g_audioSec[] =
     4,2,3,0,5,4,4,4,4,4,7,1,2,5,4,3,4,7,4,6,
     3,4,4,5,4,2,4,4,5,4,6,6,5,5,7,2,5,5,2,4,
 
-    /* frame 5 */
+    /* 25fps frame 5 */
     5,4,4,3,2,5,4,5,4,4,5,3,7,7,4,3,5,4,3,5,
     2,4,4,3,3,5,3,2,3,4,3,2,3,2,2,1,3,1,3,1,
     1,2,2,1,3,2,1,3,3,3,3,1,1,1,3,1,1,1,1,2,
@@ -1435,7 +1544,7 @@ static int16_t g_audioSec[] =
     3,6,5,2,2,0,2,1,2,1,2,1,0,1,1,0,0,1,1,0,
     1,0,1,-1,1,1,-1,0,0,-1,-1,2,-1,-1,1,4,0,3,-1,1,
 
-    /* frame 6 */
+    /* 25fps frame 6 */
     -1,2,1,1,3,1,0,1,2,1,2,0,1,3,4,1,-1,3,1,2,
     1,0,0,0,3,0,0,2,0,0,0,-2,0,-1,2,1,0,0,0,2,
     -1,1,-1,1,0,1,2,3,1,1,1,1,0,1,0,-1,1,1,1,0,
@@ -1533,7 +1642,7 @@ static int16_t g_audioSec[] =
     6,8,7,8,8,11,10,7,8,7,8,7,8,5,5,9,7,5,5,5,
     4,8,6,6,6,6,6,6,6,3,4,4,3,2,5,3,4,5,4,3,
 
-    /* frame 7 */
+    /* 25fps frame 7 */
     4,5,3,4,3,4,3,2,5,2,3,3,3,3,3,2,4,3,3,4,
     5,4,5,3,5,5,4,4,2,2,3,5,4,4,6,2,7,4,4,5,
     4,3,2,2,3,1,3,2,3,4,3,3,2,5,3,2,2,3,2,5,
@@ -1631,7 +1740,7 @@ static int16_t g_audioSec[] =
     4,2,0,2,2,0,0,1,2,-1,0,2,1,0,2,1,3,0,0,1,
     2,1,4,1,2,2,-1,1,1,1,1,0,2,2,2,1,1,1,1,2,
 
-    /* frame 8 */
+    /* 25fps frame 8 */
     2,3,3,3,5,1,2,2,0,3,2,3,4,3,2,3,3,3,1,1,
     3,1,2,2,2,-1,4,0,0,0,4,1,1,2,1,3,2,2,0,1,
     1,2,2,0,0,2,3,3,3,1,2,2,3,1,2,3,2,2,2,3,
@@ -1729,7 +1838,7 @@ static int16_t g_audioSec[] =
     6,4,5,5,5,4,4,4,3,6,6,5,7,5,6,5,3,7,4,2,
     5,5,5,3,6,5,3,5,6,5,8,4,6,5,5,5,6,7,6,6,
 
-    /* frame 9 */
+    /* 25fps frame 9 */
     7,7,4,7,5,3,5,3,5,6,5,6,4,5,8,6,6,7,4,5,
     8,4,7,6,6,6,5,5,4,6,9,6,10,5,9,7,5,6,5,8,
     5,5,7,6,9,7,7,6,6,4,7,4,4,6,5,4,5,3,4,4,
@@ -1827,7 +1936,7 @@ static int16_t g_audioSec[] =
     -1,1,-1,2,0,3,2,3,4,5,4,3,1,5,3,1,1,1,2,2,
     2,2,1,1,3,3,2,1,5,4,0,3,4,2,1,4,3,4,3,4,
 
-    /* frame 10 */
+    /* 25fps frame 10 */
     0,2,1,-1,1,3,2,1,3,3,2,3,1,4,1,5,3,2,1,2,
     2,1,3,0,2,1,2,2,-1,1,1,1,1,4,2,3,0,0,3,1,
     2,2,1,3,2,1,1,0,1,-1,-2,1,-2,1,0,-1,-3,1,0,-1,
@@ -1925,7 +2034,7 @@ static int16_t g_audioSec[] =
     0,-1,-2,-2,1,-1,-2,1,2,0,1,0,1,-2,-2,0,1,0,2,-1,
     -1,0,-2,-1,-3,-1,-2,-2,1,0,-2,0,0,0,0,0,-2,-1,0,1,
 
-    /* frame 11 */
+    /* 25fps frame 11 */
     -1,2,1,-1,-1,0,-1,-2,-1,-1,-1,0,0,-2,-2,-2,-1,-1,-4,-3,
     -3,-1,-1,-2,-3,-6,-6,-3,-4,-3,-4,-5,-2,-4,-1,-4,-2,-4,-4,-3,
     -5,-4,-6,-3,-7,-5,-5,-2,-4,-4,-2,-3,-2,-3,-4,-6,-4,-5,-6,-3,
@@ -2023,7 +2132,7 @@ static int16_t g_audioSec[] =
     5,4,4,4,3,3,3,3,3,5,3,2,2,1,2,2,1,1,1,4,
     0,-1,-1,-1,-1,1,1,-1,-1,0,-1,-3,-3,-3,-3,-1,-3,-3,-2,-1,
 
-    /* frame 12 */
+    /* 25fps frame 12 */
     -5,-3,-2,-2,-3,-2,-3,-5,-3,-2,-4,0,-3,-4,-2,-4,-1,-2,-2,-2,
     -1,-1,-1,0,0,0,0,1,1,1,1,1,1,1,-1,0,1,0,-2,-2,
     -3,-1,1,-2,2,-1,-1,1,-1,-1,1,2,3,1,2,3,0,2,1,3,
@@ -2121,7 +2230,7 @@ static int16_t g_audioSec[] =
     2,-1,1,0,2,1,4,2,1,0,-1,1,-1,1,0,2,4,3,0,5,
     4,3,5,5,5,6,6,7,4,8,9,11,8,9,10,9,6,10,11,11,
 
-    /* frame 13 */
+    /* 25fps frame 13 */
     10,11,11,10,8,13,12,12,17,13,16,16,17,22,23,22,24,26,28,29,
     33,32,34,41,42,45,49,50,57,63,67,73,77,83,88,90,97,104,115,134,
     143,154,164,197,219,237,-59,-1009,-3528,-6311,-7096,-7040,-6611,-1203,4188,4504,4555,4603,4545,4611,
@@ -2219,7 +2328,7 @@ static int16_t g_audioSec[] =
     -1382,-1928,-2056,-1392,-251,439,370,-133,-565,-237,1149,2647,2697,1439,612,670,862,912,787,229,
     -858,-2075,-2816,-2689,-2001,-1220,-492,191,807,1106,726,-136,-636,-414,321,1277,1737,1104,93,234,
 
-    /* frame 14 */
+    /* 25fps frame 14 */
     1542,2510,2718,2913,3117,2682,1497,134,-849,-1498,-2125,-2344,-1762,-1003,-801,-822,-630,-373,87,608,
     570,137,-116,-12,300,296,-253,-766,-702,-187,452,1049,1436,1347,655,-234,-647,-292,555,1141,
     1066,537,-92,-351,-267,-438,-895,-1102,-1255,-1602,-1719,-1562,-1495,-1507,-1128,-60,1379,2201,1809,994,
@@ -2317,7 +2426,7 @@ static int16_t g_audioSec[] =
     -254,201,677,883,828,710,639,481,168,-165,-321,-194,-1,-4,-165,-401,-646,-786,-827,-762,
     -467,20,448,690,767,736,677,621,536,393,205,75,88,196,271,212,79,-64,-205,-331,
 
-    /* frame 15 */
+    /* 25fps frame 15 */
     -353,-133,236,488,420,23,-424,-650,-638,-490,-361,-374,-469,-523,-459,-271,-64,56,101,95,
     130,264,461,667,742,554,171,-189,-278,-69,228,385,295,17,-246,-286,-126,57,128,99,
     68,165,417,680,825,812,597,179,-276,-524,-479,-232,28,74,-182,-533,-673,-475,-80,248,
@@ -2415,7 +2524,7 @@ static int16_t g_audioSec[] =
     75,36,0,-19,-19,7,41,73,66,25,-23,-54,-74,-79,-82,-88,-107,-120,-119,-102,
     -62,13,105,164,168,140,116,112,130,150,151,113,49,-23,-58,-51,-29,-52,-132,-221,
 
-    /* frame 16 */
+    /* 25fps frame 16 */
     -264,-223,-114,-13,14,-41,-113,-110,-25,92,158,145,63,-30,-73,-45,15,58,60,29,
     18,50,110,135,113,52,-23,-77,-105,-112,-100,-73,-44,-33,-40,-63,-78,-56,0,49,
     62,50,28,2,-22,-37,-31,-18,4,29,81,139,156,101,2,-80,-105,-82,-60,-69,
@@ -2513,7 +2622,7 @@ static int16_t g_audioSec[] =
     -25,-30,-38,-37,-27,-17,-4,1,4,7,17,27,33,27,22,12,8,6,11,15,
     9,4,-11,-39,-76,-107,-111,-96,-72,-47,-34,-31,-21,-10,-1,-3,-16,-27,-34,-21,
 
-    /* frame 17 */
+    /* 25fps frame 17 */
     2,23,26,14,-2,-17,-21,-21,-18,-14,-11,-8,-10,-31,-52,-58,-50,-31,-17,-14,
     -17,-23,-21,-16,-13,-6,-9,-11,-12,0,23,45,50,36,8,-21,-40,-51,-50,-53,
     -62,-70,-73,-64,-52,-34,-25,-29,-36,-45,-48,-40,-27,-23,-29,-32,-30,-17,0,9,
@@ -2611,7 +2720,7 @@ static int16_t g_audioSec[] =
     -6,-4,-3,-13,-22,-32,-33,-29,-23,-18,-16,-17,-20,-14,-11,-9,-10,-16,-23,-26,
     -20,-12,-5,-5,-9,-13,-16,-16,-14,-11,-9,-7,-10,-7,-8,-5,-3,-4,-10,-17,
 
-    /* frame 18 */
+    /* 25fps frame 18 */
     -21,-26,-22,-13,-6,-7,-12,-20,-22,-21,-17,-14,-17,-21,-26,-27,-27,-23,-20,-19,
     -25,-26,-24,-15,-4,6,3,0,-8,-12,-12,-8,-10,-10,-14,-21,-28,-28,-27,-21,
     -19,-22,-18,-15,-13,-9,-14,-15,-21,-19,-18,-15,-12,-14,-12,-12,-12,-10,-14,-14,
@@ -2709,7 +2818,7 @@ static int16_t g_audioSec[] =
     -6,-7,-5,-6,-4,-4,-4,-6,-6,-4,-5,-4,-2,-2,-4,-2,0,-1,-3,-4,
     -2,-6,-2,-2,-4,-6,-10,-8,-7,-8,-5,-6,-6,-9,-7,-7,-7,-6,-3,-6,
 
-    /* frame 19 */
+    /* 25fps frame 19 */
     -8,-7,-5,-5,-2,-1,-2,-5,-3,-2,-2,-2,-1,-2,-4,-2,-5,-5,-8,-4,
     -7,-6,-7,-7,-10,-6,-8,-8,-7,-6,-6,-6,-7,-6,-6,-6,-6,-8,-11,-8,
     -7,-3,-5,-4,-7,-10,-8,-10,-8,-8,-9,-9,-7,-9,-7,-9,-10,-9,-12,-10,
@@ -2807,7 +2916,7 @@ static int16_t g_audioSec[] =
     -2,-1,-3,-2,-2,-3,-3,-2,-1,-3,-1,1,-2,-3,-2,-4,-3,-2,-1,-4,
     -4,0,-4,-5,-3,-5,-4,-7,-6,-6,-4,-4,-7,-6,-6,-5,-4,-4,-3,-5,
 
-    /* frame 20 */
+    /* 25fps frame 20 */
     -4,-2,-4,-2,-2,-3,-2,0,-2,-4,-2,-5,-5,-4,-2,-1,-3,-3,-4,-4,
     -4,-5,-1,-3,-3,-5,-3,-5,-5,-5,-4,-4,-2,-3,-3,-2,0,-2,0,0,
     -1,1,1,-1,0,1,1,0,1,-1,-3,-1,0,-2,-1,0,-2,-1,1,-1,
@@ -2905,7 +3014,7 @@ static int16_t g_audioSec[] =
     2,2,5,1,2,5,3,2,3,3,1,3,4,4,7,5,4,5,4,5,
     5,8,6,5,4,6,4,5,5,7,5,6,8,7,6,10,5,7,7,8,
 
-    /* frame 21 */
+    /* 25fps frame 21 */
     6,6,8,5,7,4,6,5,5,4,5,5,4,6,6,7,7,8,10,9,
     5,8,9,7,5,8,6,4,6,4,4,4,3,4,2,4,5,4,4,5,
     7,6,6,9,7,6,6,7,3,4,5,5,5,4,4,4,3,5,4,3,
@@ -3003,7 +3112,7 @@ static int16_t g_audioSec[] =
     1,-1,0,1,-1,0,-1,1,0,0,1,2,1,0,1,2,1,2,-1,3,
     1,1,0,-1,-1,-1,-1,1,1,2,-2,1,-3,-1,-1,-1,-2,-1,-1,-2,
 
-    /* frame 22 */
+    /* 25fps frame 22 */
     -1,2,1,2,1,-1,3,0,1,0,2,0,0,2,1,1,3,3,2,4,
     4,4,4,3,5,4,6,3,5,6,6,6,5,7,7,7,5,6,7,8,
     5,8,6,8,9,8,8,6,7,8,7,7,7,10,8,8,8,8,9,8,
@@ -3101,7 +3210,7 @@ static int16_t g_audioSec[] =
     3,1,2,1,3,0,1,-2,2,0,1,-1,0,1,1,-2,0,0,1,0,
     0,1,0,-1,-1,0,1,0,-2,1,-2,2,-2,-1,0,-2,-1,1,-2,-2,
 
-    /* frame 23 */
+    /* 25fps frame 23 */
     1,-2,-3,-2,0,-1,0,1,-2,-1,0,-3,-3,-3,-5,-5,-5,-5,-5,-3,
     -4,-4,-5,-2,-5,-3,-5,-4,-4,-5,-4,-6,-4,-4,-3,-1,-1,-3,-3,-4,
     -3,-7,-2,-3,-4,-3,-5,-3,-3,-6,-4,-5,-4,-5,-3,-3,-4,-4,-1,-3,
@@ -3199,7 +3308,7 @@ static int16_t g_audioSec[] =
     4,6,4,5,4,2,2,3,4,1,2,1,2,1,2,0,1,0,1,2,
     2,1,1,1,1,2,3,1,2,0,1,2,0,0,3,0,-1,1,2,1,
 
-    /* frame 24 */
+    /* 25fps frame 24 */
     1,-3,0,1,0,1,-1,0,-2,1,1,-2,1,1,-3,0,-1,0,-2,1,
     -2,-2,-1,-2,-1,1,0,1,1,0,1,1,2,-1,2,-2,0,2,0,-1,
     0,0,-2,0,-1,0,0,0,0,2,-1,0,3,0,1,2,4,2,-1,1,
@@ -3297,7 +3406,7 @@ static int16_t g_audioSec[] =
     4,2,3,3,3,2,3,3,1,1,3,0,3,2,1,3,4,3,4,1,
     1,0,1,2,1,3,3,1,2,1,0,1,0,2,4,1,0,2,2,1,
 
-    /* frame 25 */
+    /* 25fps frame 25 */
     5,3,4,4,1,3,0,0,0,3,2,1,1,2,1,1,2,2,3,2,
     -1,2,-1,1,1,0,3,1,0,3,3,2,3,2,2,0,3,1,0,4,
     3,1,2,3,-1,2,1,2,0,0,2,-1,5,1,0,2,0,0,-2,1,
@@ -3393,7 +3502,105 @@ static int16_t g_audioSec[] =
     10,10,9,9,9,9,8,9,10,7,8,10,8,10,9,9,10,8,10,10,
     9,10,8,9,10,10,9,11,9,12,9,9,8,8,10,7,8,11,7,9,
     9,10,8,7,8,7,8,8,9,7,8,6,6,7,5,8,8,6,6,7,
-    7,6,6,7,5,5,6,5,7,7,8,6,7,9,7,6,8,6,7,5
+    7,6,6,7,5,5,6,5,7,7,8,6,7,9,7,6,8,6,7,5,
+
+    /* 25fps frame 26 */
+    7,5,4,6,3,5,5,5,2,5,2,4,4,4,5,4,1,3,3,3,
+    1,2,2,1,3,1,0,2,1,2,2,-1,2,-1,2,2,2,-1,1,1,
+    1,1,-1,2,0,2,2,0,1,-1,0,2,-1,-1,1,0,-1,0,1,2,
+    0,0,-1,1,-2,0,1,-2,1,1,-1,0,0,-2,-2,0,0,-1,0,0,
+    3,2,1,2,2,2,2,0,0,-2,2,1,0,-2,2,0,-2,-2,-2,-1,
+    -1,0,2,0,-1,2,2,0,2,-1,1,-1,0,0,-1,0,-1,2,2,3,
+    3,3,2,4,2,3,2,3,6,6,3,7,3,4,7,6,5,7,7,5,
+    5,8,6,6,8,6,7,7,7,9,11,10,12,12,9,10,11,11,9,10,
+    10,10,8,11,10,10,9,10,11,10,12,12,10,12,13,12,12,13,12,12,
+    14,12,11,12,12,12,14,14,13,15,14,14,13,14,11,11,13,13,10,10,
+    13,14,13,13,13,13,11,12,9,10,9,9,10,11,8,10,8,8,9,11,
+    9,9,10,7,8,8,9,9,7,6,7,5,7,6,7,3,5,6,4,6,
+    3,4,3,3,5,1,3,3,4,2,2,2,4,1,1,0,3,-2,1,2,
+    -1,-2,-3,-1,-4,-3,-2,-5,-4,-5,-3,-3,-4,-3,-5,-2,-4,-2,-2,-4,
+    -5,-4,-5,-6,-4,-5,-5,-2,-5,-7,-4,-6,-7,-6,-3,-5,-3,-5,-6,-4,
+    -3,-6,-4,-3,-7,-7,-7,-6,-6,-5,-9,-6,-7,-9,-6,-5,-5,-6,-7,-7,
+    -5,-7,-6,-5,-4,-7,-4,-7,-5,-8,-5,-3,-4,-5,-5,-4,-3,-4,-5,-5,
+    -4,-4,-2,0,-1,-2,-2,-2,-2,-2,-2,-4,-4,-6,-4,-3,-3,-3,-4,-3,
+    -2,-3,-3,-3,-2,-3,-4,-3,-3,-3,-2,-4,-2,-4,-3,-2,-2,-1,1,-1,
+    0,1,-2,-1,-2,0,-1,-4,0,-1,0,-2,-1,0,-1,0,-1,0,-4,-2,
+    -1,-2,0,-2,0,3,-2,-2,0,-1,0,-1,-3,-3,-3,-2,-3,-3,-5,-2,
+    -3,-4,-6,-6,-8,-6,-4,-5,-6,-5,-6,-8,-5,-7,-5,-5,-6,-5,-5,-5,
+    -5,-6,-5,-6,-3,-5,-4,-6,-5,-6,-6,-8,-6,-6,-7,-4,-5,-8,-7,-6,
+    -8,-7,-6,-7,-7,-7,-9,-6,-7,-6,-4,-5,-4,-4,-5,-6,-4,-4,-5,-6,
+    -3,-5,-5,-5,-3,-4,-3,-2,-1,-2,-4,-1,0,-3,-1,-1,-1,-3,-2,1,
+    0,-1,-3,0,-1,0,-3,-1,-1,1,0,-1,2,1,-1,-1,1,-1,1,0,
+    -1,1,3,0,3,1,2,5,3,1,3,3,2,3,4,3,5,5,6,4,
+    6,3,5,6,3,7,6,6,3,4,5,3,5,4,2,5,5,2,4,3,
+    1,2,5,3,5,3,6,5,4,4,6,2,6,5,3,4,5,5,3,3,
+    2,3,5,3,3,3,2,2,3,4,3,2,2,3,4,0,2,0,2,0,
+    3,3,0,0,2,2,1,1,1,3,3,4,3,4,1,2,2,2,3,2,
+    3,2,2,3,4,0,3,4,2,1,3,1,2,3,2,3,3,2,4,4,
+    4,2,3,1,3,2,3,3,4,-1,3,1,0,0,3,-2,0,1,2,0,
+    0,0,-1,-3,-1,-2,-2,-1,-2,-2,-1,-2,0,-3,-2,-1,-3,-2,-2,-2,
+    -2,-3,-3,-3,-1,-2,-3,-3,-3,-2,-2,-3,-2,-2,-1,-1,-3,-2,-4,-2,
+    -2,-2,-2,-2,-1,1,-2,-2,1,-1,-1,-1,-2,-2,-1,0,-1,-1,-1,0,
+    0,-3,1,0,-3,-1,0,-3,-1,-2,-4,1,-1,-3,-3,0,-1,-1,-1,1,
+    -1,2,-1,1,0,1,1,-1,1,2,3,0,0,-1,-1,-1,-1,2,-2,0,
+    0,-1,0,-1,1,1,1,1,3,0,1,2,0,1,1,1,2,0,2,1,
+    2,-1,2,4,3,0,3,2,-1,5,3,1,4,3,1,3,2,4,2,5,
+    3,1,1,2,4,3,4,4,3,3,5,2,1,2,1,2,1,3,3,2,
+    2,3,1,0,1,3,1,0,0,2,1,1,1,1,0,2,-1,1,0,1,
+    1,-1,-2,-1,-2,-2,2,0,-1,1,-2,-1,0,-1,-2,-1,0,-1,0,-1,
+    -3,-1,-1,-2,-1,-2,-1,-2,-4,-1,-3,-2,-4,-1,-3,-3,-1,-4,-5,-5,
+    -2,-4,-3,-2,-3,-2,-4,-2,-4,-3,-2,-3,-5,-2,-4,-4,-5,-3,-4,-2,
+    -3,-2,-2,-1,-4,-3,-2,-4,-3,-2,-2,-3,-2,-2,-1,0,-2,0,0,0,
+    -2,-3,1,-2,1,-1,-1,-1,0,-1,-1,0,-2,1,2,2,0,1,-1,1,
+    2,3,2,3,4,3,3,0,3,-1,4,2,0,0,3,0,1,2,2,0,
+    5,2,0,1,-1,0,3,3,2,4,3,3,2,1,1,3,1,3,2,1,
+    2,1,0,4,0,-1,-1,-1,-1,-1,1,-2,-1,1,0,1,-1,-2,0,-3,
+    -1,-3,1,1,0,2,0,-1,0,-1,1,0,1,-1,0,2,-1,2,0,0,
+    -1,2,2,1,-1,-1,-1,-1,-1,0,1,0,-1,-1,-1,1,-2,1,0,-1,
+    1,2,-1,-1,-1,0,-1,1,-1,-3,-1,-1,-1,-3,-3,-2,-2,-3,-5,-3,
+    -6,-5,-2,-2,-5,-5,-2,-3,-5,-3,-5,-3,-4,-1,-3,-2,-4,-3,-4,-4,
+    -6,-1,-3,-2,-2,-4,-2,-2,0,-2,-1,-1,1,0,-1,-1,-1,-1,0,0,
+    -1,1,-1,-2,-2,0,0,1,0,0,2,1,0,0,1,1,1,0,0,-1,
+    1,0,0,-1,0,0,-1,1,1,0,1,1,3,2,2,3,3,3,1,4,
+    5,2,2,2,2,4,1,3,2,3,3,1,4,3,3,4,3,4,3,6,
+    8,2,5,6,3,5,3,5,5,5,5,5,3,4,1,3,3,1,2,2,
+    -1,1,2,2,0,4,0,3,3,3,5,3,2,2,4,1,-1,2,0,0,
+    -2,-1,0,0,-2,-2,0,0,-2,-2,1,-1,-1,-1,1,2,-1,-2,0,0,
+    -1,-1,0,-2,0,0,0,-1,0,-1,-1,-2,-1,-2,-1,-2,1,-1,-3,0,
+    -3,-3,-1,1,-3,0,-2,-1,-3,-3,-2,-2,-3,1,-1,-2,-2,0,-1,-1,
+    1,-1,1,1,2,3,2,2,2,4,1,3,1,-1,1,3,1,2,2,1,
+    3,1,2,2,0,3,4,4,4,5,1,1,3,4,2,3,2,3,2,4,
+    2,3,4,2,3,1,0,3,0,2,2,6,3,2,5,4,3,2,3,2,
+    2,3,0,3,3,4,4,3,1,3,2,1,2,1,-1,1,3,0,3,2,
+    -1,3,0,0,-2,0,-1,-1,-3,-1,2,-1,1,-1,1,1,1,0,-2,0,
+    0,-1,-4,-3,-1,-2,-4,-3,-2,-2,-3,-4,-5,-4,-4,-5,-4,-4,-3,-3,
+    -4,-3,-5,-5,-6,-7,-5,-5,-6,-5,-4,-6,-4,-3,-6,-4,-3,-4,-6,-4,
+    -5,-1,-3,-2,-2,-4,-1,-4,-6,-2,-2,-4,-3,-3,-3,-3,-4,-6,-4,-4,
+    -4,-6,-2,-4,-2,-4,-3,-3,-1,2,-2,-2,0,-1,-1,-1,0,0,-1,-1,
+    -4,1,-1,-2,0,-1,1,2,-1,2,-1,-1,-3,-1,0,-3,-2,-3,0,-1,
+    -1,0,-2,-1,-1,-1,0,1,-2,0,0,1,1,-3,0,1,-2,1,-1,-1,
+    0,2,1,2,3,2,3,1,0,0,0,4,2,1,3,0,3,1,2,2,
+    2,3,2,4,1,2,2,2,2,3,6,3,3,3,2,5,3,6,3,5,
+    3,4,4,3,3,3,3,3,5,7,4,6,8,5,5,6,7,2,5,4,
+    4,4,3,2,6,4,3,5,6,2,6,6,3,3,6,2,3,3,1,3,
+    1,1,0,3,2,5,4,0,4,2,1,2,3,3,3,4,5,4,4,4,
+    6,3,5,4,5,5,5,4,4,5,3,4,6,4,5,5,5,7,4,6,
+    5,6,8,8,6,9,7,7,9,6,8,7,9,10,9,8,10,10,7,8,
+    11,9,10,10,9,11,11,11,9,11,8,11,11,9,10,9,10,12,9,13,
+    11,12,11,10,13,11,13,11,12,10,9,11,11,12,10,13,10,13,10,10,
+    11,11,10,9,8,9,8,11,9,9,8,9,7,9,9,9,7,7,6,7,
+    8,5,7,6,4,6,5,5,5,6,4,4,4,3,5,4,4,5,3,2,
+    5,2,1,-2,1,1,0,3,3,3,4,2,0,3,0,2,2,0,1,1,
+    -3,-1,1,0,-1,0,0,-2,3,0,0,0,-1,-3,1,-3,1,0,-1,1,
+    0,-3,-2,-1,-1,0,2,0,-1,0,1,0,0,-1,0,1,0,-2,1,2,
+    -1,1,0,-3,0,0,0,1,2,1,2,2,1,1,2,3,0,0,3,2,
+    0,1,3,1,0,0,0,0,3,1,0,2,1,1,1,2,1,3,3,1,
+    4,5,4,2,6,3,3,4,4,1,3,3,5,3,4,2,0,3,5,3,
+    4,2,3,5,4,0,1,1,2,5,3,0,3,3,1,3,1,2,1,3,
+    1,0,1,1,0,2,1,3,1,3,0,1,1,3,1,3,1,2,0,2,
+    4,2,0,2,2,2,1,4,0,1,1,0,3,1,2,-1,1,1,0,-1,
+    1,2,1,2,0,2,2,-1,2,2,2,0,2,3,0,1,1,0,2,0,
+    3,1,3,0,0,0,2,2,1,4,1,0,5,1,2,3,3,1,3,2,
 };
 
 

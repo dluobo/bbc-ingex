@@ -1,9 +1,10 @@
 /*
- * $Id: buffered_media_source.c,v 1.4 2008/10/29 17:47:41 john_f Exp $
+ * $Id: buffered_media_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,15 +39,15 @@
 //#define DEBUG_BUFFERED_SINK 1
 
 
-/* maximum number of positions in frame buffer to check for client requested frame */ 
+/* maximum number of positions in frame buffer to check for client requested frame */
 #define MAX_SEARCH_SIZE             50
 
 #define IS_EOF(bufSource, position) \
     (bufSource->eofPosition >= 0 && position >= bufSource->eofPosition)
 
 /* reads and seek will timeout after this number of seconds */
-#define TIMEOUT_SEC                 1    
-    
+#define TIMEOUT_SEC                 1
+
 
 /* Linux  */
 #if !defined(ETIMEDOUT)
@@ -64,7 +65,7 @@ typedef struct BufferedStream
     int isDisabled;
     int isPresent;
     int isEOF;
-    
+
     unsigned char* buffer;
     unsigned int bufferSize; /* size allocated */
     unsigned int dataSize; /* <= bufferSize */
@@ -81,32 +82,32 @@ struct BufferedMediaSource
 {
     int blocking;
     float byteRateLimit;
-    
+
     MediaPlayer* player;
     MediaSource mediaSource;
     MediaSource* targetSource;
     MediaSourceListener targetSourceListener;
-    
+
     BufferedFrame* frames;
     int frameBufferSize;
     int numStreams;
     int64_t frameSize;
-    
+
     pthread_mutex_t stateMutex;
     pthread_cond_t frameReadCond;
     pthread_cond_t clientFrameReadCond;
-    
+
     int clientWaiting;
     int64_t clientPosition;
-    
+
     int waiting;
     int64_t lastPosition;
     int64_t eofPosition;
-    
+
     int positionInBuffer; /* used by the target source listener to fill in the frame data */
 
 	pthread_t readThreadId;
-    
+
     int stopped; /* set when the read thread is stopped */
 };
 
@@ -116,7 +117,7 @@ static BufferedStream* get_stream(BufferedMediaSource* bufSource, int streamId)
 {
     BufferedFrame* frame = &bufSource->frames[bufSource->positionInBuffer];
     int i;
-    
+
     for (i = 0; i < bufSource->numStreams; i++)
     {
         if (frame->streams[i].streamId == streamId)
@@ -124,7 +125,7 @@ static BufferedStream* get_stream(BufferedMediaSource* bufSource, int streamId)
             return &frame->streams[i];
         }
     }
-    
+
     return NULL;
 }
 
@@ -132,35 +133,35 @@ static int bmsrc_accept_frame(void* data, int streamId, const FrameInfo* frameIn
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     BufferedStream* stream = get_stream(bufSource, streamId);
-    
+
     if (stream == NULL)
     {
         ml_log_error("Unknown stream %d\n", streamId);
         return 0;
     }
-    
+
     return !stream->isDisabled;
 }
-    
+
 static int bmsrc_allocate_buffer(void* data, int streamId, unsigned char** buffer, unsigned int bufferSize)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     BufferedStream* stream = get_stream(bufSource, streamId);
-    
+
     if (stream == NULL)
     {
         ml_log_error("Unknown stream %d\n", streamId);
         return 0;
     }
-    
-    if (stream->bufferSize < bufferSize)
+
+    if (bufferSize > stream->bufferSize)
     {
         MALLOC_ORET(stream->buffer, unsigned char, bufferSize);
         stream->bufferSize = bufferSize;
     }
 
     stream->dataSize = bufferSize;
-    
+
     *buffer = stream->buffer;
     return 1;
 }
@@ -174,15 +175,15 @@ static int bmsrc_receive_frame(void* data, int streamId, unsigned char* buffer, 
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     BufferedStream* stream = get_stream(bufSource, streamId);
-    
+
     if (stream == NULL)
     {
         ml_log_error("Unknown stream %d\n", streamId);
         return 0;
     }
-    
+
     stream->isPresent = 1;
-    
+
     return 1;
 }
 
@@ -211,8 +212,8 @@ static void* read_thread(void* arg)
     struct timeval prevRead = now;
 
     memset(&dummyFrameInfo, 0, sizeof(FrameInfo));
-    
-    
+
+
     while (!bufSource->stopped)
     {
         /* wait until a new frame can be read */
@@ -221,17 +222,17 @@ static void* read_thread(void* arg)
         while (!doneWaiting && !bufSource->stopped)
         {
             PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
-            
+
             bufSource->waiting = 1;
-            
+
             clientPositionInBuffer = bufSource->clientPosition % bufSource->frameBufferSize;
-            
-            if (bufSource->frames[clientPositionInBuffer].isReady && 
+
+            if (bufSource->frames[clientPositionInBuffer].isReady &&
                 bufSource->frames[clientPositionInBuffer].position == bufSource->clientPosition)
             {
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                 printf("READ THREAD: client frame is in buffer (%lld)\n", bufSource->clientPosition); fflush(stdout);
-#endif                
+#endif
 
                 position = bufSource->lastPosition + 1;
                 positionInBuffer = position % bufSource->frameBufferSize;
@@ -247,10 +248,10 @@ static void* read_thread(void* arg)
                             ml_log_error("Failed to wake up client\n");
                         }
                     }
-                    
-#ifdef DEBUG_BUFFERED_SINK                
+
+#ifdef DEBUG_BUFFERED_SINK
                     printf("READ THREAD: buffer full; waiting for client\n"); fflush(stdout);
-#endif                
+#endif
                     status = pthread_cond_wait(&bufSource->clientFrameReadCond, &bufSource->stateMutex);
                     if (status != 0)
                     {
@@ -269,7 +270,7 @@ static void* read_thread(void* arg)
                 position = bufSource->clientPosition;
                 doneWaiting = 1;
             }
-            
+
             if (doneWaiting)
             {
                 isEOF = IS_EOF(bufSource, position);
@@ -277,26 +278,26 @@ static void* read_thread(void* arg)
                 lastPosition = bufSource->lastPosition;
                 bufSource->waiting = 0;
             }
-            
+
             PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
         }
-        
+
         /* read thread has stopped */
         if (bufSource->stopped)
         {
             break;
         }
-        
+
 
         /* read the next frame */
-        
+
         haveReadFrame = 0;
         readEOF = 0;
         if (!isEOF)
         {
             doReadFrame = 1;
             haveSeeked = 0;
-            
+
             /* seek to position if required */
             if (position != lastPosition + 1)
             {
@@ -337,24 +338,24 @@ static void* read_thread(void* arg)
                     gettimeofday(&now, NULL);
                     timeDiff = (now.tv_sec - prevRead.tv_sec) * 1000000 + now.tv_usec - prevRead.tv_usec;
                     targetTimeDiff = (long)(bufSource->frameSize / bufSource->byteRateLimit * 1000000.0);
-                    
+
                     if (timeDiff > 0 && timeDiff < targetTimeDiff)
                     {
                         usleep(targetTimeDiff - timeDiff);
                     }
-                    
+
                     gettimeofday(&prevRead, NULL);
                 }
-                
+
                 /* read the frame */
                 readResult = msc_read_frame(bufSource->targetSource, &dummyFrameInfo,
                     &bufSource->targetSourceListener);
                 if (readResult == 0)
                 {
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                     printf("READ THREAD: have read frame\n"); fflush(stdout);
-#endif                
-                    haveReadFrame = 1;                
+#endif
+                    haveReadFrame = 1;
                     doReadFrame = 0;
 
                     /* re-calculate the frame size */
@@ -379,7 +380,7 @@ static void* read_thread(void* arg)
                     doReadFrame = 0;
                 }
             }
-            
+
             /* return to after last position if have failed to read */
             if (!haveReadFrame)
             {
@@ -394,14 +395,14 @@ static void* read_thread(void* arg)
                 }
                 else
                 {
-                    /* The mxf_source (plus libMXFReader) doesn't (yet) recover from partial read failures and 
+                    /* The mxf_source (plus libMXFReader) doesn't (yet) recover from partial read failures and
                     this results in the file not being position at the start of the next frame.
-                    The libMXFReader assumes the file is positioned at a start of the next frame 
-                    and ignores any seek to the start of the next frame. However, a failed frame 
+                    The libMXFReader assumes the file is positioned at a start of the next frame
+                    and ignores any seek to the start of the next frame. However, a failed frame
                     read will have moved the file position past the start of the next frame.
                     To avoid this problem we seek back to the start of the _last_ frame and then seek
                     to the start of the next frame */
-                    
+
                     /* seek to the start of the last frame read */
                     if (msc_seek(bufSource->targetSource, lastPosition) != 0)
                     {
@@ -416,28 +417,28 @@ static void* read_thread(void* arg)
                     }
                 }
             }
-        }            
+        }
 
-        
+
         PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
-        
+
         if (haveReadFrame)
         {
             /* complete the read */
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
             printf("READ THREAD: read frame (%lld)\n", position); fflush(stdout);
-#endif                
+#endif
             bufSource->frames[positionInBuffer].isReady = 1;
             bufSource->frames[positionInBuffer].position = position;
             bufSource->lastPosition = position;
         }
-        
-        /* update the eof if we tried to read and the target source said it was eof */ 
+
+        /* update the eof if we tried to read and the target source said it was eof */
         if (readEOF)
         {
             bufSource->eofPosition = position;
         }
-        
+
         /* note: we signal even if we failed to read the frame */
         if (bufSource->clientWaiting)
         {
@@ -447,7 +448,7 @@ static void* read_thread(void* arg)
                 ml_log_error("Failed to signal that frame has been read\n");
             }
         }
-        
+
         PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
 
 #if 0
@@ -458,8 +459,8 @@ static void* read_thread(void* arg)
         {
             sleep(3);
         }
-#endif    
-    
+#endif
+
     }
 
     pthread_exit((void*) 0);
@@ -471,36 +472,53 @@ static void* read_thread(void* arg)
 static int bmsrc_is_complete(void* data)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_is_complete(bufSource->targetSource);
 }
 
 static int bmsrc_post_complete(void* data, MediaSource* rootSource, MediaControl* mediaControl)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_post_complete(bufSource->targetSource, rootSource, mediaControl);
 }
 
 static int bmsrc_get_num_streams(void* data)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_get_num_streams(bufSource->targetSource);
 }
 
 static int bmsrc_get_stream_info(void* data, int streamIndex, const StreamInfo** streamInfo)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_get_stream_info(bufSource->targetSource, streamIndex, streamInfo);
+}
+
+static void bmsrc_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
+    int j;
+
+    msc_set_frame_rate_or_disable(bufSource->targetSource, frameRate);
+
+    if (bufSource->frameBufferSize > 0 && bufSource->numStreams > 0)
+    {
+        for (j = 0; j < bufSource->numStreams; j++)
+        {
+            BufferedStream* stream = &bufSource->frames[0].streams[j];
+            stream->isDisabled = msc_stream_is_disabled(bufSource->targetSource, stream->streamId);
+        }
+    }
 }
 
 static int bmsrc_disable_stream(void* data, int streamIndex)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     BufferedStream* stream = get_stream(bufSource, streamIndex);
-    
+
     stream->isDisabled = msc_disable_stream(bufSource->targetSource, streamIndex);
 
     return stream->isDisabled;
@@ -512,9 +530,9 @@ static void bmsrc_disable_audio(void* data)
     int i;
     int numTargetStreams;
     BufferedStream* stream;
-    
+
     msc_disable_audio(bufSource->targetSource);
-    
+
     /* synchronize the local stream disabled to take into account disabled target streams */
     numTargetStreams = msc_get_num_streams(bufSource->targetSource);
     for (i = 0; i < numTargetStreams; i++)
@@ -527,7 +545,7 @@ static void bmsrc_disable_audio(void* data)
 static int bmsrc_stream_is_disabled(void* data, int streamIndex)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_stream_is_disabled(bufSource->targetSource, streamIndex);
 }
 
@@ -556,9 +574,9 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
         PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
 
         bufSource->clientWaiting = 1;
-        
+
         clientBufferPosition = bufSource->clientPosition % bufSource->frameBufferSize;
-        
+
         if (IS_EOF(bufSource, bufSource->clientPosition))
         {
             /* client is at end of file  */
@@ -569,17 +587,17 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
             bufSource->frames[clientBufferPosition].position == bufSource->clientPosition)
         {
             /* frame is ready */
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
             printf("CLIENT: frame is ready (%lld)\n", bufSource->clientPosition); fflush(stdout);
-#endif                
+#endif
             doneWaiting = 1;
         }
         else
         {
             if (waitCount >= 2)
             {
-                /* the first wait (waitCount == 0) wake up could have been for another frame. 
-                The second (waitCount == 1) should result in the requested frame, 
+                /* the first wait (waitCount == 0) wake up could have been for another frame.
+                The second (waitCount == 1) should result in the requested frame,
                 otherwise a third attempt (waitCount == 2) means it failed */
                 readFailed = 1;
                 doneWaiting = 1;
@@ -589,9 +607,9 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
                 if (bufSource->waiting)
                 {
                     /* wake up the reading thread */
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                     printf("CLIENT: signal reading thread to wake up\n"); fflush(stdout);
-#endif                
+#endif
                     status = pthread_cond_signal(&bufSource->clientFrameReadCond);
                     if (status != 0)
                     {
@@ -599,14 +617,14 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
                         /* TODO: what now? */
                     }
                 }
-                
+
                 /* wait for read thread to make next frame available */
                 gettimeofday(&now, NULL);
                 timeout.tv_sec = now.tv_sec + 1;
                 timeout.tv_nsec = now.tv_usec * 1000;
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                 printf("CLIENT: wait for read thread to read frame (%lld)\n", bufSource->clientPosition); fflush(stdout);
-#endif                
+#endif
                 status = pthread_cond_timedwait(&bufSource->frameReadCond, &bufSource->stateMutex, &timeout);
                 if (status == ETIMEDOUT)
                 {
@@ -616,7 +634,7 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
                 else if (status != 0)
                 {
                     ml_log_error("Failed to wait for frame read conditional variable: %d\n", status);
-                    /* TODO: what now? */ 
+                    /* TODO: what now? */
                 }
 
                 waitCount++;
@@ -631,58 +649,58 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
 
         PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
     }
-        
+
     /* no more reading */
     if (bufSource->stopped)
     {
         return -1;
     }
-    
+
     if (timedOut)
     {
         return -2;
     }
-    
-    
+
+
     if (clientIsEOF || readFailed)
     {
         return -1;
     }
 
-    
+
     /* send frame to source listener */
     failedToSendFrame = 0;
     for (i = 0; i < bufSource->numStreams; i++)
     {
         BufferedStream* stream = &bufSource->frames[clientBufferPosition].streams[i];
-        
+
         if (stream->isDisabled || !stream->isPresent)
         {
             continue;
         }
-        
+
         if (!sdl_accept_frame(listener, stream->streamId, frameInfo))
         {
             continue;
         }
-        
+
         if (!sdl_receive_frame_const(listener, stream->streamId, stream->buffer, stream->dataSize))
         {
             failedToSendFrame = 1;
             break;
         }
     }
-    
-    
+
+
     if (!failedToSendFrame)
     {
         PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
 
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
         printf("CLIENT: signal the client has read frame (%lld)\n", bufSource->clientPosition); fflush(stdout);
-#endif                
+#endif
 
-        /* update client frame read and position */ 
+        /* update client frame read and position */
         bufSource->clientPosition += 1;
 
         /* signal that the client has read the frame */
@@ -695,15 +713,15 @@ static int bmsrc_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceL
 
         PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
     }
-    
-    
+
+
     return !failedToSendFrame ? 0 : -1;
 }
 
 static int bmsrc_is_seekable(void* data)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_is_seekable(bufSource->targetSource);
 }
 
@@ -723,10 +741,10 @@ static int bmsrc_seek(void* data, int64_t position)
 
     if (position < 0)
     {
-        /* note: if we tried seeking then clientBufferPosition below would have been negative! */ 
+        /* note: if we tried seeking then clientBufferPosition below would have been negative! */
         return -1;
     }
-    
+
     /* wait for the frame to become available or it cannot be read */
     clientIsEOF = 0;
     doneWaiting = 0;
@@ -762,8 +780,8 @@ static int bmsrc_seek(void* data, int64_t position)
         {
             if (waitCount >= 2)
             {
-                /* the first wait (waitCount == 0) wake up could have been for another frame. 
-                The second (waitCount == 1) should result in the requested frame, 
+                /* the first wait (waitCount == 0) wake up could have been for another frame.
+                The second (waitCount == 1) should result in the requested frame,
                 otherwise a third attempt (waitCount == 2) means it failed */
                 seekFailed = 1;
                 doneWaiting = 1;
@@ -773,9 +791,9 @@ static int bmsrc_seek(void* data, int64_t position)
                 if (bufSource->waiting)
                 {
                     /* wake up the reading thread */
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                     printf("CLIENT: signal reading thread to wake up\n"); fflush(stdout);
-#endif                
+#endif
                     status = pthread_cond_signal(&bufSource->clientFrameReadCond);
                     if (status != 0)
                     {
@@ -783,14 +801,14 @@ static int bmsrc_seek(void* data, int64_t position)
                         /* TODO: what now? */
                     }
                 }
-                
+
                 /* wait for read thread to make next frame available */
                 gettimeofday(&now, NULL);
                 timeout.tv_sec = now.tv_sec + 1;
                 timeout.tv_nsec = now.tv_usec * 1000;
-#ifdef DEBUG_BUFFERED_SINK                
+#ifdef DEBUG_BUFFERED_SINK
                 printf("CLIENT: wait for read thread to seek and read frame\n"); fflush(stdout);
-#endif                
+#endif
                 status = pthread_cond_timedwait(&bufSource->frameReadCond, &bufSource->stateMutex, &timeout);
                 if (status == ETIMEDOUT)
                 {
@@ -800,13 +818,13 @@ static int bmsrc_seek(void* data, int64_t position)
                 else if (status != 0)
                 {
                     ml_log_error("Failed to wait for frame read conditional variable: %d\n", status);
-                    /* TODO: what now? */ 
+                    /* TODO: what now? */
                 }
 
                 waitCount++;
             }
         }
-        
+
         if (doneWaiting && !timedOut)
         {
             clientBufferPosition = bufSource->clientPosition % bufSource->frameBufferSize;
@@ -815,18 +833,18 @@ static int bmsrc_seek(void* data, int64_t position)
 
         PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
     }
-    
+
     /* no more reading */
     if (bufSource->stopped)
     {
         return -1;
     }
-    
+
     if (timedOut)
     {
         return -2;
     }
-    
+
     if (clientIsEOF)
     {
         PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
@@ -853,7 +871,7 @@ static int bmsrc_seek(void* data, int64_t position)
 static int bmsrc_seek_timecode(void* data, const Timecode* timecode, TimecodeType type, TimecodeSubType subType)
 {
     //BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     /* TODO: reset client is EOF */
     ml_log_error("Seeking on timecode in a buffered media source not yet implemented\n");
     return -1;
@@ -867,21 +885,21 @@ static int bmsrc_seek_timecode(void* data, const Timecode* timecode, TimecodeTyp
 static int bmsrc_get_length(void* data, int64_t* length)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_get_length(bufSource->targetSource, length);
 }
 
 static int bmsrc_get_position(void* data, int64_t* position)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return bufSource->clientPosition;
 }
 
 static int bmsrc_get_available_length(void* data, int64_t* length)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     return msc_get_available_length(bufSource->targetSource, length);
 }
 
@@ -893,7 +911,7 @@ static int bmsrc_eof(void* data)
     PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
     isEOF = IS_EOF(bufSource, bufSource->clientPosition);
     PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
-    
+
     return isEOF;
 }
 
@@ -901,25 +919,25 @@ static void bmsrc_close(void* data)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
     int i, j;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     bufSource->stopped = 1;
 
-    /* wake up the threads - this is to avoid valgrind saying the mutx is 
+    /* wake up the threads - this is to avoid valgrind saying the mutx is
     still in use when pthread_mutex_destroy is called below */
     PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
     pthread_cond_broadcast(&bufSource->frameReadCond);
     pthread_cond_broadcast(&bufSource->clientFrameReadCond);
     PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
-        
+
     join_thread(&bufSource->readThreadId, NULL, NULL);
-    
+
     msc_close(bufSource->targetSource);
-    
+
     for (i = 0; i < bufSource->frameBufferSize; i++)
     {
         BufferedFrame* frame = &bufSource->frames[i];
@@ -931,11 +949,11 @@ static void bmsrc_close(void* data)
         SAFE_FREE(&frame->streams);
     }
     SAFE_FREE(&bufSource->frames);
-    
+
     destroy_cond_var(&bufSource->frameReadCond);
     destroy_cond_var(&bufSource->clientFrameReadCond);
 	destroy_mutex(&bufSource->stateMutex);
-    
+
     SAFE_FREE(&bufSource);
 }
 
@@ -943,9 +961,9 @@ static void bmsrc_close(void* data)
 static int bmsrc_get_buffer_state(void* data, int* numBuffers, int* numBuffersFilled)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     PTHREAD_MUTEX_LOCK(&bufSource->stateMutex);
-    
+
     *numBuffers = bufSource->frameBufferSize;
     if (bufSource->lastPosition + 1 < bufSource->clientPosition)
     {
@@ -961,35 +979,35 @@ static int bmsrc_get_buffer_state(void* data, int* numBuffers, int* numBuffersFi
     {
         *numBuffersFilled = bufSource->lastPosition + 1 - bufSource->clientPosition;
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&bufSource->stateMutex);
-    
+
     return 1;
 }
 
 static int64_t bmsrc_convert_position(void* data, int64_t position, MediaSource* childSource)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     if (childSource != &bufSource->mediaSource)
     {
         return msc_convert_position(bufSource->targetSource, position, childSource);
     }
-    
+
     return position;
 }
 
 static void bmsrc_set_source_name(void* data, const char* name)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     msc_set_source_name(bufSource->targetSource, name);
 }
 
 static void bmsrc_set_clip_id(void* data, const char* id)
 {
     BufferedMediaSource* bufSource = (BufferedMediaSource*)data;
-    
+
     msc_set_clip_id(bufSource->targetSource, id);
 }
 
@@ -1001,22 +1019,23 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     BufferedMediaSource* newBufSource = NULL;
     int i, j;
     const StreamInfo* streamInfo;
-    
+
     CALLOC_ORET(newBufSource, BufferedMediaSource, 1);
-    
+
     newBufSource->targetSource = targetSource;
     newBufSource->blocking = blocking;
     newBufSource->frameBufferSize = size;
     newBufSource->byteRateLimit = byteRateLimit;
-    
+
     newBufSource->lastPosition = -1;
     newBufSource->eofPosition = -1;
-    
+
     newBufSource->mediaSource.data = newBufSource;
     newBufSource->mediaSource.is_complete = bmsrc_is_complete;
     newBufSource->mediaSource.post_complete = bmsrc_post_complete;
     newBufSource->mediaSource.get_num_streams = bmsrc_get_num_streams;
     newBufSource->mediaSource.get_stream_info = bmsrc_get_stream_info;
+    newBufSource->mediaSource.set_frame_rate_or_disable = bmsrc_set_frame_rate_or_disable;
     newBufSource->mediaSource.disable_stream = bmsrc_disable_stream;
     newBufSource->mediaSource.disable_audio = bmsrc_disable_audio;
     newBufSource->mediaSource.stream_is_disabled = bmsrc_stream_is_disabled;
@@ -1033,14 +1052,14 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
     newBufSource->mediaSource.convert_position = bmsrc_convert_position;
     newBufSource->mediaSource.set_source_name = bmsrc_set_source_name;
     newBufSource->mediaSource.set_clip_id = bmsrc_set_clip_id;
-    
+
     newBufSource->targetSourceListener.data = newBufSource;
     newBufSource->targetSourceListener.accept_frame = bmsrc_accept_frame;
     newBufSource->targetSourceListener.allocate_buffer = bmsrc_allocate_buffer;
     newBufSource->targetSourceListener.deallocate_buffer = bmsrc_deallocate_buffer;
     newBufSource->targetSourceListener.receive_frame = bmsrc_receive_frame;
-    
-    
+
+
     newBufSource->numStreams = msc_get_num_streams(targetSource);
     CALLOC_OFAIL(newBufSource->frames, BufferedFrame, size);
     for (i = 0; i < size; i++)
@@ -1057,17 +1076,17 @@ int bmsrc_create(MediaSource* targetSource, int size, int blocking, float byteRa
             }
         }
     }
-    
+
     CHK_OFAIL(init_mutex(&newBufSource->stateMutex));
     CHK_OFAIL(init_cond_var(&newBufSource->frameReadCond));
     CHK_OFAIL(init_cond_var(&newBufSource->clientFrameReadCond));
-    
+
     CHK_OFAIL(create_joinable_thread(&newBufSource->readThreadId, read_thread, newBufSource));
-    
-    
+
+
     *bufSource = newBufSource;
     return 1;
-    
+
 fail:
     bmsrc_close(newBufSource);
     return 0;

@@ -1,9 +1,10 @@
 /*
- * $Id: qc_lto_extract.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_lto_extract.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,7 +84,7 @@ struct QCLTOExtract
 {
     char* cacheDirectory;
     char* tapeDevice;
-    
+
     char startLTOSpoolNumber[32];
     char startFilename[32];
     int startExtract;
@@ -91,16 +92,16 @@ struct QCLTOExtract
     int remainderOnly;
     int stopExtract;
     int64_t bytesWritten;
-    
+
     QCLTOExtractState state;
     pthread_mutex_t stateMutex;
 
     IndexFile indexFile;
     pthread_mutex_t indexFileMutex;
-    
+
     int stopping;
     pthread_t extractThreadId;
-    
+
     char* currentPlayLTONumber;
     char* currentPlayName;
 };
@@ -123,13 +124,13 @@ static int64_t get_file_size_on_disk(const char* name1, const char* name2, const
             strcat(filepath, name3);
         }
     }
-    
+
     result = stat(filepath, &statBuf);
     if (result != 0)
     {
         return -1;
     }
-    
+
     return statBuf.st_size;
 }
 
@@ -138,9 +139,9 @@ static int get_file_from_index(QCLTOExtract* extract, const char* ltoSpoolNumber
 {
     int i;
     int foundIt = 0;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->indexFileMutex);
-    
+
     if (strcmp(extract->indexFile.ltoNumber, ltoSpoolNumber) == 0)
     {
         for (i = 0; i < extract->indexFile.numEntries; i++)
@@ -153,17 +154,17 @@ static int get_file_from_index(QCLTOExtract* extract, const char* ltoSpoolNumber
             }
         }
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&extract->indexFileMutex);
-    
+
     return foundIt;
 }
 
-static void set_extract_state(QCLTOExtract* extract, QCLTOExtractStatus status, 
+static void set_extract_state(QCLTOExtract* extract, QCLTOExtractStatus status,
     const char* ltoSpoolNumber, const char* currentExtractingFile, int extractAll)
 {
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
-    
+
     extract->state.status = status;
     if (ltoSpoolNumber != NULL)
     {
@@ -179,7 +180,7 @@ static void set_extract_state(QCLTOExtract* extract, QCLTOExtractStatus status,
     }
 
     extract->state.updated = -1;
-    
+
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
@@ -188,25 +189,25 @@ static int parse_tar_ustar_header(const unsigned char* tarBytes, int64_t* fileSi
     int i;
     const unsigned char* sizeField;
 
-    /* type flag field (offset 156, size 1) */    
+    /* type flag field (offset 156, size 1) */
     *typeFlag = tarBytes[156];
 
-    
+
     /* parse the size field (offset 124, size 12) */
-    
-    /* 
+
+    /*
     if the first byte in the size field equals 0x80, then the size is the next
     11 bytes representing a binary decimal number using big endian byte order. This
-    format is a GNU extension, which occurs when the tar --format parameter was _not_  
-    set to "posix" and the file size exceeds 8GB. See also 
+    format is a GNU extension, which occurs when the tar --format parameter was _not_
+    set to "posix" and the file size exceeds 8GB. See also
     http://swtch.com/usr/local/plan9/src/cmd/tar.c (search for "Binsize")
-    
-    Otherwise the file size is represented in Ascii text characters with max 11 octal numbers 
-    terminated by a null or space character 
+
+    Otherwise the file size is represented in Ascii text characters with max 11 octal numbers
+    terminated by a null or space character
     */
 
     sizeField = &tarBytes[124];
-    
+
     if (sizeField[0] == 0x80) /* GNU extension, big endian binary decimal number */
     {
         *fileSize = 0;
@@ -215,7 +216,7 @@ static int parse_tar_ustar_header(const unsigned char* tarBytes, int64_t* fileSi
             *fileSize = (*fileSize << 8) | sizeField[i];
         }
     }
-    else /* octal ascii string terminated by null or space character */ 
+    else /* octal ascii string terminated by null or space character */
     {
         unsigned long long sizeLL = strtoull((const char*)sizeField, NULL, 8);
         if (sizeLL == ULLONG_MAX)
@@ -229,7 +230,7 @@ static int parse_tar_ustar_header(const unsigned char* tarBytes, int64_t* fileSi
             *fileSize = sizeLL;
         }
     }
-    
+
     return 1;
 }
 
@@ -240,21 +241,21 @@ static int parse_tar_extended_header_data(const unsigned char* tarBytes, int64_t
     const char* keywordPtr;
     const char* valuePtr;
     int64_t processedSize = 0;
-    
+
     /* search for a size field */
-    
-    /* 
+
+    /*
     From "The Open Group Base Specifications Issue 6, IEEE Std 1003.1, 2004 Edition, pax - portable archive interchange":
 
     An extended header shall consist of one or more records, each constructed as follows:
     "%d %s=%s\n", <length>, <keyword>, <value>
-    The extended header records shall be encoded according to the ISO/IEC 10646-1:2000 standard (UTF-8). 
-    The <length> field, <blank>, equals sign, and <newline> shown shall be limited to the portable 
-    character set, as encoded in UTF-8. The <keyword> and <value> fields can be any UTF-8 characters. 
-    The <length> field shall be the decimal length of the extended header record in octets, including 
-    the trailing <newline>. 
+    The extended header records shall be encoded according to the ISO/IEC 10646-1:2000 standard (UTF-8).
+    The <length> field, <blank>, equals sign, and <newline> shown shall be limited to the portable
+    character set, as encoded in UTF-8. The <keyword> and <value> fields can be any UTF-8 characters.
+    The <length> field shall be the decimal length of the extended header record in octets, including
+    the trailing <newline>.
     */
-    
+
     while (processedSize < bytesSize)
     {
         if (sscanf(fieldPtr, "%d\n", &length) != 1)
@@ -262,7 +263,7 @@ static int parse_tar_extended_header_data(const unsigned char* tarBytes, int64_t
             ml_log_error("Failed to parse <length> of length/keyword/value in tar extended header data\n");
             return 0;
         }
-        
+
         /* locate the keyword and value */
         keywordPtr = strchr(fieldPtr, ' ');
         if (keywordPtr == NULL)
@@ -278,7 +279,7 @@ static int parse_tar_extended_header_data(const unsigned char* tarBytes, int64_t
             return 0;
         }
         valuePtr++;
-        
+
         if (strncmp(keywordPtr, "size", valuePtr - keywordPtr - 1) == 0)
         {
             /* parse the "size" value and then we are done */
@@ -305,7 +306,7 @@ static int parse_tar_extended_header_data(const unsigned char* tarBytes, int64_t
 
     /* no size field was found */
     *fileSize = -1;
-    return 1;    
+    return 1;
 }
 
 static int parse_tar_header(const unsigned char* tarBytes, int64_t* fileSize, int64_t* offset)
@@ -315,19 +316,19 @@ static int parse_tar_header(const unsigned char* tarBytes, int64_t* fileSize, in
 
     *offset = 0;
     *fileSize = -1;
-    
+
     while (1)
     {
         size = 0;
         typeFlag = 0;
-        
+
         if (!parse_tar_ustar_header(&tarBytes[*offset], &size, &typeFlag))
         {
             ml_log_error("Failed to parse ustar header\n");
             return 0;
         }
         *offset += 512; /* skip the ustar header */
-        
+
         if (typeFlag == 'g')
         {
             /* data is a global extended header - parse the file size if present */
@@ -340,7 +341,7 @@ static int parse_tar_header(const unsigned char* tarBytes, int64_t* fileSize, in
         }
         else if (typeFlag == 'x')
         {
-            /* data is a extended header - parse the file size if present and not already defined by a 
+            /* data is a extended header - parse the file size if present and not already defined by a
             global extended header */
             if (*fileSize < 0)
             {
@@ -362,7 +363,7 @@ static int parse_tar_header(const unsigned char* tarBytes, int64_t* fileSize, in
             break;
         }
     }
-    
+
     return 1;
 }
 
@@ -382,7 +383,7 @@ static int get_tape_pos(const char* device, int* fileNo, int* blockNo)
 
     *fileNo = status.mt_fileno;
     *blockNo = status.mt_blkno;
-    
+
     close(fd); return 1;
 }
 
@@ -450,8 +451,8 @@ static QCLTOExtractStatus probe_tape_status(const char *device)
             case EBUSY:
                 // E.g. when another process has opened the same device
                 // domo: busy when ejecting tape
-                // qc: if we are polling and the tape is busy then either it is ejecting or 
-                //     another process is using the tape device 
+                // qc: if we are polling and the tape is busy then either it is ejecting or
+                //     another process is using the tape device
                 return LTO_BUSY_STATUS;
                 break;
             default:
@@ -509,35 +510,35 @@ static int seek_to_file(QCLTOExtract* extract, int num)
     int haveRewoundTape = 0;
     int fileNo = -1;
     int blockNo = -1;
-    
+
     if (get_tape_pos(extract->tapeDevice, &fileNo, &blockNo))
     {
         ml_log_warn("Failed to get tape pos - rewinding tape\n");
     }
-    
+
     if (fileNo < 0)
     {
         set_extract_state(extract, LTO_BUSY_REWINDING_STATUS, NULL, NULL, -1);
-        
+
         if (!rewind_tape(extract->tapeDevice))
         {
             ml_log_error("Failed to rewind tape to allow seek to file\n");
             return 0;
         }
         haveRewoundTape = 1;
-        
+
         if (!get_tape_pos(extract->tapeDevice, &fileNo, &blockNo) || fileNo < 0 || blockNo < 0)
         {
             ml_log_error("Failed to get tape pos\n");
             return 0;
         }
     }
-    
+
     if (num == fileNo && blockNo == 0)
     {
         return 1;
     }
-    
+
     if (num == 0)
     {
         if (!haveRewoundTape)
@@ -552,14 +553,14 @@ static int seek_to_file(QCLTOExtract* extract, int num)
             }
         }
     }
-    else 
+    else
     {
         int fd;
         if ((fd = open(extract->tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
             ml_log_error("Failed to open device %s: %s\n", extract->tapeDevice, strerror(errno));
             return 0;
         }
-    
+
         struct mtop control;
         if (num < fileNo)
         {
@@ -578,7 +579,7 @@ static int seek_to_file(QCLTOExtract* extract, int num)
         }
 
         set_extract_state(extract, LTO_BUSY_SEEKING_STATUS, NULL, NULL, -1);
-        
+
         if (ioctl(fd, MTIOCTOP, &control) == -1) {
             ml_log_error("MTIOCTOP mt_op=%s failed: %s\n", control.mt_op == MTBSFM ? "MTBSFM" : "MTFSF", strerror(errno));
             close(fd); return 0;
@@ -586,7 +587,7 @@ static int seek_to_file(QCLTOExtract* extract, int num)
 
         close(fd);
     }
-    
+
     return 1;
 }
 
@@ -596,14 +597,14 @@ static int parse_index_file_entry(const char* text, IndexFileEntry* entry)
     char* namePtr = &entry->name[0];
     char* maxNamePtr = &entry->name[31];
     size_t len;
-    
+
     /* parse the entry number, terminated by a '\t' or ' ' */
     if (*textPtr == '\0' || sscanf(textPtr, "%d", &entry->num) != 1)
     {
         ml_log_error("Failed to parse the index entry number\n");
         return 0;
     }
-    while (*textPtr != '\0' && *textPtr != '\r' && *textPtr != '\n' && 
+    while (*textPtr != '\0' && *textPtr != '\r' && *textPtr != '\n' &&
         (*textPtr != '\t' && *textPtr != ' '))
     {
         textPtr++;
@@ -617,9 +618,9 @@ static int parse_index_file_entry(const char* text, IndexFileEntry* entry)
     {
         textPtr++;
     }
-    
+
     /* parse the name */
-    while (*textPtr != '\0' && *textPtr != '\r' && *textPtr != '\n' && 
+    while (*textPtr != '\0' && *textPtr != '\r' && *textPtr != '\n' &&
         (*textPtr != '\t' && *textPtr != ' ') && namePtr != maxNamePtr)
     {
         *namePtr++ = *textPtr++;
@@ -635,13 +636,13 @@ static int parse_index_file_entry(const char* text, IndexFileEntry* entry)
         return 0;
     }
     *namePtr++ = '\0';
-    
+
     if (*textPtr != '\t' && *textPtr != ' ')
     {
         ml_log_error("Missing file size in index entry\n");
         return 0;
     }
-    
+
     /* skip '\t', ' ' and '0' */
     while (*textPtr == '\t' || *textPtr == ' ' || *textPtr == '0')
     {
@@ -652,13 +653,13 @@ static int parse_index_file_entry(const char* text, IndexFileEntry* entry)
         ml_log_error("Failed to get file size from index entry\n");
         return 0;
     }
-    
+
     len = strlen(entry->name);
     if (len >= 4 && strcmp(".txt", &entry->name[len - 4]) == 0)
     {
         entry->isSelfReference = 1;
     }
-    
+
     return 1;
 }
 
@@ -667,7 +668,7 @@ static int parse_index_file(IndexFile* indexFile, char* textPtr)
     IndexFileEntry* entries = NULL;
     int i;
     int maxLTONumberlen = (int)sizeof(indexFile->ltoNumber) - 1;
-    
+
     /* read the LTO number */
     for (i = 0; i < maxLTONumberlen; i++)
     {
@@ -683,7 +684,7 @@ static int parse_index_file(IndexFile* indexFile, char* textPtr)
         return 0;
     }
     indexFile->ltoNumber[i] = '\0';
-    
+
     /* skip the line */
     textPtr = strchr(textPtr, '\n');
     if (textPtr == NULL)
@@ -692,7 +693,7 @@ static int parse_index_file(IndexFile* indexFile, char* textPtr)
         return 0;
     }
     textPtr++;
-    
+
     /* parse entries, terminated by an empty line */
     indexFile->numEntries = 0;
     while (*textPtr != '\r' && *textPtr != '\n')
@@ -707,7 +708,7 @@ static int parse_index_file(IndexFile* indexFile, char* textPtr)
             entries = NULL;
             indexFile->allocEntries += INDEX_ENTRY_ALLOC_STEP;
         }
-        
+
         /* parse entry */
         indexFile->numEntries++;
         if (!parse_index_file_entry(textPtr, &indexFile->entries[indexFile->numEntries - 1]))
@@ -724,16 +725,16 @@ static int parse_index_file(IndexFile* indexFile, char* textPtr)
         }
         textPtr++;
     }
-    
+
     if (indexFile->numEntries == 0)
     {
         ml_log_error("Failed to find any entries in the index file\n");
         goto fail;
     }
-    
-    
+
+
     return 1;
-    
+
 fail:
     SAFE_FREE(&entries);
     indexFile->numEntries = 0;
@@ -747,7 +748,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
     char sysCmd[FILENAME_MAX];
     struct stat statBuf;
 
-    
+
     /* rewind to position tape at start of the index file */
     if (!seek_to_file(extract, 0))
     {
@@ -755,7 +756,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         return -1;
     }
 
-    
+
     set_extract_state(extract, LTO_BUSY_EXTRACTING_INDEX_STATUS, NULL, NULL, -1);
 
     int fd;
@@ -766,7 +767,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
 
     // POSIX tar header is 512 bytes
     ssize_t nread = read(fd, buffer, TAPEBLOCK);
-    if (nread != TAPEBLOCK) 
+    if (nread != TAPEBLOCK)
     {
         if (nread < 0)
         {
@@ -790,11 +791,11 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
 
         size_t filenameLen = strlen((char*)buffer);
         if (filenameLen < 6 ||
-            buffer[filenameLen - 6] != '0' || 
-            buffer[filenameLen - 5] != '0' || 
-            buffer[filenameLen - 4] != '.' || 
-            tolower(buffer[filenameLen - 3]) != 't' || 
-            tolower(buffer[filenameLen - 2]) != 'x' || 
+            buffer[filenameLen - 6] != '0' ||
+            buffer[filenameLen - 5] != '0' ||
+            buffer[filenameLen - 4] != '.' ||
+            tolower(buffer[filenameLen - 3]) != 't' ||
+            tolower(buffer[filenameLen - 2]) != 'x' ||
             tolower(buffer[filenameLen - 1]) != 't')
         {
             close(fd); return -1;
@@ -819,7 +820,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         ml_log_error("Index file size %"PRId64" is larger than buffer size %"PRId64"\n", fileSize, TAPEBLOCK - offset);
         close(fd); return -1;
     }
-    
+
     /* parse the index file */
     PTHREAD_MUTEX_LOCK(&extract->indexFileMutex);
     if (!parse_index_file(&extract->indexFile, (char*)&buffer[offset]))
@@ -829,11 +830,11 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         close(fd); return -1;
     }
     PTHREAD_MUTEX_UNLOCK(&extract->indexFileMutex);
-    
-    
+
+
     /* get the index file filename
-       tar run with option '--format=posix' will by default write the name as '%d/PaxHeaders.%p/%f' 
-       where %d is the directory, %p is the process id and %f is the filename 
+       tar run with option '--format=posix' will by default write the name as '%d/PaxHeaders.%p/%f'
+       where %d is the directory, %p is the process id and %f is the filename
        we strip out the bit before the last slash to get the name (%f) */
     char* name = strrchr((char*)buffer, '/');
     if (name == NULL)
@@ -845,10 +846,10 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
     {
         name++;
     }
-    SAFE_FREE(&extract->indexFile.filename);    
+    SAFE_FREE(&extract->indexFile.filename);
     CALLOC_OFAIL(extract->indexFile.filename, char, strlen(name) + 1);
     strcpy(extract->indexFile.filename, name);
-    
+
 
     /* check if directory exists in cache, create it if not */
     strcpy(filename, extract->cacheDirectory);
@@ -864,8 +865,8 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
             close(fd); return -1;
         }
     }
-    
-    
+
+
     /* read the index file and write to the cache sub-directory */
     strcpy(filename, extract->cacheDirectory);
     strcat_separator(filename);
@@ -879,7 +880,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         ml_log_error("Failed to create the tape index file: %s\n", strerror(errno));
         close(fd); return -1;
     }
-    
+
     int64_t count = 0;
     int64_t numWrite;
     while (count < fileSize)
@@ -892,7 +893,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         }
         count += numWrite;
         offset = 0;
-        
+
         if (count < fileSize)
         {
             nread = read(fd, buffer, TAPEBLOCK);
@@ -903,14 +904,14 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
         }
     }
     fclose(indexFile);
-    
+
     close(fd); return 0;
-    
+
 fail:
     close(fd); return -1;
 }
 
-/* note: extract->bytesWritten must be set to 0 before calling this function */    
+/* note: extract->bytesWritten must be set to 0 before calling this function */
 static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNum,
     int64_t fileSizeInIndex, int64_t freeDiskSpace)
 {
@@ -925,8 +926,8 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         return 0;
     }
 
-    set_extract_state(extract, LTO_BUSY_EXTRACTING_FILE_STATUS, NULL, NULL, -1); 
-    
+    set_extract_state(extract, LTO_BUSY_EXTRACTING_FILE_STATUS, NULL, NULL, -1);
+
     /* check if directory exists in cache, create it if not */
     strcpy(filename, extract->cacheDirectory);
     strcat_separator(filename);
@@ -941,8 +942,8 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
             return 0;
         }
     }
-    
-    
+
+
     /* read and write to the cache sub-directory */
     int fd;
     if ((fd = open(extract->tapeDevice, O_RDONLY|O_NONBLOCK|O_LARGEFILE)) == -1) {
@@ -986,7 +987,7 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
     strcat(filename, extract->indexFile.ltoNumber);
     strcat_separator(filename);
     strcat(filename, name);
-    
+
     int64_t fileSize;
     int64_t offset;
     if (!parse_tar_header(buffer, &fileSize, &offset))
@@ -994,12 +995,12 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         ml_log_error("Failed to parse the tar header\n");
         close(fd); return 0;
     }
-    
+
     if (fileSize != fileSizeInIndex)
     {
         ml_log_warn("File size on tape, %"PRId64", does not equal file size in index file, %"PRId64"\n",
             fileSize, fileSizeInIndex);
-            
+
         if (freeDiskSpace >= 0 && fileSize + FREE_DISK_SPACE_MARGIN > freeDiskSpace)
         {
             ml_log_error("Disk is full: requested %"PRId64" MB, have %"PRId64" MB with %d MB margin\n",
@@ -1008,16 +1009,16 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         }
     }
 
-    /* check just before we open (and truncate) the file that the extract hasn't being stopped. 
-    This will prevent the file being truncated to zero when the user selected to stop the extract 
+    /* check just before we open (and truncate) the file that the extract hasn't being stopped.
+    This will prevent the file being truncated to zero when the user selected to stop the extract
     whilst the tape drive was still seeking and before the extract actually started */
     if (extract->stopping ||
         extract->stopExtract ||
-        (extract->startExtract && !extract->extractAll)) 
+        (extract->startExtract && !extract->extractAll))
     {
         close(fd); return 1;
     }
-    
+
     FILE* file;
     if ((file = fopen(filename, "wb")) == NULL)
     {
@@ -1032,8 +1033,8 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
     int64_t count = 0;
     int64_t numWrite;
     while (!extract->stopping &&
-        !extract->stopExtract && 
-        (!extract->startExtract || extract->extractAll) && 
+        !extract->stopExtract &&
+        (!extract->startExtract || extract->extractAll) &&
         count < fileSize)
     {
         numWrite = (count + (TAPEBLOCK - offset) < fileSize) ? (TAPEBLOCK - offset) : fileSize - count;
@@ -1045,7 +1046,7 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         count += numWrite;
         extract->bytesWritten += numWrite;
         offset = 0;
-        
+
         if (count < fileSize)
         {
             nread = read(fd, buffer, TAPEBLOCK);
@@ -1058,7 +1059,7 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         /* limit the throughput ~ 50 MB/s when a file is playing.
         The limit is set to 65 MB/s, which is practice limits the throughput to ~ 50 MB/s. The assumption
         is that the tape drive is actively limiting the throughput below the maximum.
-        Note that this value was found by experiment and could be different for different LTO tape drives 
+        Note that this value was found by experiment and could be different for different LTO tape drives
         and/or RAID controllers. */
         gettimeofday(&end, NULL);
         diff = (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
@@ -1069,7 +1070,7 @@ static int extract_file(QCLTOExtract* extract, unsigned char* buffer, int fileNu
         start = end;
     }
     fclose(file);
-    
+
     /* return 1 if completed extract, 2 if not */
     close(fd); return 1;
 }
@@ -1103,13 +1104,13 @@ static void* extract_thread(void* arg)
     int blockNo;
     int result;
     int failedToReadIndexCount = 0;
-    
+
 
     while (!extract->stopping)
     {
         gettimeofday(&now, NULL);
-        
-        
+
+
         diffTime = (now.tv_sec - lastStatusPoll.tv_sec) * 1000000 + now.tv_usec - lastStatusPoll.tv_usec;
         if (diffTime < 0)
         {
@@ -1117,14 +1118,14 @@ static void* extract_thread(void* arg)
             lastStatusPoll = now;
         }
         diffTime -= delayPoll;
-        
+
         switch (state)
         {
             case 0: /* poll tape device status */
                 if (diffTime > 1000000) /* poll status every second - note below with lastBusyLoadPosCount that we assume 1 second poll interval */
                 {
                     status = probe_tape_status(extract->tapeDevice);
-                    
+
                     if (status == LTO_ONLINE_STATUS)
                     {
                         if (failedToReadIndexCount < 3)
@@ -1142,7 +1143,7 @@ static void* extract_thread(void* arg)
                             lastProbeStatus == status)
                         {
                             /* if the tape has been in LTO_BUSY_LOAD_POS_STATUS for more than 5 seconds
-                            then we assume the PC was started with a tape in the tape drive 
+                            then we assume the PC was started with a tape in the tape drive
                             and we assume ONLINE status */
                             if (lastBusyLoadPosCount > 5)
                             {
@@ -1152,8 +1153,8 @@ static void* extract_thread(void* arg)
                         }
                         set_extract_state(extract, status, NULL, NULL, -1);
                     }
-                    
-        
+
+
                     if (status == LTO_BUSY_LOAD_POS_STATUS)
                     {
                         lastBusyLoadPosCount++;
@@ -1167,15 +1168,15 @@ static void* extract_thread(void* arg)
                     lastProbeStatus = status;
                 }
                 break;
-                
+
             case 1: /* tape device is online */
-                
+
                 /* set tape params */
                 set_tape_params(extract->tapeDevice);
-                
-                
+
+
                 /* extract index file */
-                
+
                 result = extract_index_file(extract, blockBuffer);
                 if (result != 0)
                 {
@@ -1191,7 +1192,7 @@ static void* extract_thread(void* arg)
                         ml_log_error("Failed to extract index file from tape\n");
                         printf("Failed to extract index file from tape\n");
                     }
-                    
+
                     failedToReadIndexCount++;
                     state = 0;
                     delayPoll = 5000000; /* wait 5 seconds before we poll again */
@@ -1199,11 +1200,11 @@ static void* extract_thread(void* arg)
                 }
                 ml_log_info("Parsed %d entries from the index file\n", extract->indexFile.numEntries);
                 failedToReadIndexCount = 0;
-                
+
                 set_extract_state(extract, LTO_READY_TO_EXTRACT_STATUS, extract->indexFile.ltoNumber, "", 0);
-                
+
                 state = 2;
-                
+
                 break;
 
             case 2:
@@ -1222,7 +1223,7 @@ static void* extract_thread(void* arg)
                 extract->remainderOnly = 0;
                 extract->stopExtract = 0; /* can't stop before we have started */
                 PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
-                
+
                 if (startExtract)
                 {
                     /* inits for extract all */
@@ -1249,10 +1250,10 @@ static void* extract_thread(void* arg)
                         }
                         numFilesExtracted = 0;
                     }
-                    
+
                     while (!extract->stopping &&
                         !extract->stopExtract &&
-                        !extract->startExtract) 
+                        !extract->startExtract)
                     {
                         if (extractAll)
                         {
@@ -1270,7 +1271,7 @@ static void* extract_thread(void* arg)
                             }
                             fileForExtract = extract->indexFile.entries[fileIndex];
                             PTHREAD_MUTEX_UNLOCK(&extract->indexFileMutex);
-                            
+
                             if (fileForExtract.isSelfReference)
                             {
                                 /* skip the index file itself */
@@ -1278,7 +1279,7 @@ static void* extract_thread(void* arg)
                                 numFilesExtracted++;
                                 continue;
                             }
-                            
+
                             if (remainderOnly)
                             {
                                 fileSizeOnDisk = get_file_size_on_disk(extract->cacheDirectory, extract->indexFile.ltoNumber, fileForExtract.name);
@@ -1286,7 +1287,7 @@ static void* extract_thread(void* arg)
                                 {
                                     ml_log_info("Skipping '%s/%s' for extract because it is complete\n", extract->indexFile.ltoNumber, fileForExtract.name);
                                     printf("Skipping '%s/%s' for extract because it is complete\n", extract->indexFile.ltoNumber, fileForExtract.name);
-                                    
+
                                     /* skip this file which is already on disk */
                                     fileIndex++;
                                     numFilesExtracted++;
@@ -1299,9 +1300,9 @@ static void* extract_thread(void* arg)
                             if (!get_file_from_index(extract, startExtractSpoolNumber, startExtractFilename, &fileForExtract))
                             {
                                 ml_log_error("File selected to extract is unknown\n");
-                                
+
                                 set_extract_state(extract, LTO_FILE_EXTRACT_FAILED_STATUS, "", "", 0);
-                                
+
                                 state = 0;
                                 delayPoll = 5000000; /* wait 5 seconds before we poll again */
                                 goto breakout;
@@ -1319,15 +1320,15 @@ static void* extract_thread(void* arg)
                                 {
                                     ml_log_error("Disk is full: requested %"PRId64" MB, have %"PRId64" MB with %d MB margin\n",
                                         fileForExtract.fileSize / (1e6), freeDiskSpace / 1e6, FREE_DISK_SPACE_MARGIN / 1e6);
-                                    
+
                                     set_extract_state(extract, LTO_DISK_FULL_STATUS, NULL, "", 0);
-                                    
+
                                     delayPoll = 20000000; /* wait 20 seconds before we poll again */
                                     goto breakout;
                                 }
                             }
                         }
-    
+
                         /* don't extract to the file that is currently playing */
                         skipExtract = 0;
                         PTHREAD_MUTEX_LOCK(&extract->stateMutex);
@@ -1339,26 +1340,26 @@ static void* extract_thread(void* arg)
                             skipExtract = 1;
                         }
                         PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
-                        
+
                         if (!skipExtract)
                         {
                             extract->bytesWritten = 0; /* used in qce_can_play() function */
-                            set_extract_state(extract, LTO_BUSY_EXTRACTING_FILE_STATUS, extract->indexFile.ltoNumber, 
+                            set_extract_state(extract, LTO_BUSY_EXTRACTING_FILE_STATUS, extract->indexFile.ltoNumber,
                                 fileForExtract.name, extractAll);
-        
+
                             ml_log_info("Extracting file '%s/%s' (%s)\n", extract->indexFile.ltoNumber, fileForExtract.name,
                                 extractAll ? "extract all" : "single extract");
                             printf("Extracting file '%s/%s' (%s)\n", extract->indexFile.ltoNumber, fileForExtract.name,
                                 extractAll ? "extract all" : "single extract");
-                                
+
                             /* start extracting */
                             if (!extract_file(extract, blockBuffer, fileForExtract.num, fileForExtract.fileSize, freeDiskSpace))
                             {
                                 ml_log_error("Failed to extract file from tape\n");
                                 printf("Failed to extract file from tape\n");
-                                
+
                                 set_extract_state(extract, LTO_FILE_EXTRACT_FAILED_STATUS, "", "", 0);
-                                
+
                                 state = 0;
                                 delayPoll = 5000000; /* wait 5 seconds before we poll again */
                                 goto breakout;
@@ -1371,9 +1372,9 @@ static void* extract_thread(void* arg)
                             ml_log_info("Skipping extract of '%s/%s' (%s) which is currently playing\n", extract->indexFile.ltoNumber,
                                 fileForExtract.name, extractAll ? "extract all" : "single extract");
                             printf("Skipping extract of '%s/%s' (%s) which is currently playing\n", extract->indexFile.ltoNumber,
-                                fileForExtract.name, extractAll ? "extract all" : "single extract"); 
+                                fileForExtract.name, extractAll ? "extract all" : "single extract");
                         }
-                        
+
                         if (!extractAll)
                         {
                             break;
@@ -1393,7 +1394,7 @@ static void* extract_thread(void* arg)
                     if (diffTime > 1000000) /* poll status every second */
                     {
                         status = probe_tape_status(extract->tapeDevice);
-                        
+
                         if (status != LTO_ONLINE_STATUS)
                         {
                             set_extract_state(extract, status, "", "", 0);
@@ -1403,20 +1404,20 @@ static void* extract_thread(void* arg)
                         {
                             set_extract_state(extract, LTO_READY_TO_EXTRACT_STATUS, NULL, NULL, -1);
                         }
-            
+
                         delayPoll = 0;
                         lastStatusPoll = now;
                     }
                 }
-                
+
                 break;
-                
+
             default:
                 break;
         }
-        
+
 breakout:
-        
+
         gettimeofday(&endNow, NULL);
         diffTime = (endNow.tv_sec - now.tv_sec) * 1000000 + endNow.tv_usec - now.tv_usec;
         if (diffTime < 100000)
@@ -1425,7 +1426,7 @@ breakout:
             usleep(100000);
         }
     }
-    
+
     pthread_exit((void*) 0);
 }
 
@@ -1433,9 +1434,9 @@ breakout:
 int qce_create_lto_extract(const char* cacheDirectory, const char* tapeDevice, QCLTOExtract** extract)
 {
     QCLTOExtract* newExtract = NULL;
-    
+
     CALLOC_ORET(newExtract, QCLTOExtract, 1);
-    
+
     CALLOC_OFAIL(newExtract->cacheDirectory, char, strlen(cacheDirectory) + 1);
     strcpy(newExtract->cacheDirectory, cacheDirectory);
 
@@ -1444,13 +1445,13 @@ int qce_create_lto_extract(const char* cacheDirectory, const char* tapeDevice, Q
 
     CHK_OFAIL(init_mutex(&newExtract->stateMutex));
     CHK_OFAIL(init_mutex(&newExtract->indexFileMutex));
-    
-    CHK_OFAIL(create_joinable_thread(&newExtract->extractThreadId, extract_thread, newExtract)); 
 
-    
+    CHK_OFAIL(create_joinable_thread(&newExtract->extractThreadId, extract_thread, newExtract));
+
+
     *extract = newExtract;
     return 1;
-    
+
 fail:
     qce_free_lto_extract(&newExtract);
     return 0;
@@ -1462,22 +1463,22 @@ void qce_free_lto_extract(QCLTOExtract** extract)
     {
         return;
     }
-    
+
     (*extract)->stopping = 1;
     join_thread(&(*extract)->extractThreadId, NULL, NULL);
-    
+
     SAFE_FREE(&(*extract)->cacheDirectory);
     SAFE_FREE(&(*extract)->tapeDevice);
-    
+
     SAFE_FREE(&(*extract)->indexFile.entries);
     SAFE_FREE(&(*extract)->indexFile.filename);
-    
+
     SAFE_FREE(&(*extract)->currentPlayLTONumber);
     SAFE_FREE(&(*extract)->currentPlayName);
-    
+
     destroy_mutex(&(*extract)->stateMutex);
     destroy_mutex(&(*extract)->indexFileMutex);
-    
+
     SAFE_FREE(extract);
 }
 
@@ -1488,14 +1489,14 @@ void qce_start_extract(QCLTOExtract* extract, const char* ltoSpoolNumber, const 
     extract->startExtract = 1;
     extract->extractAll = 0;
     extract->remainderOnly = 0;
-    
+
     strncpy(extract->startLTOSpoolNumber, ltoSpoolNumber, 31);
     extract->startLTOSpoolNumber[31] = '\0';
-    
+
     strncpy(extract->startFilename, filename, 31);
     extract->startFilename[31] = '\0';
-    
-    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);    
+
+    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
 void qce_start_extract_all(QCLTOExtract* extract, const char* ltoSpoolNumber)
@@ -1505,13 +1506,13 @@ void qce_start_extract_all(QCLTOExtract* extract, const char* ltoSpoolNumber)
     extract->startExtract = 1;
     extract->extractAll = 1;
     extract->remainderOnly = 0;
-    
+
     strncpy(extract->startLTOSpoolNumber, ltoSpoolNumber, 31);
     extract->startLTOSpoolNumber[31] = '\0';
-    
+
     strcpy(extract->startFilename, "");
-    
-    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);    
+
+    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
 void qce_start_extract_remainder(QCLTOExtract* extract, const char* ltoSpoolNumber)
@@ -1521,84 +1522,84 @@ void qce_start_extract_remainder(QCLTOExtract* extract, const char* ltoSpoolNumb
     extract->startExtract = 1;
     extract->extractAll = 1;
     extract->remainderOnly = 1;
-    
+
     strncpy(extract->startLTOSpoolNumber, ltoSpoolNumber, 31);
     extract->startLTOSpoolNumber[31] = '\0';
-    
+
     strcpy(extract->startFilename, "");
-    
-    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);    
+
+    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
 void qce_stop_extract(QCLTOExtract* extract)
 {
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     extract->stopExtract = 1;
-    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);    
+    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
 void qce_get_lto_state(QCLTOExtract* extract, QCLTOExtractState* state, int updateMask)
 {
-    PTHREAD_MUTEX_LOCK(&extract->stateMutex);    
+    PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     *state = extract->state;
     extract->state.updated &= ~updateMask;
-    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);    
+    PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
 
 int qce_is_current_lto(QCLTOExtract* extract, const char* ltoNumber)
 {
     int result;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     result = (strcmp(ltoNumber, extract->state.ltoSpoolNumber) == 0);
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 
-    return result;    
+    return result;
 }
 
 int qce_is_extracting(QCLTOExtract* extract, const char* ltoNumber, const char* filename)
 {
     int result;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     result = (strcmp(ltoNumber, extract->state.ltoSpoolNumber) == 0) &&
         (strcmp(filename, extract->state.currentExtractingFile) == 0);
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 
-    return result;    
+    return result;
 }
 
 int qce_is_extracting_from(QCLTOExtract* extract, const char* ltoNumber)
 {
     int result;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     result = (strcmp(ltoNumber, extract->state.ltoSpoolNumber) == 0) &&
         (strlen(extract->state.currentExtractingFile) > 0);
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 
-    return result;    
+    return result;
 }
 
 int qce_is_extracting_all_from(QCLTOExtract* extract, const char* ltoNumber)
 {
     int result;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
     result = (strcmp(ltoNumber, extract->state.ltoSpoolNumber) == 0) &&
         (strlen(extract->state.currentExtractingFile) > 0) &&
         extract->state.extractAll;
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 
-    return result;    
+    return result;
 }
 
 void qce_set_current_play_name(QCLTOExtract* extract, const char* directory, const char* name)
 {
     const char* ltoNumber;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
-    
+
     SAFE_FREE(&extract->currentPlayLTONumber);
     SAFE_FREE(&extract->currentPlayName);
     if (directory != NULL && directory[0] != '\0')
@@ -1619,10 +1620,10 @@ void qce_set_current_play_name(QCLTOExtract* extract, const char* directory, con
         CALLOC_OFAIL(extract->currentPlayName, char, strlen(name) + 1);
         strcpy(extract->currentPlayName, name);
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
     return;
-    
+
 fail:
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
 }
@@ -1631,9 +1632,9 @@ int qce_can_play(QCLTOExtract* extract, const char* directory, const char* name)
 {
     const char* ltoNumber = NULL;
     int result = 0;
-    
+
     PTHREAD_MUTEX_LOCK(&extract->stateMutex);
-    
+
     if (directory != NULL && directory[0] != '\0')
     {
         if ((ltoNumber = strrchr(directory, '/')) != NULL)
@@ -1645,15 +1646,15 @@ int qce_can_play(QCLTOExtract* extract, const char* directory, const char* name)
             ltoNumber = directory;
         }
     }
-    /* can play the file if it is not currently being extracted or at least 5 mega-bytes of data 
+    /* can play the file if it is not currently being extracted or at least 5 mega-bytes of data
     have already been written to the file on disk */
     result = ltoNumber == NULL ||
         strcmp(ltoNumber, extract->state.ltoSpoolNumber) != 0 ||
         strcmp(name, extract->state.currentExtractingFile) != 0 ||
         extract->bytesWritten > 5000000;
-    
+
     PTHREAD_MUTEX_UNLOCK(&extract->stateMutex);
-    
+
     return result;
 }
 

@@ -1,9 +1,10 @@
 /*
- * $Id: player.c,v 1.15 2008/12/05 16:49:00 philipn Exp $
+ * $Id: player.c,v 1.16 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -107,24 +108,24 @@ typedef enum
 typedef struct
 {
     InputType type;
-    
+
     /* file input */
     const char* filename;
-    
+
     /* shared memory input */
     const char* shmSourceName;
-    
+
     /* raw files */
     StreamInfo streamInfo;
     StreamInfo streamInfo2; /* TODO: generalise inputs with multuple streams */
-    
+
     /* bouncing balls */
     int numBalls;
-    
+
     int disableAudio;
-    
+
     const char* sourceName;
-    
+
     const char* clipId;
 } InputInfo;
 
@@ -137,30 +138,30 @@ typedef struct
     QCSession* qcSession;
     HTTPAccess* httpAccess;
     FILE* bufferStateLogFile;
-    
+
     X11DisplaySink* x11DisplaySink;
     X11XVDisplaySink* x11XVDisplaySink;
     DualSink* dualSink;
     DVSSink* dvsSink;
     SDLSink* sdlSink;
-    
+
     VideoSwitchDatabase* videoSwitchDatabase;
-    
+
     X11WindowListener x11WindowListener;
 
     OutputType outputType;
-    
+
     MarkConfigs markConfigs;
-    
+
     ShuttleInput* shuttle;
     ShuttleConnect* shuttleConnect;
     ConnectMapping connectMapping;
 	pthread_t shuttleThreadId;
-    
+
     TermKeyboardInput* termKeyboardInput;
     KeyboardConnect* termKeyboardConnect;
 	pthread_t termKeyboardThreadId;
-    
+
     int writeAllMarks;
 } Player;
 
@@ -168,37 +169,37 @@ typedef struct
 static void* shuttle_control_thread(void* arg)
 {
     Player* player = (Player*)arg;
-    
+
     shj_start_shuttle(player->shuttle);
-    
+
     pthread_exit((void *) 0);
 }
 
 static void* term_keyboard_control_thread(void* arg)
 {
     Player* player = (Player*)arg;
-    
+
     tki_start_term_keyboard(player->termKeyboardInput);
-    
+
     pthread_exit((void *) 0);
 }
 
 static int start_control_threads(Player* player, int reviewDuration)
 {
     int result;
-    
+
     /* shuttle input connect */
     if (player->shuttle != NULL)
     {
         result = sic_create_shuttle_connect(
-            reviewDuration, 
-            ply_get_media_control(player->mediaPlayer), 
-            player->shuttle, 
-            player->connectMapping, 
+            reviewDuration,
+            ply_get_media_control(player->mediaPlayer),
+            player->shuttle,
+            player->connectMapping,
             &player->shuttleConnect);
         if (result)
         {
-            if (!create_joinable_thread(&player->shuttleThreadId, shuttle_control_thread, player)) 
+            if (!create_joinable_thread(&player->shuttleThreadId, shuttle_control_thread, player))
             {
                 shj_close_shuttle(&player->shuttle);
                 sic_free_shuttle_connect(&player->shuttleConnect);
@@ -212,19 +213,19 @@ static int start_control_threads(Player* player, int reviewDuration)
         }
     }
 
-    
+
     /* terminal keyboard input */
     if (player->termKeyboardInput != NULL)
     {
         result = kic_create_keyboard_connect(
-            reviewDuration, 
+            reviewDuration,
             ply_get_media_control(player->mediaPlayer),
-            tki_get_keyboard_input(player->termKeyboardInput), 
-            player->connectMapping, 
+            tki_get_keyboard_input(player->termKeyboardInput),
+            player->connectMapping,
             &player->termKeyboardConnect);
         if (result)
         {
-            if (!create_joinable_thread(&player->termKeyboardThreadId, term_keyboard_control_thread, player)) 
+            if (!create_joinable_thread(&player->termKeyboardThreadId, term_keyboard_control_thread, player))
             {
                 kic_free_keyboard_connect(&player->termKeyboardConnect);
                 kip_close(tki_get_keyboard_input(player->termKeyboardInput));
@@ -244,15 +245,15 @@ static int start_control_threads(Player* player, int reviewDuration)
 
 static void terminate_control_threads(Player* player)
 {
-    /* stop, join and free the shuttle */    
+    /* stop, join and free the shuttle */
     if (player->shuttleThreadId != 0)
     {
         join_thread(&player->shuttleThreadId, player->shuttle, shj_stop_shuttle);
         sic_free_shuttle_connect(&player->shuttleConnect);
         shj_close_shuttle(&player->shuttle);
     }
-    
-    /* stop, join and free the terminal keyboard */    
+
+    /* stop, join and free the terminal keyboard */
     if (player->termKeyboardThreadId != 0)
     {
         join_thread(&player->termKeyboardThreadId, player->termKeyboardInput, tki_stop_term_keyboard);
@@ -272,7 +273,7 @@ static void cleanup_exit(int res)
 {
     Mark* marks = NULL;
     int numMarks = 0;
-    
+
     /* reset signal handlers */
     if (signal(SIGINT, SIG_IGN) == SIG_ERR)
     {
@@ -292,7 +293,7 @@ static void cleanup_exit(int res)
     }
 
     /* close in this order */
-    
+
     msc_close(g_player.mediaSource);
     g_player.mediaSource = NULL;
 
@@ -316,13 +317,13 @@ static void cleanup_exit(int res)
     if (g_player.shuttle != NULL)
     {
         shj_close_shuttle(&g_player.shuttle);
-    }        
+    }
     if (g_player.termKeyboardInput != NULL)
     {
         kip_close(tki_get_keyboard_input(g_player.termKeyboardInput));
         g_player.termKeyboardInput = NULL;
     }
-    
+
     if (g_player.mediaPlayer != NULL)
     {
         /* get marks for writing to qc session below */
@@ -330,19 +331,19 @@ static void cleanup_exit(int res)
         {
             numMarks = ply_get_marks(g_player.mediaPlayer, &marks);
         }
-        
+
         ply_close_player(&g_player.mediaPlayer);
     }
 
     msk_close(g_player.mediaSink);
     g_player.mediaSink = NULL;
-    
+
     if (g_player.bufferStateLogFile != NULL)
     {
         fclose(g_player.bufferStateLogFile);
         g_player.bufferStateLogFile = NULL;
     }
-        
+
     if (g_player.qcSession != NULL)
     {
         if (numMarks > 0)
@@ -358,13 +359,13 @@ static void cleanup_exit(int res)
     {
         csm_close(&g_player.consoleMonitor);
     }
-    
+
     hac_free_http_access(&g_player.httpAccess);
-    
+
     vsd_close(&g_player.videoSwitchDatabase);
 
     ml_log_file_close();
-    
+
     exit(res);
 }
 
@@ -389,16 +390,16 @@ static void catch_sigint(int sig_number)
     }
 
     ml_log_info("Received signal %d\n", sig_number);
-    
+
     /* make sure the terminal settings are restored */
     if (g_player.termKeyboardInput != NULL)
     {
         tki_restore_term_settings(g_player.termKeyboardInput);
     }
-    
+
     /* make sure the DVS card is closed */
     dvs_close_card(g_player.dvsSink);
-    
+
     exit(1);
 }
 
@@ -423,7 +424,7 @@ static void control_help()
         fprintf(stderr, "  %-15s%s\n", defaultKeyboardHelp[i].input, defaultKeyboardHelp[i].description);
         i++;
     }
-    
+
     fprintf(stderr, "\n");
     fprintf(stderr, "Default shuttle:\n");
     i = 0;
@@ -443,7 +444,7 @@ static void control_help()
         i++;
     }
     fprintf(stderr, "\n");
-    
+
     fprintf(stderr, "\n");
     fprintf(stderr, "QC shuttle:\n");
     i = 0;
@@ -468,7 +469,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     {
         const char* name;
         Colour colour;
-    } colourInfos[] = 
+    } colourInfos[] =
     {
         {"white", WHITE_COLOUR},
         {"light-white", LIGHT_WHITE_COLOUR},
@@ -480,14 +481,14 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
         {"blue", BLUE_COLOUR},
         {"orange", ORANGE_COLOUR}
     };
-    
+
     if (val == NULL || val[0] == '\0')
     {
         return 0;
     }
-    
+
     markConfigs->numConfigs = 0;
-    
+
     do
     {
         /* prepare parse type,name,colour */
@@ -524,7 +525,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
         {
             colourStr++;
         }
-        
+
         /* parse type */
         if (sscanf(typeStr, "%d", &typeBit) != 1 || typeBit < 1 || typeBit > 32)
         {
@@ -532,11 +533,11 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
             return 0;
         }
         markConfigs->configs[markConfigs->numConfigs].type = 1 << (typeBit - 1);
-        
+
         /* copy name */
         strncpy(markConfigs->configs[markConfigs->numConfigs].name, nameStr,
             ((endNameStr - nameStr) > 32) ? 32 : (endNameStr - nameStr));
-            
+
         /* parse colour */
         for (i = 0; i < (int)(sizeof(colourInfos) / sizeof(struct ColourInfo)); i++)
         {
@@ -551,7 +552,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
             fprintf(stderr, "Failed to parse colour\n");
             return 0;
         }
-        
+
         markConfigs->numConfigs++;
         if (markConfigs->numConfigs > 32)
         {
@@ -560,11 +561,11 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
         }
     }
     while ((configSep = strchr(configSep + 1, ':')) != NULL);
-    
+
     return 1;
 }
 
-static int parse_length(const char* text, int64_t* value)
+static int parse_length(const char* text, int allowDecimal, int64_t* value, Rational* frameRate)
 {
     if (strstr(text, ":") != NULL)
     {
@@ -573,21 +574,37 @@ static int parse_length(const char* text, int64_t* value)
         {
             return 0;
         }
-        
+
         *value = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
+        *frameRate = g_palFrameRate;
         return 1;
     }
-    else
+    else if (strstr(text, ";") != NULL)
+    {
+        int hour, min, sec, frame;
+        if (sscanf(text, "%d;%d;%d;%d", &hour, &min, &sec, &frame) != 4)
+        {
+            return 0;
+        }
+
+        *value = hour * 60 * 60 * 30 + min * 60 * 30 + sec * 30 + frame;
+        *frameRate = g_ntscFrameRate;
+        return 1;
+    }
+    else if (allowDecimal)
     {
         int64_t tmp;
         if (sscanf(text, "%"PRId64, &tmp) != 1)
         {
             return 0;
         }
-        
+
         *value = tmp;
+        memset(frameRate, 0, sizeof(*frameRate));
         return 1;
     }
+
+    return 0;
 }
 
 static int complete_source_info(StreamInfo* streamInfo)
@@ -596,25 +613,26 @@ static int complete_source_info(StreamInfo* streamInfo)
     {
         streamInfo->type = PICTURE_STREAM_TYPE;
     }
-    
+
+    if (streamInfo->frameRate.num < 1 || streamInfo->frameRate.num < 1)
+    {
+        streamInfo->frameRate = g_palFrameRate;
+        streamInfo->isHardFrameRate = 0;
+    }
+
     if (streamInfo->type == PICTURE_STREAM_TYPE)
     {
         if (streamInfo->format == UNKNOWN_FORMAT)
         {
             streamInfo->format = UYVY_FORMAT;
         }
-        
+
         if (streamInfo->width < 1 || streamInfo->height < 1)
         {
             streamInfo->width = 720;
             streamInfo->height = 576;
         }
-        
-        if (streamInfo->frameRate.num < 1 || streamInfo->frameRate.num < 1)
-        {
-            streamInfo->frameRate = g_palFrameRate;
-        }
-        
+
         if (streamInfo->aspectRatio.num < 1 || streamInfo->aspectRatio.num < 1)
         {
             streamInfo->aspectRatio.num = 4;
@@ -627,26 +645,19 @@ static int complete_source_info(StreamInfo* streamInfo)
         {
             streamInfo->format = PCM_FORMAT;
         }
-        
-        /* TODO: frame rate should be determined by other inputs is possible */
-        if (streamInfo->frameRate.num < 1 ||
-            streamInfo->frameRate.den < 1)
-        {
-            streamInfo->frameRate = g_palFrameRate;
-        }
-        
+
         if (streamInfo->samplingRate.num < 1 ||
             streamInfo->samplingRate.den < 1)
         {
             streamInfo->samplingRate.num = 48000;
             streamInfo->samplingRate.den = 1;
         }
-        
+
         if (streamInfo->numChannels < 1)
         {
             streamInfo->numChannels = 1;
         }
-        
+
         if (streamInfo->bitsPerSample < 1)
         {
             streamInfo->bitsPerSample = 16;
@@ -668,7 +679,7 @@ static int complete_source_info(StreamInfo* streamInfo)
     {
         return 0;
     }
-    
+
     return 1;
 }
 
@@ -702,7 +713,7 @@ static int parse_timecode_selection(const char* arg, int* tcIndex, int* tcType, 
         *tcSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
         return 1;
     }
-    
+
     return 0;
 }
 
@@ -720,7 +731,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --log-file <name>        Output log messages to file\n");
     fprintf(stderr, "  --log-level <level>      Output log level; 0=debug, 1=info, 2=warning, 3=error (default %d)\n", DEBUG_LOG_LEVEL);
     fprintf(stderr, "  --log-buf <name>         Log source and sink buffer state to file\n");
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
     fprintf(stderr, "  --dvs                    SDI ouput using the DVS card\n");
     fprintf(stderr, "  --dvs-card <num>         Select the DVS card. Default is to use the first available card\n");
     fprintf(stderr, "  --dvs-channel <num>      Select the channel to use on the DVS card. Default is to use the first available channel\n");
@@ -733,13 +744,13 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --extra-ltc_as_vitc      Outputs the source LTC to the extra SDI VITC lines\n");
     fprintf(stderr, "  --extra-count-as-vitc    Outputs the frame count to the extra SDI VITC lines\n");
     fprintf(stderr, "  --disable-fit-video      Disable fitting the video to the SDI raster\n");
-#endif    
+#endif
     fprintf(stderr, "  --xv                     X11 Xv extension display output (YUV colourspace)\n");
     fprintf(stderr, "  --x11                    X11 display output (RGB colourspace)\n");
     fprintf(stderr, "  --window-id <id>         Don't create a new window, use existing window id e.g. for browser plugin use\n");
-#if defined(HAVE_SDL)    
+#if defined(HAVE_SDL)
     fprintf(stderr, "  --sdl                    Simple DirectMedia Layer output\n");
-#endif    
+#endif
     fprintf(stderr, "  --disable-x11-osd        Disable the OSD on the X11 or X11 Xv output\n");
     fprintf(stderr, "  --raw-out <template>     Raw stream output files. Template must contain '%%d'\n");
     fprintf(stderr, "  --null-out               Accepts streams and does nothing\n");
@@ -788,14 +799,14 @@ static void usage(const char* cmd)
     fprintf(stderr, "                                  type is 1...32 (bit position in the 32-bit value used internally),\n");
     fprintf(stderr, "                                  name is a string with maximum length 31 and\n");
     fprintf(stderr, "                                  colour is one of white|yellow|cyan|green|magenta|red|blue|orange\n");
-#if defined(HAVE_SHTTPD)    
+#if defined(HAVE_SHTTPD)
     fprintf(stderr, "  --http-access <port>     Player access via http <port>\n");
-#endif    
-    fprintf(stderr, "  --frame-sequence         Show sequence of frames in each frame\n");         
-#if defined(HAVE_PORTAUDIO)    
+#endif
+    fprintf(stderr, "  --frame-sequence         Show sequence of frames in each frame\n");
+#if defined(HAVE_PORTAUDIO)
     fprintf(stderr, "  --disable-pc-audio       Disable audio output to the PC sound devices\n");
     fprintf(stderr, "  --audio-dev <num>        Select an audio device (default is audio device 0)\n");
-#endif    
+#endif
     fprintf(stderr, "  --hide-progress-bar      Don't show the progress bar shown in the OSD\n");
     fprintf(stderr, "  --audio-lineup <level>   Audio line-up level in dBFS (default -18.0)\n");
     fprintf(stderr, "  --enable-term-keyb       Enable terminal window keyboard input.\n");
@@ -818,21 +829,23 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --start <frame>          Start playing at frame (hh:mm:ss:ff or frame count)\n");
     fprintf(stderr, "  [--pb-mark-mask <val>]*  32-bit mask for marks to show on the (next) progress bar (decimal or 0x hex)\n");
     fprintf(stderr, "  --start-paused           Start with the player paused\n");
+    fprintf(stderr, "  [--disable-stream <num>]*    Disable stream <num>. Use --src-info to check which streams are available\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Inputs:\n");
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
-    fprintf(stderr, "  --system-tc <timecode>   Add a system timecode with given start timecode (hh:mm:ss:ff or 'now')\n");
-    fprintf(stderr, "  --max-length <dur>       Limit the source length played (hh:mm:ss:ff)\n");
+    fprintf(stderr, "  --system-tc <timecode>   Add a system timecode with given start timecode (hh:mm:ss:ff or 'now', replace : with ; for NTSC)\n");
+    fprintf(stderr, "  --max-length <dur>       Limit the source length played (hh:mm:ss:ff, replace : with ; for NTSC)\n");
     fprintf(stderr, "  --src-format <format>    Source video format: uyvy, yuv420, yuv422, yuv444, pcm, timecode (default uyvy)\n");
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
+    fprintf(stderr, "  --src-fps <num>          Video frame rate for the source. Valid values are 25 (PAL) or 30 (NTSC)\n");
     fprintf(stderr, "  --raw-in  <file>         Raw file input\n");
 #if defined(HAVE_FFMPEG)
     fprintf(stderr, "  --dv <file>              Raw DV-DIF input (currently video only)\n");
-#endif    
+#endif
 #if defined(HAVE_FFMPEG) && defined(HAVE_FFMPEG_SWSCALE)
     fprintf(stderr, "  --ffmpeg <file>          FFmpeg input\n");
-#endif    
+#endif
     fprintf(stderr, "  --balls <num>            Bouncing balls\n");
     fprintf(stderr, "  --blank                  Blank video source\n");
     fprintf(stderr, "  --clapper                Clapper source\n");
@@ -865,7 +878,7 @@ int main(int argc, const char **argv)
     Timecode startLTCTimecode = g_invalidTimecode;
     int addVideoSwitch = 0;
     int addAudioSwitch = 0;
-    VideoSwitchSplit videoSwitchSplit = NO_SPLIT_VIDEO_SWITCH; 
+    VideoSwitchSplit videoSwitchSplit = NO_SPLIT_VIDEO_SWITCH;
     int applySplitFilter = 1;
     int splitSelect = 0;
     VideoSwitchSink* videoSwitch = NULL;
@@ -905,8 +918,9 @@ int main(int argc, const char **argv)
     X11WindowInfo windowInfo = {NULL, 0, 0, 0};
     SDIVITCSource sdiVITCSource = VITC_AS_SDI_VITC;
     int loop = 0;
-    int extraSDIVITCSource = 0; 
+    int extraSDIVITCSource = 0;
     int64_t systemStartTimecode = -1;
+    Rational systemStartTimecodeFrameRate = {0, 0};
     int reviewDuration = 20;
     HalfSplitSink* halfSplitSink = NULL;
     int halfSplit = 0;
@@ -914,16 +928,17 @@ int main(int argc, const char **argv)
     int audioLevelStreams = -1;
     int showFieldSymbol = 0;
     const char* restoreMarksFilename = NULL;
-#if defined(HAVE_SHTTPD)    
+#if defined(HAVE_SHTTPD)
     int httpPort = -1;
 #endif
     MarkConfigs markConfigs;
     int64_t maxLength = -1;
+    Rational maxLengthFrameRate = {0, 0};
     int showFrameSequence = 0;
     FrameSequenceSink* frameSequenceSink = NULL;
     const char* bufferStateLogFilename = NULL;
     int fitVideo = 1;
-#if defined(HAVE_PORTAUDIO)    
+#if defined(HAVE_PORTAUDIO)
     int disablePCAudio = 0;
     int audioDevice = -1;
 #endif
@@ -937,9 +952,11 @@ int main(int argc, const char **argv)
     float srcRateLimit = -1.0;
     int64_t clipStart = -1;
     int64_t clipDuration = -1;
+    Rational clipFrameRate = {0, 0};
     ClipSource* clipSource = NULL;
     int prescaledSplit = 0;
     int64_t startFrame = -1;
+    Rational startFrameFrameRate = {0, 0};
     int markSelectionTypeMasks[MAX_PB_MARK_SELECTIONS];
     int numMarkSelections = 0;
     char sessionComments[MAX_SESSION_COMMENTS_SIZE];
@@ -947,12 +964,17 @@ int main(int argc, const char **argv)
     int dvsChannel = -1;
     int startPaused = 0;
     int printSourceInfo = 0;
-    
-    
+    int fps = 25;
+    Rational frameRate = {0, 0};
+    int disableStream[MAX_INPUTS * 3];
+    int numDisabledStreams = 0;
+
+
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
-    
-    
+    memset(disableStream, 0, sizeof(disableStream));
+
+
     while (cmdlnIndex < argc)
     {
         if (strcmp(argv[cmdlnIndex], "-h") == 0 ||
@@ -1020,7 +1042,7 @@ int main(int argc, const char **argv)
             bufferStateLogFilename = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
         else if (strcmp(argv[cmdlnIndex], "--dvs") == 0)
         {
             outputType = DVS_OUTPUT;
@@ -1115,40 +1137,40 @@ int main(int argc, const char **argv)
             fitVideo = 0;
             cmdlnIndex += 1;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--xv") == 0)
         {
             xOutputType = X11_XV_DISPLAY_OUTPUT;
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
             if (outputType != DUAL_OUTPUT)
             {
-#endif                
+#endif
                 outputType = X11_XV_DISPLAY_OUTPUT;
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
             }
-#endif            
+#endif
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--x11") == 0)
         {
             xOutputType = X11_DISPLAY_OUTPUT;
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
             if (outputType != DUAL_OUTPUT)
             {
-#endif                
+#endif
                 outputType = X11_DISPLAY_OUTPUT;
-#if defined(HAVE_DVS)    
+#if defined(HAVE_DVS)
             }
-#endif            
+#endif
             cmdlnIndex += 1;
         }
-#if defined(HAVE_SDL)        
+#if defined(HAVE_SDL)
         else if (strcmp(argv[cmdlnIndex], "--sdl") == 0)
         {
             outputType = SDL_OUTPUT;
             cmdlnIndex += 1;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--window-id") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1290,7 +1312,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (!parse_timecode_selection(argv[cmdlnIndex + 1], 
+            if (!parse_timecode_selection(argv[cmdlnIndex + 1],
                 &vswitchTimecodeIndex, &vswitchTimecodeType, &vswitchTimecodeSubType))
             {
                 usage(argv[0]);
@@ -1453,7 +1475,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d", &swScale) != 1 || 
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &swScale) != 1 ||
                     (swScale != 2 && swScale != 3))
             {
                 usage(argv[0]);
@@ -1496,7 +1518,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d", &audioLevelStreams) != 1 || 
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &audioLevelStreams) != 1 ||
                 audioLevelStreams < 0 || audioLevelStreams > 16)
             {
                 usage(argv[0]);
@@ -1537,7 +1559,7 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
-#if defined(HAVE_SHTTPD)    
+#if defined(HAVE_SHTTPD)
         else if (strcmp(argv[cmdlnIndex], "--http-access") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1554,13 +1576,13 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--frame-sequence") == 0)
         {
             showFrameSequence = 1;
             cmdlnIndex += 1;
         }
-#if defined(HAVE_PORTAUDIO)    
+#if defined(HAVE_PORTAUDIO)
         else if (strcmp(argv[cmdlnIndex], "--disable-pc-audio") == 0)
         {
             disablePCAudio = 1;
@@ -1582,7 +1604,7 @@ int main(int argc, const char **argv)
             }
             cmdlnIndex += 2;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--hide-progress-bar") == 0)
         {
             hideProgressBar = 1;
@@ -1601,7 +1623,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (!parse_timecode_selection(argv[cmdlnIndex + 1], 
+            if (!parse_timecode_selection(argv[cmdlnIndex + 1],
                 &startTimecodeIndex, &startTimecodeType, &startTimecodeSubType))
             {
                 usage(argv[0]);
@@ -1639,11 +1661,15 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (!parse_length(argv[cmdlnIndex + 1], &clipStart))
+            if (!parse_length(argv[cmdlnIndex + 1], 1, &clipStart, &frameRate))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
+            }
+            if (frameRate.num >= 1 && frameRate.den >= 1)
+            {
+                clipFrameRate = frameRate;
             }
             cmdlnIndex += 2;
         }
@@ -1655,11 +1681,15 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (!parse_length(argv[cmdlnIndex + 1], &clipDuration))
+            if (!parse_length(argv[cmdlnIndex + 1], 1, &clipDuration, &frameRate))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
+            }
+            if (frameRate.num >= 1 && frameRate.den >= 1)
+            {
+                clipFrameRate = frameRate;
             }
             cmdlnIndex += 2;
         }
@@ -1671,7 +1701,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (!parse_length(argv[cmdlnIndex + 1], &startFrame))
+            if (!parse_length(argv[cmdlnIndex + 1], 1, &startFrame, &startFrameFrameRate))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
@@ -1700,6 +1730,28 @@ int main(int argc, const char **argv)
                 return 1;
             }
             numMarkSelections++;
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--disable-stream") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if ((size_t)numDisabledStreams >= sizeof(disableStream) / sizeof(int))
+            {
+                fprintf(stderr, "Hardcoded stream disables is set to %zd\n", sizeof(disableStream) / sizeof(int));
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d\n", &disableStream[numDisabledStreams]) != 1)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            numDisabledStreams++;
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--start-paused") == 0)
@@ -1745,21 +1797,19 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            int value[4];
             if (strcmp("now", argv[cmdlnIndex + 1]) == 0)
             {
-                systemStartTimecode = get_timecode_now();
+                systemStartTimecode = get_timecode_now(25);
+                systemStartTimecodeFrameRate = g_palFrameRate;
             }
             else
             {
-                if (sscanf(argv[cmdlnIndex + 1], "%u:%u:%u:%u", &value[0], &value[1], &value[2], &value[3]) < 4)
+                if (!parse_length(argv[cmdlnIndex + 1], 0, &systemStartTimecode, &systemStartTimecodeFrameRate))
                 {
                     usage(argv[0]);
                     fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-                systemStartTimecode = value[0] * 60 * 60 * 25 + 
-                    value[1] * 60 * 25 + value[2] * 25 + value[3];
             }
             cmdlnIndex += 2;
         }
@@ -1771,18 +1821,15 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            int value[4];
-            if (sscanf(argv[cmdlnIndex + 1], "%u:%u:%u:%u", &value[0], &value[1], &value[2], &value[3]) < 4)
+            if (!parse_length(argv[cmdlnIndex + 1], 0, &maxLength, &maxLengthFrameRate))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            maxLength = value[0] * 60 * 60 * 25 + 
-                value[1] * 60 * 25 + value[2] * 25 + value[3];
             cmdlnIndex += 2;
         }
-#if !defined(DISABLE_SHARED_MEM_SOURCE)        
+#if !defined(DISABLE_SHARED_MEM_SOURCE)
         else if (strcmp(argv[cmdlnIndex], "--shm-in") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1798,7 +1845,7 @@ int main(int argc, const char **argv)
             cmdlnIndex += 2;
         }
 #endif
-#if !defined(DISABLE_UDP_SOURCE)        
+#if !defined(DISABLE_UDP_SOURCE)
         else if (strcmp(argv[cmdlnIndex], "--udp-in") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1822,32 +1869,32 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (strcmp(argv[cmdlnIndex + 1], "uyvy") == 0) 
+            if (strcmp(argv[cmdlnIndex + 1], "uyvy") == 0)
             {
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = UYVY_FORMAT;
             }
-            else if (strcmp(argv[cmdlnIndex + 1], "yuv420") == 0) 
+            else if (strcmp(argv[cmdlnIndex + 1], "yuv420") == 0)
             {
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = YUV420_FORMAT;
             }
-            else if (strcmp(argv[cmdlnIndex + 1], "yuv422") == 0) 
+            else if (strcmp(argv[cmdlnIndex + 1], "yuv422") == 0)
             {
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = YUV422_FORMAT;
             }
-            else if (strcmp(argv[cmdlnIndex + 1], "yuv444") == 0) 
+            else if (strcmp(argv[cmdlnIndex + 1], "yuv444") == 0)
             {
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = YUV444_FORMAT;
             }
-            else if (strcmp(argv[cmdlnIndex + 1], "pcm") == 0) 
+            else if (strcmp(argv[cmdlnIndex + 1], "pcm") == 0)
             {
                 inputs[numInputs].streamInfo.type = SOUND_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = PCM_FORMAT;
             }
-            else if (strcmp(argv[cmdlnIndex + 1], "timecode") == 0) 
+            else if (strcmp(argv[cmdlnIndex + 1], "timecode") == 0)
             {
                 inputs[numInputs].streamInfo.type = TIMECODE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = TIMECODE_FORMAT;
@@ -1868,8 +1915,8 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%dx%d", &inputs[numInputs].streamInfo.width, 
-                    &inputs[numInputs].streamInfo.height) != 2 || 
+            if (sscanf(argv[cmdlnIndex + 1], "%dx%d", &inputs[numInputs].streamInfo.width,
+                    &inputs[numInputs].streamInfo.height) != 2 ||
                 inputs[numInputs].streamInfo.width < 1 || inputs[numInputs].streamInfo.height < 1)
             {
                 usage(argv[0]);
@@ -1886,12 +1933,38 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%dx", &inputs[numInputs].streamInfo.bitsPerSample) != 1 || 
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &inputs[numInputs].streamInfo.bitsPerSample) != 1 ||
                 (inputs[numInputs].streamInfo.bitsPerSample < 1 || inputs[numInputs].streamInfo.bitsPerSample > 32))
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
+            }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--src-fps") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &fps) != 1 || (fps != 25 && fps != 30))
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (fps == 25)
+            {
+                inputs[numInputs].streamInfo.frameRate = g_palFrameRate;
+                inputs[numInputs].streamInfo.isHardFrameRate = 1;
+            }
+            else
+            {
+                inputs[numInputs].streamInfo.frameRate = g_ntscFrameRate;
+                inputs[numInputs].streamInfo.isHardFrameRate = 1;
             }
             cmdlnIndex += 2;
         }
@@ -1914,7 +1987,7 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
-#if defined(HAVE_FFMPEG)        
+#if defined(HAVE_FFMPEG)
         else if (strcmp(argv[cmdlnIndex], "--dv") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1943,7 +2016,7 @@ int main(int argc, const char **argv)
             numInputs++;
             cmdlnIndex += 2;
         }
-#endif        
+#endif
         else if (strcmp(argv[cmdlnIndex], "--balls") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
@@ -1952,7 +2025,7 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            if (sscanf(argv[cmdlnIndex + 1], "%d", &inputs[numInputs].numBalls) != 1 || 
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &inputs[numInputs].numBalls) != 1 ||
                 inputs[numInputs].numBalls <= 0)
             {
                 usage(argv[0]);
@@ -2030,26 +2103,26 @@ int main(int argc, const char **argv)
             fprintf(stderr, "Unknown argument '%s'\n", argv[cmdlnIndex]);
             return 1;
         }
-        
+
         if (numInputs >= MAX_INPUTS)
         {
             fprintf(stderr, "Max inputs, %d, exceeded\n", MAX_INPUTS);
             return 1;
         }
     }
-    
+
     if (numInputs == 0)
     {
         usage(argv[0]);
         fprintf(stderr, "No inputs\n");
         return 1;
     }
-    
+
 
     /* set log level */
     ml_set_log_level(logLevel);
-    
-    
+
+
     /* open the log file */
     if (logFilename != NULL)
     {
@@ -2063,7 +2136,7 @@ int main(int argc, const char **argv)
     /* log the player version */
     ml_log_info("Version: %s, build: %s\n", get_player_version(), get_player_build_timestamp());
     ml_log_file_flush();
-    
+
     /* initialise the player struct */
     memset(&g_player, 0, sizeof(Player));
     g_player.outputType = outputType;
@@ -2077,13 +2150,13 @@ int main(int argc, const char **argv)
     }
     g_player.markConfigs = markConfigs;
 
-    
+
     /* set writeAllMarks in player struct to allow marks to be written when closing */
-    
+
     g_player.writeAllMarks = 1;
 
-    
-    
+
+
     /* set signal handlers to clean up cleanly */
     if (signal(SIGINT, catch_sigint) == SIG_ERR)
     {
@@ -2107,36 +2180,36 @@ int main(int argc, const char **argv)
     }
 
 
-    
+
     /* open the shuttle input */
 
     if (!shj_open_shuttle(&g_player.shuttle))
     {
         ml_log_warn("Failed to open shuttle input\n");
     }
-    
-    
+
+
     /* open the terminal keyboard input */
 
-    if (enableTermKeyboard && 
+    if (enableTermKeyboard &&
         !tki_create_term_keyboard(&g_player.termKeyboardInput))
     {
         ml_log_warn("Failed to create terminal keyboard input\n");
     }
-    
-    
+
+
     /* create multiple source source */
-    
-    if (!mls_create(&sourceAspectRatio, maxLength, &multipleSource))
+
+    if (!mls_create(&sourceAspectRatio, maxLength, &maxLengthFrameRate, &multipleSource))
     {
         ml_log_error("Failed to create multiple source data\n");
         goto fail;
     }
     g_player.mediaSource = mls_get_media_source(multipleSource);
-    
-    
+
+
     /* open the media sources */
-    
+
     for (i = 0; i < numInputs; i++)
     {
         switch (inputs[i].type)
@@ -2173,31 +2246,31 @@ int main(int argc, const char **argv)
                     goto fail;
                 }
                 break;
-                
-           case BBALLS_INPUT:    
+
+           case BBALLS_INPUT:
                 if (!bbs_create(&inputs[i].streamInfo, 2160000, inputs[i].numBalls, &mediaSource))
                 {
                     ml_log_error("Failed to create bouncing balls source\n");
                     goto fail;
                 }
                 break;
-                
-           case BLANK_INPUT:    
+
+           case BLANK_INPUT:
                 if (!bks_create(&inputs[i].streamInfo, 2160000, &mediaSource))
                 {
                     ml_log_error("Failed to create blank source\n");
                     goto fail;
                 }
                 break;
-                
-           case CLAPPER_INPUT:    
+
+           case CLAPPER_INPUT:
                 if (!clp_create(&inputs[i].streamInfo, &inputs[i].streamInfo2, 2160000, &mediaSource))
                 {
                     ml_log_error("Failed to create clapper source\n");
                     goto fail;
                 }
                 break;
-                
+
             case DV_INPUT:
                 if (!rds_open(inputs[i].filename, &mediaSource))
                 {
@@ -2205,7 +2278,7 @@ int main(int argc, const char **argv)
                     goto fail;
                 }
                 break;
-                
+
             case FFMPEG_INPUT:
                 if (!fms_open(inputs[i].filename, numFFMPEGThreads, &mediaSource))
                 {
@@ -2213,18 +2286,18 @@ int main(int argc, const char **argv)
                     goto fail;
                 }
                 break;
-                
+
             default:
 				ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
                 assert(0);
         }
-        
+
         /* disable audio */
         if (inputs[i].disableAudio)
         {
             msc_disable_audio(mediaSource);
         }
-        
+
         /* set the source name */
         if (inputs[i].sourceName != NULL)
         {
@@ -2235,20 +2308,20 @@ int main(int argc, const char **argv)
                 case UDP_INPUT:
                     printf("%s = %s\n", inputs[i].sourceName, inputs[i].filename);
                     break;
-    
+
                 case SHM_INPUT:
                     printf("%s = %s\n", inputs[i].sourceName, inputs[i].shmSourceName);
                     break;
-    
-               case BBALLS_INPUT:    
+
+               case BBALLS_INPUT:
                     printf("%s = bballs\n", inputs[i].sourceName);
                     break;
-                    
-               case BLANK_INPUT:    
+
+               case BLANK_INPUT:
                     printf("%s = blank\n", inputs[i].sourceName);
                     break;
-                    
-               case CLAPPER_INPUT:    
+
+               case CLAPPER_INPUT:
                     printf("%s = clapper\n", inputs[i].sourceName);
                     break;
 
@@ -2256,7 +2329,7 @@ int main(int argc, const char **argv)
                     ml_log_error("Unknown input type (%d) for input %d\n", inputs[i].type, i);
                     assert(0);
             }
-            
+
             msc_set_source_name(mediaSource, inputs[i].sourceName);
         }
 
@@ -2265,7 +2338,7 @@ int main(int argc, const char **argv)
         {
             msc_set_clip_id(mediaSource, inputs[i].clipId);
         }
-        
+
         /* add to collection */
         if (!mls_assign_source(multipleSource, &mediaSource))
         {
@@ -2273,20 +2346,20 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-    
+
     /* finalise the blank video sources */
     if (!mls_finalise_blank_sources(multipleSource))
     {
         ml_log_error("Failed to finalise blank video sources\n");
         goto fail;
     }
-    
-    
+
+
     /* add a system timecode source */
-    
+
     if (systemStartTimecode >= 0)
     {
-        if (!sts_create(systemStartTimecode, &mediaSource))
+        if (!sts_create(systemStartTimecode, &systemStartTimecodeFrameRate, &mediaSource))
         {
             ml_log_error("Failed to create a system timecode source\n");
             goto fail;
@@ -2299,10 +2372,10 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-    
-    
+
+
     /* open buffered media source */
-    
+
     if (srcBufferSize > 0)
     {
         if (!bmsrc_create(g_player.mediaSource, srcBufferSize, 1, srcRateLimit, &bufferedSource))
@@ -2312,13 +2385,13 @@ int main(int argc, const char **argv)
         }
         g_player.mediaSource = bmsrc_get_source(bufferedSource);
     }
-    
-    
+
+
     /* open clip source */
-    
+
     if (clipStart >= 0 || clipDuration >= 0)
     {
-        if (!cps_create(g_player.mediaSource, clipStart, clipDuration, &clipSource))
+        if (!cps_create(g_player.mediaSource, &clipFrameRate, clipStart, clipDuration, &clipSource))
         {
             ml_log_error("Failed to create clip media source\n");
             goto fail;
@@ -2328,10 +2401,10 @@ int main(int argc, const char **argv)
 
 
     /* open the qc session */
-    
+
     if (qcSessionFilename != NULL)
     {
-        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, restoreMarksFilename, 
+        if (!qcs_open(qcSessionFilename, g_player.mediaSource, argc, argv, NULL, restoreMarksFilename,
             NULL, NULL, &g_player.qcSession))
         {
             fprintf(stderr, "Failed to open QC session\n");
@@ -2340,9 +2413,9 @@ int main(int argc, const char **argv)
         qcs_flush(g_player.qcSession);
     }
 
-    
+
     /* auto-detect whether X11 Xv is available as output type */
-    
+
     if (outputType == X11_AUTO_DISPLAY_OUTPUT)
     {
         if (xvsk_check_is_available())
@@ -2370,7 +2443,7 @@ int main(int argc, const char **argv)
         }
     }
 
-    
+
     /* open media sink */
 
     switch (outputType)
@@ -2378,7 +2451,7 @@ int main(int argc, const char **argv)
         case X11_XV_DISPLAY_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
-            
+
             if (!xvsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
                 scale, swScale, &windowInfo, &g_player.x11XVDisplaySink))
             {
@@ -2388,7 +2461,7 @@ int main(int argc, const char **argv)
             xvsk_set_window_name(g_player.x11XVDisplaySink, "Ingex Player");
             xvsk_register_window_listener(g_player.x11XVDisplaySink, &g_player.x11WindowListener);
             g_player.mediaSink = xvsk_get_media_sink(g_player.x11XVDisplaySink);
-            
+
             if (!bms_create(&g_player.mediaSink, 2, 0, &bufSink))
             {
                 ml_log_error("Failed to create bufferred x11 xv display sink\n");
@@ -2400,7 +2473,7 @@ int main(int argc, const char **argv)
         case X11_DISPLAY_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
-            
+
             if (!xsk_open(reviewDuration, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
                 scale, swScale, &windowInfo, &g_player.x11DisplaySink))
             {
@@ -2410,7 +2483,7 @@ int main(int argc, const char **argv)
             xsk_set_window_name(g_player.x11DisplaySink, "Ingex Player");
             xsk_register_window_listener(g_player.x11DisplaySink, &g_player.x11WindowListener);
             g_player.mediaSink = xsk_get_media_sink(g_player.x11DisplaySink);
-            
+
             if (!bms_create(&g_player.mediaSink, 2, 0, &bufSink))
             {
                 ml_log_error("Failed to create bufferred x11 display sink\n");
@@ -2420,7 +2493,7 @@ int main(int argc, const char **argv)
             break;
 
         case DVS_OUTPUT:
-            if (!dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
+            if (!dvs_open(dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize,
                 disableSDIOSD, fitVideo, &g_player.dvsSink))
             {
                 ml_log_error("Failed to open DVS card sink\n");
@@ -2428,12 +2501,12 @@ int main(int argc, const char **argv)
             }
             g_player.mediaSink = dvs_get_media_sink(g_player.dvsSink);
             break;
-            
+
         case DUAL_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
-            
-            if (!dusk_open(reviewDuration, dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize, 
+
+            if (!dusk_open(reviewDuration, dvsCard, dvsChannel, sdiVITCSource, extraSDIVITCSource, dvsBufferSize,
                 xOutputType == X11_XV_DISPLAY_OUTPUT, disableSDIOSD, disableX11OSD, &pixelAspectRatio, &monitorAspectRatio,
                 scale, swScale, fitVideo, &windowInfo, &g_player.dualSink))
             {
@@ -2444,11 +2517,11 @@ int main(int argc, const char **argv)
             dusk_register_window_listener(g_player.dualSink, &g_player.x11WindowListener);
             g_player.mediaSink = dusk_get_media_sink(g_player.dualSink);
             break;
-            
+
         case SDL_OUTPUT:
             g_player.x11WindowListener.data = &g_player;
             g_player.x11WindowListener.close_request = x11_window_close_request;
-            
+
             if (!sdls_open(&g_player.sdlSink))
             {
                 ml_log_error("Failed to open SDL sink\n");
@@ -2457,7 +2530,7 @@ int main(int argc, const char **argv)
             sdls_register_window_listener(g_player.sdlSink, &g_player.x11WindowListener);
             g_player.mediaSink = sdls_get_media_sink(g_player.sdlSink);
             break;
-            
+
         case RAW_STREAM_OUTPUT:
             if (!rms_open(rawFilenameTemplate, &g_player.mediaSink))
             {
@@ -2465,7 +2538,7 @@ int main(int argc, const char **argv)
                 goto fail;
             }
             break;
-            
+
         case NULL_OUTPUT:
             if (!nms_open(&g_player.mediaSink))
             {
@@ -2473,18 +2546,22 @@ int main(int argc, const char **argv)
                 goto fail;
             }
             break;
-            
+
         default:
             assert(0);
     }
 
-#if defined(HAVE_PORTAUDIO)    
+#if defined(HAVE_PORTAUDIO)
     /* create audio sink */
     if (!disablePCAudio)
     {
         if (outputType == X11_XV_DISPLAY_OUTPUT ||
             outputType == X11_DISPLAY_OUTPUT)
-            // TODO: DVS drops frames when pc audio is enabled outputType != DVS_OUTPUT)
+            // TODO: DVS drops frames when pc audio is enabled
+            // Also, the buffer before the X11 sink will cause this pc audio, which is before the
+            // buffer, to be out of sync by buffersize frames. The audio sink must be positioned
+            // before the x11 sink and after the buffer sink when used in a dual sink (e.g. create this
+            // sink in the dual sink instead)
         {
             AudioSink* audioSink;
             if (!aus_create_audio_sink(g_player.mediaSink, audioDevice, &audioSink))
@@ -2497,7 +2574,7 @@ int main(int argc, const char **argv)
             }
         }
     }
-#endif    
+#endif
 
     /* disable the OSD progress bar */
     if (hideProgressBar)
@@ -2509,9 +2586,9 @@ int main(int argc, const char **argv)
         }
     }
 
-    
+
     /* create video switch, half split or frame sequence sink */
-    
+
     if (addVideoSwitch)
     {
         if (videoSwitchDatabaseFilename != NULL)
@@ -2549,10 +2626,10 @@ int main(int argc, const char **argv)
         }
         g_player.mediaSink = fss_get_media_sink(frameSequenceSink);
     }
-    
-    
+
+
     /* create audio level sink */
-    
+
     if (audioLevelStreams > 0)
     {
         if (!als_create_audio_level_sink(g_player.mediaSink, audioLevelStreams, audioLineupLevel, &audioLevelSink))
@@ -2564,7 +2641,7 @@ int main(int argc, const char **argv)
     }
 
     /* create audio switch before the audio level sink */
-    
+
     if (addAudioSwitch)
     {
         if (!qas_create_audio_switch(g_player.mediaSink, &audioSwitch))
@@ -2573,10 +2650,10 @@ int main(int argc, const char **argv)
             goto fail;
         }
         g_player.mediaSink = asw_get_media_sink(audioSwitch);
-    }    
-    
+    }
+
     /* create buffer state log */
-    
+
     if (bufferStateLogFilename != NULL)
     {
         if ((g_player.bufferStateLogFile = fopen(bufferStateLogFilename, "wb")) == NULL)
@@ -2584,46 +2661,59 @@ int main(int argc, const char **argv)
             ml_log_error("Failed top open buffer state log file: %s\n", strerror(errno));
             goto fail;
         }
-        
-        fprintf(g_player.bufferStateLogFile, "# Columns: frame, source buffers filled, sink buffers filled\n"); 
+
+        fprintf(g_player.bufferStateLogFile, "# Columns: frame, source buffers filled, sink buffers filled\n");
     }
-    
-    
+
+
+    /* disable streams */
+
+    for (i = 0; i < numDisabledStreams; i++)
+    {
+        if (msc_disable_stream(g_player.mediaSource, disableStream[i]))
+        {
+            ml_log_info("Stream %d was disabled by user\n", disableStream[i]);
+        }
+    }
+
+
     /* create the player */
-    
-    if (!ply_create_player(g_player.mediaSource, g_player.mediaSink, lock, closeAtEnd, 
-        numFFMPEGThreads, useWorkerThreads, loop, showFieldSymbol, 
-        &startVITCTimecode, &startLTCTimecode, g_player.bufferStateLogFile, 
+
+    if (!ply_create_player(g_player.mediaSource, g_player.mediaSink, lock, closeAtEnd,
+        numFFMPEGThreads, useWorkerThreads, loop, showFieldSymbol,
+        &startVITCTimecode, &startLTCTimecode, g_player.bufferStateLogFile,
         markSelectionTypeMasks, numMarkSelections, &g_player.mediaPlayer))
     {
         ml_log_error("Failed to create media player\n");
         goto fail;
     }
-    
+
     if (bufferedSource != NULL)
     {
         bmsrc_set_media_player(bufferedSource, g_player.mediaPlayer);
     }
-    
-    
+
+
     /* set the start offset for position values returned by the player */
 
     if (clipSource != NULL)
     {
         ply_set_start_offset(g_player.mediaPlayer, clipStart);
     }
-    
-    
+
+
     /* move to the start frame */
 
     if (startFrame > 0)
     {
+        ply_get_frame_rate(g_player.mediaPlayer, &frameRate);
+        startFrame = convert_length(startFrame, &startFrameFrameRate, &frameRate);
         mc_seek(ply_get_media_control(g_player.mediaPlayer), startFrame, SEEK_SET, FRAME_PLAY_UNIT);
     }
-    
-    
+
+
     /* restore marks from QC session */
-    
+
     if (restoreMarksFilename != NULL)
     {
         if (!qcs_restore_session(ply_get_media_control(g_player.mediaPlayer), restoreMarksFilename, sessionComments))
@@ -2636,12 +2726,12 @@ int main(int argc, const char **argv)
         }
     }
 
-    
+
     /* connect the X11 display keyboard and mouse input */
-    
+
     if (outputType == X11_XV_DISPLAY_OUTPUT)
     {
-        xvsk_set_media_control(g_player.x11XVDisplaySink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink), 
+        xvsk_set_media_control(g_player.x11XVDisplaySink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink),
             ply_get_media_control(g_player.mediaPlayer));
     }
     else if (outputType == X11_DISPLAY_OUTPUT)
@@ -2654,8 +2744,8 @@ int main(int argc, const char **argv)
         dusk_set_media_control(g_player.dualSink, g_player.connectMapping, msk_get_video_switch(g_player.mediaSink),
             ply_get_media_control(g_player.mediaPlayer));
     }
-    
-    
+
+
     /* create the console monitor */
 
     if (!disableConsoleMonitor &&
@@ -2664,10 +2754,10 @@ int main(int argc, const char **argv)
         ml_log_error("Failed to create console monitor\n");
         goto fail;
     }
-    
-    
+
+
     /* connect the QC session to the player */
-    
+
     if (g_player.qcSession != NULL)
     {
         if (!qcs_connect_to_player(g_player.qcSession, g_player.mediaPlayer))
@@ -2677,7 +2767,7 @@ int main(int argc, const char **argv)
         }
     }
 
-#if defined(HAVE_SHTTPD)    
+#if defined(HAVE_SHTTPD)
     /* create the http access */
 
     if (httpPort >= 0)
@@ -2688,11 +2778,11 @@ int main(int argc, const char **argv)
             goto fail;
         }
     }
-#endif    
+#endif
 
 
     /* create and start shuttle/keyboard control threads */
-    
+
     if (!start_control_threads(&g_player, reviewDuration))
     {
 		ml_log_error("Failed to start control threads:\n");
@@ -2707,19 +2797,19 @@ int main(int argc, const char **argv)
         mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), startTimecodeIndex, startTimecodeType, startTimecodeSubType);
     }
 
-    
+
     /* qc or not control stuff */
-    
+
     if (qcControl)
     {
         /* start with info screen and pause */
         mc_pause(ply_get_media_control(g_player.mediaPlayer));
         mc_set_osd_screen(ply_get_media_control(g_player.mediaPlayer), OSD_SOURCE_INFO_SCREEN);
-        
+
         /* set default mark configs if neccessary */
         if (g_player.markConfigs.numConfigs == 0)
         {
-            MarkConfig configs[] = 
+            MarkConfig configs[] =
             {
                 {M0_MARK_TYPE, "red", RED_COLOUR},
                 {M1_MARK_TYPE, "magenta", MAGENTA_COLOUR},
@@ -2732,7 +2822,7 @@ int main(int argc, const char **argv)
             memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
             g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);
         }
-        
+
         osd_set_mark_display(msk_get_osd(g_player.mediaSink), &g_player.markConfigs);
     }
     else
@@ -2749,16 +2839,16 @@ int main(int argc, const char **argv)
 
 
     /* print source info */
-    
+
     if (printSourceInfo)
     {
         ply_print_source_info(g_player.mediaPlayer);
     }
-    
-    
+
+
 
     /* start playing... */
-    
+
     gettimeofday(&startTime, NULL);
     ml_log_file_flush();
 
@@ -2767,10 +2857,10 @@ int main(int argc, const char **argv)
         ml_log_error("Media player failed to play\n");
         goto fail;
     }
-    
+
     ml_log_file_flush();
     gettimeofday(&endTime, NULL);
-    
+
     timeDiffSec = endTime.tv_sec - startTime.tv_sec;
     timeDiffUSec = endTime.tv_usec - startTime.tv_usec;
     if (timeDiffUSec < 0)
@@ -2779,13 +2869,13 @@ int main(int argc, const char **argv)
         timeDiffUSec += 1000000;
     }
     ml_log_info("Playing time was %ld secs and %06d usecs\n", timeDiffSec, timeDiffUSec);
-    
-    
+
+
     /* close down */
 
     cleanup_exit(0);
     return 0; /* for the benefit of the compiler */
-    
+
 fail:
     if (logFilename != NULL)
     {

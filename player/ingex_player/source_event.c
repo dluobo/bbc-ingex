@@ -1,9 +1,10 @@
 /*
- * $Id: source_event.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: source_event.c,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,7 +58,7 @@ void svt_read_event(const unsigned char* buffer, int index, SourceEvent* event)
 void svt_set_name_update_event(SourceEvent* event, char* name)
 {
     memset(event, 0, sizeof(SourceEvent));
-    
+
     event->type = SOURCE_NAME_UPDATE_EVENT_TYPE;
     strncpy(event->value.nameUpdate.name, name, sizeof(event->value.nameUpdate.name) - 1);
 }

@@ -1,9 +1,10 @@
 /*
- * $Id: shared_mem_source.c,v 1.6 2008/10/29 17:47:42 john_f Exp $
+ * $Id: shared_mem_source.c,v 1.7 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,8 +72,9 @@ typedef struct
     TrackInfo tracks[MAX_TRACKS];
     int numTracks;
 
+    Rational frameRate;
     int64_t position;
-    
+
     int prevLastFrame;
 
     char sourceName[64];
@@ -167,6 +169,21 @@ static int shm_get_stream_info(void* data, int streamIndex, const StreamInfo** s
     return 1;
 }
 
+static void shm_set_frame_rate_or_disable(void* data, const Rational* frameRate)
+{
+    SharedMemSource* source = (SharedMemSource*)data;
+    int i;
+
+    /* disable this source if the frame rate differs */
+    if (memcmp(frameRate, &source->frameRate, sizeof(*frameRate)) != 0)
+    {
+        for (i = 0; i < source->numTracks; i++)
+        {
+            msc_disable_stream(&source->mediaSource, i);
+        }
+    }
+}
+
 static int shm_disable_stream(void* data, int streamIndex)
 {
     SharedMemSource* source = (SharedMemSource*)data;
@@ -234,18 +251,27 @@ static uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame
                 pctl->elementsize * (lastFrame % pctl->ringlen);
 }
 
+static int rec_ring_num_aud_samp(SharedMemSource *source, int track, int lastFrame)
+{
+    int channel = source->channel;
+
+    int offset = pctl->num_aud_samp_offset;
+
+    return *(int *)(ring[channel] + pctl->elementsize * (lastFrame % pctl->ringlen) + offset);
+}
+
 static uint8_t *rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
 {
     int channel = source->channel;
 
-    int offset = pctl->vitc_offset;         // VITC
+    int offset = pctl->vitc_offset;       // VITC
     if (track == 1)
         offset = pctl->ltc_offset;        // LTC
 
     return ring[channel] + pctl->elementsize * (lastFrame % pctl->ringlen) + offset;
 }
 
-static void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
+static void dvsaudio32_to_16bitmono(int channel, int num_samples, uint8_t *buf32, uint8_t *buf16)
 {
     int i;
     // A DVS audio buffer contains a mix of two 32bits-per-sample channels
@@ -258,7 +284,7 @@ static void dvsaudio32_to_16bitmono(int channel, uint8_t *buf32, uint8_t *buf16)
 
     // Skip every other channel, copying 16 most significant bits of 32 bits
     // from little-endian DVS format to little-endian 16bits
-    for (i = channel_offset; i < 1920*4*2; i += 8) {
+    for (i = channel_offset; i < num_samples*4*2; i += 8) {
         *buf16++ = buf32[i+2];
         *buf16++ = buf32[i+3];
     }
@@ -275,7 +301,8 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     int waitCount = 0;
     const int sleepUSec = 100;
     int nameUpdated;
-    
+    int roundedFrameRate = get_rounded_frame_rate(&source->frameRate);
+
     /* wait until a new frame is available in the ring buffer */
     lastFrame = pctl->channel[source->channel].lastframe - 1;
     waitCount = 0;
@@ -283,7 +310,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     {
         usleep(sleepUSec);
         waitCount++;
-        
+
         lastFrame = pctl->channel[source->channel].lastframe - 1;
     }
     if (lastFrame == source->prevLastFrame && waitCount >= 60000 / sleepUSec)
@@ -292,12 +319,12 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         return -2;
     }
     source->prevLastFrame = lastFrame;
-    
-    
+
+
     /* check for updated source name */
-    
+
     PTHREAD_MUTEX_LOCK(&pctl->m_source_name_update);
-    
+
     nameUpdated = 0;
     if (pctl->source_name_update != source->sourceNameUpdate)
     {
@@ -306,10 +333,10 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             nameUpdated = 1;
             strncpy(source->sourceName, pctl->channel[source->channel].source_name, sizeof(source->sourceName) - 1);
         }
-        
+
         source->sourceNameUpdate = pctl->source_name_update;
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&pctl->m_source_name_update);
 
     // Track numbers are hard-coded by setup code in shared_mem_open()
@@ -324,14 +351,19 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     for (i = 0; i < source->numTracks; i++)
     {
         track = &source->tracks[i];
-        
+
         if (track->isDisabled)
             continue;
 
         if (! sdl_accept_frame(listener, i, frameInfo))
             continue;
 
-        /* calculate current frame size for events stream */
+        /* calculate current frame size for sound and events streams */
+        if (track->streamInfo.type == SOUND_STREAM_TYPE)
+        {
+            int num_samples = rec_ring_num_aud_samp(source, i - 1, lastFrame);
+            track->frameSize = num_samples * 2;        // * 2 for 16bit audio
+        }
         if (track->streamInfo.type == EVENT_STREAM_TYPE)
         {
             if (nameUpdated)
@@ -343,7 +375,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
                 track->frameSize = svt_get_buffer_size(0);
             }
         }
-        
+
         if (! sdl_allocate_buffer(listener, i, &buffer, track->frameSize))
         {
             /* listener failed to allocate a buffer for us */
@@ -354,53 +386,53 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         if (track->streamInfo.type == PICTURE_STREAM_TYPE)
         {
             unsigned char* data = rec_ring_video(source, lastFrame);
-            
+
             if (source->captureFormat == Format422PlanarYUVShifted)
             {
                 /* shift picture back up one line */
-                
+
                 /* Y */
-                memcpy(buffer, &data[track->streamInfo.width], 
+                memcpy(buffer, &data[track->streamInfo.width],
                     track->streamInfo.width * (track->streamInfo.height - 1));
-                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)], 
+                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)],
                     0x80, track->streamInfo.width);
-                
+
                 /* U */
-                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height], 
-                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2], 
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height],
+                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2],
                     track->streamInfo.width * (track->streamInfo.height - 1) / 2);
-                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 2], 
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 2],
                     0x10, track->streamInfo.width / 2);
-                
+
                 /* V */
-                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2], 
-                    &data[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width / 2], 
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2],
+                    &data[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width / 2],
                     track->streamInfo.width * (track->streamInfo.height - 1) / 2);
-                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width * (track->streamInfo.height - 1) / 2], 
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 3 / 2 + track->streamInfo.width * (track->streamInfo.height - 1) / 2],
                     0x10, track->streamInfo.width / 2);
             }
             else if (source->captureFormat == Format420PlanarYUVShifted)
             {
                 /* shift picture back up one line */
-                
+
                 /* Y */
-                memcpy(buffer, &data[track->streamInfo.width], 
+                memcpy(buffer, &data[track->streamInfo.width],
                     track->streamInfo.width * (track->streamInfo.height - 1));
-                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)], 
+                memset(&buffer[track->streamInfo.width * (track->streamInfo.height - 1)],
                     0x80, track->streamInfo.width);
-                
+
                 /* U */
-                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height], 
-                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2], 
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height],
+                    &data[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width / 2],
                     track->streamInfo.width * (track->streamInfo.height - 1) / 4);
-                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 4], 
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height + track->streamInfo.width * (track->streamInfo.height - 1) / 4],
                     0x10, track->streamInfo.width / 2);
-                
+
                 /* V */
-                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4], 
-                    &data[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width / 2], 
+                memcpy(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4],
+                    &data[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width / 2],
                     track->streamInfo.width * (track->streamInfo.height - 1) / 4);
-                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width * (track->streamInfo.height - 1) / 4], 
+                memset(&buffer[track->streamInfo.width * track->streamInfo.height * 5 / 4 + track->streamInfo.width * (track->streamInfo.height - 1) / 4],
                     0x10, track->streamInfo.width / 2);
             }
             else
@@ -410,6 +442,9 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         }
 
         if (track->streamInfo.type == SOUND_STREAM_TYPE) {
+            // audio size is variable so set frameSize for this frame
+            int num_samples = rec_ring_num_aud_samp(source, i - 1, lastFrame);
+
             // Get a pointer to the correct DVS audio buffer
             uint8_t *buf32 = rec_ring_audio(source, i - 1, lastFrame);
 
@@ -417,7 +452,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             int pair_num = (i - 1) % 2;
 
             // reformat audio from interleaved DVS audio format to single channel audio
-            dvsaudio32_to_16bitmono(pair_num, buf32, buffer);
+            dvsaudio32_to_16bitmono(pair_num, num_samples, buf32, buffer);
         }
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
@@ -426,20 +461,20 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             // convert ts-as-int to Timecode
             Timecode tc;
             tc.isDropFrame = 0;
-            tc.frame = tc_as_int % 25;
-            tc.hour = (int)(tc_as_int / (60 * 60 * 25));
-            tc.min = (int)((tc_as_int - (tc.hour * 60 * 60 * 25)) / (60 * 25));
-            tc.sec = (int)((tc_as_int - (tc.hour * 60 * 60 * 25) - (tc.min * 60 * 25)) / 25);
+            tc.frame = tc_as_int % roundedFrameRate;
+            tc.hour = (int)(tc_as_int / (60 * 60 * roundedFrameRate));
+            tc.min = (int)((tc_as_int - (tc.hour * 60 * 60 * roundedFrameRate)) / (60 * roundedFrameRate));
+            tc.sec = (int)((tc_as_int - (tc.hour * 60 * 60 * roundedFrameRate) - (tc.min * 60 * roundedFrameRate)) / roundedFrameRate);
             memcpy(buffer, &tc, track->frameSize);
         }
-        
+
         if (track->streamInfo.type == EVENT_STREAM_TYPE)
         {
             if (nameUpdated)
             {
                 SourceEvent event;
                 svt_set_name_update_event(&event, source->sourceName);
-                
+
                 svt_write_num_events(buffer, 1);
                 svt_write_event(buffer, 0, &event);
             }
@@ -501,7 +536,7 @@ static void shm_set_source_name(void* data, const char* name)
     int i;
     for (i = 0; i < source->numTracks; i++)
     {
-        add_known_source_info(&source->tracks[i].streamInfo, SRC_INFO_NAME, name);    
+        add_known_source_info(&source->tracks[i].streamInfo, SRC_INFO_NAME, name);
     }
 }
 
@@ -512,7 +547,7 @@ static void shm_set_clip_id(void* data, const char* id)
     int i;
     for (i = 0; i < source->numTracks; i++)
     {
-        set_stream_clip_id(&source->tracks[i].streamInfo, id);    
+        set_stream_clip_id(&source->tracks[i].streamInfo, id);
     }
 }
 
@@ -543,7 +578,7 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     CaptureFormat captureFormat;
     int disable = 0;
     int i;
-    
+
     /* check channel number is within range */
     channelNum = atol(channel_name);
     if (channelNum < 0 || channelNum >= MAX_CHANNELS)
@@ -579,9 +614,9 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
         return 0;
     }
 
-    
+
     captureFormat = primary ? pctl->pri_video_format : pctl->sec_video_format;
-    
+
     if (captureFormat != Format422UYVY &&
         captureFormat != Format422PlanarYUV &&
         captureFormat != Format422PlanarYUVShifted &&
@@ -597,8 +632,6 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
         ml_log_warn("Shared memory channel %d is not in use - streams will be disabled\n", channelNum);
         disable = 1;
     }
-    
-    
 
     CALLOC_ORET(newSource, SharedMemSource, 1);
 
@@ -607,12 +640,15 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->primary = primary;
     newSource->sourceNameUpdate = -1;
     newSource->captureFormat = captureFormat;
-    
-    
+
+    newSource->frameRate.num = pctl->frame_rate_numer;
+    newSource->frameRate.den = pctl->frame_rate_denom;
+
     /* setup media source */
     newSource->mediaSource.data = newSource;
     newSource->mediaSource.get_num_streams = shm_get_num_streams;
     newSource->mediaSource.get_stream_info = shm_get_stream_info;
+    newSource->mediaSource.set_frame_rate_or_disable = shm_set_frame_rate_or_disable;
     newSource->mediaSource.disable_stream = shm_disable_stream;
     newSource->mediaSource.disable_audio = shm_disable_audio;
     newSource->mediaSource.stream_is_disabled = shm_stream_is_disabled;
@@ -627,14 +663,15 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->mediaSource.set_clip_id = shm_set_clip_id;
     newSource->mediaSource.close = shm_close;
 
-    
+
     sourceId = msc_create_id();
 
     /* video track */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
     newSource->tracks[newSource->numTracks].streamInfo.type = PICTURE_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = g_palFrameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.width = pctl->width;
     newSource->tracks[newSource->numTracks].streamInfo.height = pctl->height;
     newSource->tracks[newSource->numTracks].streamInfo.aspectRatio.num = 16;
@@ -645,12 +682,12 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
             newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = UYVY_FORMAT;
             break;
-            
+
         case Format422PlanarYUV:
             newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
             break;
-            
+
         case Format422PlanarYUVShifted:
             newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
@@ -660,7 +697,7 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
             newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 3/2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
             break;
-            
+
         case Format420PlanarYUVShifted:
             newSource->tracks[newSource->numTracks].frameSize = pctl->width * pctl->height * 3/2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
@@ -677,11 +714,13 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 1"));
-    newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
+    newSource->tracks[newSource->numTracks].frameSize = 0;  /* zero indicates variable size */
     newSource->numTracks++;
 
     /* audio track 2 */
@@ -689,11 +728,13 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 2"));
-    newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
+    newSource->tracks[newSource->numTracks].frameSize = 0;
     newSource->numTracks++;
 
     /* audio track 3 */
@@ -701,11 +742,13 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 3"));
-    newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
+    newSource->tracks[newSource->numTracks].frameSize = 0;
     newSource->numTracks++;
 
     /* audio track 4 */
@@ -713,11 +756,13 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
     newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
     newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 4"));
-    newSource->tracks[newSource->numTracks].frameSize = 2 * 48000 / 25;
+    newSource->tracks[newSource->numTracks].frameSize = 0;
     newSource->numTracks++;
 
     /* timecode track 1 */
@@ -725,6 +770,8 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 1"));
@@ -736,6 +783,8 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 2"));
@@ -747,10 +796,12 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
     newSource->tracks[newSource->numTracks].streamInfo.type = EVENT_STREAM_TYPE;
     newSource->tracks[newSource->numTracks].streamInfo.format = SOURCE_EVENT_FORMAT;
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Event"));
     newSource->numTracks++;
 
-    
+
     /* disabled tracks if the channel is not in use */
     if (disable)
     {
@@ -759,8 +810,8 @@ int shared_mem_open(const char* channel_name, MediaSource** source)
             CHK_OFAIL(msc_disable_stream(&newSource->mediaSource, i));
         }
     }
-    
-    
+
+
     *source = &newSource->mediaSource;
     return 1;
 

@@ -1,9 +1,10 @@
 /*
- * $Id: term_keyboard_input.c,v 1.3 2008/11/06 19:56:56 john_f Exp $
+ * $Id: term_keyboard_input.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <unistd.h>	
+#include <unistd.h>
 #include <termios.h>
 
 #include <X11/keysym.h>
@@ -44,8 +45,8 @@ struct TermKeyboardInput
     int stopped;
     pthread_mutex_t listenerMutex;
 };
-    
-    
+
+
 
 static void tki_set_listener(void* data, KeyboardInputListener* listener)
 {
@@ -68,17 +69,17 @@ static void tki_unset_listener(void* data)
 static void tki_close(void* data)
 {
     TermKeyboardInput* termInput = (TermKeyboardInput*)data;
-    
+
     if (data == NULL)
     {
         return;
     }
-    
+
     /* reset original attributes */
     tcsetattr(0, TCSANOW, &termInput->tio_orig);
-    
+
 	destroy_mutex(&termInput->listenerMutex);
-    
+
     SAFE_FREE(&termInput);
 }
 
@@ -90,17 +91,17 @@ int tki_create_term_keyboard(TermKeyboardInput** termInput)
 
     CALLOC_ORET(newInput, TermKeyboardInput, 1);
 
-    newInput->input.data = newInput;    
-    newInput->input.set_listener = tki_set_listener;    
-    newInput->input.unset_listener = tki_unset_listener;    
-    newInput->input.close = tki_close;    
+    newInput->input.data = newInput;
+    newInput->input.set_listener = tki_set_listener;
+    newInput->input.unset_listener = tki_unset_listener;
+    newInput->input.close = tki_close;
 
-    
+
     /* save attributes for restoring later */
     tcgetattr(STDIN_FILENO, &newInput->tio_orig);
-    
+
     /* set new attributes */
-    /* VMIN=1 and VTIME=0 means that the read func returns when at least 1 
+    /* VMIN=1 and VTIME=0 means that the read func returns when at least 1
     character is present */
     tio_new = newInput->tio_orig;
     tio_new.c_lflag &= ~(ICANON|ECHO);
@@ -109,10 +110,10 @@ int tki_create_term_keyboard(TermKeyboardInput** termInput)
     tcsetattr(STDIN_FILENO, TCSANOW, &tio_new);
 
     CHK_OFAIL(init_mutex(&newInput->listenerMutex));
-    
+
     *termInput = newInput;
     return 1;
-    
+
 fail:
     tki_close(newInput);
     return 0;
@@ -141,7 +142,7 @@ void tki_start_term_keyboard(TermKeyboardInput* termInput)
         FD_SET(STDIN_FILENO, &rfds);
         tv.tv_sec = 0;
         tv.tv_usec = 50000; /* 1/20 second */
-            
+
         retval = select(STDIN_FILENO + 1, &rfds, NULL, NULL, &tv);
 
         if (termInput->stopped)
@@ -168,7 +169,7 @@ void tki_start_term_keyboard(TermKeyboardInput* termInput)
                 continue;
             }
             bufPtr = buf;
-            
+
             PTHREAD_MUTEX_LOCK(&termInput->listenerMutex);
             if (numRead == 1)
             {
@@ -256,7 +257,7 @@ void tki_restore_term_settings(TermKeyboardInput* termInput)
 void tki_stop_term_keyboard(void* arg)
 {
     TermKeyboardInput* termInput = (TermKeyboardInput*)arg;
-    
+
     termInput->stopped = 1;
 }
 

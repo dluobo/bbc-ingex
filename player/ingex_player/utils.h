@@ -1,10 +1,11 @@
 /*
- * $Id: utils.h,v 1.3 2008/10/29 17:47:42 john_f Exp $
+ * $Id: utils.h,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +28,7 @@
 #include <sys/time.h>
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -41,11 +42,11 @@ extern "C"
 /* returns number of usecs slept. value can be negative */
 long sleep_diff(long delay, const struct timeval* now, const struct timeval* last);
 
-void print_timecode(TimecodeType type, TimecodeSubType subType, const Timecode* timecode);
+void print_timecode(TimecodeType type, TimecodeSubType subType, const Rational* frameRate, const Timecode* timecode);
 
 void get_timestamp_string(char* timestampStr);
 void get_short_timestamp_string(char* timestampStr);
-int64_t get_timecode_now();
+int64_t get_timecode_now(int roundedFrameRate);
 
 
 int init_mutex(pthread_mutex_t* mutex);
@@ -68,6 +69,11 @@ void strcat_separator(char* path);
 
 char* get_host_name(char* buffer, size_t bufferSize);
 char* get_user_name(char* buffer, size_t bufferSize);
+
+
+int64_t convert_length(int64_t length, const Rational* oldFrameRate, const Rational* newFrameRate);
+int64_t convert_non_drop_timecode(int64_t timecode, const Rational* oldFrameRate, const Rational* newFrameRate);
+
 
 
 #ifdef __cplusplus

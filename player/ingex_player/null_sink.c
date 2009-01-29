@@ -1,9 +1,10 @@
 /*
- * $Id: null_sink.c,v 1.4 2008/11/11 10:40:59 philipn Exp $
+ * $Id: null_sink.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,9 +39,9 @@
 typedef struct
 {
     int streamId;
-    unsigned int bufferSize; 
+    unsigned int bufferSize;
     unsigned char* buffer;
-    unsigned int allocatedBufferSize; 
+    unsigned int allocatedBufferSize;
     int isPresent;
 } NullStream;
 
@@ -48,14 +49,14 @@ typedef struct
 {
     /* media sink interface */
     MediaSink mediaSink;
-    
+
     /* listener */
     MediaSinkListener* listener;
-    
+
     /* streams */
     NullStream streams[MAX_STREAMS];
     int numStreams;
-    
+
     /* osd */
     OnScreenDisplay* osd;
     OSDListener osdListener;
@@ -77,7 +78,7 @@ static void reset_streams(NullSink* sink)
 static NullStream* get_null_stream(NullSink* sink, int streamId)
 {
     int i;
-    
+
     for (i = 0; i < sink->numStreams; i++)
     {
         if (streamId == sink->streams[i].streamId)
@@ -92,16 +93,16 @@ static NullStream* get_null_stream(NullSink* sink, int streamId)
 static int nms_register_listener(void* data, MediaSinkListener* listener)
 {
     NullSink* sink = (NullSink*)data;
-    
+
     sink->listener = listener;
-    
+
     return 1;
 }
 
 static void nms_unregister_listener(void* data, MediaSinkListener* listener)
 {
     NullSink* sink = (NullSink*)data;
-    
+
     if (sink->listener == listener)
     {
         sink->listener = NULL;
@@ -111,7 +112,7 @@ static void nms_unregister_listener(void* data, MediaSinkListener* listener)
 static int nms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     /* TODO: add option to set what the null sink should accept */
-    
+
     /* make sure that the picture is UYVY */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
         streamInfo->format != UYVY_FORMAT)
@@ -144,16 +145,16 @@ static int nms_register_stream(void* data, int streamId, const StreamInfo* strea
         return 0;
     }
 
-    if (streamInfo->type == PICTURE_STREAM_TYPE && 
+    if (streamInfo->type == PICTURE_STREAM_TYPE &&
         sink->osd != NULL && !sink->osdInitialised)
     {
         CHK_ORET(osd_initialise(sink->osd, streamInfo, &streamInfo->aspectRatio));
         sink->osdInitialised = 1;
     }
-    
+
     sink->streams[sink->numStreams].streamId = streamId;
     sink->numStreams++;
-    
+
     return 1;
 }
 
@@ -166,13 +167,13 @@ static int nms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
 {
     NullSink* sink = (NullSink*)data;
     NullStream* nullStream;
-    
+
     if ((nullStream = get_null_stream(sink, streamId)) == NULL)
     {
         ml_log_error("Unknown stream %d for null output\n", streamId);
         return 0;
     }
-    
+
     if (nullStream->allocatedBufferSize != bufferSize)
     {
         if ((nullStream->buffer = realloc(nullStream->buffer, bufferSize)) == NULL)
@@ -182,9 +183,9 @@ static int nms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
         }
         nullStream->allocatedBufferSize = bufferSize;
     }
-    
+
     *buffer = nullStream->buffer;
-    
+
     return 1;
 }
 
@@ -192,7 +193,7 @@ static int nms_receive_stream_frame(void* data, int streamId, unsigned char* buf
 {
     NullSink* sink = (NullSink*)data;
     NullStream* nullStream;
-    
+
     if ((nullStream = get_null_stream(sink, streamId)) == NULL)
     {
         ml_log_error("Unknown stream %d for null output\n", streamId);
@@ -204,7 +205,7 @@ static int nms_receive_stream_frame(void* data, int streamId, unsigned char* buf
         return 0;
     }
     nullStream->bufferSize = bufferSize;
-        
+
     nullStream->isPresent = 1;
 
     return 1;
@@ -214,15 +215,15 @@ static int nms_receive_stream_frame_const(void* data, int streamId, const unsign
 {
     NullSink* sink = (NullSink*)data;
     NullStream* nullStream;
-    
+
     if ((nullStream = get_null_stream(sink, streamId)) == NULL)
     {
         ml_log_error("Unknown stream %d for null output\n", streamId);
         return 0;
     }
-    
+
     /* we don't allocate a buffer like when nms_get_stream_buffer is called */
-        
+
     nullStream->isPresent = 1;
 
     return 1;
@@ -235,8 +236,8 @@ static int nms_complete_frame(void* data, const FrameInfo* frameInfo)
     msl_frame_displayed(sink->listener, frameInfo);
 
     reset_streams(sink);
-    
-    return 1;    
+
+    return 1;
 }
 
 static void nms_cancel_frame(void* data)
@@ -262,7 +263,7 @@ static void nms_close(void* data)
 {
     NullSink* sink = (NullSink*)data;
     int i;
-    
+
     if (data == NULL)
     {
         return;
@@ -272,12 +273,12 @@ static void nms_close(void* data)
     {
         SAFE_FREE(&sink->streams[i].buffer);
     }
-    
+
     if (sink->osd != NULL)
     {
         osd_free(sink->osd);
     }
-    
+
     SAFE_FREE(&sink);
 }
 
@@ -285,13 +286,13 @@ static int nms_reset_or_close(void* data)
 {
     NullSink* sink = (NullSink*)data;
     int i;
-    
+
     for (i = 0; i < sink->numStreams; i++)
     {
         SAFE_FREE(&sink->streams[i].buffer);
     }
     sink->numStreams = 0;
-    
+
     return 1;
 }
 
@@ -299,14 +300,14 @@ static int nms_reset_or_close(void* data)
 static void nms_refresh_required(void* data)
 {
     NullSink* sink = (NullSink*)data;
-    
+
     msl_refresh_required(sink->listener);
 }
 
 static void nms_osd_screen_changed(void* data, OSDScreen screen)
 {
     NullSink* sink = (NullSink*)data;
-    
+
     msl_osd_screen_changed(sink->listener, screen);
 }
 
@@ -314,10 +315,10 @@ static void nms_osd_screen_changed(void* data, OSDScreen screen)
 int nms_open(MediaSink** sink)
 {
     NullSink* newSink = NULL;
-    
+
     CALLOC_ORET(newSink, NullSink, 1);
 
-    
+
     newSink->mediaSink.data = newSink;
     newSink->mediaSink.register_listener = nms_register_listener;
     newSink->mediaSink.unregister_listener = nms_unregister_listener;
@@ -333,16 +334,16 @@ int nms_open(MediaSink** sink)
     newSink->mediaSink.mute_audio = nms_mute_audio;
     newSink->mediaSink.reset_or_close = nms_reset_or_close;
     newSink->mediaSink.close = nms_close;
-    
+
     CHK_OFAIL(osdd_create(&newSink->osd));
     newSink->osdListener.data = newSink;
     newSink->osdListener.refresh_required = nms_refresh_required;
     newSink->osdListener.osd_screen_changed = nms_osd_screen_changed;
     osd_set_listener(newSink->osd, &newSink->osdListener);
-    
+
     *sink = &newSink->mediaSink;
     return 1;
-    
+
 fail:
     nms_close(newSink);
     return 0;

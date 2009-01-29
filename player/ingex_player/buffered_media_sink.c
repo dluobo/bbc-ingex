@@ -1,9 +1,10 @@
 /*
- * $Id: buffered_media_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
+ * $Id: buffered_media_sink.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,23 +34,23 @@
 #include "macros.h"
 
 
-    
+
 struct BufferedMediaSink
 {
     MediaSink mediaSink;
-    
+
     MediaSink* targetSink;
-    
+
     /* listener for sink events */
     MediaSinkListener* listener;
-    
+
     int dropFrameWhenFull;
-    
+
     int stopping;  /* set when buf sink is stopping (when closing or resetting) */
-    
+
     MediaSinkFrame** frames;
     int numFrames;
-    
+
     OnScreenDisplay bufOSD;
     OnScreenDisplayState* osdState;
 
@@ -61,7 +62,7 @@ struct BufferedMediaSink
     int firstFramePosition;
     int framesUsed;
     int writePosition;
-    
+
     int frameStarted;
 
 	pthread_t readThreadId;
@@ -76,7 +77,7 @@ static void* read_thread(void* arg)
     while (!bufSink->stopping)
     {
         PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
-    
+
         /* check if frame is ready to be read */
         if (bufSink->framesUsed > 0)
         {
@@ -86,10 +87,10 @@ static void* read_thread(void* arg)
             bufSink->firstFramePosition = (bufSink->firstFramePosition + 1) % bufSink->numFrames;
             bufSink->framesUsed -= 1;
         }
-        
+
         PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
 
-        
+
         /* read frame if one is available */
         if (bufSink->currentFrameRead != NULL)
         {
@@ -100,34 +101,34 @@ static void* read_thread(void* arg)
             }
 
             PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
-            
+
             bufSink->swapFrame = bufSink->currentFrameRead;
             bufSink->currentFrameRead = NULL;
-            
+
             /* signal so that writer wakes up */
             status = pthread_cond_signal(&bufSink->frameReadCond);
             if (status != 0)
             {
                 ml_log_warn("Failed to signal buffered sink write thread\n");
             }
-            
+
             PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
         }
         /* else wait for write thread to signal that a new frame is ready */
         else
         {
             PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
-            
+
             status = pthread_cond_wait(&bufSink->frameWrittenCond, &bufSink->stateMutex);
             if (status != 0)
             {
                 ml_log_warn("Failed to wait for signal from write thread in buffered sink\n");
             }
-            
+
             PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
         }
     }
-    
+
     pthread_exit((void*) 0);
 }
 
@@ -135,28 +136,28 @@ static void* read_thread(void* arg)
 static int bms_register_listener(void* data, MediaSinkListener* listener)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     bufSink->listener = listener;
-    
+
     return msk_register_listener(bufSink->targetSink, listener);
 }
 
 static void bms_unregister_listener(void* data, MediaSinkListener* listener)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     if (bufSink->listener == listener)
     {
         bufSink->listener = NULL;
     }
-    
+
     msk_unregister_listener(bufSink->targetSink, listener);
 }
 
 static int bms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     return msk_accept_stream(bufSink->targetSink, streamInfo);
 }
 
@@ -165,7 +166,7 @@ static int bms_register_stream(void* data, int streamId, const StreamInfo* strea
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
     int result;
     int i;
-    
+
     result = 1;
     for (i = 0; i < bufSink->numFrames && result; i++)
     {
@@ -173,7 +174,7 @@ static int bms_register_stream(void* data, int streamId, const StreamInfo* strea
         result = result && msf_register_stream(bufSink->frames[i], streamId, streamInfo);
     }
     result = result && msf_register_stream(bufSink->swapFrame, streamId, streamInfo);
-    
+
     return result;
 }
 
@@ -184,14 +185,14 @@ static int bms_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
     int status;
     int readyToWrite = 0;
 
-    
+
     if (!bufSink->frameStarted)
     {
         /* wait until we write the frame, or return directly if non-drop frames and buffer is full */
         while (!doneWaiting && !bufSink->stopping)
         {
             PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
-            
+
             if (bufSink->framesUsed < bufSink->numFrames)
             {
                 bufSink->writePosition = (bufSink->firstFramePosition + bufSink->framesUsed) % bufSink->numFrames;
@@ -199,13 +200,13 @@ static int bms_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                 doneWaiting = 1;
             }
             else
-            {            
+            {
                 if (bufSink->dropFrameWhenFull)
                 {
                     /* drop a frame */
                     bufSink->firstFramePosition = (bufSink->firstFramePosition + 1) % bufSink->numFrames;
                     bufSink->framesUsed -= 1;
-                    
+
                     bufSink->writePosition = (bufSink->firstFramePosition + bufSink->framesUsed) % bufSink->numFrames;
                     readyToWrite = 1;
                     doneWaiting = 1;
@@ -220,27 +221,27 @@ static int bms_accept_stream_frame(void* data, int streamId, const FrameInfo* fr
                     }
                 }
             }
-            
+
             PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
         }
     }
-    else 
+    else
     {
         readyToWrite = 1;
     }
-    
+
     if (bufSink->stopping || !readyToWrite)
     {
         return 0;
     }
 
-    
+
     if (!bufSink->frameStarted)
     {
         msf_reset(bufSink->frames[bufSink->writePosition]);
         bufSink->frameStarted = 1;
     }
-    
+
     return msf_accept_stream_frame(bufSink->frames[bufSink->writePosition], streamId, frameInfo);
 }
 
@@ -254,7 +255,7 @@ static int bms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
 static int bms_receive_stream_frame(void* data, int streamId, unsigned char* buffer, unsigned int bufferSize)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     return msf_set_is_present(bufSink->frames[bufSink->writePosition], streamId);
 }
 
@@ -263,18 +264,18 @@ static int bms_complete_frame(void* data, const FrameInfo* frameInfo)
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
     int result;
     int status;
-    
+
     /* stamp frame with current OSD state and frame info */
     osds_complete(bufSink->osdState, frameInfo);
     result = msf_complete_frame(bufSink->frames[bufSink->writePosition], bufSink->osdState, frameInfo);
-    
+
     osds_reset_screen_state(bufSink->osdState);
     bufSink->frameStarted = 0;
-    
+
     PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
 
     bufSink->framesUsed += 1;
-    
+
     /* signal so that reader wakes up */
     status = pthread_cond_signal(&bufSink->frameWrittenCond);
     if (status != 0)
@@ -282,7 +283,7 @@ static int bms_complete_frame(void* data, const FrameInfo* frameInfo)
         ml_log_warn("Failed to signal buffered sink read thread\n");
     }
     PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
-    
+
     return result;
 }
 
@@ -293,16 +294,16 @@ static void bms_cancel_frame(void* data)
 
     osds_reset_screen_state(bufSink->osdState);
     bufSink->frameStarted = 0;
-    
+
     PTHREAD_MUTEX_LOCK(&bufSink->stateMutex)
-    
+
     /* signal so that reader wakes up */
     status = pthread_cond_signal(&bufSink->frameWrittenCond);
     if (status != 0)
     {
         ml_log_warn("Failed to signal buffered sink read thread\n");
     }
-    
+
     PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
 }
 
@@ -329,7 +330,7 @@ static OnScreenDisplay* bms_get_osd(void* data)
     {
         return NULL;
     }
-    
+
     return &bufSink->bufOSD;
 }
 
@@ -344,7 +345,7 @@ static void bms_close(void* data)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
     int i;
-    
+
     if (data == NULL)
     {
         return;
@@ -356,9 +357,9 @@ static void bms_close(void* data)
     pthread_cond_broadcast(&bufSink->frameReadCond);
     pthread_cond_broadcast(&bufSink->frameWrittenCond);
     PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex);
-    
+
     join_thread(&bufSink->readThreadId, bufSink->targetSink->data, NULL);
-   
+
     for (i = 0; i < bufSink->numFrames; i++)
     {
         msf_free(bufSink->frames[i]);
@@ -375,16 +376,16 @@ static void bms_close(void* data)
         msf_free(bufSink->swapFrame);
         bufSink->swapFrame = NULL;
     }
-    
+
     /* only close after free'ing frames (eg. frames could be using shared memory attached to a display) */
     msk_close(bufSink->targetSink);
-    
+
     osds_free(&bufSink->osdState);
-    
+
     destroy_cond_var(&bufSink->frameReadCond);
     destroy_cond_var(&bufSink->frameWrittenCond);
 	destroy_mutex(&bufSink->stateMutex);
-    
+
     SAFE_FREE(&bufSink);
 }
 
@@ -396,7 +397,7 @@ static int bms_get_buffer_state(void* data, int* numBuffers, int* numBuffersFill
     *numBuffers = bufSink->numFrames;
     *numBuffersFilled = bufSink->framesUsed;
     PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex)
-    
+
     return 1;
 }
 
@@ -406,16 +407,16 @@ static int bms_reset_or_close(void* data)
     int i;
     int numFrames = bufSink->numFrames;
     int result;
-    
+
     bufSink->stopping = 1;
 
     PTHREAD_MUTEX_LOCK(&bufSink->stateMutex);
     pthread_cond_broadcast(&bufSink->frameReadCond);
     pthread_cond_broadcast(&bufSink->frameWrittenCond);
     PTHREAD_MUTEX_UNLOCK(&bufSink->stateMutex);
-    
+
     join_thread(&bufSink->readThreadId, bufSink->targetSink->data, NULL);
-    
+
     for (i = 0; i < bufSink->numFrames; i++)
     {
         msf_free(bufSink->frames[i]);
@@ -433,14 +434,14 @@ static int bms_reset_or_close(void* data)
         msf_free(bufSink->swapFrame);
         bufSink->swapFrame = NULL;
     }
-    
+
     bufSink->stopping = 0;
-    
+
     result = msk_reset_or_close(bufSink->targetSink);
     if (result != 1)
     {
         if (result == 2)
-        {  
+        {
             /* target sink was closed */
             bufSink->targetSink = NULL;
         }
@@ -448,7 +449,7 @@ static int bms_reset_or_close(void* data)
     }
 
     osds_sink_reset(bufSink->osdState);
-    
+
     CALLOC_OFAIL(bufSink->frames, MediaSinkFrame*, numFrames);
     bufSink->numFrames = numFrames;
 
@@ -461,13 +462,13 @@ static int bms_reset_or_close(void* data)
     bufSink->firstFramePosition = 0;
     bufSink->framesUsed = 0;
     bufSink->writePosition = 0;
-    
+
     bufSink->frameStarted = 0;
-    
+
     CHK_OFAIL(create_joinable_thread(&bufSink->readThreadId, read_thread, bufSink));
-    
+
     return 1;
-    
+
 fail:
     bms_close(data);
     return 2;
@@ -500,7 +501,7 @@ static void bms_osd_set_active_menu_model(void* data, int updateMask, OSDMenuMod
 static int bms_osd_set_screen(void* data, OSDScreen screen)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     return osd_set_screen(osds_get_osd(bufSink->osdState), screen);
 }
 
@@ -514,7 +515,7 @@ static int bms_osd_next_screen(void* data)
 static int bms_osd_get_screen(void* data, OSDScreen* screen)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
-    
+
     /* bypass the buffer and get directly from sink */
     return osd_get_screen(msk_get_osd(bufSink->targetSink), screen);
 }
@@ -676,7 +677,7 @@ static void bms_osd_set_active_progress_bar_marks(void* data, int index)
     osd_set_active_progress_bar_marks(msk_get_osd(bufSink->targetSink), index);
 }
 
-static void bms_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight, 
+static void bms_osd_set_label(void* data, int xPos, int yPos, int imageWidth, int imageHeight,
     int fontSize, Colour colour, int box, const char* label)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
@@ -689,8 +690,8 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
 {
     BufferedMediaSink* newBufSink = NULL;
     int i;
-    
-    if ((*targetSink)->allocate_frame == NULL || 
+
+    if ((*targetSink)->allocate_frame == NULL ||
         (*targetSink)->complete_sink_frame == NULL)
     {
         ml_log_error("Target sink does not support bufferring\n");
@@ -701,11 +702,11 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
         ml_log_error("Buffered Media Sink must have size >= 2\n");
         return 0;
     }
-    
+
     CALLOC_ORET(newBufSink, BufferedMediaSink, 1);
-    
+
     newBufSink->dropFrameWhenFull = dropFrameWhenFull;
-    
+
     CALLOC_ORET(newBufSink->frames, MediaSinkFrame*, size);
     newBufSink->numFrames = size;
 
@@ -716,7 +717,7 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     CHK_OFAIL(msk_allocate_frame(*targetSink, &newBufSink->swapFrame));
 
     CHK_OFAIL(osds_create(&newBufSink->osdState));
-    
+
     newBufSink->mediaSink.data = newBufSink;
     newBufSink->mediaSink.register_listener = bms_register_listener;
     newBufSink->mediaSink.unregister_listener = bms_unregister_listener;
@@ -765,19 +766,19 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->bufOSD.set_active_progress_bar_marks = bms_osd_set_active_progress_bar_marks;
     newBufSink->bufOSD.set_label = bms_osd_set_label;
 
-    
+
     CHK_OFAIL(init_mutex(&newBufSink->stateMutex));
     CHK_OFAIL(init_cond_var(&newBufSink->frameReadCond));
     CHK_OFAIL(init_cond_var(&newBufSink->frameWrittenCond));
-    
-    CHK_OFAIL(create_joinable_thread(&newBufSink->readThreadId, read_thread, newBufSink)); 
 
-    
+    CHK_OFAIL(create_joinable_thread(&newBufSink->readThreadId, read_thread, newBufSink));
+
+
     newBufSink->targetSink = *targetSink;
     *targetSink = NULL;
     *bufSink = newBufSink;
     return 1;
-    
+
 fail:
     bms_close(newBufSink);
     return 0;

@@ -1,9 +1,10 @@
 /*
- * $Id: x11_common.h,v 1.6 2008/11/06 19:56:56 john_f Exp $
+ * $Id: x11_common.h,v 1.7 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +38,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -45,9 +46,9 @@ extern "C"
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     void (*close_request)(void* data);
-    
+
 } X11WindowListener;
 
 /* Store X11 display and window information, e.g. created by browser and
@@ -76,17 +77,17 @@ typedef struct
     unsigned int imageHeight;
     unsigned int windowWidth;
     unsigned int windowHeight;
-    
+
     MediaSinkListener* sinkListener;
-    
+
     X11WindowListener* windowListener;
 
     ProgressBarInput progressBarInput;
     ProgressBarConnect* progressBarConnect;
     ProgressBarInputListener* progressBarListener;
     ProgressBarInputListener* separateProgressBarListener;
-    KeyboardInput keyboardInput;    
-    KeyboardConnect* keyboardConnect;    
+    KeyboardInput keyboardInput;
+    KeyboardConnect* keyboardConnect;
     KeyboardInputListener* keyboardListener;
     KeyboardInputListener* separateKeyboardListener;
     MouseInput mouseInput;
@@ -94,7 +95,7 @@ typedef struct
     MouseInputListener* mouseListener;
     MouseInputListener* separateMouseListener;
     pthread_mutex_t eventMutex;
-    
+
     pthread_t processEventThreadId;
     int stopped;
     struct timeval processEventTime;

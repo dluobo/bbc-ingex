@@ -1,9 +1,10 @@
 /*
- * $Id: media_sink.c,v 1.5 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_sink.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -127,12 +128,12 @@ int msk_receive_stream_frame_const(MediaSink* sink, int streamId, const unsigned
 {
     unsigned char* nonconstBuffer;
     int result;
-    
+
     if (sink && sink->receive_stream_frame_const)
     {
         return sink->receive_stream_frame_const(sink->data, streamId, buffer, bufferSize);
     }
-    else 
+    else
     {
         /* sink doesn't accept const buffer - take the non-const option */
         result = msk_get_stream_buffer(sink, streamId, bufferSize, &nonconstBuffer);
@@ -188,7 +189,7 @@ OnScreenDisplay* msk_get_osd(MediaSink* sink)
     }
     return NULL;
 }
-    
+
 VideoSwitchSink* msk_get_video_switch(MediaSink* sink)
 {
     if (sink && sink->get_video_switch)
@@ -197,7 +198,7 @@ VideoSwitchSink* msk_get_video_switch(MediaSink* sink)
     }
     return NULL;
 }
-    
+
 AudioSwitchSink* msk_get_audio_switch(MediaSink* sink)
 {
     if (sink && sink->get_audio_switch)
@@ -206,7 +207,7 @@ AudioSwitchSink* msk_get_audio_switch(MediaSink* sink)
     }
     return NULL;
 }
-    
+
 HalfSplitSink* msk_get_half_split(MediaSink* sink)
 {
     if (sink && sink->get_half_split)
@@ -215,7 +216,7 @@ HalfSplitSink* msk_get_half_split(MediaSink* sink)
     }
     return NULL;
 }
-    
+
 FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink)
 {
     if (sink && sink->get_frame_sequence)
@@ -224,7 +225,7 @@ FrameSequenceSink* msk_get_frame_sequence(MediaSink* sink)
     }
     return NULL;
 }
-    
+
 int msk_allocate_frame(MediaSink* sink, MediaSinkFrame** frame)
 {
     if (sink && sink->allocate_frame)

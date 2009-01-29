@@ -1,9 +1,10 @@
 /*
- * $Id: shuttle_input_connect.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: shuttle_input_connect.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,9 +47,9 @@ struct ShuttleConnect
     ConnectMapping mapping;
     MediaControl* control;
     ShuttleInput* shuttle;
-    
+
     ShuttleEvent lastNonPingEvent;
-    
+
     /* variables for qc mapping */
     struct timeval qcClearMarkPressedTime;
     struct timeval qcQuitPressedTime;
@@ -67,7 +68,7 @@ struct ShuttleConnect
 };
 
 
-static const ControlInputHelp g_defaultShuttleInputHelp[] = 
+static const ControlInputHelp g_defaultShuttleInputHelp[] =
 {
     {"1", "Toggle lock"},
     {"2", "Display next OSD screen"},
@@ -89,7 +90,7 @@ static const ControlInputHelp g_defaultShuttleInputHelp[] =
     {NULL, NULL}
 };
 
-static const ControlInputHelp g_qcShuttleInputHelp[] = 
+static const ControlInputHelp g_qcShuttleInputHelp[] =
 {
     {"1", "Display next OSD screen"},
     {"2", "Display next timecode"},
@@ -128,16 +129,16 @@ static long get_time_diff(struct timeval* from)
 {
     long diff;
     struct timeval now;
-    
+
     gettimeofday(&now, NULL);
-    
+
     diff = (now.tv_sec - from->tv_sec) * 1000000 + now.tv_usec - from->tv_usec;
     if (diff < 0)
     {
         /* we don't allow negative differences */
         diff = 0;
     }
-    
+
     return diff;
 }
 
@@ -146,7 +147,7 @@ static void default_listener(void* data, ShuttleEvent* event)
     ShuttleConnect* connect = (ShuttleConnect*)data;
     MediaControlMode mode = mc_get_mode(connect->control);
     int i;
-    
+
     switch (event->type)
     {
         case SH_KEY_EVENT:
@@ -156,9 +157,9 @@ static void default_listener(void* data, ShuttleEvent* event)
                 break;
             }
 
-            
+
             /* else event->value.key.isPressed */
-            
+
             switch (event->value.key.number)
             {
                 case 1:
@@ -281,7 +282,7 @@ static void default_listener(void* data, ShuttleEvent* event)
                 }
             }
             break;
-    
+
         case SH_PING_EVENT:
             if (mode == MENU_MODE &&
                 connect->lastNonPingEvent.type == SH_SHUTTLE_EVENT &&
@@ -305,7 +306,7 @@ static void default_listener(void* data, ShuttleEvent* event)
             }
             break;
     }
-    
+
     if (event->type != SH_PING_EVENT)
     {
         connect->lastNonPingEvent = *event;
@@ -318,13 +319,13 @@ static void qc_listener(void* data, ShuttleEvent* event)
     unsigned int speed;
     MediaControlMode mode = mc_get_mode(connect->control);
     int i;
-    
+
     if (mode == MENU_MODE)
     {
         switch (event->type)
         {
             case SH_KEY_EVENT:
-            
+
                 if (!event->value.key.isPressed) /* released */
                 {
                     switch (event->value.key.number)
@@ -376,7 +377,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
 
             case SH_SHUTTLE_EVENT:
                 assert(event->value.shuttle.speed <= 7);
-                
+
                 /* pause when speed > 1 or reverse play coming from a non-menu mode */
                 if (connect->prevModeForShuttle != MENU_MODE &&
                     (connect->maxShuttleSpeed > 1 || connect->haveReversed))
@@ -401,7 +402,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                         }
                     }
                 }
-                
+
                 if (event->value.shuttle.speed == 0)
                 {
                     connect->maxShuttleSpeed = 0;
@@ -416,12 +417,12 @@ static void qc_listener(void* data, ShuttleEvent* event)
                         connect->haveReversed = 1;
                     }
                 }
-                
+
                 connect->prevModeForShuttle = mode;
                 connect->prevShuttleSpeed = event->value.shuttle.speed;
-                
+
                 break;
-                
+
             case SH_JOG_EVENT:
                 if (event->value.jog.clockwise)
                 {
@@ -432,7 +433,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                     mc_previous_menu_item(connect->control);
                 }
                 break;
-    
+
             case SH_PING_EVENT:
                 if (connect->lastNonPingEvent.type == SH_SHUTTLE_EVENT &&
                     connect->lastNonPingEvent.value.shuttle.speed > 0)
@@ -454,14 +455,14 @@ static void qc_listener(void* data, ShuttleEvent* event)
                     }
                 }
                 break;
-        }            
+        }
     }
     else /* mode != MENU_MODE */
     {
         switch (event->type)
         {
             case SH_KEY_EVENT:
-            
+
                 if (!event->value.key.isPressed) /* released */
                 {
                     switch (event->value.key.number)
@@ -478,13 +479,13 @@ static void qc_listener(void* data, ShuttleEvent* event)
                                 if (get_time_diff(&connect->qcClearMarkPressedTime) >= KEY_HOLD_EVENT_DURATION)
                                 {
                                     /* clear all marks except for PSE failures and D3 VTR errors */
-                                    mc_clear_all_marks(connect->control, 
+                                    mc_clear_all_marks(connect->control,
                                         ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
                                 }
                                 else
                                 {
                                     /* clear mark except for PSE failures and D3 VTR errors */
-                                    mc_clear_mark(connect->control, 
+                                    mc_clear_mark(connect->control,
                                         ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
                                 }
                             }
@@ -534,7 +535,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                 else
                 {
                     /* else event->value.key.isPressed */
-                    
+
                     switch (event->value.key.number)
                     {
                         case 1:
@@ -588,10 +589,10 @@ static void qc_listener(void* data, ShuttleEvent* event)
                     }
                 }
                 break;
-                
+
             case SH_SHUTTLE_EVENT:
                 assert(event->value.shuttle.speed <= 7);
-                
+
                 if (connect->playPauseButtonPressed)
                 {
                     if (event->value.shuttle.clockwise)
@@ -604,7 +605,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
                         /* play backwards at % source length steps */
                         speed = g_reverseShuttleSpeedPerc[event->value.shuttle.speed];
                     }
-    
+
                     mc_play_speed(connect->control, speed, PERCENTAGE_PLAY_UNIT);
                 }
                 else
@@ -619,10 +620,10 @@ static void qc_listener(void* data, ShuttleEvent* event)
                         /* speed backward */
                         speed = g_reverseShuttleSpeed[event->value.shuttle.speed];
                     }
-                    
+
                     mc_play_speed(connect->control, speed, FRAME_PLAY_UNIT);
                 }
-                
+
                 if (event->value.shuttle.speed == 0)
                 {
                     /* pause when returning to neutral from a speed > 1 or reverse play */
@@ -642,24 +643,24 @@ static void qc_listener(void* data, ShuttleEvent* event)
                         connect->haveReversed = 1;
                     }
                 }
-                
+
                 connect->prevModeForShuttle = mode;
                 connect->prevShuttleSpeed = event->value.shuttle.speed;
                 connect->shuttleWithPlayPause = connect->playPauseButtonPressed;
-                
+
                 break;
-                
+
             case SH_JOG_EVENT:
                 if (event->value.jog.clockwise)
                 {
                     /* step forward */
-                    mc_step(connect->control, 1, 
+                    mc_step(connect->control, 1,
                         connect->playPauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
                 }
                 else
                 {
                     /* step backward */
-                    mc_step(connect->control, 0, 
+                    mc_step(connect->control, 0,
                         connect->playPauseButtonPressed ? PERCENTAGE_PLAY_UNIT : FRAME_PLAY_UNIT);
                 }
 
@@ -672,7 +673,7 @@ static void qc_listener(void* data, ShuttleEvent* event)
         }
     }
 
-    
+
     if (event->type != SH_PING_EVENT)
     {
         connect->lastNonPingEvent = *event;
@@ -680,39 +681,39 @@ static void qc_listener(void* data, ShuttleEvent* event)
 }
 
 
-int sic_create_shuttle_connect(int reviewDuration, MediaControl* control, 
+int sic_create_shuttle_connect(int reviewDuration, MediaControl* control,
     ShuttleInput* shuttle, ConnectMapping mapping, ShuttleConnect** connect)
 {
     ShuttleConnect* newConnect;
 
     CALLOC_ORET(newConnect, ShuttleConnect, 1);
-    
+
     newConnect->reviewDuration = reviewDuration;
     newConnect->control = control;
     newConnect->shuttle = shuttle;
-    
-    /* assume we were in menu mode so that things like button 15 doesn't put us at the 
+
+    /* assume we were in menu mode so that things like button 15 doesn't put us at the
     end of the file for the QC_MAPPING */
     newConnect->prevModeForShuttle = MENU_MODE;
     newConnect->prevModeForPrevMarkSeek = MENU_MODE;
     newConnect->prevModeForNextMarkSeek = MENU_MODE;
-    
-    
+
+
     switch (mapping)
     {
         case QC_MAPPING:
             CHK_OFAIL(shj_register_listener(newConnect->shuttle, qc_listener, newConnect));
             break;
-            
+
         default:
             CHK_OFAIL(shj_register_listener(newConnect->shuttle, default_listener, newConnect));
             break;
     }
-    
-    
+
+
     *connect = newConnect;
     return 1;
-    
+
 fail:
     sic_free_shuttle_connect(&newConnect);
     return 0;
@@ -724,10 +725,10 @@ void sic_free_shuttle_connect(ShuttleConnect** connect)
     {
         return;
     }
-    
+
     shj_unregister_listener((*connect)->shuttle, qc_listener);
     shj_unregister_listener((*connect)->shuttle, default_listener);
-    
+
     SAFE_FREE(connect);
 }
 

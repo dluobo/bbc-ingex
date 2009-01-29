@@ -1,9 +1,10 @@
 /*
- * $Id: shuttle_input_connect.h,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: shuttle_input_connect.h,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -38,7 +39,7 @@ extern "C"
 typedef struct ShuttleConnect ShuttleConnect;
 
 
-int sic_create_shuttle_connect(int reviewDuration, MediaControl* control, 
+int sic_create_shuttle_connect(int reviewDuration, MediaControl* control,
     ShuttleInput* shuttle, ConnectMapping mapping, ShuttleConnect** connect);
 void sic_free_shuttle_connect(ShuttleConnect** connect);
 

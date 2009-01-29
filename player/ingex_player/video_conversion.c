@@ -1,9 +1,10 @@
 /*
- * $Id: video_conversion.c,v 1.4 2008/10/29 17:47:42 john_f Exp $
+ * $Id: video_conversion.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Stuart Cunningham, <stuart_hc@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Stuart Cunningham
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -101,7 +102,7 @@ void uyvy_to_yuv422(int width, int height, uint8_t *input, uint8_t *output)
 			input += 16;
 		}
 	}
-    
+
     _mm_empty();        // Clear aliased fp register state
 }
 
@@ -220,7 +221,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 	int start_line = 0;
 
 	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -240,7 +241,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
                 // can no longer process in 32 byte chunks - revert to basic method below
                 break;
             }
-            
+
 			__m64 m0 = *(__m64 *)u;			// load UUUU UUUU(0)
 			__m64 m1 = *(__m64 *)v;			// load VVVV VVVV(0)
 			__m64 m2 = m0;					// copy U for mix op
@@ -266,7 +267,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 			y += 16;
 			output += 32;
 		}
-        
+
         // process the rest of the line
         for (; i < width*2; i += 2)
         {
@@ -282,7 +283,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
         }
 	}
     _mm_empty();        // Clear aliased fp register state
-    
+
 	if (shift_picture_up) {
 		// Fill bottom line with one line of black
 		for (i = 0; i < width*2; i += 4) {
@@ -303,7 +304,7 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 	int start_line = 0;
 
 	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -346,7 +347,7 @@ void yuv4xx_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
 	int start_line = 0;
 
 	// Shifting picture up one line is necessary when decoding PAL DV25
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -361,7 +362,7 @@ void yuv4xx_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
             y = input->data[0] + j * input->linesize[0];
             u = input->data[1] + (j / 2) * input->linesize[1];
             v = input->data[2] + (j / 2) * input->linesize[2];
-    
+
             for (i = 0; i < width; i++)
             {
                 if (i % 2 == 0)
@@ -409,7 +410,7 @@ void yuv4xx_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
             y = input->data[0] + j * input->linesize[0];
             u = input->data[1] + j * input->linesize[1];
             v = input->data[2] + j * input->linesize[2];
-    
+
             for (i = 0; i < width; i++)
             {
                 if (i % 4 == 0)
@@ -417,10 +418,10 @@ void yuv4xx_to_uyvy(int width, int height, int shift_picture_up, AVFrame *input,
                 else if (i % 4 == 1)
                     *output++ = *v++;
                 else if (i % 4 == 2)
-                    *output++ = (*u + *(u-1)) / 2; /* take average of prev and next sample */ 
+                    *output++ = (*u + *(u-1)) / 2; /* take average of prev and next sample */
                 else
                     *output++ = (*v + *(v-1)) / 2; /* take average of prev and next sample */
-                    
+
                 *output++ = *y++;
             }
         }
@@ -442,11 +443,11 @@ void yuv422_to_yuv422(int width, int height, int shift_picture_up, AVFrame *inpu
 {
 	int j;
 	uint8_t *y, *u, *v;
-    uint8_t *yOut, *uOut, *vOut; 
+    uint8_t *yOut, *uOut, *vOut;
 	int start_line = 0;
 
 	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -455,7 +456,7 @@ void yuv422_to_yuv422(int width, int height, int shift_picture_up, AVFrame *inpu
     yOut = output;
     uOut = output + width * height;
     vOut = uOut + width * height / 2;
-    
+
 	/* copy every line, where width <= linesize */
 	for (j = start_line; j < height; j++) {
 		y = input->data[0] + j * input->linesize[0];
@@ -483,11 +484,11 @@ void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *inpu
 {
 	int j;
 	uint8_t *y, *u, *v;
-    uint8_t *yOut, *uOut, *vOut; 
+    uint8_t *yOut, *uOut, *vOut;
 	int start_line = 0;
 
 	// Shifting picture up one line is necessary when decoding PAL DV25
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -501,14 +502,14 @@ void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *inpu
         yOut = output;
         uOut = output + height * width;
         vOut = output + height * width * 5 / 4;
-        
-        for (j = start_line; j < height; j++) 
+
+        for (j = start_line; j < height; j++)
         {
             y = input->data[0] + j * input->linesize[0];
-            
+
             memcpy(yOut, y, width);
             yOut += width;
-            
+
             if (j % 2 == 0)
             {
                 u = input->data[1] + (j / 2) * input->linesize[1];
@@ -535,17 +536,17 @@ void yuv4xx_to_yuv4xx(int width, int height, int shift_picture_up, AVFrame *inpu
         yOut = output;
         uOut = output + width * height;
         vOut = output + width * height * 5 / 4;
-        
-        for (j = start_line; j < height; j++) 
+
+        for (j = start_line; j < height; j++)
         {
             y = input->data[0] + j * input->linesize[0];
             u = input->data[1] + j * input->linesize[1];
             v = input->data[2] + j * input->linesize[2];
-    
+
             memcpy(yOut, y, width);
             memcpy(uOut, u, width / 4);
             memcpy(vOut, v, width / 4);
-    
+
             yOut += width;
             uOut += width / 4;
             vOut += width / 4;
@@ -592,7 +593,7 @@ void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *inpu
                 // can no longer process in 32 byte chunks - revert to basic method below
                 break;
             }
-            
+
 			__m64 m0 = *(__m64 *)u;			// load UUUU UUUU(0)
 			__m64 m1 = *(__m64 *)v;			// load VVVV VVVV(0)
 			__m64 m2 = m0;					// copy U for mix op
@@ -618,7 +619,7 @@ void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *inpu
 			y += 16;
 			output += 32;
 		}
-        
+
         // process the rest of the line
         for (; i < width*2; i += 2)
         {
@@ -646,7 +647,7 @@ void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *inpu
 	}
 }
 
-#else 
+#else
 
 void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
 {
@@ -657,9 +658,9 @@ void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *inpu
 	y = input;
 	u = input + width*height;
 	v = input + width*height * 3 / 2;
-    
+
 	// Shifting picture up one line is necessary when decoding PAL DV50
-	if (shift_picture_up) 
+	if (shift_picture_up)
     {
 		// Skip one line of input picture and start one line lower
 		start_line = 1;
@@ -669,7 +670,7 @@ void yuv422_to_uyvy_2(int width, int height, int shift_picture_up, uint8_t *inpu
 	}
 
 	// Convert to UYVY
-	for (j = start_line; j < height; j++) 
+	for (j = start_line; j < height; j++)
     {
 		for (i = 0; i < width; i++)
 		{
@@ -734,7 +735,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
     {
         int i;
         int size = width * height * 2;
-        
+
         for (i = 0; i < size; i += 4)
         {
             image[i + 0] = 0x80;
@@ -750,7 +751,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
         unsigned char* y = image;
         unsigned char* u = &image[width * height];
         unsigned char* v = &image[width * height * 3 / 2];
-        
+
         for (i = 0; i < size; i ++)
         {
             *y++ = 0x10;
@@ -768,7 +769,7 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
         unsigned char* y = image;
         unsigned char* u = &image[width * height];
         unsigned char* v = &image[width * height * 5 / 4];
-        
+
         for (i = 0; i < size; i ++)
         {
             *y++ = 0x10;

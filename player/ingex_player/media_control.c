@@ -1,9 +1,10 @@
 /*
- * $Id: media_control.c,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_control.c,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -81,7 +82,7 @@ void mc_toggle_play_pause(MediaControl* control)
 void mc_seek(MediaControl* control, int64_t offset, int whence, PlayUnit unit)
 {
     assert(whence == SEEK_SET || whence == SEEK_CUR || whence == SEEK_END);
-    
+
     if (control && control->seek)
     {
         control->seek(control->data, offset, whence, unit);
@@ -91,7 +92,7 @@ void mc_seek(MediaControl* control, int64_t offset, int whence, PlayUnit unit)
 void mc_play_speed(MediaControl* control, int speed, PlayUnit unit)
 {
     assert(speed >= 1 || speed <= -1);
-    
+
     if (control && control->play_speed)
     {
         control->play_speed(control->data, speed, unit);

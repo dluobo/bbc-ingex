@@ -1,9 +1,10 @@
 /*
- * $Id: qc_http_access.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: qc_http_access.h,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +32,7 @@
 typedef struct QCHTTPAccess QCHTTPAccess;
 
 
-int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory, 
+int qch_create_qc_http_access(MediaPlayer* player, int port, const char* cacheDirectory,
     const char* reportDirectory, QCHTTPAccess** access);
 void qch_free_qc_http_access(QCHTTPAccess** access);
 

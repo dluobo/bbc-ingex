@@ -1,9 +1,10 @@
 /*
- * $Id: x11_display_sink.h,v 1.7 2008/11/06 19:56:56 john_f Exp $
+ * $Id: x11_display_sink.h,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -41,7 +42,7 @@ extern "C"
 typedef struct X11DisplaySink X11DisplaySink;
 
 
-int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio, 
+int xsk_open(int reviewDuration, int disableOSD, const Rational* pixelAspectRatio,
     const Rational* monitorAspectRatio, float scale, int swScale, X11WindowInfo* windowInfo, X11DisplaySink** sink);
 void xsk_set_media_control(X11DisplaySink* sink, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);
 void xsk_unset_media_control(X11DisplaySink* sink);

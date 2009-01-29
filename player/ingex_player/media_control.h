@@ -1,9 +1,10 @@
 /*
- * $Id: media_control.h,v 1.7 2008/11/06 11:30:09 john_f Exp $
+ * $Id: media_control.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +27,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -55,33 +56,33 @@ typedef struct
 {
     void* data; /* passed as parameter in function calls */
 
-    
+
     /* get the mode which determines which functions should be called */
-    
+
     MediaControlMode (*get_mode)(void* data);
-    
-    
+
+
     /* enable/disable media control (other than this function) */
-    
+
     void (*toggle_lock)(void* data);
-    
-    
-    /* audio/video stream control */    
-    
+
+
+    /* audio/video stream control */
+
     void (*play)(void* data);
     void (*stop)(void* data);
     void (*pause)(void* data);
     void (*toggle_play_pause)(void* data);
-    void (*seek)(void* data, int64_t offset, int whence /* SEEK_SET, SEEK_CUR or SEEK_END */, 
+    void (*seek)(void* data, int64_t offset, int whence /* SEEK_SET, SEEK_CUR or SEEK_END */,
         PlayUnit unit /* offset is in units of 1/1000 % if unit is PERCENTAGE_PLAY_UNIT */);
     void (*play_speed)(void* data, int speed, PlayUnit unit);
     void (*play_speed_factor)(void* data, float factor);
     void (*step)(void* data, int forward /* else backward */, PlayUnit unit);
     void (*mute_audio)(void* data, int mute /* -1=toggle, 0=not mute, 1=mute */);
-    
-    
+
+
     /* mark-in and mark-out controls */
-    
+
     void (*mark)(void* data, int type, int toggle);
     void (*mark_position)(void* data, int64_t position, int type, int toggle);
     void (*clear_mark)(void* data, int typeMask /* ALL_MARK_TYPE will clear all mark types */);
@@ -92,58 +93,58 @@ typedef struct
     void (*seek_clip_mark)(void* data);
     void (*next_active_mark_selection)(void* data);
 
-    
+
     /* on screen display */
-    
+
     void (*set_osd_screen)(void* data, OSDScreen screen);
     void (*next_osd_screen)(void* data);
     void (*set_osd_timecode)(void* data, int index, int type, int subType);
     void (*next_osd_timecode)(void* data);
     void (*toggle_show_audio_level)(void* data);
- 
-    
+
+
     /* video switch control */
-    
+
     void (*switch_next_video)(void* data);
     void (*switch_prev_video)(void* data);
     void (*switch_video)(void* data, int index);
     void (*show_source_name)(void* data, int enable);
     void (*toggle_show_source_name)(void* data);
 
-    
+
     /* audio switch control */
-    
+
     void (*switch_next_audio_group)(void* data);
     void (*switch_prev_audio_group)(void* data);
     void (*switch_audio_group)(void* data, int index);
     void (*snap_audio_to_video)(void* data);
 
-    
+
     /* functions for sinks supporting half-split */
 
     void (*set_half_split_orientation)(void* data, int vertical /* -1 == toggle */);
     void (*set_half_split_type)(void* data, int type /* -1 == toggle, else see HalfSplitType enum */);
     void (*show_half_split)(void* data, int showSplitDivide /* -1 == toggle */);
     void (*move_half_split)(void* data, int rightOrDown, int speed /* 0...5 */);
-    
-    
+
+
     /* review */
-    
+
     void (*review_start)(void* data, int64_t duration);
     void (*review_end)(void* data, int64_t duration);
     void (*review)(void* data, int64_t duration);
-    
-    
+
+
     /* menu (MENU_MODE) */
-    
+
     void (*next_menu_item)(void* data);
-    void (*previous_menu_item)(void* data); 
-    void (*select_menu_item_left)(void* data); 
-    void (*select_menu_item_right)(void* data); 
-    void (*select_menu_item_center)(void* data); 
-    void (*select_menu_item_extra)(void* data); 
-    
-    
+    void (*previous_menu_item)(void* data);
+    void (*select_menu_item_left)(void* data);
+    void (*select_menu_item_right)(void* data);
+    void (*select_menu_item_center)(void* data);
+    void (*select_menu_item_extra)(void* data);
+
+
 } MediaControl;
 
 

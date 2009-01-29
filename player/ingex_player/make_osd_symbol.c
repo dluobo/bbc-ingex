@@ -1,9 +1,10 @@
 /*
- * $Id: make_osd_symbol.c,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: make_osd_symbol.c,v 1.3 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +25,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* 
-   0. create image in gimp 
+/*
+   0. create image in gimp
         the YUV overlay requires an even number for image width and height
         choose greyscale
    1. export the bitmap image from gimp as a C file
@@ -36,14 +37,14 @@
    5. execute = ./a.out > dump
    6. copy dump to osd_symbols.c
    7. add declaration in osd_symbol.h
-  
+
 */
 
 
 static const int width = 42;
 static const int height = 42;
 static const char* name = "FieldSymbol";
-static const unsigned char* rawSymbol = 
+static const unsigned char* rawSymbol =
   "\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376"
   "\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376"
   "\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376\376"
@@ -292,7 +293,7 @@ int main()
 {
     int i, j;
     size_t size = width * height * 3;
-    
+
     printf("BYTE g_osd%sBitMap[] = \n", name);
     printf("{\n");
     for (i = 0; i < size / (width * 3); i++)
@@ -339,5 +340,5 @@ int main()
     printf("    0\n");
     printf("};\n");
     printf("\n");
-}   
+}
 

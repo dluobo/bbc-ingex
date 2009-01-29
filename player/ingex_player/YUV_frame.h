@@ -1,9 +1,10 @@
 /*
- * $Id: YUV_frame.h,v 1.3 2008/10/29 17:47:41 john_f Exp $
+ * $Id: YUV_frame.h,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Jim Easterbrook, <easter@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +49,7 @@ typedef enum
 {
     YV12, IF09, YVU9, IYUV,
     UYVY, YUY2, YVYU, HDYC,
-    Y42B, I420, 
+    Y42B, I420,
     YUV422 // planar YUV 4:2:2
 } formats;
 

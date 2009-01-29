@@ -1,9 +1,10 @@
 /*
- * $Id: JogShuttle.cpp,v 1.1 2008/10/24 19:09:22 john_f Exp $
+ * $Id: JogShuttle.cpp,v 1.2 2009/01/29 07:10:27 stuart_hc Exp $
  *
  * Report jog shuttle controller events
  *
- * Copyright (C) 2008  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,7 +20,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +58,7 @@ using namespace ingex;
 #define MAX_SHUTTLE_VALUE       7
 
 // some number > max number of events we expect (all keys + jog + shuttle + sync = 17) before a sync event
-#define EVENT_BUFFER_SIZE       32 
+#define EVENT_BUFFER_SIZE       32
 
 // wait 4 seconds before trying to reopen the shuttle device
 #define DEVICE_REOPEN_WAIT      (4000 * 1000)
@@ -74,7 +75,7 @@ typedef struct
     JogShuttleDevice device;
 } ShuttleData;
 
-static const ShuttleData g_supportedShuttles[] = 
+static const ShuttleData g_supportedShuttles[] =
 {
     {0x0b33, 0x0010, "Contour ShuttlePro", CONTOUR_SHUTTLE_PRO_DEVICE},
     {0x0b33, 0x0030, "Contour ShuttlePro V2", CONTOUR_SHUTTLE_PRO_V2_DEVICE}
@@ -113,7 +114,7 @@ namespace ingex
                 fprintf(stderr, "Failed to destroy mutex: %s\n", strerror(errno));
             }
         }
-        
+
         void lock()
         {
             if (pthread_mutex_lock(&_mutex) != 0)
@@ -122,7 +123,7 @@ namespace ingex
                 throw;
             }
         }
-    
+
         void unlock()
         {
             if (pthread_mutex_unlock(&_mutex) != 0)
@@ -131,11 +132,11 @@ namespace ingex
                 throw;
             }
         }
-        
+
     private:
         pthread_mutex_t _mutex;
     };
-    
+
     class MutexLocker
     {
     public:
@@ -143,12 +144,12 @@ namespace ingex
         {
             _mutex->lock();
         }
-    
+
         ~MutexLocker()
         {
             _mutex->unlock();
         }
-        
+
     private:
         Mutex* _mutex;
     };
@@ -161,9 +162,9 @@ namespace ingex
 void* ingex::jog_shuttle_thread(void* arg)
 {
     JogShuttle* jogShuttle = (JogShuttle*)arg;
-    
+
     jogShuttle->threadStart();
-    
+
     pthread_exit((void*) 0);
 }
 
@@ -173,8 +174,8 @@ void* ingex::jog_shuttle_thread(void* arg)
 
 
 JogShuttle::JogShuttle()
-: _listenersMutex(0), _deviceMutex(0), _deviceFile(-1), _deviceType(UNKNOWN_DEVICE), 
-_pauseThread(false), _stopThread(false), _prevJogPosition(MAX_JOG_VALUE + 1), _checkShuttleValue(false), 
+: _listenersMutex(0), _deviceMutex(0), _deviceFile(-1), _deviceType(UNKNOWN_DEVICE),
+_pauseThread(false), _stopThread(false), _prevJogPosition(MAX_JOG_VALUE + 1), _checkShuttleValue(false),
 _prevShuttleClockwise(false), _prevShuttlePosition(0), _jogIsAtPosition0(false)
 {
     _listenersMutex = new Mutex();
@@ -185,14 +186,14 @@ _prevShuttleClockwise(false), _prevShuttlePosition(0), _jogIsAtPosition0(false)
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-    
+
     int result = pthread_create(&_thread, &attr, jog_shuttle_thread, (void*)this);
     if (result != 0)
     {
         fprintf(stderr, "Failed to create joinable thread: %s\n", strerror(result));
         throw;
     }
-    
+
     pthread_attr_destroy(&attr);
 }
 
@@ -206,7 +207,7 @@ JogShuttle::~JogShuttle()
 
     // signal the thread to stop and join
     _stopThread = true;
-    
+
     int result;
     void* status;
     if ((result = pthread_join(_thread, (void **)&status)) != 0)
@@ -216,7 +217,7 @@ JogShuttle::~JogShuttle()
 
     // close the event device
     closeDevice();
-    
+
     delete _listenersMutex;
     delete _deviceMutex;
 }
@@ -263,7 +264,7 @@ string JogShuttle::getDeviceName(JogShuttleDevice device)
             return g_supportedShuttles[i].name;
         }
     }
-    
+
     return "Unknown";
 }
 
@@ -280,7 +281,7 @@ void JogShuttle::stop()
 bool JogShuttle::openDevice()
 {
     LOCK_SECTION(_deviceMutex);
-    
+
     int i;
     int fd;
     struct input_id deviceInfo;
@@ -288,13 +289,13 @@ bool JogShuttle::openDevice()
     char eventDevName[256];
     int grab = 1;
 
-    
+
     // loop through the event devices, check whether it is a supported shuttle
     // and then try opening it
     for (i = 0; i < EVENT_DEV_INDEX_MAX; i++)
     {
         sprintf(eventDevName, g_eventDeviceTemplate, i);
-        
+
         if ((fd = open(eventDevName, O_RDONLY)) != -1)
         {
             // get the device information
@@ -312,38 +313,38 @@ bool JogShuttle::openDevice()
                             _prevJogPosition = MAX_JOG_VALUE + 1;
                             _deviceFile = fd;
                             _deviceType = g_supportedShuttles[j].device;
-                            
+
                             signalDeviceConnected(_deviceType);
                             return true;
                         }
-                        
+
                         // failed to grab device
                         break;
                     }
                 }
             }
-            
+
             close(fd);
         }
     }
-    
+
     return false;
 }
 
 void JogShuttle::closeDevice()
 {
     LOCK_SECTION(_deviceMutex);
-    
+
     JogShuttleDevice deviceType;
 
     if (_deviceFile >= 0)
     {
         deviceType = _deviceType;
-        
+
         close(_deviceFile);
         _deviceFile = -1;
         _deviceType = UNKNOWN_DEVICE;
-        
+
         signalDeviceDisconnected(deviceType);
     }
 }
@@ -428,7 +429,7 @@ void JogShuttle::signalPing()
 
 void JogShuttle::threadStart()
 {
-    struct input_event inEvent[EVENT_BUFFER_SIZE]; 
+    struct input_event inEvent[EVENT_BUFFER_SIZE];
     int j;
     fd_set rfds;
     struct timeval tv;
@@ -441,7 +442,7 @@ void JogShuttle::threadStart()
     int selectCount;
     int waitTime = 0;
 
-    
+
     numEvents = 0;
     eventsOffset = 0;
     selectCount = 0;
@@ -454,14 +455,14 @@ void JogShuttle::threadStart()
             {
                 closeDevice();
             }
-            
+
             while (!_stopThread && _pauseThread)
             {
                 usleep(100 * 1000);
             }
             continue;
         }
-        
+
         // do waits
         if (waitTime > 0)
         {
@@ -470,13 +471,13 @@ void JogShuttle::threadStart()
                 usleep(100 * 1000);
                 waitTime -= 100 * 1000;
             }
-            
+
             if (_stopThread || _pauseThread)
             {
                 continue;
             }
         }
-        
+
         // open the device if closed
         if (_deviceFile < 0)
         {
@@ -486,17 +487,17 @@ void JogShuttle::threadStart()
                 continue;
             }
         }
-        
-        
+
+
         FD_ZERO(&rfds);
         FD_SET(_deviceFile, &rfds);
         tv.tv_sec = 0;
         tv.tv_usec = 50000; // 1/20 second
-        
+
         retval = select(_deviceFile + 1, &rfds, NULL, NULL, &tv);
         selectCount++;
 
-        
+
         if (_stopThread)
         {
             // thread stop was signalled so break out of the loop to allow join
@@ -515,9 +516,9 @@ void JogShuttle::threadStart()
             {
                 // something is wrong
                 // close the device and try open again after waiting
-                
+
                 closeDevice();
-                
+
                 waitTime = DEVICE_REOPEN_WAIT;
                 continue;
             }
@@ -525,13 +526,13 @@ void JogShuttle::threadStart()
         else if (retval)
         {
             selectCount = 0;
-            
+
             numRead = read(_deviceFile, &inEvent[eventsOffset], (EVENT_BUFFER_SIZE - eventsOffset) * sizeof(struct input_event));
             if (numRead > 0)
             {
                 numEvents += numRead / sizeof(struct input_event);
                 eventsOffset += numRead / sizeof(struct input_event);
-                
+
                 // process the events if there is a sync event
                 processOffset = 0;
                 if (numEvents == EVENT_BUFFER_SIZE)
@@ -568,9 +569,9 @@ void JogShuttle::threadStart()
             {
                 // num read zero indicates end-of-file, ie. the shuttle device was unplugged
                 // close the device and try open again after waiting
-                
+
                 closeDevice();
-                
+
                 waitTime = DEVICE_REOPEN_WAIT;
                 continue;
             }
@@ -578,7 +579,7 @@ void JogShuttle::threadStart()
         else if (selectCount > 80) // > 4 seconds
         {
             selectCount = 0;
-            
+
             // a timeout > 4 seconds means we are in jog position 0 where no events are sent
 
             // flush the events
@@ -586,18 +587,18 @@ void JogShuttle::threadStart()
             {
                 handleEvent(&inEvent[0], numEvents, j);
             }
-            
+
             numEvents = 0;
             eventsOffset = 0;
 
-            // handle silence            
-            // assume shuttle is back in neutral if we don't receive events. Silence occurs 
+            // handle silence
+            // assume shuttle is back in neutral if we don't receive events. Silence occurs
             // when the jog is at position 0
-        
+
             if (_prevShuttlePosition != 0)
             {
                 signalShuttle(true, 0);
-                
+
                 _prevShuttleClockwise = true;
                 _prevShuttlePosition = 0;
             }
@@ -612,7 +613,7 @@ void JogShuttle::threadStart()
 int JogShuttle::getNumEvents(struct input_event* events, int numEvents)
 {
     int i;
-    
+
     for (i = 0; i < numEvents; i++)
     {
         if (events[i].type == EV_SYN)
@@ -620,7 +621,7 @@ int JogShuttle::getNumEvents(struct input_event* events, int numEvents)
             return i + 1;
         }
     }
-    
+
     return 0;
 }
 
@@ -632,12 +633,12 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
     bool clockwise;
     int position;
 
-    
+
     switch (inEvent->type)
     {
         // synchronization event
         case EV_SYN:
-        
+
             // assume shuttle is back in neutral if we receive 2 synchronization events
             // with no shuttle event in-between
 
@@ -647,7 +648,7 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 {
                     // shuttle is back in neutral
                     signalShuttle(true, 0);
-                    
+
                     _prevShuttleClockwise = true;
                     _prevShuttlePosition = 0;
                     _checkShuttleValue = false;
@@ -663,7 +664,7 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 _checkShuttleValue = false;
             }
             break;
-            
+
         // key event
         case EV_KEY:
             if (inEvent->code >= KEY_CODE_MIN && inEvent->code <= KEY_CODE_MAX)
@@ -678,8 +679,8 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 }
             }
             break;
-            
-        // Jog or Shuttle event            
+
+        // Jog or Shuttle event
         case EV_REL:
 
             // ignore jog events occurrences that occur directly after shuttle events
@@ -691,8 +692,8 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 _prevJogPosition = inEvent->value;
                 break;
             }
-            
-                
+
+
             // Jog event
             if (inEvent->code == REL_DIAL)
             {
@@ -701,7 +702,7 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 {
                     _jogIsAtPosition0 = false;
                 }
-                
+
                 if (inEvent->value == _prevJogPosition + 1 ||
                     (inEvent->value == 1 && _prevJogPosition >= UNPATCHED_MAX_JOG_VALUE))
                 {
@@ -712,7 +713,7 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 {
                     clockwise = false;
                 }
-                // handle missed events (is this possible?) 
+                // handle missed events (is this possible?)
                 else if (inEvent->value > _prevJogPosition)
                 {
                     clockwise = true;
@@ -722,24 +723,24 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                     clockwise = false;
                 }
                 position = inEvent->value;
-                
+
                 signalJog(clockwise, position);
 
-                
+
                 _prevJogPosition = position;
             }
-            
+
             // Shuttle event
             else if (inEvent->code == REL_WHEEL)
             {
                 _checkShuttleValue = false;
-                
+
                 clockwise = (inEvent->value >= 0);
                 position = abs(inEvent->value);
 
                 // change behaviour to (try) compensate for fact that return to neutral shuttle
                 // events do not occur when the jog is at position 0
-                haveJogEvent = false;                    
+                haveJogEvent = false;
                 for (i = 0; i < numEvents; i++)
                 {
                     if (inEvents[i].type == EV_REL && inEvent[i].code == REL_DIAL)
@@ -748,17 +749,17 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                         break;
                     }
                 }
-                if (!haveJogEvent) 
+                if (!haveJogEvent)
                 {
                     if (!_jogIsAtPosition0)
                     {
                         _jogIsAtPosition0 = true;
                     }
-                    
+
                     // inEvent value 0 and 1 are taken to be speed 0. A value
                     // equal 1 will then trigger the speed to drop back to 0.
                     // Also, jumps in speed will also trigger it
-                    // handleSilence() will deal with the case where speed value 1 is skipped 
+                    // handleSilence() will deal with the case where speed value 1 is skipped
                     if (position <= 1 || _prevShuttlePosition > position + 1)
                     {
                         position = 0;
@@ -778,8 +779,8 @@ void JogShuttle::handleEvent(struct input_event* inEvents, int numEvents, int ev
                 {
                     signalShuttle(clockwise, position);
                 }
-                
-                
+
+
                 _prevShuttleClockwise = clockwise;
                 _prevShuttlePosition = position;
             }

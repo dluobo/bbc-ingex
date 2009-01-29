@@ -1,9 +1,10 @@
 /*
- * $Id: stream_connect.h,v 1.2 2008/10/29 17:47:42 john_f Exp $
+ * $Id: stream_connect.h,v 1.3 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@
 
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -37,12 +38,12 @@ extern "C"
 typedef struct
 {
     void* data; /* passed to functions */
-    
+
     MediaSourceListener* (*get_source_listener)(void* data);
-    
+
     /* complete all remaining tasks */
     int (*sync)(void* data);
-    
+
     /* close and free resources */
     void (*close)(void* data);
 } StreamConnect;
@@ -59,10 +60,10 @@ void stc_close(StreamConnect* connect);
 /* connector that passes data directly from source to sink */
 
 int pass_through_accept(MediaSink* sink, const StreamInfo* streamInfo);
-int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId, 
+int create_pass_through_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     const StreamInfo* streamInfo, StreamConnect** connect);
 
-    
+
 
 #ifdef __cplusplus
 }

@@ -1,9 +1,10 @@
 /*
- * $Id: raw_file_sink.c,v 1.4 2008/11/11 10:40:59 philipn Exp $
+ * $Id: raw_file_sink.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
  *
  *
  *
- * Copyright (C) 2008 BBC Research, Philip de Nier, <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,17 +51,17 @@ typedef struct
 {
     /* media sink interface */
     MediaSink mediaSink;
-    
+
     /* filename template */
     char* filenameTemplate;
-    
+
     /* listener */
     MediaSinkListener* listener;
-    
+
     /* streams */
     RawStream streams[MAX_OUTPUT_FILES];
     int numStreams;
-    
+
     int muteAudio;
 } RawFileSink;
 
@@ -79,7 +80,7 @@ static void reset_streams(RawFileSink* sink)
 static RawStream* get_raw_stream(RawFileSink* sink, int streamId)
 {
     int i;
-    
+
     for (i = 0; i < sink->numStreams; i++)
     {
         if (streamId == sink->streams[i].streamId)
@@ -94,16 +95,16 @@ static RawStream* get_raw_stream(RawFileSink* sink, int streamId)
 static int rms_register_listener(void* data, MediaSinkListener* listener)
 {
     RawFileSink* sink = (RawFileSink*)data;
-    
+
     sink->listener = listener;
-    
+
     return 1;
 }
 
 static void rms_unregister_listener(void* data, MediaSinkListener* listener)
 {
     RawFileSink* sink = (RawFileSink*)data;
-    
+
     if (sink->listener == listener)
     {
         sink->listener = NULL;
@@ -113,7 +114,7 @@ static void rms_unregister_listener(void* data, MediaSinkListener* listener)
 static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     /* TODO: add option to set what the raw file sink should accept */
-    
+
     /* make sure that the picture is UYVY */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
         streamInfo->format != UYVY_FORMAT)
@@ -146,7 +147,7 @@ static int rms_register_stream(void* data, int streamId, const StreamInfo* strea
         ml_log_warn("Number of streams exceeds hard coded maximum %d\n", MAX_OUTPUT_FILES);
         return 0;
     }
-    
+
     sink->streams[sink->numStreams].streamType = streamInfo->type;
     sink->streams[sink->numStreams].streamId = streamId;
     if (snprintf(filename, FILENAME_MAX, sink->filenameTemplate, streamId) < 0)
@@ -160,7 +161,7 @@ static int rms_register_stream(void* data, int streamId, const StreamInfo* strea
         return 0;
     }
     sink->numStreams++;
-    
+
     return 1;
 }
 
@@ -173,13 +174,13 @@ static int rms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
 {
     RawFileSink* sink = (RawFileSink*)data;
     RawStream* rawStream;
-    
+
     if ((rawStream = get_raw_stream(sink, streamId)) == NULL)
     {
         ml_log_error("Unknown stream %d for raw file output\n", streamId);
         return 0;
     }
-    
+
     if (rawStream->allocatedBufferSize != bufferSize)
     {
         if ((rawStream->buffer = realloc(rawStream->buffer, bufferSize)) == NULL)
@@ -189,9 +190,9 @@ static int rms_get_stream_buffer(void* data, int streamId, unsigned int bufferSi
         }
         rawStream->allocatedBufferSize = bufferSize;
     }
-    
+
     *buffer = rawStream->buffer;
-    
+
     return 1;
 }
 
@@ -199,7 +200,7 @@ static int rms_receive_stream_frame(void* data, int streamId, unsigned char* buf
 {
     RawFileSink* sink = (RawFileSink*)data;
     RawStream* rawStream;
-    
+
     if ((rawStream = get_raw_stream(sink, streamId)) == NULL)
     {
         ml_log_error("Unknown stream %d for raw file output\n", streamId);
@@ -211,7 +212,7 @@ static int rms_receive_stream_frame(void* data, int streamId, unsigned char* buf
         return 0;
     }
     rawStream->bufferSize = bufferSize;
-        
+
     rawStream->isPresent = 1;
 
     return 1;
@@ -230,19 +231,19 @@ static int rms_complete_frame(void* data, const FrameInfo* frameInfo)
             {
                 memset(sink->streams[i].buffer, 0, sink->streams[i].bufferSize);
             }
-            
+
             if (fwrite(sink->streams[i].buffer, sink->streams[i].bufferSize, 1, sink->streams[i].outputFile) != 1)
             {
                 ml_log_error("Failed to write raw data to file: %s\n", strerror(errno));
             }
         }
     }
-    
+
     msl_frame_displayed(sink->listener, frameInfo);
 
     reset_streams(sink);
-    
-    return 1;    
+
+    return 1;
 }
 
 static void rms_cancel_frame(void* data)
@@ -264,7 +265,7 @@ static int rms_mute_audio(void* data, int mute)
     {
         sink->muteAudio = mute;
     }
-    
+
     return 1;
 }
 
@@ -277,7 +278,7 @@ static void rms_close(void* data)
     {
         return;
     }
-    
+
     for (i = 0; i < sink->numStreams; i++)
     {
         SAFE_FREE(&sink->streams[i].buffer);
@@ -294,20 +295,20 @@ static void rms_close(void* data)
 int rms_open(const char* filenameTemplate, MediaSink** sink)
 {
     RawFileSink* newSink;
-    
-    if (strstr(filenameTemplate, "%d") == NULL || 
+
+    if (strstr(filenameTemplate, "%d") == NULL ||
         strchr(strchr(filenameTemplate, '%') + 1, '%') != NULL)
     {
         ml_log_error("Invalid filename template '%s': must contain a single '%%d'\n", filenameTemplate);
         return 0;
     }
-    
+
     CALLOC_ORET(newSink, RawFileSink, 1);
 
     MALLOC_OFAIL(newSink->filenameTemplate, char, strlen(filenameTemplate) + 1);
     strcpy(newSink->filenameTemplate, filenameTemplate);
-    
-    
+
+
     newSink->mediaSink.data = newSink;
     newSink->mediaSink.register_listener = rms_register_listener;
     newSink->mediaSink.unregister_listener = rms_unregister_listener;
@@ -320,11 +321,11 @@ int rms_open(const char* filenameTemplate, MediaSink** sink)
     newSink->mediaSink.complete_frame = rms_complete_frame;
     newSink->mediaSink.cancel_frame = rms_cancel_frame;
     newSink->mediaSink.close = rms_close;
-    
-    
+
+
     *sink = &newSink->mediaSink;
     return 1;
-    
+
 fail:
     rms_close(newSink);
     return 0;

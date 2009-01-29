@@ -1,9 +1,10 @@
 /*
- * $Id: JogShuttle.h,v 1.1 2008/10/24 19:09:22 john_f Exp $
+ * $Id: JogShuttle.h,v 1.2 2009/01/29 07:10:27 stuart_hc Exp $
  *
  * Report jog shuttle controller events
  *
- * Copyright (C) 2008  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,7 +20,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
+
 #ifndef __INGEX_JOGSHUTTLE_H__
 #define __INGEX_JOGSHUTTLE_H__
 
@@ -46,17 +47,17 @@ class JogShuttleListener
 {
 public:
     virtual ~JogShuttleListener() {}
-    
-    virtual void connected(JogShuttle* jogShuttle, JogShuttleDevice device) {}
-    virtual void disconnected(JogShuttle* jogShuttle, JogShuttleDevice device) {}
-    
-    virtual void buttonPressed(JogShuttle* jogShuttle, int number) {}
-    virtual void buttonReleased(JogShuttle* jogShuttle, int number) {}
 
-    virtual void jog(JogShuttle* jogShuttle, bool clockwise, int position) {}
-    virtual void shuttle(JogShuttle* jogShuttle, bool clockwise, int position) {}
-    
-    virtual void ping(JogShuttle* jogShuttle) {}
+    virtual void connected(JogShuttle* jogShuttle, JogShuttleDevice device) = 0;
+    virtual void disconnected(JogShuttle* jogShuttle, JogShuttleDevice device) = 0;
+
+    virtual void buttonPressed(JogShuttle* jogShuttle, int number) = 0;
+    virtual void buttonReleased(JogShuttle* jogShuttle, int number) = 0;
+
+    virtual void jog(JogShuttle* jogShuttle, bool clockwise, int position) = 0;
+    virtual void shuttle(JogShuttle* jogShuttle, bool clockwise, int position) = 0;
+
+    virtual void ping(JogShuttle* jogShuttle) = 0;
 };
 
 
@@ -75,13 +76,13 @@ public:
     // listeners
     void addListener(JogShuttleListener* listener);
     void removeListener(JogShuttleListener* listener);
-    
+
     // device name
     std::string getDeviceName(JogShuttleDevice device);
-    
+
     // open the device and start reading
     void start();
-    
+
     // stop reading and close the device
     void stop();
 
@@ -90,11 +91,11 @@ public:
 public:
     // allow thread start function to access private stuff
     friend void* jog_shuttle_thread(void* arg);
-    
+
 private:
     bool openDevice();
     void closeDevice();
-    
+
     void signalDeviceConnected(JogShuttleDevice device);
     void signalDeviceDisconnected(JogShuttleDevice device);
     void signalButtonPressed(int number);
@@ -106,8 +107,8 @@ private:
     void threadStart();
     int getNumEvents(struct input_event* events, int numEvents);
     void handleEvent(struct input_event* inEvents, int numEvents, int eventIndex);
-    
-    
+
+
     // listeners
     Mutex* _listenersMutex;
     std::vector<JogShuttleListener*> _listeners;
@@ -116,7 +117,7 @@ private:
     Mutex* _deviceMutex;
     int _deviceFile;
     JogShuttleDevice _deviceType;
-    
+
     // reading thread
     pthread_t _thread;
     bool _pauseThread;
