@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.2 2009/01/23 19:57:18 john_f Exp $
+ * $Id: mjpeg_compress.c,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * MJPEG encoder.
  *

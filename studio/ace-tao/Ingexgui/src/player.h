@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: player.h,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $                                                                 *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -26,36 +29,39 @@
 #include <map>
 #include "LocalIngexPlayer.h"
 #include <wx/wx.h>
+#include <wx/socket.h>
 
 //File poll timer checks for files appearing after completion of a recording
 #define FILE_POLL_TIMER_INTERVAL 250 //ms
 #define MAX_SPEED 64 //times normal; must be power of 2
+#define TRAFFIC_CONTROL_PORT 2000
 
 DECLARE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE, -1)
-
-namespace prodauto
-{
 
 enum PlayerEventType {
 	STATE_CHANGE = 0,
 	CUE_POINT,
 	FRAME_DISPLAYED,
 	NEW_FILESET,
-	WITHIN_TAKE,
+	AT_START,
+	WITHIN,
+	AT_END,
 	CLOSE_REQ,
 	KEYPRESS,
 	PROGRESS_BAR_DRAG,
 	SPEED_CHANGE,
-	QUADRANT_CLICK
+	QUADRANT_CLICK,
 };
 
-enum PlayerMode {
-	PLAY,
-	PLAY_BACKWARDS,
-	PAUSE,
-	STOP,
-	CLOSE
-};
+namespace PlayerMode { //this avoids clashes with different enums with the same member names
+	enum EnumType {
+		PLAY,
+		PLAY_BACKWARDS,
+		PAUSE,
+		STOP,
+		CLOSE
+	};
+}
 
 enum OSDtype {
 	OSD_OFF,
@@ -66,10 +72,10 @@ enum OSDtype {
 class Player;
 
 /// Class with methods that are called by the player.
-class Listener : public IngexPlayerListener
+class Listener : public prodauto::IngexPlayerListener
 {
 	public:
-		Listener(Player *);
+		Listener(Player *, prodauto::IngexPlayerListenerRegistry *);
 		void SetStartIndex(const int);
 		void ClearCuePoints();
 		void AddCuePoint(const int64_t);
@@ -89,55 +95,59 @@ class Listener : public IngexPlayerListener
 		wxMutex mMutex;
 		unsigned int mStartIndex;
 		unsigned int mLastCuePointNotified;
-//		std::map<int64_t, int> mCuePointMap;
+//		std::map<int64_t, int> mCuePointMap;ic
 		std::vector<int64_t> mCuePoints;
 };
 
-/// Class representing the X11/SDI MXF video player.
-class Player : public wxEvtHandler, LocalIngexPlayer
+/// Class representing the X11/SDI video/audio player.
+class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 {
 	public:
-		Player(wxEvtHandler *, const bool, const PlayerOutputType, const OSDtype);
+		Player(wxEvtHandler *, const bool, const prodauto::PlayerOutputType, const OSDtype);
 		~Player();
 		bool IsOK();
 		void Enable(bool);
-		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
 		void SelectTrack(const int, const bool);
 		void SetOSD(const OSDtype);
 		void EnableSDIOSD(bool = true);
-		void SetOutputType(const PlayerOutputType);
-		void Play();
-		void PlayBackwards();
+		void SetOutputType(const prodauto::PlayerOutputType);
+		void Play(const bool = false, const bool = false);
+		void PlayAbsolute(const int);
 		void Pause();
 		void Step(bool);
 		void Reset();
 		void JumpToCue(unsigned int cuePoint);
 		bool Within();
 		bool AtEnd();
+		bool LastPlayingBackwards();
 		bool ExtOutputIsAvailable();
 		bool AtMaxForwardSpeed();
 		bool AtMaxReverseSpeed();
+		void MuteAudio(const bool);
 		void AudioFollowsVideo(const bool);
-//		std::vector<bool> GetFilesStatus();
 	private:
-		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, PlayerInputType = MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		void SetWindowName(const wxString & name = wxT(""));
 		void OnFrameDisplayed(wxCommandEvent&);
-//		void OnPlayerClosing(wxCommandEvent&);
 		void OnFilePollTimer(wxTimerEvent&);
-		void OnStateChange(wxCommandEvent& event);
-		void OnSpeedChange(wxCommandEvent& event);
-		void OnProgressBarDrag(wxCommandEvent& event);
+		void OnStateChange(wxCommandEvent&);
+		void OnSpeedChange(wxCommandEvent&);
+		void OnProgressBarDrag(wxCommandEvent&);
+		void OnSocketEvent(wxSocketEvent&);
+		void TrafficControl(const bool, const bool = false);
 		Listener * mListener;
+		prodauto::IngexPlayerListenerRegistry mListenerRegistry;
 		OSDtype mOSDtype;
 		bool mEnabled;
 		bool mOK;
-		PlayerMode mMode;
+		PlayerMode::EnumType mMode;
 		int mStartIndex;
 		std::string mDesiredTrackName;
 		unsigned int mNFilesExisting;
 		std::vector<std::string> mFileNames;
 		std::vector<std::string> mTrackNames;
-		PlayerInputType mInputType;
+		prodauto::PlayerInputType mInputType;
 		std::vector<bool> mOpened;
 		std::vector<int64_t> mCuePoints;
 		long mLastFrameDisplayed;
@@ -145,8 +155,12 @@ class Player : public wxEvtHandler, LocalIngexPlayer
 		wxTimer * mFilePollTimer;
 		unsigned int mLastRequestedCuePoint;
 		int mSpeed;
+		wxString mName;
+		bool mMuted;
+		bool mLastPlayingBackwards;
+		wxSocketClient * mSocket;
+		bool mTrafficControl;
 		DECLARE_EVENT_TABLE()
 };
 
-}
 #endif

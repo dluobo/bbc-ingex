@@ -20,7 +20,8 @@ module ProdAuto
 	struct Source
 	{
 		//UMID package_id;
-		string package_name;
+		string package_name; ///< SourceConfig
+        string tape_name;    ///< SourcePackage
 		//TrackId track_id;
 		string track_name;
 	};

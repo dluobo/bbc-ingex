@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: ingexgui.h,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $              *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,7 +23,6 @@
 
 #ifndef _INGEXGUI_H_
 #define _INGEXGUI_H_
-#include <vector>
 #include "comms.h"
 #include "controller.h"
 #include <wx/listctrl.h> //for Win32
@@ -42,8 +44,6 @@
 #define TOOLTIP_DELAY 1000 //ms
 #define TITLE wxT("Ingex Control")
 
-#define CUE_LABEL wxT("Cue")
-
 #define BUTTON_WARNING_COLOUR wxColour(0xFF, 0x80, 0x00)
 
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
@@ -58,6 +58,10 @@ static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};
 
 class TickTreeCtrl;
 class DragButtonList;
+namespace ingex {
+	class JogShuttle;
+}
+class JSListener;
 
 class 
 IngexguiApp : public wxApp
@@ -67,50 +71,15 @@ IngexguiApp : public wxApp
 		int FilterEvent(wxEvent&);
 };
 
-WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
-WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
-
-/// Class holding information about a take, for later replay.
-/// Holds the position of the take within the displayed list of events, the project name, an array of lists of files
-/// (one for each recorder) and an array of lists of track names (ditto).
-/// Also arrays of cue point colour codes, timecodes and frame numbers.
-class TakeInfo
-{
-	public:
-		TakeInfo(const unsigned long startIndex, const wxString & projectName) : mStartIndex(startIndex), mProjectName(projectName) {};
-		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
-		void AddCuePoint(const int64_t frame, const ProdAuto::MxfTimecode timecode, const ProdAuto::LocatorColour::EnumType colourCode) {mCuePointFrames.push_back(frame); mCueTimecodes.push_back(timecode); mCueColourCodes.push_back(colourCode);}; //no text here because it's stored in the event list (which means it can be edited)
-		void DeleteCuePoint(const unsigned long index) {mCuePointFrames.erase(mCuePointFrames.begin() + index); mCueColourCodes.erase(mCueColourCodes.begin() + index); mCueTimecodes.erase(mCueTimecodes.begin() + index);};
-
-		const unsigned long GetStartIndex() {return mStartIndex;};
-		ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
-		const wxString GetProjectName() {return mProjectName;};
-		ArrayOfTrackList_var * GetTracks() {return &mTracks;};
-		std::vector<int64_t> * GetCuePointFrames() {return &mCuePointFrames;};
-		std::vector<ProdAuto::LocatorColour::EnumType> * GetCueColourCodes() {return &mCueColourCodes;};
-		std::vector<ProdAuto::MxfTimecode> * GetCueTimecodes() {return &mCueTimecodes;};
-	private:
-		const unsigned long mStartIndex; //the index in the event list for the start of this take
-		ArrayOfStringSeq_var mFiles;
-		const wxString mProjectName;
-		ArrayOfTrackList_var mTracks; //deletes itself
-		std::vector<int64_t> mCuePointFrames;
-		std::vector<ProdAuto::LocatorColour::EnumType> mCueColourCodes;
-		std::vector<ProdAuto::MxfTimecode> mCueTimecodes;
-};
-
-WX_DECLARE_OBJARRAY(TakeInfo, TakeInfoArray);
-
 class Timepos;
-namespace prodauto {
-	class Player;
-}
+class Player;
 class RecordButton;
 class HelpDlg;
 class RecorderGroupCtrl;
 class CuePointsDlg;
 class TestModeDlg;
 class wxToggleButton;
+class EventList;
 
 /// The main displayed frame, at the heart of the application
 class IngexguiFrame : public wxFrame
@@ -129,34 +98,39 @@ class IngexguiFrame : public wxFrame
 		MENU_Stop,
 		MENU_PrevTrack,
 		MENU_NextTrack,
-		MENU_3,
-		MENU_4,
+		MENU_StepBackwards,
+		MENU_StepForwards,
+		MENU_Mute,
 		MENU_Up,
 		MENU_Down,
-		MENU_PageUp,
-		MENU_PageDown,
-		MENU_Home,
-		MENU_End,
-		MENU_J,
-		MENU_K,
-		MENU_L,
-		MENU_Space,
+		MENU_PrevTake,
+		MENU_NextTake,
+		MENU_FirstTake,
+		MENU_LastTake,
+		MENU_PlayBackwards,
+		MENU_Pause,
+		MENU_PlayForwards,
+		MENU_PlayPause,
 		MENU_AutoClear,
 		MENU_ClearLog,
 		MENU_PlayerDisable,
 		MENU_PlayMOV,
 		MENU_PlayMXF,
+		MENU_TogglePlayFile,
 		MENU_PlayerType,
-		MENU_PlayerExtOutput,
 		MENU_PlayerAccelOutput,
+#ifdef HAVE_DVS
+		MENU_PlayerEnableSDIOSD,
+		MENU_PlayerExtOutput,
 		MENU_PlayerExtAccelOutput,
 		MENU_PlayerExtUnaccelOutput,
+#endif
 		MENU_PlayerUnaccelOutput,
 		MENU_PlayerOSD,
 		MENU_PlayerAbsoluteTimecode,
 		MENU_PlayerRelativeTimecode,
 		MENU_PlayerNoOSD,
-		MENU_PlayerDisableSDIOSD,
+		MENU_PlayerMuteAudio,
 		MENU_PlayerAudioFollowsVideo,
 		MENU_TestMode,
 		BUTTON_Record,
@@ -177,14 +151,6 @@ class IngexguiFrame : public wxFrame
 		BUTTON_JumpToTimecode,
 	};
 	private:
-	enum EventType
-	{
-		START,
-		CUE,
-//		REVIEW,
-		STOP,
-		PROBLEM
-	};
 	enum Stat
 	{
 		STOPPED,
@@ -208,18 +174,16 @@ class IngexguiFrame : public wxFrame
 		void OnCue(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
 		void OnPlayerOSDChange(wxCommandEvent&);
+#ifdef HAVE_DVS
 		void OnPlayerSDIOSDChange(wxCommandEvent&);
+#endif
 		void OnPlayerOutputTypeChange(wxCommandEvent&);
 		void OnPlayerAudioFollowsVideo(wxCommandEvent& WXUNUSED(event));
+		void OnPlayerMuteAudio(wxCommandEvent& WXUNUSED(event));
 		void OnQuit(wxCommandEvent&);
 		void OnEventSelection(wxListEvent&);
 		void OnEventActivated(wxListEvent&);
-		void OnEventBeginEdit(wxListEvent&);
-		void OnEventEndEdit(wxListEvent&);
-		void OnRestoreListLabel(wxCommandEvent&);
 		void OnRefreshTimer(wxTimerEvent&);
-		void OnPrevTake(wxCommandEvent&);
-		void OnNextTake(wxCommandEvent&);
 		void OnDeleteCue(wxCommandEvent&);
 		void OnJumpToTimecode(wxCommandEvent&);
 		void OnPlayerEvent(wxCommandEvent&);
@@ -237,21 +201,22 @@ class IngexguiFrame : public wxFrame
 		void OnFocusLost(wxFocusEvent&);
 		void OnTestMode(wxCommandEvent&);
 		void OnPlayFile(wxCommandEvent&);
+		void OnJogShuttleEvent(wxCommandEvent&);
+		void OnPrevTake(wxCommandEvent&);
+		void OnNextTake(wxCommandEvent&);
 
 		void UpdatePlayerAndEventControls(bool = false, bool = false);
 		void UpdateTextShortcutStates();
-		void AddEvent(EventType, const wxString = wxT(""), ProdAuto::MxfTimecode = InvalidMxfTimecode, const int64_t = 0, const wxString = wxT(""), const wxColour = wxT("WHITE"), const wxColour = wxT("BLACK"), const ProdAuto::LocatorColour::EnumType = ProdAuto::LocatorColour::DEFAULT_COLOUR);
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
 		void ClearLog();
-		void SelectAdjacentEvent(bool down);
 		void ResetPlayer();
-		void Play(const bool = false);
 		void ResetToDisconnected();
 		void Log(const wxString &);
 		void SetProjectName();
 		bool IsRecording();
 		void EnableButtonReliably(wxButton *, bool = true);
+		void CanEditCues(const bool);
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
 		RecorderGroupCtrl * mRecorderGroup;
@@ -259,7 +224,7 @@ class IngexguiFrame : public wxFrame
 		wxButton * mTapeIdButton;
 		wxButton * mStopButton, * mCueButton;
 		RecordButton * mRecordButton;
-		wxListView * mEventList; //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
+		EventList * mEventList;
 		wxNotebook * mNotebook;
 		wxButton * mDescClearButton;
 		TickTreeCtrl * mTree;
@@ -278,16 +243,11 @@ class IngexguiFrame : public wxFrame
 		wxStaticBoxSizer * mTimecodeBox;
 
 		Stat mStatus;
-		long mStartEvent, mEndEvent;
 		long mEditRateNumerator, mEditRateDenominator;
-		TakeInfoArray mTakeInfoArray;
 		Timepos * mTimepos;
-		TakeInfo * mCurrentTakeInfo;
-		unsigned long mCurrentSelectedEvent;
-		prodauto::Player * mPlayer;
+		Player * mPlayer;
 		wxXmlDocument mSavedState;
 		wxString mSavedStateFilename;
-		bool mLastPlayingBackwards;
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
 		wxArrayString mFileModeFiles;
@@ -295,6 +255,8 @@ class IngexguiFrame : public wxFrame
 		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
 		int64_t mTakeModeFrameOffset;
+		ingex::JogShuttle * mJogShuttle;
+		JSListener * mJSListener;
 		wxDateTime mToday;
 		DECLARE_EVENT_TABLE()
 };

@@ -165,26 +165,26 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
     VALUES (3, 'COPY_COMMAND', '', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (10, 'ENCODE1_RESOLUTION', '8', 1);
+    VALUES (10, 'ENCODE1_RESOLUTION', '4', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (11, 'ENCODE1_WRAPPING', '2', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (12, 'ENCODE1_BITC', 'false', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (13, 'ENCODE1_DIR', '/video/mxf_offline/', 1);
+    VALUES (13, 'ENCODE1_DIR', '/video/mxf_online/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (14, 'ENCODE1_DEST', '/store/mxf_offline/', 1);
+    VALUES (14, 'ENCODE1_DEST', '/store/mxf_online/', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (20, 'ENCODE2_RESOLUTION', '4', 1);
+    VALUES (20, 'ENCODE2_RESOLUTION', '8', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (21, 'ENCODE2_WRAPPING', '2', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (22, 'ENCODE2_BITC', 'false', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (23, 'ENCODE2_DIR', '/video/mxf_online/', 1);
+    VALUES (23, 'ENCODE2_DIR', '/video/mxf_offline/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (24, 'ENCODE2_DEST', '/store/mxf_online/', 1);
+    VALUES (24, 'ENCODE2_DEST', '/store/mxf_offline/', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (30, 'QUAD_RESOLUTION', '0', 1);
@@ -252,26 +252,26 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '8', 1, 12);
+    VALUES ('ENCODE1_RESOLUTION', '4', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_BITC', 'false', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 12);
+    VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 12);
+    VALUES ('ENCODE1_DEST', '/store/mxf_online/', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '4', 1, 12);
+    VALUES ('ENCODE2_RESOLUTION', '8', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_BITC', 'false', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DIR', '/video/mxf_online/', 1, 12);
+    VALUES ('ENCODE2_DIR', '/video/mxf_offline/', 1, 12);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/mxf_online/', 1, 12);
+    VALUES ('ENCODE2_DEST', '/store/mxf_offline/', 1, 12);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 12);
@@ -294,26 +294,26 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('COPY_COMMAND', '/home/ingex/ap-workspace/ingex/studio/processing/media_transfer/xferclient.pl', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_RESOLUTION', '8', 1, 13);
+    VALUES ('ENCODE1_RESOLUTION', '4', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_BITC', 'false', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DIR', '/video/mxf_offline/', 1, 13);
+    VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/mxf_offline/', 1, 13);
+    VALUES ('ENCODE1_DEST', '/store/mxf_online/', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_RESOLUTION', '4', 1, 13);
+    VALUES ('ENCODE2_RESOLUTION', '8', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_WRAPPING', '2', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_BITC', 'false', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DIR', '/video/mxf_online/', 1, 13);
+    VALUES ('ENCODE2_DIR', '/video/mxf_offline/', 1, 13);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/mxf_online/', 1, 13);
+    VALUES ('ENCODE2_DEST', '/store/mxf_offline/', 1, 13);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 13);

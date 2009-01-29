@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: dialogues.cpp,v 1.7 2009/01/29 07:36:58 stuart_hc Exp $           *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -1101,6 +1104,7 @@ BEGIN_EVENT_TABLE(TestModeDlg, wxDialog)
 END_EVENT_TABLE()
 
 DEFINE_EVENT_TYPE(wxEVT_TEST_DLG_MESSAGE)
+#define COUNTDOWN_FORMAT wxT("%H:%M:%S")
 
 /// Sets up dialogue.
 /// @param parent The parent window.
@@ -1129,9 +1133,12 @@ TestModeDlg::TestModeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const 
 	gridSizer->Add(mMaxGapTime, 0, wxALIGN_CENTRE);
 	gridSizer->Add(new wxStaticText(this, wxID_ANY, wxT("sec."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT), 0, wxALIGN_CENTRE);
 	//bottom row
-	gridSizer->AddStretchSpacer();
 	mRunButton = new wxToggleButton(this, RUN, wxT("Run"));
 	gridSizer->Add(mRunButton);
+	mRunStopMessage = new wxStaticText(this, wxID_ANY, wxT(""));
+	gridSizer->Add(mRunStopMessage, 0, wxALIGN_CENTRE_VERTICAL);
+	mRunStopCountdown = new wxStaticText(this, wxID_ANY, wxT(""));
+	gridSizer->Add(mRunStopCountdown, 0, wxALIGN_CENTRE_VERTICAL);
 	mCancelButton = new wxButton(this, wxID_CANCEL, wxT("Cancel"));
 	gridSizer->Add(mCancelButton);
 	Fit();
@@ -1197,13 +1204,22 @@ void TestModeDlg::OnRun(wxCommandEvent & WXUNUSED(event))
 		//stop
 		Record(false);
 		mTimer->Stop();
+		mRunStopMessage->SetLabel(wxT("Stopped"));
+		mRunStopCountdown->SetLabel(wxT(""));
 	}
 }
 
 /// Responds to the timer.
 void TestModeDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 {
-	Record(!mRecording);
+	mCountdown -= wxTimeSpan(0, 0, 1, 0); //one second
+	mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+	if (mCountdown.IsEqualTo(wxTimeSpan())) { //empty
+		Record(!mRecording);
+	}
+	else {
+		mTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
+	}
 }
 
 /// Sends a record or stop command, and starts the timer for the next command.
@@ -1216,17 +1232,21 @@ void TestModeDlg::Record(bool rec)
 		AddPendingEvent(frameEvent);
 		int dur;
 		if (mRecording) {
+			mRunStopMessage->SetLabel(wxT("Recording for"));
 			int range = mMaxRecTime->GetValue() - mMinRecTime->GetValue() + 1;
 			while ((dur = rand()/(RAND_MAX/range)) > range); //avoid occasional truncation to range
 			dur += mMinRecTime->GetValue();
-			mTimer->Start(dur * 60 * 1000, wxTIMER_ONE_SHOT);
+			mCountdown = wxTimeSpan::Minutes(dur);
 		}
 		else {
+			mRunStopMessage->SetLabel(wxT("Stopped for"));
 			int range = mMaxGapTime->GetValue() - mMinGapTime->GetValue() + 1;
 			while ((dur = rand()/(RAND_MAX/range)) > range); //avoid occasional truncation to range
 			dur += mMinGapTime->GetValue();
-			mTimer->Start(dur * 1000, wxTIMER_ONE_SHOT);
+			mCountdown = wxTimeSpan::Seconds(dur);
 		}
+		mRunStopCountdown->SetLabel(mCountdown.Format(COUNTDOWN_FORMAT));
+		mTimer->Start(1000, wxTIMER_ONE_SHOT); //one second
 	}
 }
 
@@ -1360,61 +1380,76 @@ void CuePointsDlg::Load()
 	Fit();
 }
 
-/// Shows the dialogue and saves the grid if OK is pressed.
+/// Saves the grid contents in the XML document.
+void CuePointsDlg::Save()
+{
+	//remove old state
+	wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
+	while (cuePointNode) {
+		wxXmlNode * deadNode = cuePointNode;
+		cuePointNode = cuePointNode->GetNext();
+		mCuePointsNode->RemoveChild(deadNode);
+		delete deadNode;
+	}
+	//store new state
+	for (int row = 0; row < 10; row++) {
+		wxString description = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
+		if (!description.IsEmpty() || mDescrColours[row]) { //something to store
+			//create a new element node "CuePoint" containing a new text node with the description
+			new wxXmlNode(
+				new wxXmlNode(
+					mCuePointsNode,
+					wxXML_ELEMENT_NODE,
+					wxT("CuePoint"),
+					wxT(""),
+					new wxXmlProperty(
+						wxT("Shortcut"),
+						wxString::Format(wxT("%d"), (row + 1) % 10),
+						new wxXmlProperty(wxT("Colour"), wxString::Format(wxT("%d"), mDescrColours[row]))
+					)
+				),
+				wxXML_TEXT_NODE,
+				wxT(""),
+				description
+			);
+		}
+	}
+}
+
+/// If dialogue not already visible, shows the dialogue and returns when the dialogue is dismissed, saving the grid if OK is pressed.
+/// If dialogue already visible, this will be a Mark Cue keystroke from an external device, so act as if the default event had been selected
 /// @param timecode If present, displays this at the top of the window and goes into add cue mode - shortcut keys enabled.
 int CuePointsDlg::ShowModal(const wxString timecode)
 {
-	mTimecodeDisplay->SetLabel(timecode);
-	mTimecodeDisplay->Show(!timecode.IsEmpty());
-	mMessage->Show(!timecode.IsEmpty());
-	Fit();
+	int rc = wxID_CANCEL; //to stop compiler warning
+	if (IsModal()) {
+		//return a blank (default) locator
+		mDescription.Clear();
+		mColour = 0;
+		EndModal(wxID_OK);
+	}
+	else {
+		mTimecodeDisplay->SetLabel(timecode);
+		mTimecodeDisplay->Show(!timecode.IsEmpty());
+		mMessage->Show(!timecode.IsEmpty());
+		Fit();
 
-	if (timecode.IsEmpty()) {
-		SetTitle(wxT("Edit Cue Point Descriptions"));
-		mGrid->SetFocus(); //typing will immediately start editing
-	}
-	else {
-		SetTitle(wxT("Choose/edit Cue Point"));
-		mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
-		mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
-	}
-	int rc;
-	if (wxID_OK == (rc = wxDialog::ShowModal())) {
-		//remove old state
-		wxXmlNode * cuePointNode = mCuePointsNode->GetChildren();
-		while (cuePointNode) {
-			wxXmlNode * deadNode = cuePointNode;
-			cuePointNode = cuePointNode->GetNext();
-			mCuePointsNode->RemoveChild(deadNode);
-			delete deadNode;
+		if (timecode.IsEmpty()) {
+			SetTitle(wxT("Edit Cue Point Descriptions"));
+			mGrid->SetFocus(); //typing will immediately start editing
 		}
-		//store new state
- 		for (int row = 0; row < 10; row++) {
-			wxString description = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
-			if (!description.IsEmpty() || mDescrColours[row]) { //something to store
-				//create a new element node "CuePoint" containing a new text node with the description
-				new wxXmlNode(
-					new wxXmlNode(
-						mCuePointsNode,
-						wxXML_ELEMENT_NODE,
-						wxT("CuePoint"),
-						wxT(""),
-						new wxXmlProperty(
-							wxT("Shortcut"),
-							wxString::Format(wxT("%d"), (row + 1) % 10),
-							new wxXmlProperty(wxT("Colour"), wxString::Format(wxT("%d"), mDescrColours[row]))
-						)
-					),
-					wxXML_TEXT_NODE,
-					wxT(""),
-					description
-				);
-			}
+		else {
+			SetTitle(wxT("Choose/edit Cue Point"));
+			mOkButton->SetFocus(); //stops shortcut keys disappearing into the grid
+			mMessage->SetForegroundColour(mTextColour); //as it's shown we need to see it...
 		}
-	}
-	else {
-		//reload old state
-		Load();
+		if (wxID_OK == (rc = wxDialog::ShowModal())) {
+			Save();
+		}
+		else {
+			//reload old state
+			Load();
+		}
 	}
 	return rc;
 }
@@ -1450,7 +1485,7 @@ void CuePointsDlg::OnSetGridRow(wxCommandEvent & event)
 	mGrid->SetGridCursor(event.GetId(), 0);
 }
 
-/// Depending on the ID, sets a new locator colour (i.e. called from the pop-up colour menu), or, if enabled to do so, closes the dialogue, setting the selected locator accordingly (i.e. called with a shortcut key)
+/// Depending on the ID, sets a new locator colour (i.e. called from the pop-up colour menu), or, if enabled to do so, closes the dialogue (saving the grid state), setting the selected locator accordingly (i.e. called with a shortcut key).
 /// @param event Contains the menu ID.
 void CuePointsDlg::OnMenu(wxCommandEvent & event)
 {
@@ -1462,7 +1497,7 @@ void CuePointsDlg::OnMenu(wxCommandEvent & event)
 	}
 	else if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
 		if (wxID_HIGHEST + N_COLOURS + 1 == event.GetId()) { //function key pressed
-			//return a blank event
+			//return a blank (default) locator
 			mDescription.Clear();
 			mColour = 0;
 		}
@@ -1471,10 +1506,30 @@ void CuePointsDlg::OnMenu(wxCommandEvent & event)
 			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
 			mColour = mDescrColours[row];
 		}
+		Save();
 		EndModal(wxID_OK);
 	}
 	else { //editing
 		event.Skip();
+	}
+}
+
+/// If dialogue is accepting locator selection shortcuts, acts as if the given locator number had been entered
+/// @param shortcut The locator number (0-9) or -1 to cancel the dialogue
+void CuePointsDlg::Shortcut(const int shortcut)
+{
+	if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
+		if (-1 == shortcut) { //cancel
+			Load(); //reload old state (to make it consistent with pressing ESC in the dialogue)
+			EndModal(wxID_CANCEL);
+		}
+		else {
+			int row = shortcut ? shortcut - 1 : 9;
+			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
+			mColour = mDescrColours[row];
+			Save();
+			EndModal(wxID_OK);
+		}
 	}
 }
 

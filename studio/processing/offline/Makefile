@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.5 2008/10/29 17:54:26 john_f Exp $
+# $Id: Makefile,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF

@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: recordergroup.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $       *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -550,7 +553,7 @@ void RecorderGroupCtrl::Record(const wxString & recorderName, const CORBA::Boole
 
 /// Issue a stop command to all recorders.
 /// @param stopTimecode First frame in recording of postroll period.
-/// @param description Recording description.
+/// @param description Recording description (which is saved).
 /// @param locators Locator information.
 void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const wxString & description, const ProdAuto::LocatorSeq & locators)
 {
@@ -560,6 +563,7 @@ void RecorderGroupCtrl::Stop(const ProdAuto::MxfTimecode & stopTimecode, const w
 			GetController(i)->Stop(stopTimecode, mPostroll, description, locators);
 		}
 	}
+	mCurrentDescription = description;
 	EnableForInput(); //do it here for safety (in case we get no response)
 
 }
@@ -619,4 +623,10 @@ void RecorderGroupCtrl::SetCurrentProjectName(const wxString & name)
 const wxString & RecorderGroupCtrl::GetCurrentProjectName()
 {
 	return mCurrentProject;
+}
+
+/// Get the description sent at the end of each recording.
+const wxString & RecorderGroupCtrl::GetCurrentDescription()
+{
+	return mCurrentDescription;
 }

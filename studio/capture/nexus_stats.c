@@ -159,6 +159,7 @@ extern int main(int argc, char *argv[])
 
 	int tc[MAX_CHANNELS];
 	int signal_ok[MAX_CHANNELS] = {0,0,0,0,0,0,0,0};
+	int num_aud_samp[MAX_CHANNELS] = {0,0,0,0,0,0,0,0};
 	int last_saved[MAX_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 	double audio_peak_power[MAX_CHANNELS][2];
 	int recording[MAX_CHANNELS][2] = {{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}};
@@ -193,6 +194,7 @@ extern int main(int argc, char *argv[])
 
 			tc[i] = nexus_lastframe_tc(pctl, ring, i, tc_type);
 			signal_ok[i] = nexus_lastframe_signal_ok(pctl, ring, i);
+			num_aud_samp[i] = nexus_lastframe_num_aud_samp(pctl, ring, i);
 
 			last_saved[i] = pc->lastframe;
 
@@ -233,8 +235,11 @@ extern int main(int argc, char *argv[])
 			for (i = 0; i < pctl->channels; i++)
 			{
 				char tcstr[32];
-				printf("%d,%d,%s,%3.0f,%3.0f,%s ",
-						i, last_saved[i], signal_ok[i] ? "ok":"--", audio_peak_power[i][0], audio_peak_power[i][1],
+				printf("%d,%d,%s,%4d,%3.0f,%3.0f,%s ",
+						i, last_saved[i],
+						signal_ok[i] ? "ok":"--",
+						num_aud_samp[i],
+						audio_peak_power[i][0], audio_peak_power[i][1],
 						framesToStr(tc[i], tcstr));
 			}
 			if (pctl->channels == 3)

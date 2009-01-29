@@ -1,5 +1,5 @@
 /*
- * $Id: EditorsFile.h,v 1.1 2009/01/23 19:42:44 john_f Exp $
+ * $Id: EditorsFile.h,v 1.2 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Editor's file
  *
@@ -56,6 +56,12 @@ public:
 // get the startTime in the file SourcePackage referenced by the materialPackage
 int64_t getStartTime(MaterialPackage* materialPackage, PackageSet& packages, Rational editRate);
 
+Rational getVideoEditRate(Package* package);
+Rational getVideoEditRate(Package* package, PackageSet& packages);
+Rational getVideoEditRate(MCClipDef* mcClipDef);
+
+int64_t convertLength(Rational inRate, int64_t inLength, Rational outRate);
+uint16_t getTimecodeBase(Rational rate);
 
 
 };

@@ -1,5 +1,5 @@
 /*
- * $Id: CutsDatabase.cpp,v 1.3 2009/01/23 19:49:32 john_f Exp $
+ * $Id: CutsDatabase.cpp,v 1.4 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Simple file database for video switch events.
  *

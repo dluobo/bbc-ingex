@@ -1,5 +1,5 @@
 /*
- * $Id: CommunicationPort.h,v 1.2 2008/11/06 11:02:54 john_f Exp $
+ * $Id: CommunicationPort.h,v 1.3 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Abstract base for communication port.
  *

@@ -1,5 +1,5 @@
 /*
- * $Id: CutsDatabase.cpp,v 1.1 2008/02/06 16:59:12 john_f Exp $
+ * $Id: CutsDatabase.cpp,v 1.2 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * 
  *
@@ -114,7 +114,7 @@ bool parse_entry(const unsigned char* entryBuffer, int entryBufferSize, CutsData
     entry->date.year = year;
     entry->date.month = month;
     entry->date.day = day;
-    entry->timecode = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame;
+    entry->timecode = hour * 60 * 60 * 25 + min * 60 * 25 + sec * 25 + frame; // TODO: need frame rate info
     
     return true;
 }

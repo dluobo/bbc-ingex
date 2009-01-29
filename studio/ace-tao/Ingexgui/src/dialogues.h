@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: dialogues.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $             *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -22,6 +25,7 @@
 #define _DIALOGUES_H_
 #include <wx/wx.h>
 #include <wx/grid.h>
+#include <vector>
 #include "ingexgui.h"
 
 /// Set preroll and postroll
@@ -220,8 +224,11 @@ class TestModeDlg : public wxDialog
 		wxSpinCtrl * mMinGapTime;
 		wxSpinCtrl * mMaxGapTime;
 		wxToggleButton * mRunButton;
+		wxStaticText * mRunStopMessage;
+		wxStaticText * mRunStopCountdown;
 		wxButton * mCancelButton;
 		wxTimer * mTimer;
+		wxTimeSpan mCountdown;
 		bool mRecording;
 	DECLARE_EVENT_TABLE()
 };
@@ -232,6 +239,7 @@ class CuePointsDlg : public wxDialog
 	public:
 		CuePointsDlg(wxWindow *, wxXmlDocument &);
 		int ShowModal(const wxString = wxT(""));
+		void Shortcut(const int);
 		const wxString GetDescription();
 		const wxColour GetColour();
 		const wxColour GetLabelColour();
@@ -240,6 +248,7 @@ class CuePointsDlg : public wxDialog
 		void OnEditorShown(wxGridEvent &);
 		void OnEditorHidden(wxGridEvent &);
 		void Load();
+		void Save();
 		void OnMenu(wxCommandEvent &);
 		void OnOK(wxCommandEvent &);
 		void OnCellLeftClick(wxGridEvent &);

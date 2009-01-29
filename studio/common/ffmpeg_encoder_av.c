@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.4 2008/10/30 20:17:31 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Encode AV and write to file.
  *
@@ -620,16 +620,28 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-#if 0
+    if (0)
+    {
     // 4:3
-    sar.num = 59;
-    sar.den = 54;
-#elif 1
+        sar.num = 59;
+        sar.den = 54;
+    }
+    else
+    {
     // 16:9
-    sar.num = 118;
-    sar.den = 81;
-#else
-    // bodge for FCP
+        sar.num = 118;
+        sar.den = 81;
+    }
+#if 1
+    // Bodge for FCP
+    // When writing track header in mov file, ffmpeg (see movenc.c) writes
+    // width of sample_aspect_ratio * track->enc->width
+    // It gets sample_aspect_ratio from the AVStream
+    // FCP seems to want the width in samples so set sar = 1/1 to force
+    // that.
+    // However, the ffmpeg DV encoder will look at sample_aspect_ratio in
+    // the AVCodecContext to decide what aspect flag to put in the DV bitstream.
+    // So this means we get 4:3 signalled.
     sar.num = 1;
     sar.den = 1;
 #endif

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.9 2009/01/23 19:50:15 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Servant class for Recorder.
  *
@@ -216,6 +216,37 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
+#if 1
+    // Alternative to method below
+    for (unsigned int i = 0; i < mTracks->length(); ++i)
+    {
+        ProdAuto::Track & track = mTracks->operator[](i);
+        HardwareTrack hw_trk = mTrackMap[track.id];
+
+        bool signal_present = IngexShm::Instance()->SignalPresent(hw_trk.channel);
+        framecount_t timecode = IngexShm::Instance()->CurrentTimecode(hw_trk.channel);
+
+        // We can rely on mTracksStatus->length() == mTracks->length()
+        ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
+
+        ts.signal_present = signal_present;
+        if (timecode >= 0)
+        {
+            ts.timecode.undefined = 0;
+            ts.timecode.samples = timecode;
+        }
+        else
+        {
+            ts.timecode.undefined = 1;
+            ts.timecode.samples = 0;
+        }
+    }
+#else
+    // Below we are relying on hardware order to get same order of tracks in
+    // TracksStatus() as we have in Tracks().  It would be preferable to use
+    // the order of Tracks directly to allow freedom to present Tracks in a
+    // different order without need to change TracksStatus code.
+
     // Update member with current timecode and status
     for (unsigned int channel_i = 0; channel_i < IngexShm::Instance()->Channels(); ++channel_i)
     {
@@ -246,6 +277,7 @@ char * IngexRecorderImpl::RecordingFormat (
             }
         }
     }
+#endif
 
     // Make a copy to return
     ProdAuto::TrackStatusList_var tracks_status = mTracksStatus;
@@ -292,11 +324,37 @@ char * IngexRecorderImpl::RecordingFormat (
     // alternative (not updating here) would mean you rely
     // on controller disconnecting and reconnecting to
     // force an update.
+    // This can cause a delay to start recording because of
+    // database access.
+#if 0
     UpdateFromDatabase();
+#endif
 
     // Translate enables to per-track and per-channel.
     std::vector<bool> channel_enables;
     std::vector<bool> track_enables;
+#if 0
+    // Without assuming mTracks in hardware order
+    // - not yet finished
+
+    // Start with channel enables false.
+    for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
+    {
+        channel_enables.push_back(false);
+    }
+    for (unsigned int i = 0; i < mTracks->length(); ++i)
+    {
+        ProdAuto::Track & track = mTracks->operator[](i);
+        HardwareTrack hw_trk = mTrackMap[track.id];
+        
+        channel_enables[hw_trk.channel] = true;
+
+        if (track.has_source && rec_enable[i])
+        {
+        }
+    }
+#else
+    // Older method
     for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
     {
         // Start with channel enables false.
@@ -332,6 +390,26 @@ char * IngexRecorderImpl::RecordingFormat (
         // Set channel enable
         channel_enables.push_back(ce);
     }
+#endif
+    // Check that project name is loaded.
+    // Only load if necessary to avoid delay of 
+    // database access.
+    if (mProjectName.name.compare(project) != 0)
+    {
+        prodauto::Database * db = 0;
+        try
+        {
+            db = prodauto::Database::getInstance();
+            if (db)
+            {
+                mProjectName = db->loadOrCreateProjectName(project);
+            }
+        }
+        catch (const prodauto::DBException & dbe)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+        }
+    }
 
     // Make a new IngexRecorder to manage this recording.
     mpIngexRecorder = new IngexRecorder(this, recording_index);
@@ -356,7 +434,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // Check for start timecode.
     // This may modify the channel_enable array.
     ok = ok && mpIngexRecorder->CheckStartTimecode(
-        channel_enables,
+        track_enables,
         start,
         pre_roll.undefined ? 0 : pre_roll.samples,
         crash);
@@ -367,11 +445,7 @@ char * IngexRecorderImpl::RecordingFormat (
     start_timecode.samples = start;
 
     // Setup IngexRecorder
-    mpIngexRecorder->Setup(
-        start,
-        channel_enables,
-        track_enables,
-        project);
+    mpIngexRecorder->Setup(start, mProjectName);
 
     // Start
     if (!test_only)
@@ -401,6 +475,11 @@ char * IngexRecorderImpl::RecordingFormat (
         mpIngexRecorder = 0;
         StartCopying(recording_index);
     }
+
+    // Debug to measure delay in responding to Start command
+    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start() Returning %C at time          %C\n"),
+        (ok ? "SUCCESS" : "FAILURE"),
+        DateTime::Timecode().c_str()));
 
     // Return
     return (ok ? ProdAuto::Recorder::SUCCESS : ProdAuto::Recorder::FAILURE);

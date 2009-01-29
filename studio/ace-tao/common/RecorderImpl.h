@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.8 2008/10/10 16:50:49 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.9 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Base class for Recorder servant.
  *
@@ -162,6 +162,14 @@ public:
     int Fps() { return mFps; }
     bool Df() { return mDf; }
   
+public:
+// data which needs to be visible to clases such as IngexRecorder
+    ProdAuto::TrackList_var mTracks;
+
+    // maps with SourceTrackConfig database id as key
+    std::map<long, HardwareTrack> mTrackMap;
+    std::map<long, unsigned int> mTrackIndexMap;
+
 protected:
 // data
     ProdAuto::MxfDuration mMaxPreRoll;
@@ -169,7 +177,6 @@ protected:
     unsigned int mMaxInputs;
     unsigned int mMaxTracksPerInput;
     unsigned int mVideoTrackCount;
-    ProdAuto::TrackList_var mTracks;
     ProdAuto::TrackStatusList_var mTracksStatus;
     std::string mName;
     std::string mFormat;
@@ -177,8 +184,10 @@ protected:
     int mFps;
     bool mDf;
     std::auto_ptr<prodauto::Recorder> mRecorder;
+
+    // map with SourceConfig database id as key
     std::map<long, prodauto::SourceConfig *> mSourceConfigs;
-    std::map<long, HardwareTrack> mTrackMap; // map from SourceTrackConfig id
+
     std::map<std::string, std::string> mTapeMap;
 // methods
     bool UpdateFromDatabase();

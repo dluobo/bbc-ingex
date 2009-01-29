@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.6 2008/11/06 11:08:37 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.7 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Router recorder application class.
  *
@@ -27,11 +27,14 @@
 
 #include "CorbaUtil.h"
 #include "Logfile.h"
+#include "DateTime.h"
 #include "routerloggerApp.h"
 #include "SimplerouterloggerImpl.h"
 #include "quartzRouter.h"
 #include "EasyReader.h"
 #include "ClockReader.h"
+#include "DatabaseManager.h"
+#include "DBException.h"
 
 #include <string>
 #include <sstream>
@@ -77,6 +80,20 @@ routerloggerApp::~routerloggerApp()
 
 bool routerloggerApp::Init(int argc, char * argv[])
 {
+#if 1
+// Set logging to file
+	Logfile::Init();
+	Logfile::AddPathComponent("var");
+	Logfile::AddPathComponent("tmp");
+	Logfile::AddPathComponent("IngexLogs");
+	std::string dir = "RouterRecorder_";
+	dir += DateTime::DateTimeNoSeparators();
+
+    Logfile::AddPathComponent(dir.c_str());
+	Logfile::Open("Main", false);
+	ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Main thread\n\n") ));
+#endif
+
     bool ok = true;
 
     // Initialise ORB
@@ -94,7 +111,6 @@ bool routerloggerApp::Init(int argc, char * argv[])
     ACE_Get_Opt cmd_opts (argc, argv, OPTS);
 
 
-    std::string routerlogger_name = "RouterLog"; // default name
     std::string db_file; // We'll add a default name later if none supplied
 
     std::string router_port;
@@ -205,7 +221,6 @@ bool routerloggerApp::Init(int argc, char * argv[])
 // Set verbosity of debug messages
     Logfile::DebugLevel(debug_level);
 
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("routerlogger name is \"%C\"\n"), routerlogger_name.c_str() ));
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"\n"), router_port.c_str() ));
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"\n"), tc_port.c_str() ));
 
@@ -253,14 +268,19 @@ bool routerloggerApp::Init(int argc, char * argv[])
     }
 
     // Initialise database connection
+    const std::string db_username = "bamzooki";
+    const std::string db_password = "bamzooki";
     try
     {
-        prodauto::Database::initialise("prodautodb", "bamzooki", "bamzooki", 4, 12);
+        DatabaseManager::Instance()->Initialise(db_username, db_password, 4, 12);
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed: %C\n"), dbe.getMessage().c_str()));
     }
     catch (...)
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
-        ok = false;
     }
 
     // If no NameService args passed, try to get one from

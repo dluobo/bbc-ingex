@@ -89,6 +89,7 @@ private:
 	bool mReconnecting;
 	bool mRouterRecorder;
 	Command mPendingCommand;
+	bool mPendingCommandSent;
 	wxDateTime mLastTimecodeRequest;
 	ProdAuto::MxfTimecode mLastTimecodeReceived;
 	//vbls written to in both contexts while thread is running

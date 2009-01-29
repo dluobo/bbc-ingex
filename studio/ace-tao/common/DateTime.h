@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.h,v 1.2 2008/10/08 10:16:06 john_f Exp $
+ * $Id: DateTime.h,v 1.3 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Date/time to text functions.
  *

@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.h,v 1.5 2008/11/06 11:08:37 john_f Exp $
+ * $Id: quartzRouter.h,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Class to handle communication with Quartz router.
  *

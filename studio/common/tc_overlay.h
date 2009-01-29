@@ -1,5 +1,5 @@
 /*
- * $Id: tc_overlay.h,v 1.3 2008/11/06 11:09:43 john_f Exp $
+ * $Id: tc_overlay.h,v 1.4 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Create burnt-in timecode.
  *

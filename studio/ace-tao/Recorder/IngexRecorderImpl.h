@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.4 2008/10/10 16:50:49 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Servant class for Recorder.
  *
@@ -109,6 +109,7 @@ private:
 	IngexRecorder * mpIngexRecorder;
     CopyManager mCopyManager;
     std::string mHostname;
+    prodauto::ProjectName mProjectName;
 
 // static instance pointer
 	static IngexRecorderImpl * mInstance;

@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.8 2009/01/23 20:07:10 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.9 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Transcodes Avid MXF files
  *

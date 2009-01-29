@@ -36,7 +36,8 @@ Destructor
 */
 EasyReader::~EasyReader()
 {
-	delete mpCommunicationPort;
+    this->Stop();
+    delete mpCommunicationPort;
 }
 
 /**
@@ -60,28 +61,6 @@ bool EasyReader::Init(const std::string & port, Transport::EnumType transport)
     {
         mpCommunicationPort = new SerialPort;
     }
-#if 0
-    // Open the serial port
-    if (-1 == mDeviceConnector.connect(mSerialDevice, ACE_DEV_Addr(ACE_TEXT(port.c_str()))))
-    {
-        ok = false;
-    }
-
-    // Set baudrate etc.
-	ACE_TTY_IO::Serial_Params myparams;
-	myparams.baudrate = 19200;
-#if ACE_MAJOR_VERSION >= 5 && ACE_MINOR_VERSION >= 6 && ACE_BETA_VERSION >= 6
-	myparams.paritymode = "none";
-#else
-	myparams.parityenb = false;
-#endif
-	myparams.databits = 8;
-	myparams.stopbits = 1;
-	myparams.readtimeoutmsec = 100;
-	myparams.ctsenb = 0;
-	myparams.rcvenb = true;
-	mSerialDevice.control(ACE_TTY_IO::SETPARAMS, &myparams);
-#endif
 
     if (mpCommunicationPort->Connect(port))
     {
@@ -91,17 +70,13 @@ bool EasyReader::Init(const std::string & port, Transport::EnumType transport)
             p_serial->BaudRate(19200);
         }
 
+    // Initialise EasyReader - select LTC and VITC
         mpCommunicationPort->Send ((const void *)"L1V1U0", 6);
     }
 
-#if 0
-    // Initialise EasyReader
-    mSerialDevice.send((const void *)"L1V1U0", 6);  // select LTC and VITC
-#endif
-
     // Initialise local data structures
-	mTimecode = "00:00:00:00";
-	mWritePtr = &mBuffer[0];
+    mTimecode = "00:00:00:00";
+    mWritePtr = &mBuffer[0];
 
     // Start thread to read incoming data
     mActivated = true;
@@ -121,61 +96,52 @@ void EasyReader::Stop()
 }
 
 /**
-It's a good idea to call this regularly so that data coming in to the
-serial port doesn't pile up.
-*/
-//void EasyReader::OnTimer()
-//{
-	//ReadData();
-//}
-
-/**
 Return the current timecode.
 VITC is used if available, otherwise LTC
 */
 std::string EasyReader::Timecode()
 {
-	ReadData();
+    ReadData();
 
     ACE_Guard<ACE_Thread_Mutex> guard(mBufferMutex);
 
-	char * read_ptr = mWritePtr - 1;
-	while(*read_ptr != '\r' && read_ptr > mBuffer + 18)
-	{
-		--read_ptr;
-	}
-	if(*read_ptr == '\r')
-	{
-		--read_ptr;
-		if(*read_ptr == 'E' || *read_ptr == 'e')
-		{
-			// no VITC, try LTC instead
-			read_ptr -= 9;
-		}
+    char * read_ptr = mWritePtr - 1;
+    while (*read_ptr != '\r' && read_ptr > mBuffer + 18)
+    {
+        --read_ptr;
+    }
+    if (*read_ptr == '\r')
+    {
+        --read_ptr;
+        if (*read_ptr == 'E' || *read_ptr == 'e')
+        {
+            // no VITC, try LTC instead
+            read_ptr -= 9;
+        }
 
-		if(*read_ptr == 'E' || *read_ptr == 'e')
-		{
-			mTimecode = "00:00:00:00";
-		}
-		else
-		{
-			read_ptr -= 8; // point to start of timecode string
-			mTimecode = "";
-			mTimecode += *(read_ptr++);
-			mTimecode += *(read_ptr++);
-			mTimecode += ':';
-			mTimecode += *(read_ptr++);
-			mTimecode += *(read_ptr++);
-			mTimecode += ':';
-			mTimecode += *(read_ptr++);
-			mTimecode += *(read_ptr++);
-			mTimecode += ':';
-			mTimecode += *(read_ptr++);
-			mTimecode += *(read_ptr++);
-		}
-	}
+        if (*read_ptr == 'E' || *read_ptr == 'e')
+        {
+            mTimecode = "00:00:00:00";
+        }
+        else
+        {
+            read_ptr -= 8; // point to start of timecode string
+            mTimecode = "";
+            mTimecode += *(read_ptr++);
+            mTimecode += *(read_ptr++);
+            mTimecode += ':';
+            mTimecode += *(read_ptr++);
+            mTimecode += *(read_ptr++);
+            mTimecode += ':';
+            mTimecode += *(read_ptr++);
+            mTimecode += *(read_ptr++);
+            mTimecode += ':';
+            mTimecode += *(read_ptr++);
+            mTimecode += *(read_ptr++);
+        }
+    }
 
-	return mTimecode;
+    return mTimecode;
 }
 
 /**
@@ -185,27 +151,25 @@ void EasyReader::ReadData()
 {
     const ACE_Time_Value READ_TIMEOUT(0, 10000);
 
-	int bytes_read;
+    int bytes_read;
     ACE_Guard<ACE_Thread_Mutex> guard(mBufferMutex);
-	do
-	{
-		// shift data down in the buffer if getting near the end
-		if(mBuffer + bufsize < mWritePtr + chunksize)
-		{
+    do
+    {
+        // shift data down in the buffer if getting near the end
+        if(mBuffer + bufsize < mWritePtr + chunksize)
+        {
             ACE_OS::memmove(mBuffer, mWritePtr - chunksize, chunksize);
-			mWritePtr = mBuffer + chunksize;
-		}
+            mWritePtr = mBuffer + chunksize;
+        }
 
-		// read available data into buffer
-		//bytes_read = mSerialPort.Read(mWritePtr, chunksize);
-		//bytes_read = mSerialDevice.recv(mWritePtr, chunksize);
-		bytes_read = mpCommunicationPort->Recv(mWritePtr, chunksize, &READ_TIMEOUT);
+        // read available data into buffer
+        bytes_read = mpCommunicationPort->Recv(mWritePtr, chunksize, &READ_TIMEOUT);
         if (bytes_read > 0)
         {
-		    mWritePtr += bytes_read;
+            mWritePtr += bytes_read;
         }
-	}
-	while (bytes_read == chunksize);
+    }
+    while (bytes_read == chunksize);
 }
 
 

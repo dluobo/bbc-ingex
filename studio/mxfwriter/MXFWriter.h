@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.h,v 1.5 2009/01/23 20:08:20 john_f Exp $
+ * $Id: MXFWriter.h,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Writes essence data to MXF files
  *

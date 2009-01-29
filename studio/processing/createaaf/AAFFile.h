@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.h,v 1.2 2009/01/23 19:42:44 john_f Exp $
+ * $Id: AAFFile.h,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -39,7 +39,7 @@ namespace prodauto
 class AAFFile : public EditorsFile
 {
 public:
-    AAFFile(std::string filename, bool aafxml, bool addAudioEdits);
+    AAFFile(std::string filename, Rational targetEditRate, bool aafxml, bool addAudioEdits);
     virtual ~AAFFile();
 
     // must call this to save the data to the file
@@ -76,6 +76,7 @@ private:
     void mapTapeSourceMob(SourcePackage* sourcePackage);
 
     
+    Rational _targetEditRate;
     bool _addAudioEdits;
     
     IAAFSmartPointer<IAAFFile> pFile;

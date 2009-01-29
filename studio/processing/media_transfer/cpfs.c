@@ -1,6 +1,7 @@
 /***************************************************************************
- *   Copyright (C) 2008 British Broadcasting Corporation                   *
+ *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,6 +29,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <utime.h>
 
 #define BUFSIZE 1024 * 1024 /* if this is too big then the buffer will have to be created on the heap or the program will segfault immediately */
 #define ONE_SEC	1000000LL /* # of microseconds in a second */
@@ -131,6 +133,14 @@ int main(int argc, char ** argv) {
 	printf(".  Closing file...");
 	fflush(stdout);
 	close(dest);
+	/* conserve modification time */
+	struct utimbuf dest_times;
+	dest_times.modtime = src_st.st_mtime;
+	dest_times.actime = src_st.st_mtime;
+	if (-1 == utime(argv[5] , &dest_times)) {
+		printf("\nCouldn't set destination file times.\n");
+	}
+
 	display();
 	printf("                  \n");
 	return 0;

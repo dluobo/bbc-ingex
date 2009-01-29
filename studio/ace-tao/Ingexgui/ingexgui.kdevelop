@@ -56,9 +56,7 @@
         <f77compiler>kdevg77options</f77compiler>
         <cxxflags>-O0 -g3 -W -Wall `wx-config --cxxflags`</cxxflags>
         <envvars>
-          <envvar value="/home/matthew/packages/ACE_wrappers/" name="ACE_ROOT" />
           <envvar value="thing" name="DVSSDK" />
-          <envvar value="$ACE_ROOT/TAO" name="TAO_ROOT" />
         </envvars>
         <topsourcedir/>
         <cppflags/>

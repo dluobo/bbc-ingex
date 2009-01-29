@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: dragbuttonlist.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $             *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,6 +23,7 @@
 
 #include "dragbuttonlist.h"
 #include "ingexgui.h"
+#include "eventlist.h"
 #include "avid_mxf_info.h"
 
 /// @param parent The parent window.

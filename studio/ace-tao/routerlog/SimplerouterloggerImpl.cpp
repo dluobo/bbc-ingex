@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.8 2009/01/23 19:49:33 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.9 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -36,11 +36,11 @@
 #include "CutsDatabase.h"
 #include "routerloggerApp.h"
 
-#ifdef WIN32
-const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
-#else
-const std::string RECORD_DIR = "/var/tmp/RouterLogs/";
-#endif
+//#ifdef WIN32
+//const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
+//#else
+//const std::string RECORD_DIR = "/var/tmp/RouterLogs/";
+//#endif
 
 // Constructor for Vt struct
 Vt::Vt(int rd, const std::string & n)
@@ -154,21 +154,23 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 {
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Start()\n"), mName.c_str()));
 
-    FileUtils::CreatePath(RECORD_DIR);
+    //FileUtils::CreatePath(RECORD_DIR);
 
-    std::string date = DateTime::DateNoSeparators();
-    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
-    std::ostringstream ss;
-    ss << RECORD_DIR << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
+    //std::string date = DateTime::DateNoSeparators();
+    //Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
+    //std::ostringstream ss;
+    //ss << RECORD_DIR << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
 
 
-    //start saving to file
-    StartSavingFile(ss.str());
+    // Start saving to cuts database
+    StartSaving();
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
 
-    // so a sensible number comes back, even for start now
+    // Return start timecode
+    // (otherwise with start now it would be left as zero)
+    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
     start_timecode.undefined = false; 
     start_timecode.samples = tc.FramesSinceMidnight();
 
@@ -189,7 +191,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 {
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Stop()\n"), mName.c_str()));
 
-    StopSavingFile();
+    StopSaving();
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 0;
@@ -215,12 +217,8 @@ void SimplerouterloggerImpl::SetRouterPort(std::string rp)
 }
 
 
-void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
+void SimplerouterloggerImpl::StartSaving()
 {
-    // Get info about current routing to write at start of file
-    // and/or in database
-    std::string tc = routerloggerApp::Instance()->Timecode();
-
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
 
@@ -233,9 +231,10 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
     std::string deststring = "Mixer Out";
 #endif
 
-    // Open file
+#if 0
     // No longer using this format
-    //mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
+    // Open file
+    mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
 
     if (mpFile == 0)
     {
@@ -246,9 +245,11 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
         ACE_DEBUG((LM_DEBUG, ACE_TEXT ("filename ok %C\n"), filename.c_str()));
 
         // Write info at head of file
+        std::string tc = routerloggerApp::Instance()->Timecode();
         ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mMixDestination, deststring.c_str() );
         ACE_OS::fprintf (mpFile, "%s start   source name = %s\n", tc.c_str(), mLastSrc.c_str() );
     }
+#endif
 
     // Open database file
     if (mpCutsDatabase)
@@ -261,8 +262,10 @@ void SimplerouterloggerImpl::StartSavingFile(const std::string & filename)
     }
 }
 
-void SimplerouterloggerImpl::StopSavingFile()
+void SimplerouterloggerImpl::StopSaving()
 {
+#if 0
+    // No longer using this format
     // Put finish time at end of file and close
     if (mpFile)
     {
@@ -275,6 +278,7 @@ void SimplerouterloggerImpl::StopSavingFile()
         }
         mpFile = 0;
     }
+#endif
 
     if (mpCutsDatabase)
     {

@@ -1,8 +1,11 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# *   Copyright (C) 2008 British Broadcasting Corporation                   *
+# * $Id: xferserver.pl,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $                          *
+# *                                                                         *
+# *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
+# *   Author: Matthew Marks                                                 *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU General Public License as published by  *
@@ -20,21 +23,28 @@
 # *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
 # ***************************************************************************/
 
+# This script performs copying of material from the local host to a remote file server, under the instruction of clients, applying switchable traffic control to prevent saturation of the local disks.
+
 # In the following description, the capitalised words refer to constants defined below.
 
-# The script listens on network port CLIENT_PORT for clients to open connections, send parameters and then close connections.
+# The script listens on network port CLIENT_PORT for clients to open connections, send parameters and then close connections.  These clients will typically be Ingex recorders or Ingex players.
 # Parameters are as follows:
-# <recorder name> <recording identifier> [<source path> <destination path>] ... (each terminated with a newline)
-# The recorder name and recording identifier combination identify a recording, and must be unique so that the script can determine unambiguously if any recordings are taking place, even when a recorder starts a recording before finishing the previous one (due to postroll).
-# If no other parameters are supplied, this indicates the start of a recording.  The recording's identifier is added to a recording list, and traffic control is switched on at rate SLOW_LIMIT.
-# If additional pair(s) of paths are supplied, this indicates the end of a recording, or a recorder being started.  This will result in the recording's identifier being removed from the recording list (if present), and if the list is empty, traffic control is switched off (reverting to copying at FAST_LIMIT, which is unlimited if 0).
-# Recording identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all recordings being made by the associated recorder.  This value should be sent when a recorder is started, so that the recording list is cleared of any previous recordings by this recorder.  This ensures that traffic control does not remain on permanently due to a recorder crashing and hence not indicating the end of a recording.
+# <client name> [<identifier> [<source path> <destination path>]] ... (each terminated with a newline)
+
+# The client name and identifier combination unambiguously identify an event requiring traffic control, to cater for, e.g., recorders which can make more than one recording simultaneously.
+# If no other parameters are supplied, this indicates the start of the event.  The name/identifier pair are added to an event list, and traffic control is switched on at rate SLOW_LIMIT.
+# Additional pair(s) of paths being supplied indicates the end of the event, or a recorder being started.  This will result in the event's identifier being removed from the event list (if present), and if the list is then empty, traffic control being switched off (reverting to copying at FAST_LIMIT, which is unlimited if set to zero).
+# Identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all events belonging to the associated client.  This value should be sent when a client is started, so that the event list is cleared of any previous events belonging to this client.  This ensures that traffic control does not remain on permanently due to a client crashing and hence not indicating the end of an event.  It should not be used as an event identifier if the client can have more than one event in action simultaneously.
+# A further special case is to provide the client name on its own.  This is also interpreted as clearing the list of events belonging to this client, and is useful for clients such as players which do not provide copying path information.  (Players typically only play one file at once, which means that they can always supply the same identifier value to switch traffic control on.)
+
 # The supplied pairs of paths are treated in descending order of priority, so that the script will attempt to copy all the files in all the first pairs before moving on to the second pairs, and so on.  (Offline files would normally be given higher priority than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  Paths are saved in configuration file PATHS_FILE to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
+
 # In each source directory, every file whose name begins with 8 digits* and ends in ".mxf" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable, into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING directories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and it will not be copied because this might indicate a file name clash.  If a file fails to copy, any partial file is deleted and no more files are copied at that priority (because the order of copying must be maintained - see below).  Once a copy cycle has been completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
 # Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data copied to, the mount point.
 # For each priority, the files to copy are sorted by decreasing age using ctime, making sure that all files with the latest ctime have been accounted for.  Before copying a file, the amount of free space is checked to make sure it is likely to fit, and the priority is abandoned if it doesn't: this avoids wasting time repeatedly copying large files that won't succeed.  When copying of a particular priority is completed, the ctime of the most recent successfully-copied file is written to the configuration file, and any files older than this are subsequently ignored.  This allows files to be removed from the destination server without them being copied again if they remain on the recorder.  (ctime is used rather than mtime, because it indicates the time the source file was made visible by moving it into the source directory, therefore making it impossible for older files to appear subsequently, which would never be copied.)
 # There must not be more than one destination path for any source path (or the latest destination path will apply).  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
+
 # If EXTRA_DEST is not empty, it forms an additional destination for all files at the highest priority.  This is intended for use with a portable drive onto which to copy rushes.
 # As source directories are scanned, source files are deleted if they have been successfully copied (indicated by existing at the destination with the same size, or having a ctime older than the value stored in PATHS_FILE), and their mtimes are more than KEEP_PERIOD old.
 
@@ -182,7 +192,7 @@ my $monSock = new IO::Socket::INET(
 $ports->add($monSock);
 Report("Listening for status requests at http://localhost:" . MON_PORT . "/.\n\n");
 
-my %recordings;
+my %events;
 
 #main loop
 while (1) {
@@ -190,53 +200,54 @@ while (1) {
 	foreach (@requests) {
  		my $client = $_->accept();
 		if ($_ == $recSock) {
-			&serveRecorder($client, $share);
+			&serveClient($client, $share);
 		}
 		else {
-			&serveStatus($client);
+			&serveStatus($client, $share);
 		}
 		$client->shutdown(2); #stopped using it - this seems to prevent partial status pages being served (when close() is used instead)
 	}
 }
 
-sub serveRecorder {
+sub serveClient {
  my ($client, $share) = @_;
  my ($buf, $data);
  while (sysread($client, $buf, 100)) { #don't use buffered read or can hang if several strings arrive at once
 	$data .= $buf;
  }
  if (!defined $data) {
-	print "\rWARNING: Recorder client connection made but no parameters passed: ignoring.\n";
+	print "\rWARNING: Client connection made but no parameters passed: ignoring.\n";
 	return;
  }
  my @commands = split /\n/, $data;
- my $recorder = shift @commands;
- my $index = shift @commands;
- if (!defined $index) {
- 	print "\rWARNING: Recorder '$recorder' provided no index: ignoring.\n";
-	return;
- }
+ $client = shift @commands;
+ my $identifier = shift @commands;
  my $priority = 1;
- if (@commands) { #not recording
-	print "\rRecorder '$recorder' says copy:\n";
-	$priority = 1;
-	chomp @commands;
-	if ($index eq '0') { #all recordings
-		delete $recordings{$recorder};
+ if (@commands || !defined $identifier) { #event end, from recorder or player
+	print "\rClient '$client' ";
+	if (!defined $identifier || $identifier eq '0') { #all events
+		print "is clearing all events.\n";
+		delete $events{$client};
 	}
 	else {
-		delete $recordings{$recorder}{$index};
-		if (!keys %{ $recordings{$recorder} }) {
-			delete $recordings{$recorder};
+		print "has finished an event (identifier '$identifier').\n";
+		delete $events{$client}{$identifier};
+		if (!keys %{ $events{$client} }) {
+			delete $events{$client};
 		}
 	}
 	$share->lock(LOCK_EX);
 	my $transfers = thaw($share->fetch);
-	while (@commands) {
-		addPair($transfers, \@commands, $priority++);
+	if (@commands) {
+		print "\rClient '$client' says copy:\n";
+		$priority = 1;
+		chomp @commands;
+		while (@commands) {
+			addPair($transfers, \@commands, $priority++);
+		}
+		print CHILD "\n"; #kicks the child into action if it's idle
 	}
-	print CHILD "\n"; #kicks the child into action if it's idle
-	if (!keys %recordings && $transfers->{limit}) {
+	if (!keys %events && $transfers->{limit}) {
 		$transfers->{limit} = 0;
 		kill 'USR2', $transfers->{pid} if $transfers->{pid};
 		print "\rTRAFFIC CONTROL OFF\n";
@@ -245,14 +256,13 @@ sub serveRecorder {
 	SaveConfig($transfers); #so that if the script is re-started it can carry on copying immediately
 	$share->unlock;
  }
- else { #recording
-	print "\rRecorder '$recorder' recording (index '$index').\n";
-	print "\r WARNING: index is 0 so all recordings from this recorder will have assumed to have stopped when this recording stops, possibly leading to an erroneous removal of traffic control.\n" unless $index;
+ else { #event start
+	print "\rClient '$client' has started an event (identifier '$identifier').\n";
 	#traffic control
-	$recordings{$recorder}{$index} = 1;
+	$events{$client}{$identifier} = 1;
 	$share->lock(LOCK_EX);
 	my $transfers = thaw($share->fetch);
-	if (!$transfers->{limit}) {
+	if (!$transfers->{limit}) { #not already controlling traffic
 		$transfers->{limit} = 1;
 		$share->store(freeze $transfers);
 		kill 'USR1', $transfers->{pid} if $transfers->{pid};
@@ -290,10 +300,10 @@ sub serveStatus {
 
 	#don't use free-form strings as names in case they contain incompatible characters
 	print $client "\t\t\"recordings\" : [\n";
-	if (keys %recordings) {
+	if (keys %events) {
 		my @output;
-		foreach (sort keys %recordings) { #there will always be at least one pair for each priority
-			push @output, "\t\t\t{ \"name\" : " . E($_) . ', "number" : ' . keys(%{ $recordings{$_} }) . ' }';
+		foreach (sort keys %events) { #there will always be at least one pair for each priority
+			push @output, "\t\t\t{ \"name\" : " . E($_) . ', "number" : ' . keys(%{ $events{$_} }) . ' }';
 		}
 		print $client join(",\n", @output), "\n";
 	}
@@ -647,7 +657,7 @@ sub childLoop {
 				$transfers->{pid} = $cpPid;
 				$share->store(freeze $transfers);
 				$share->unlock;
-				# get progress from the copy whilw waiting for it to finish
+				# get progress from the copy while waiting for it to finish
 				my $buf;
 				my $signalled = 0;
 				while (sysread(COPYCHILD, $buf, 100)) { # can't use <> because there aren't any newlines

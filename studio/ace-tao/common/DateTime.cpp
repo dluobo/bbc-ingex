@@ -1,5 +1,5 @@
 /*
- * $Id: DateTime.cpp,v 1.4 2008/11/06 11:02:54 john_f Exp $
+ * $Id: DateTime.cpp,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Date/time to text functions.
  *

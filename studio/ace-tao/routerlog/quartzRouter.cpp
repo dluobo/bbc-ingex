@@ -1,5 +1,5 @@
 /*
- * $Id: quartzRouter.cpp,v 1.5 2008/11/06 11:08:37 john_f Exp $
+ * $Id: quartzRouter.cpp,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Class to handle communication with Quartz router.
  *
@@ -124,6 +124,18 @@ bool Router::Init(const std::string & port, Transport::EnumType transport)
             p_serial->BaudRate(38400);
         }
 
+        // Flush any input
+        ACE_Time_Value tm(0, 200000);
+        const int buf_size = 16;
+        char buf[buf_size];
+        ssize_t bytes_read = 0;
+        do
+        {
+            bytes_read = mpCommunicationPort->Recv ((void *) &buf[0], buf_size, &tm);
+        }
+        while (bytes_read == buf_size);
+
+        // Test for presence of router
         mpCommunicationPort->Send ((const void *)".#01\r", 5);
         bool tst = readReply();
         if (tst)
@@ -141,6 +153,7 @@ bool Router::Init(const std::string & port, Transport::EnumType transport)
         ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Could not open %C.\n"), port.c_str() ));
     }
 
+    // Initialise buffer pointers
     mWritePtr = &mBuffer[0];
     mBufferEnd = mBuffer + qbufsize;
 
@@ -241,14 +254,14 @@ bool Router::readReply()
 {
     char charReceived;
     ssize_t bytes_read;
-    char * readPtr;
+    char * rd_ptr;
         
     
     std::string RouterString = "";
-    char * mWPtr, *mBufEnd;
-    char mBuf[qbufsize];
-    mWPtr = &mBuf[0];
-    mBufEnd = mBuf + qbufsize;
+    char tmp[qbufsize];
+    char * buf = &tmp[0];
+    char * wr_ptr = buf;
+    char * buf_end = buf + qbufsize;
 
 
     // expect quartz router reply as .A\r
@@ -269,59 +282,63 @@ bool Router::readReply()
                 // First, see if we have received enough bytes to decode
 
                 // find the dot . at the start of the message
-                readPtr = mWPtr - 1; // last char received
-                while (readPtr >= mBuf && *readPtr != '.')
+                rd_ptr = wr_ptr - 1; // last char received
+                while (rd_ptr >= buf && *rd_ptr != '.')
                 {
-                    readPtr--;
+                    rd_ptr--;
                 }
 
                 RouterString = "";                  
-                if (readPtr >= mBuf)
+                if (rd_ptr >= buf)
                 {
                     // still in buffer, so . found
-                    readPtr++; // skip over .
+                    rd_ptr++; // skip over .
                     // next char should be an A
-                    while (readPtr < mWPtr)
+                    while (rd_ptr < wr_ptr)
                     {
-                        RouterString += *(readPtr++); // copy update command string
+                        RouterString += *(rd_ptr++); // copy update command string
                         //run = 0; // exit
                     }
                 }
 
                 // reset write pointer
-                mWPtr = mBuf;
+                wr_ptr = &buf[0];
                 //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("routerstring: %s\n"), RouterString.c_str() ));
             }
             else
             {
                 // save this byte in the buffer
                 // is buffer full?
-                if (mWPtr >= mBufEnd)
+                if (wr_ptr >= buf_end)
                 {
-                    mWPtr = mBuf; // just start at beginning of buffer
+                    wr_ptr = buf; // just start at beginning of buffer
                 }
 
-                *mWPtr = charReceived;
-                mWPtr++;
+                *wr_ptr = charReceived;
+                wr_ptr++;
             }
         } // end of bytes read OK
         else
         {
-            run =0;
+            run = 0; // exit loop
         }
     } // end of while (run)
 
     //ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("found %s\n"), mBuf ));
-    if (::strncmp (mBuf, ".A", 2) == 0)
-    return true;
+    if (::strncmp(buf, ".A", 2) == 0)
+    {
+        return true;
+    }
     else
-    return false;
+    {
+        return false;
+    }
 }
 
 
 // Query current source connected to router.
 // Expect observer to read reply.
-// (reply from interrogate route command, ".I{level}{dest}(cr)" )
+// (sends interrogate route command, ".I{level}{dest}(cr)" )
 void Router::QuerySrc(unsigned int dest)
 {
     //find current source connected to router
@@ -330,100 +347,6 @@ void Router::QuerySrc(unsigned int dest)
     const std::string & command = ss.str();
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("Sending %C\n"), command.c_str() ));
     mpCommunicationPort->Send (command.c_str(), command.length());
-
-#if 0 // Don't receive reply here
-    char charReceived;
-    ssize_t bytes_read;
-    char * readPtr;
-        
-    
-    std::string router_response;
-    char * mWPtr, *mBufEnd;
-    char mBuf[qbufsize];
-    mWPtr = &mBuf[0];
-    mBufEnd = mBuf + qbufsize;
-
-    // expect quartz router reply as .I{level}{dest},{srce}\r
-    bool done = false;
-    int read_attempts = 0;
-    while (!done)
-    {
-        //ACE_Time_Value tm(0.2);
-        ACE_Time_Value tm(0, 200000);
-        bytes_read = mSerialDevice.recv_n ((void *) &charReceived, 1, &tm);
-        //bytes_read = mSerialDevice.recv ((void *) &charReceived, 1);
-
-        if (bytes_read == 1)
-        {
-            if (charReceived == '\r')
-            {
-                // convert the bytes received so far into a router command string.
-                // First, see if we have received enough bytes to decode
-
-                // find the dot . at the start of the message
-                readPtr = mWPtr - 1; // last char received
-                while (readPtr >= mBuf && *readPtr != '.')
-                {
-                    readPtr--;
-                }
-
-                router_response = "";                  
-                if (readPtr >= mBuf)
-                {
-                    // still in buffer, so . found
-                    readPtr++; // skip over .
-                    // next char should be an I
-                    while (readPtr < mWPtr)
-                    {
-                        router_response += *(readPtr++); // copy update command string
-                    }
-                }
-                else
-                {
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Empty string from router.\n")));
-                }
-
-                // reset write pointer
-                mWPtr = mBuf;
-                done = true;
-            }
-            else
-            {
-                // save this byte in the buffer
-                // is buffer full?
-                if (mWPtr >= mBufEnd)
-                {
-                    mWPtr = mBuf; // just start at beginning of buffer
-                }
-
-                *mWPtr = charReceived;
-                mWPtr++;
-            }
-        } // end of bytes read OK
-        else
-        {
-            if (++read_attempts > 2)
-            {
-                done = true;
-            }
-            else
-            {
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Re-trying read from router.\n")));
-            }
-        }
-    } // end of while loop
-
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router reply [.{level}{destination},{source}]: %C\n"), router_response.c_str() ));
-    //m_CurSrc = router_response.c_str();
-
-    unsigned int src = 0;
-    if (router_response.size() > 6)
-    {
-        src = ACE_OS::atoi(router_response.substr(6).c_str());
-    }
-
-    return src;
-#endif
 }
 
 void Router::ProcessMessage(const std::string & message)

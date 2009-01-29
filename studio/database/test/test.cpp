@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.4 2008/10/10 09:52:34 philipn Exp $
+ * $Id: test.cpp,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Tests the database library
  *

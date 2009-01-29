@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.7 2009/01/23 19:49:33 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.8 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -71,9 +71,9 @@ public:
 
   void SetRouterPort(std::string rp);
 
-  void StartSavingFile(const std::string & filename);
+  void StartSaving();
 
-  void StopSavingFile();
+  void StopSaving();
 
   
   virtual

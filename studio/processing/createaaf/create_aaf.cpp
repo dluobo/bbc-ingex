@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.7 2009/01/23 19:42:44 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.8 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -77,9 +77,10 @@ public:
     PackageSet packages;
 };   
 
-static void parseDateAndTimecode(string dateAndTimecodeStr, Date* date, int64_t* timecode)
+static void parseDateAndTimecode(string dateAndTimecodeStr, bool isPAL, Date* date, int64_t* timecode)
 {
     int data[7];
+    int timecodeBase = (isPAL ? 25 : 30);
     
     if (sscanf(dateAndTimecodeStr.c_str(), "%u-%u-%uS%u:%u:%u:%u", &data[0], &data[1],
         &data[2], &data[3], &data[4], &data[5], &data[6]) != 7)
@@ -90,9 +91,9 @@ static void parseDateAndTimecode(string dateAndTimecodeStr, Date* date, int64_t*
     date->year = data[0];
     date->month = data[1];
     date->day = data[2];
-    *timecode = data[3] * 60 * 60 * 25 +
-        data[4] * 60 * 25 + 
-        data[5] * 25 + 
+    *timecode = data[3] * 60 * 60 * timecodeBase +
+        data[4] * 60 * timecodeBase + 
+        data[5] * timecodeBase + 
         data[6];
 }
 
@@ -129,9 +130,10 @@ static void parseTag(string tag, string& tagName, string& tagValue)
 }
 
 
-static string dateAndTimecodeString(Date date, int64_t timecode)
+static string dateAndTimecodeString(Date date, int64_t timecode, bool isPAL)
 {
     char dateAndTimecodeStr[48];
+    int timecodeBase = (isPAL ? 25 : 30);
     
 #if defined(_MSC_VER)    
     _snprintf(
@@ -140,10 +142,10 @@ static string dateAndTimecodeString(Date date, int64_t timecode)
 #endif
         dateAndTimecodeStr, 48, "%04d%02u%02u%02u%02u%02u%02u",
         date.year, date.month, date.day, 
-        (int)(timecode / (60 * 60 * 25)), 
-        (int)((timecode % (60 * 60 * 25)) / (60 * 25)),
-        (int)(((timecode % (60 * 60 * 25)) % (60 * 25)) / 25),
-        (int)(((timecode % (60 * 60 * 25)) % (60 * 25)) % 25));
+        (int)(timecode / (60 * 60 * timecodeBase)), 
+        (int)((timecode % (60 * 60 * timecodeBase)) / (60 * timecodeBase)),
+        (int)(((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) / timecodeBase),
+        (int)(((timecode % (60 * 60 * timecodeBase)) % (60 * timecodeBase)) % timecodeBase));
         
     return dateAndTimecodeStr;
 }
@@ -164,11 +166,11 @@ static string timestampString(Timestamp timestamp)
     return timestampStr;
 }
 
-static string createDateAndTimecodeSuffix(Date fromDate, int64_t fromTimecode, Date toDate, int64_t toTimecode)
+static string createDateAndTimecodeSuffix(Date fromDate, int64_t fromTimecode, Date toDate, int64_t toTimecode, bool isPAL)
 {
     stringstream suffix;
     
-    suffix << dateAndTimecodeString(fromDate, fromTimecode) << "_" << dateAndTimecodeString(toDate, toTimecode);
+    suffix << dateAndTimecodeString(fromDate, fromTimecode, isPAL) << "_" << dateAndTimecodeString(toDate, toTimecode, isPAL);
         
     return suffix.str();
 }
@@ -395,6 +397,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -o, --grouponly                Only create AAF file with all clips included\n");
     fprintf(stderr, "      --no-ts-suffix             Don't use a timestamp for a group only file\n");
     fprintf(stderr, "  -m, --multicam                 Also create multi-camera clips\n");
+    fprintf(stderr, "  --ntsc                         Targets NTSC sources (default is PAL)\n");
     fprintf(stderr, "  -f, --from <date>S<timecode>   Includes clips created >= date and start timecode\n");
     fprintf(stderr, "  -t, --to <date>S<timecode>     Includes clips created < date and start timecode\n");
     fprintf(stderr, "  -c, --from-cd <date>T<time>    Includes clips created >= CreationDate of clip\n");
@@ -409,7 +412,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
-    fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff'\n");
+    fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff' (PAL: ff ranges 1..24, NTSC: ff ranges 1..29 and is non-drop frame)\n");
     fprintf(stderr, "* --from-cd form is 'yyyy-mm-ddThh:mm:ss'\n");
     fprintf(stderr, "* The default for --from is the start of today\n"); 
     fprintf(stderr, "* The default for --to is the start of tommorrow\n");
@@ -446,6 +449,10 @@ int main(int argc, const char* argv[])
     CutsDatabase* mcCutsDatabase = 0;
     Timestamp fromCreationDate = g_nullTimestamp;
     string fcpPath;
+    bool isPAL = true;
+    const char* toString = 0;
+    const char* fromString = 0;
+    Rational targetEditRate = g_palEditRate;
     
     Timestamp t = generateTimestampStartToday();
     fromDate.year = t.year;
@@ -527,6 +534,11 @@ int main(int argc, const char* argv[])
                 createMultiCam = true;
                 cmdlnIndex += 1;
             }
+            else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
+            {
+                isPAL = false;
+                cmdlnIndex += 1;
+            }
             else if (strcmp(argv[cmdlnIndex], "-f") == 0 ||
                 strcmp(argv[cmdlnIndex], "--from") == 0)
             {
@@ -536,7 +548,7 @@ int main(int argc, const char* argv[])
                     fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-                parseDateAndTimecode(argv[cmdlnIndex + 1], &fromDate, &fromTimecode);
+                fromString = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
             }
             else if (strcmp(argv[cmdlnIndex], "-t") == 0 ||
@@ -548,7 +560,7 @@ int main(int argc, const char* argv[])
                     fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-                parseDateAndTimecode(argv[cmdlnIndex + 1], &toDate, &toTimecode);
+                toString = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
             }
             else if (strcmp(argv[cmdlnIndex], "-c") == 0 ||
@@ -667,6 +679,18 @@ int main(int argc, const char* argv[])
         fprintf(stderr, "\nFailed to parse arguments:\nUnknown exception thrown\n");
         return 1;
     }
+    
+    targetEditRate = (isPAL ? g_palEditRate : g_ntscEditRate);
+    
+    // parse --to and --from now that we know whether it is PAL or NTSC
+    if (fromString != 0)
+    {
+        parseDateAndTimecode(fromString, isPAL, &fromDate, &fromTimecode);
+    }
+    if (toString != 0)
+    {
+        parseDateAndTimecode(toString, isPAL, &toDate, &toTimecode);
+    }
 
     if (tagName.size() > 0)
     {
@@ -674,7 +698,7 @@ int main(int argc, const char* argv[])
     }
     else
     {
-        suffix = createDateAndTimecodeSuffix(fromDate, fromTimecode, toDate, toTimecode);
+        suffix = createDateAndTimecodeSuffix(fromDate, fromTimecode, toDate, toTimecode, isPAL);
     }
     
     
@@ -769,7 +793,6 @@ int main(int argc, const char* argv[])
 
             // remove all packages that are < fromTimecode (at fromDate) and > toTimecode (at toDate)
             vector<prodauto::MaterialPackage *> packagesToErase;
-            Rational palEditRate = {25, 1};
             MaterialPackageSet::const_iterator it;
             for (it = material.topPackages.begin(); it != material.topPackages.end(); ++it)
             {
@@ -778,14 +801,14 @@ int main(int argc, const char* argv[])
                 if (topPackage->creationDate.year == fromDate.year && 
                     topPackage->creationDate.month == fromDate.month && 
                     topPackage->creationDate.day == fromDate.day &&
-                    getStartTime(topPackage, material.packages, palEditRate) < fromTimecode)
+                    getStartTime(topPackage, material.packages, targetEditRate) < fromTimecode)
                 {
                     packagesToErase.push_back(topPackage);
                 }
                 else if (topPackage->creationDate.year == toDate.year && 
                     topPackage->creationDate.month == toDate.month && 
                     topPackage->creationDate.day == toDate.day &&
-                    getStartTime(topPackage, material.packages, palEditRate) >= toTimecode)
+                    getStartTime(topPackage, material.packages, targetEditRate) >= toTimecode)
                 {
                     packagesToErase.push_back(topPackage);
                 }
@@ -829,6 +852,7 @@ int main(int argc, const char* argv[])
     }
     
     
+    // remove any packages with an edit rate != the target edit rate and
     // go through the material package -> file package and remove any that reference
     // a file package with a non-zero videoResolutionID and !=  targetVideoResolutionID
     vector<prodauto::MaterialPackage *> packagesToErase;
@@ -836,8 +860,16 @@ int main(int argc, const char* argv[])
     for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
     {
         MaterialPackage* topPackage = *iter1;
-        
-        bool erase = false;
+
+        // check package edit rate        
+        Rational packageEditRate = getVideoEditRate(topPackage, material.packages);
+        if (packageEditRate != targetEditRate && packageEditRate != g_nullRational)
+        {
+            packagesToErase.push_back(topPackage);
+            continue;
+        }
+
+        // check video resolution IDs
         vector<Track*>::const_iterator iter2;
         for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
         {
@@ -866,15 +898,11 @@ int main(int argc, const char* argv[])
                     fileDescriptor->videoResolutionID != videoResolutionID)
                 {
                     // material package has wrong video resolution
-                    erase = true;
+                    packagesToErase.push_back(topPackage);
                     break; // break out of track loop
                 }
             }
 
-        }
-        if (erase)
-        {
-            packagesToErase.push_back(topPackage);
         }
     }
     vector<prodauto::MaterialPackage *>::const_iterator it;
@@ -928,17 +956,17 @@ int main(int argc, const char* argv[])
                     if (createAAFGroupOnly && noTSSuffix)
                     {
                         editorsFile = auto_ptr<EditorsFile>(new AAFFile(
-                        addFilename(filenames, createUniqueFilename(filenamePrefix)), aafxml, audioEdits));
+                            addFilename(filenames, createUniqueFilename(filenamePrefix)), targetEditRate, aafxml, audioEdits));
                     }
                     else if (createMultiCam)
                     {
                         editorsFile = auto_ptr<EditorsFile>(new AAFFile(
-                        addFilename(filenames, createAAFGroupMCFilename(filenamePrefix, suffix)), aafxml, audioEdits));
+                            addFilename(filenames, createAAFGroupMCFilename(filenamePrefix, suffix)), targetEditRate, aafxml, audioEdits));
                     }
                     else
                     {
                         editorsFile = auto_ptr<EditorsFile>(new AAFFile(
-                        addFilename(filenames, createAAFGroupSingleFilename(filenamePrefix, suffix)), aafxml, audioEdits));
+                            addFilename(filenames, createAAFGroupSingleFilename(filenamePrefix, suffix)), targetEditRate, aafxml, audioEdits));
                     }
                 }
             }
@@ -954,7 +982,7 @@ int main(int argc, const char* argv[])
                 
                 if (!fcpxml && !createAAFGroupOnly)
                 {
-                    AAFFile aafFile(addFilename(filenames, createSingleClipFilename(filenamePrefix, suffix, index++)), aafxml, audioEdits);
+                    AAFFile aafFile(addFilename(filenames, createSingleClipFilename(filenamePrefix, suffix, index++)), targetEditRate, aafxml, audioEdits);
                     aafFile.addClip(topPackage, material.packages);
                     aafFile.save();
                 }
@@ -990,7 +1018,6 @@ int main(int argc, const char* argv[])
                     materialPackages.insert(topPackage1);
                     
                     // add material to group that has same start time and creation date
-                    Rational palEditRate = {25, 1}; // any rate will do
                     MaterialPackageSet::iterator iter2;
                     for (iter2 = iter1, iter2++; iter2 != material.topPackages.end(); iter2++)
                     {
@@ -999,8 +1026,8 @@ int main(int argc, const char* argv[])
                         if (topPackage2->creationDate.year == topPackage1->creationDate.year &&
                             topPackage2->creationDate.month == topPackage1->creationDate.month &&
                             topPackage2->creationDate.day == topPackage1->creationDate.day &&
-                            getStartTime(topPackage1, material.packages, palEditRate) == 
-                                getStartTime(topPackage2, material.packages, palEditRate))
+                            getStartTime(topPackage1, material.packages, targetEditRate) == 
+                                getStartTime(topPackage2, material.packages, targetEditRate))
                         {
                             materialPackages.insert(topPackage2);
                             donePackages.insert(topPackage2);
@@ -1017,15 +1044,23 @@ int main(int argc, const char* argv[])
                         MCClipDef* mcClipDef = *iter3;
                         vector<CutInfo> sequence;
                         
+                        // exclude clip defs referencing sources with wrong video edit rate
+                        Rational mcClipDefEditRate = getVideoEditRate(mcClipDef);
+                        if (mcClipDefEditRate != targetEditRate && mcClipDefEditRate != g_nullRational)
+                        {
+                            continue;
+                        }
+                        
                         if (mcCutsDatabase != 0)
                         {
+                            // TODO: director's cut database doesn't yet have flag indicating PAL/NTSC
                             sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, 
-                            topPackage1->creationDate, getStartTime(topPackage1, material.packages, palEditRate));
+                                topPackage1->creationDate, getStartTime(topPackage1, material.packages, targetEditRate));
                         }
 
                         if (!fcpxml && !createAAFGroupOnly)
                         {
-                            AAFFile aafFile(addFilename(filenames, createMCClipFilename(filenamePrefix,  getStartTime(topPackage1, material.packages, palEditRate), suffix, index++)), aafxml, audioEdits); 
+                            AAFFile aafFile(addFilename(filenames, createMCClipFilename(filenamePrefix, getStartTime(topPackage1, material.packages, targetEditRate), suffix, index++)), targetEditRate, aafxml, audioEdits); 
                             aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence);
                             aafFile.save();
                         }       

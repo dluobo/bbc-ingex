@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.3 2009/01/23 19:50:15 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.4 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Encapsulation of the recorder application.
  *

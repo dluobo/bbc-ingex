@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: controller.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $          *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -36,7 +39,7 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPrevCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPendingCommandSent(false), mPrevCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
 {
 	mCondition = new wxCondition(mMutex);
 	SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
@@ -119,8 +122,9 @@ void Controller::AddProjectNames(const CORBA::StringSeq & projectNames)
 	if (NONE == mPendingCommand) { //nothing more important is happening - adding a project name is not a vital thing to do
 		mPendingCommand = ADD_PROJECT_NAMES; //act on it later or detect if it is superceded while retrying
 	}
-	if (!mReconnecting) { //can't send a command now
+	if (!mReconnecting) { //can send a command now
 		Signal(ADD_PROJECT_NAMES);
+		mPendingCommandSent = true;
 	}
 }
 
@@ -146,6 +150,7 @@ void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdA
 		mStartTimecode = startTimecode;
 		mMutex.Unlock();
 		Signal(RECORD);
+		mPendingCommandSent = true;
 	}
 }
 
@@ -171,6 +176,7 @@ void Controller::Stop(const ProdAuto::MxfTimecode & stopTimecode, const ProdAuto
 		mStopTimecode = stopTimecode;
 		mMutex.Unlock();
 		Signal(STOP);
+		mPendingCommandSent = true;
 	}
 }
 
@@ -251,11 +257,12 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 				mMutex.Unlock();
 				//let the parent know
 				GetNextHandler()->AddPendingEvent(event);
-				//buffer the command
+				//buffer the failed command
 				if ((RECORD == event.GetCommand() || STOP == event.GetCommand() || ADD_PROJECT_NAMES == event.GetCommand()) && NONE == mPendingCommand) { //make sure the event doesn't override a command received while waiting for a response
 //std::cerr << "new pending command" << std::endl;
 					//execute command when reconnected
 					mPendingCommand = event.GetCommand();
+					mPendingCommandSent = false; //needs to be sent again when communication re-established
 				}
 			}
 			Signal(RECONNECT);
@@ -269,15 +276,19 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 		else if (event.GetCommand() == mPendingCommand) { //pending command successfully sent
 //std::cerr << "pending command successfully sent" << std::endl;
 			mPendingCommand = NONE;
+			mPendingCommandSent = false; //default state
 			GetNextHandler()->AddPendingEvent(event);
 			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT); //back to normal
 		}
-		else if (NONE != mPendingCommand) { //pending command not sent yet
-			//Send the pending command again immediately, with updated parameters
+		else if (NONE != mPendingCommand) { //not in idle state
+			if (!mPendingCommandSent) {
+				//Send the pending command again immediately, with updated parameters
 //std::cerr << "pending command being sent" << std::endl;
-			Signal(mPendingCommand);
+				Signal(mPendingCommand);
+				mPendingCommandSent = true;
+			}
 		}
-		else {
+		else { //idle state
 //std::cerr << "ordinary notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event);
 			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT);
@@ -479,10 +490,10 @@ wxThread::ExitCode Controller::Entry()
 					timecode = mStartTimecode;
 					ProdAuto::MxfDuration preroll = mPreroll;
 					CORBA::BooleanSeq rec_enable = mEnableList;
-					char * project = CORBA::string_dup(mProject.mb_str(*wxConvCurrent));
+					std::string project = (const char *) mProject.mb_str(*wxConvCurrent);
 					mMutex.Unlock();
 					try {
-						rc = mRecorder->Start(timecode, preroll, rec_enable, project, false);
+						rc = mRecorder->Start(timecode, preroll, rec_enable, project.c_str(), false);
 					}
 					catch (const CORBA::Exception & e) {
 //std::cerr << "start exception" << std::endl;

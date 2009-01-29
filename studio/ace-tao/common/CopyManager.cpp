@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.4 2008/10/08 10:16:06 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Class to manage file copying in a separate process.
  *

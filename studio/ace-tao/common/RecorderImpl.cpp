@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.8 2009/01/23 19:50:15 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.9 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Base class for Recorder servant.
  *
@@ -521,7 +521,7 @@ bool RecorderImpl::UpdateFromDatabase()
                 rc->name.c_str(), mRecorder->name.c_str()));
 
             const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
-            CORBA::ULong track_i = 0;
+            unsigned int track_i = 0;
             unsigned int n_video_tracks = 0;
             for (unsigned int i = 0; i < n_inputs; ++i)
             {
@@ -566,15 +566,47 @@ bool RecorderImpl::UpdateFromDatabase()
                         mTrackMap[id] = trk;
                     }
 
-                    mTracks->length(track_i + 1);
-                    ProdAuto::Track & track = mTracks[track_i];
+                    // Note that here we assemble our list of tracks in harware order.
+                    // An alternative would be to present them in source order.  The
+                    // GUI already re-orders them in source order and presents them to
+                    // the user in that form.
 
-                    // Assuming first track of an input is video, others audio.
-                    std::ostringstream s;
-                    if (j == 0)
+                    // Update map from source to mTracks index
+                    if (stc)
                     {
-                        ++n_video_tracks;
+                        long id = stc->getDatabaseID();
+                        mTrackIndexMap[id] = track_i;
+                    }
+
+                    mTracks->length(track_i + 1);
+                    ProdAuto::Track & track = mTracks->operator[](track_i);
+
+                    // Set track type
+                    if (stc && stc->dataDef == PICTURE_DATA_DEFINITION)
+                    {
                         track.type = ProdAuto::VIDEO;
+                        ++n_video_tracks;
+                    }
+                    else if (stc && stc->dataDef == SOUND_DATA_DEFINITION)
+                    {
+                        track.type = ProdAuto::AUDIO;
+                    }
+                    // If no source track, assume hardware track 0 is video
+                    else if (j == 0)
+                    {
+                        track.type = ProdAuto::VIDEO;
+                        ++n_video_tracks;
+                    }
+                    else
+                    {
+                        track.type = ProdAuto::AUDIO;
+                    }
+
+#if 1
+                    // Name track by hardware input
+                    std::ostringstream s;
+                    if (track.type == ProdAuto::VIDEO)
+                    {
                         s << "V";
                     }
                     else
@@ -584,12 +616,39 @@ bool RecorderImpl::UpdateFromDatabase()
                     }
                     s << "  (input " << i << ")";
                     track.name = CORBA::string_dup(s.str().c_str());
-                    track.id = j; // Is this ever used?
+#else
+                    // Name track by source track name
+                    if (stc)
+                    {
+                        track.name = CORBA::string_dup(stc->name.c_str());
+                    }
+#endif
+
+                    // Set track id
+                    //track.id = j; // Is this ever used?
+                    if (stc)
+                    {
+                        track.id = stc->getDatabaseID(); // Helps to have this as used as key for maps
+                    }
+                    else
+                    {
+                        // No source connected
+                        track.id = 0;
+                    }
 
                     if (sc && stc)
                     {
                         track.has_source = 1;
                         track.src.package_name = CORBA::string_dup(sc->name.c_str());
+                        prodauto::SourcePackage * sp = sc->getSourcePackage();
+                        if (sp)
+                        {
+                            track.src.tape_name = CORBA::string_dup(sp->name.c_str());
+                        }
+                        else
+                        {
+                            track.src.tape_name = CORBA::string_dup("");
+                        }
                         track.src.track_name = CORBA::string_dup(stc->name.c_str());
                     }
                     else
@@ -597,6 +656,7 @@ bool RecorderImpl::UpdateFromDatabase()
                         // No connection to this input
                         track.has_source = 0;
                         track.src.package_name = CORBA::string_dup("zz No Connection");
+                        track.src.tape_name = CORBA::string_dup("");
                         track.src.track_name = CORBA::string_dup("");
                     }
                     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, src.track_name %C\n"),

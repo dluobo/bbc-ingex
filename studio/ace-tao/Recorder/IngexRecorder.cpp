@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.7 2008/10/08 10:16:06 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Class to manage an individual recording.
  *
@@ -46,6 +46,17 @@
 #define max(a,b) (((a)>(b))?(a):(b))
 #define min(a,b) (((a)<(b))?(a):(b))
 
+static void clean_filename(std::string & filename)
+{
+    const std::string allowed_chars = "0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    size_t pos;
+    while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
+    {
+        filename.replace(pos, 1, "-");
+    }
+}
+
 
 /**
 Constructor clears all member data.
@@ -56,6 +67,11 @@ IngexRecorder::IngexRecorder(RecorderImpl * impl, unsigned int index)
   mRecordingOK(true), mIndex(index), mDroppedFrames(false)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::IngexRecorder()\n")));
+
+    for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
+    {
+        mChannelEnable.push_back(false);
+    }
 
     if (mpImpl)
     {
@@ -78,19 +94,231 @@ IngexRecorder::~IngexRecorder()
     }
 }
 
+/**
+Prepare for a recording.  Search for target timecode and set some of the RecordOptions.
+This should be called before IngexRecorder::Setup().
+*/
+bool IngexRecorder::CheckStartTimecode(
+                //std::vector<bool> & channel_enables,
+                const std::vector<bool> & track_enables,
+                framecount_t & start_timecode,
+                framecount_t pre_roll,
+                bool crash_record)
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode()\n")));
+
+    // Set up channel enables
+#if 1
+    for (unsigned int i = 0; mpImpl && i < mpImpl->mTracks->length() && i < track_enables.size(); ++i)
+    {
+        ProdAuto::Track & track = mpImpl->mTracks->operator[](i);
+        HardwareTrack hw_trk = mpImpl->mTrackMap[track.id];
+        
+
+        if (track.has_source && track_enables[i])
+        {
+            mChannelEnable[hw_trk.channel] = true;
+        }
+    }
+#else
+    mChannelEnable = channel_enables;
+#endif
+
+    // Store track enables for use by recorder_functions
+    mTrackEnable = track_enables;
+
+    unsigned int n_channels = IngexShm::Instance()->Channels();
+
+    framecount_t target_tc;
+
+    // If crash record, search across all channels for the minimum current (lastframe) timecode
+    if (crash_record)
+    {
+        //int tc[MAX_CHANNELS];
+        struct { int framecount; bool valid; } tc[MAX_CHANNELS];
+        for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
+        {
+            tc[i].valid = false;
+        }
+
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
+        for (unsigned int channel_i = 0; channel_i < mChannelEnable.size(); channel_i++)
+        {
+            if (mChannelEnable[channel_i] && IngexShm::Instance()->SignalPresent(channel_i))
+            {
+                tc[channel_i].framecount = IngexShm::Instance()->CurrentTimecode(channel_i);
+                tc[channel_i].valid = true;
+
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
+                    channel_i, Timecode(tc[channel_i].framecount, mFps, mDf).Text()));
+            }
+        }
+
+        int max_tc = 0;
+        int min_tc = INT_MAX;
+        bool tc_valid = false;
+        for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
+        {
+            if (tc[channel_i].valid)
+            {
+                max_tc = max(max_tc, tc[channel_i].framecount);
+                min_tc = min(min_tc, tc[channel_i].framecount);
+                tc_valid = true;
+            }
+        }
+
+        if (!tc_valid)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("    No channels enabled!\n")));
+        }
+
+        target_tc = min_tc;
+        //target_tc = tc[1]; // just for testing
+    }
+    else
+    {
+        target_tc = start_timecode;
+    }
+
+    // Include pre-roll
+    if (target_tc < pre_roll)
+    {
+        target_tc += 24 * 60 * 60 * 25;
+    }
+    target_tc -= pre_roll;
+
+    // NB. Should be keeping target_tc and pre-roll separate in case of discontinuous timecode.
+    // i.e. find target_tc and then step back by pre-roll.
+
+    // Start timecode for record threads.
+    // Also used for setting stop duration (not the ideal way to do it).
+    mStartTimecode = target_tc;
+
+    // Passing back the actual start_timecode.
+    start_timecode = target_tc;
+
+    // local vars
+    bool found_all_target = true;
+    unsigned int search_limit;
+    const int ring_length = IngexShm::Instance()->RingLength();
+    if (ring_length > SEARCH_GUARD)
+    {
+        search_limit = ring_length - SEARCH_GUARD;
+    }
+    else
+    {
+        search_limit = 1;
+    }
+
+    // Search for desired timecode across all target sources
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc, mFps, mDf).Text()));
+    for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
+    {
+        if (! mChannelEnable[channel_i])
+        {
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d not enabled\n"), channel_i));
+            continue;
+        }
+
+        int lastframe = IngexShm::Instance()->LastFrame(channel_i);
+
+        bool found_target = false;
+        int first_tc_seen = 0;
+        int last_tc_seen = 0;
+
+        // Find target timecode.
+        for (unsigned int i = 0; !found_target && i < search_limit; ++i)
+        {
+            // read timecode value
+			int frame = lastframe - i;
+			if (frame < 0)
+			{
+				frame += ring_length;
+            }
+            int tc = IngexShm::Instance()->Timecode(channel_i, frame);
+
+            if (i == 0)
+            {
+                first_tc_seen = tc;
+            }
+            last_tc_seen = tc;
+
+            if (tc == target_tc)
+            {
+                mStartFrame[channel_i] = lastframe - i;
+                found_target = true;
+
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
+                    channel_i, lastframe, lastframe - i, Timecode(tc, mFps, mDf).Text()));
+            }
+            else if (i == 0 && target_tc > tc && target_tc - tc < 5)
+            {
+                // Target is slightly in the future.  We predict the start frame.
+                mStartFrame[channel_i] = frame + target_tc - tc;
+                found_target = true;
+
+                ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for channel[%d]: target=%C, most_recent=%C\n"),
+                    channel_i,
+                    Timecode(target_tc, mFps, mDf).Text(),
+                    Timecode(first_tc_seen, mFps, mDf).Text()
+                    ));
+            }
+        }
+
+        if (! found_target)
+        {
+            ACE_DEBUG((LM_ERROR, "channel[%d] Target tc %C not found, buffer %C - %C\n",
+                channel_i,
+                Timecode(target_tc, mFps, mDf).Text(),
+                Timecode(last_tc_seen, mFps, mDf).Text(),
+                Timecode(first_tc_seen, mFps, mDf).Text()
+            ));
+
+            if (IngexShm::Instance()->SignalPresent(channel_i))
+            {
+                found_all_target = false;
+            }
+            else
+            {
+                // As there is no signal at this input we won't
+                // prevent recording from starting but will
+                // simply disable this input.
+                ACE_DEBUG((LM_ERROR,
+                    ACE_TEXT("This channel has no signal present so will be disabled for the current recording.\n")
+                    ));
+                mChannelEnable[channel_i] = false;
+            }
+        }
+    } // for channel_i
+
+
+    // Return
+    if (!found_all_target)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not start record - not all target timecodes found\n")));
+        return false;
+    }
+    else
+    {
+        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::PrepareStart() returning true\n")));
+        return true;
+    }
+}
+
+/**
+Final preparation for recording.
+*/
 void IngexRecorder::Setup(
                 framecount_t start_timecode,
-                const std::vector<bool> & channel_enables,
-                const std::vector<bool> & track_enables,
-                const char * project)
+                const prodauto::ProjectName & project_name)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Setup()\n")));
 
     // Get ProjectName associated with supplied name.
-    prodauto::ProjectName project_name;
-    GetProjectFromDb(project, project_name);
+    //prodauto::ProjectName project_name;
+    //GetProjectFromDb(project, project_name);
 
-    // Store project name and recording description
+    // Store project name
     mProjectName = project_name;
 
     // Get current recorder settings
@@ -117,11 +345,8 @@ void IngexRecorder::Setup(
     // e.g. 5 (1 video, 4 audio) or 9 (1 video, 8 audio)
     // A bit dodgy as different inputs on a recorder can have
     // different numbers of tracks.
-    mTracksPerChannel = track_enables.size() / channel_enables.size();
+    //mTracksPerChannel = track_enables.size() / channel_enables.size();
 
-    // Set up enables
-    mChannelEnable = channel_enables;
-    mTrackEnable = track_enables;
     int first_enabled_channel = -1;
     for (unsigned int i = 0; first_enabled_channel < 0 && i < mChannelEnable.size(); ++i)
     {
@@ -219,214 +444,30 @@ void IngexRecorder::Setup(
 
     // We also include project name to help with copying to project-based
     // directories on a file-server.
-    // But that bit commented out because of problems with unsuitable
-    // characters such as /
+
+    // Note that we make sure ident does not contain any unsuitable
+    // characters such as '/'
 
     // Set filename stems in RecordOptions.
     for (std::vector<ThreadParam>::iterator
         it = mThreadParams.begin(); it != mThreadParams.end(); ++it)
     {
         const char * src_name = (it->p_opt->quad ? QUAD_NAME : SOURCE_NAME[it->p_opt->channel_num]);
-        std::ostringstream ident;
-        ident << date << "_" << tcode
-            /* << "_" << project */
+        std::ostringstream ss;
+        ss << date << "_" << tcode
+            << "_" << mProjectName.name
             << "_" << mpImpl->Name()
             << "_" << src_name
             << "_" << it->p_opt->index;
-        it->p_opt->file_ident = ident.str();
+
+        std::string ident = ss.str();
+        clean_filename(ident);
+
+        it->p_opt->file_ident = ident;
     }
 
 }
 
-
-/**
-Prepare for a recording.  Search for target timecode and set some of the RecordOptions
-*/
-bool IngexRecorder::CheckStartTimecode(
-                std::vector<bool> & channel_enables,
-                framecount_t & start_timecode,
-                framecount_t pre_roll,
-                bool crash_record)
-{
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::CheckStartTimecode()\n")));
-
-    unsigned int n_channels = IngexShm::Instance()->Channels();
-
-    framecount_t target_tc;
-
-    // If crash record, search across all channels for the minimum current (lastframe) timecode
-    if (crash_record)
-    {
-        //int tc[MAX_CHANNELS];
-        struct { int framecount; bool valid; } tc[MAX_CHANNELS];
-        for (unsigned int i = 0; i < MAX_CHANNELS; ++i)
-        {
-            tc[i].valid = false;
-        }
-
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Crash record:\n")));
-        for (unsigned int channel_i = 0; channel_i < channel_enables.size(); channel_i++)
-        {
-            if (channel_enables[channel_i] && IngexShm::Instance()->SignalPresent(channel_i))
-            {
-                tc[channel_i].framecount = IngexShm::Instance()->CurrentTimecode(channel_i);
-                tc[channel_i].valid = true;
-
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("    tc[%d]=%C\n"),
-                    channel_i, Timecode(tc[channel_i].framecount, mFps, mDf).Text()));
-            }
-        }
-
-        int max_tc = 0;
-        int min_tc = INT_MAX;
-        bool tc_valid = false;
-        for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
-        {
-            if (tc[channel_i].valid)
-            {
-                max_tc = max(max_tc, tc[channel_i].framecount);
-                min_tc = min(min_tc, tc[channel_i].framecount);
-                tc_valid = true;
-            }
-        }
-
-        if (!tc_valid)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("    No channels enabled!\n")));
-        }
-
-        target_tc = min_tc;
-        //target_tc = tc[1]; // just for testing
-    }
-    else
-    {
-        target_tc = start_timecode;
-    }
-
-    // Include pre-roll
-    if (target_tc < pre_roll)
-    {
-        target_tc += 24 * 60 * 60 * 25;
-    }
-    target_tc -= pre_roll;
-
-    // NB. Should be keeping target_tc and pre-roll separate in case of discontinuous timecode.
-    // i.e. find target_tc and then step back by pre-roll.
-
-    // Start timecode for record threads.
-    // Also used for setting stop duration (not the ideal way to do it).
-    mStartTimecode = target_tc;
-
-    // Passing back the actual start_timecode.
-    start_timecode = target_tc;
-
-    // local vars
-    bool found_all_target = true;
-    unsigned int search_limit;
-    const int ring_length = IngexShm::Instance()->RingLength();
-    if (ring_length > SEARCH_GUARD)
-    {
-        search_limit = ring_length - SEARCH_GUARD;
-    }
-    else
-    {
-        search_limit = 1;
-    }
-
-    // Search for desired timecode across all target sources
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Searching for timecode %C\n"), Timecode(target_tc, mFps, mDf).Text()));
-    for (unsigned int channel_i = 0; channel_i < n_channels; channel_i++)
-    {
-        if (! channel_enables[channel_i])
-        {
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d not enabled\n"), channel_i));
-            continue;
-        }
-
-        int lastframe = IngexShm::Instance()->LastFrame(channel_i);
-
-        bool found_target = false;
-        int first_tc_seen = 0;
-        int last_tc_seen = 0;
-
-        // Find target timecode.
-        for (unsigned int i = 0; !found_target && i < search_limit; ++i)
-        {
-            // read timecode value
-			int frame = lastframe - i;
-			if (frame < 0)
-			{
-				frame += ring_length;
-            }
-            int tc = IngexShm::Instance()->Timecode(channel_i, frame);
-
-            if (i == 0)
-            {
-                first_tc_seen = tc;
-            }
-            last_tc_seen = tc;
-
-            if (tc == target_tc)
-            {
-                mStartFrame[channel_i] = lastframe - i;
-                found_target = true;
-
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Found channel%d lf=%6d lf-i=%8d tc=%C\n"),
-                    channel_i, lastframe, lastframe - i, Timecode(tc, mFps, mDf).Text()));
-            }
-            else if (i == 0 && target_tc > tc && target_tc - tc < 5)
-            {
-                // Target is slightly in the future.  We predict the start frame.
-                mStartFrame[channel_i] = frame + target_tc - tc;
-                found_target = true;
-
-                ACE_DEBUG((LM_WARNING, ACE_TEXT("Target timecode in future for channel[%d]: target=%C, most_recent=%C\n"),
-                    channel_i,
-                    Timecode(target_tc, mFps, mDf).Text(),
-                    Timecode(first_tc_seen, mFps, mDf).Text()
-                    ));
-            }
-        }
-
-        if (! found_target)
-        {
-            ACE_DEBUG((LM_ERROR, "channel[%d] Target tc %C not found, buffer %C - %C\n",
-                channel_i,
-                Timecode(target_tc, mFps, mDf).Text(),
-                Timecode(last_tc_seen, mFps, mDf).Text(),
-                Timecode(first_tc_seen, mFps, mDf).Text()
-            ));
-
-            if (IngexShm::Instance()->SignalPresent(channel_i))
-            {
-                found_all_target = false;
-            }
-            else
-            {
-                // As there is no signal at this input we won't
-                // prevent recording from starting but will
-                // simply disable this input.
-                ACE_DEBUG((LM_ERROR,
-                    ACE_TEXT("This channel has no signal present so will be disabled for the current recording.\n")
-                    ));
-                channel_enables[channel_i] = false;
-            }
-        }
-    } // for channel_i
-
-
-    // Return
-    if (!found_all_target)
-    {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not start record - not all target timecodes found\n")));
-        return false;
-    }
-    else
-    {
-        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::PrepareStart() returning true\n")));
-        return true;
-    }
-}
 
 bool IngexRecorder::Start()
 {

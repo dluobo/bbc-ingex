@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.7 2008/10/22 09:32:19 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -26,6 +26,8 @@
 #include <ace/Time_Value.h>
 #include <ace/OS_NS_sys_shm.h>
 #include <ace/Log_Msg.h>
+#include <ace/OS_NS_stdio.h>
+#include <ace/OS_NS_signal.h>
 
 #include "IngexShm.h"
 
@@ -156,7 +158,7 @@ void IngexShm::InfoSetup(std::string name)
             return;
         }
         // Check if process is dead, if so take over slot
-        if (mpControl && kill(mpControl->record_info[i].pid, 0) == -1 && errno != EPERM)
+        if (mpControl && ACE_OS::kill(mpControl->record_info[i].pid, 0) == -1 && errno != EPERM)
         {
             memset(&mpControl->record_info[i], 0, sizeof(mpControl->record_info[i]));
             mpControl->record_info[i].pid = pid;
@@ -212,9 +214,13 @@ void IngexShm::InfoSetRecording(unsigned int channel, int index, bool quad_video
 {
     int recidx = InfoGetRecIdx();
     if (quad_video)
+    {
         mpControl->record_info[recidx].quad.recording = recording ? 1 : 0;
+    }
     else
+    {
         mpControl->record_info[recidx].channel[channel][index].recording = recording ? 1 : 0;
+    }
 }
 
 void IngexShm::InfoSetDesc(unsigned int channel, int index, bool quad_video, const char *fmt, ...)
@@ -223,14 +229,16 @@ void IngexShm::InfoSetDesc(unsigned int channel, int index, bool quad_video, con
     char buf[sizeof(mpControl->record_info[0].channel[0][0].desc)];
     va_list    ap;
     va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+    ACE_OS::vsnprintf(buf, sizeof(buf)-1, fmt, ap);
     va_end(ap);
     buf[sizeof(buf)-1] = '\0';
 
-    if (quad_video) {
+    if (quad_video)
+    {
         strncpy(mpControl->record_info[recidx].quad.desc, buf, sizeof(buf));
     }
-    else {
+    else
+    {
         strncpy(mpControl->record_info[recidx].channel[channel][index].desc, buf, sizeof(buf));
     }
 }
@@ -241,17 +249,21 @@ void IngexShm::InfoSetRecordError(unsigned int channel, int index, bool quad_vid
     char buf[sizeof(mpControl->record_info[0].channel[0][0].error)];
     va_list    ap;
     va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf)-1, fmt, ap);
+    ACE_OS::vsnprintf(buf, sizeof(buf)-1, fmt, ap);
     va_end(ap);
     buf[sizeof(buf)-1] = '\0';
     if (buf[strlen(buf)-1] == '\n')    // Remove trailing newline if any
+    {
         buf[strlen(buf)-1] = '\0';
+    }
 
-    if (quad_video) {
+    if (quad_video)
+    {
         mpControl->record_info[recidx].quad.record_error = 1;
         strncpy(mpControl->record_info[recidx].quad.error, buf, sizeof(buf));
     }
-    else {
+    else
+    {
         mpControl->record_info[recidx].channel[channel][index].record_error = 1;
         strncpy(mpControl->record_info[recidx].channel[channel][index].error, buf, sizeof(buf));
     }

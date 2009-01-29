@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.9 2008/11/06 11:05:30 john_f Exp $
+    # $Id: configure.in,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -57,14 +57,17 @@ AC_DEFUN([PLAYERTEST],
 	if test -f "$WORKSPACE/player/IngexPlayer/$PLAYERLIB"; then
 		AC_MSG_RESULT([yes])
 		AC_MSG_CHECKING([player for DVS card support])
+		# test player lib for dvs_register_listener symbol which only exists when DVS supported is compiled in
 		if test `readelf -s $WORKSPACE/player/IngexPlayer/$PLAYERLIB | grep -c dvs_register_listener` -gt 0; then
 			AC_MSG_RESULT([yes])
 			DVS_CPPFLAGS="-DHAVE_DVS"
 			AC_MSG_CHECKING([for DVS SDK])
-			DVS_PATH=`for f in /usr/local /usr; do test -e $f/include/dvs_fifo.h && echo $f && break; done`
-			if test -n "$DVS_PATH"; then
+			# search for libdvsoem.a in common locations
+			if test `uname -m` = "x86_64" ; then DVS_ARCH_PATH=linux-x86_64 ; else DVS_ARCH_PATH=linux-x86 ; fi
+			DVS_LIB_PATH=`for f in /usr/local/lib /usr/local/lib64 /usr/lib /usr/lib64 $HOME/sdk3.*/$DVS_ARCH_PATH/lib $HOME/sdk2.*/lib; do test -e $f/libdvsoem.a && echo $f && break; done`
+			if test -n "$DVS_LIB_PATH"; then
 				AC_MSG_RESULT([yes])
-				DVS_LDFLAGS="-L$DVS_PATH/lib -L$DVS_PATH/lib64 -ldvsoem"
+				DVS_LDFLAGS="-L$DVS_LIB_PATH -ldvsoem"
 			else 
 				if test -n "$DVSSDK"; then
 					# DVS SDK version 3		
@@ -116,13 +119,13 @@ AC_DEFUN([ACETAOTEST],
 #call ACETAOTEST func
 ACETAOTEST
 
-CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/player/jogshuttle -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
 CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-#LDFLAGS="$LDFLAGS -L$ACE_ROOT/lib -lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $WORKSPACE/common/libcommon.a $WORKSPACE/common/YUVlib/libYUVlib.a -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo $WORKSPACE/libMXF/examples/reader/libMXFReader.a $WORKSPACE/libMXF/examples/avidmxfinfo/libavidmxfinfo.a $WORKSPACE/libMXF/lib/libMXF.a -lavformat -lavcodec -lavutil -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio $DVS_LDFLAGS"
 LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lavidmxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lswscale -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio"
 LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/libMXF/lib -L$WORKSPACE/libMXF/examples/avidmxfinfo -L$WORKSPACE/libMXF/examples/archive/info -L$WORKSPACE/libMXF/examples/reader -L$WORKSPACE/common -L$WORKSPACE/common/YUVlib"
 LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"
 
 AC_SUBST(WX_LIBS)
+AC_SUBST(WORKSPACE)
 
 AC_OUTPUT(Makefile src/Makefile)

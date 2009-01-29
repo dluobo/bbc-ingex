@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.9 2008/10/22 09:32:19 john_f Exp $
+ * $Id: nexus_control.h,v 1.10 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -24,19 +24,21 @@
 #ifndef NEXUS_CONTROL_H
 #define NEXUS_CONTROL_H
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #ifndef _MSC_VER
 #include <pthread.h>
 #include <stdio.h>
 #define PTHREAD_MUTEX_LOCK(x) if (pthread_mutex_lock( x ) != 0 ) fprintf(stderr, "pthread_mutex_lock failed\n");
 #define PTHREAD_MUTEX_UNLOCK(x) if (pthread_mutex_unlock( x ) != 0 ) fprintf(stderr, "pthread_mutex_unlock failed\n");
-#endif
 
 #include <sys/time.h>		// gettimeofday() and struct timeval
+#else
+#include <ace/OS_NS_sys_time.h>
+#endif
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 typedef enum {
     FormatNone,                // Indicates off or disabled
@@ -139,18 +141,19 @@ typedef struct {
 	int				audio78_offset;		// offset to start of audio ch 7,8 samples (if used)
 	int				audio_size;			// size in bytes of all audio data (4/8 chans)
 										// including internal padding for DMA transfer
+	int				num_aud_samp_offset;// offset to count of audio samples (varies for NTSC)
 	int				signal_ok_offset;	// offset to flag for good input status
 	int				tick_offset;		// offset to "frame" tick (dvs field tick / 2)
 	int				ltc_offset;			// offset to start of LTC timecode data (int)
 	int				vitc_offset;		// offset to start of VITC timecode data (int)
 	int				sec_video_offset;	// offset to secondary video buffer
-	
-	
+
+
 #ifndef _MSC_VER
 	pthread_mutex_t	m_source_name_update;	// mutex for source_name_update
 #endif
 	int				source_name_update;		// incremented each time the source_name is changed
-	
+
 } NexusControl;
 
 
@@ -170,6 +173,7 @@ extern const char *nexus_capture_format_name(CaptureFormat fmt);
 // Return a char* string name for the NexusTimecode type
 extern const char *nexus_timecode_type_name(NexusTimecode tc_type);
 
+extern int nexus_lastframe_num_aud_samp(const NexusControl *pctl, uint8_t *ring[], int channel);
 extern int nexus_lastframe_signal_ok(const NexusControl *pctl, uint8_t *ring[], int channel);
 
 extern int nexus_lastframe_tc(const NexusControl *pctl, uint8_t *ring[], int channel, NexusTimecode tctype);

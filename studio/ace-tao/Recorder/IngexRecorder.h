@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.6 2008/09/04 15:38:44 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.7 2009/01/29 07:36:58 stuart_hc Exp $
  *
  * Class to manage an individual recording.
  *
@@ -96,16 +96,14 @@ public:
     IngexRecorder(RecorderImpl * impl, unsigned int index);
     ~IngexRecorder();
 
-    void Setup( framecount_t start_timecode,
-                const std::vector<bool> & channel_enables,
-                const std::vector<bool> & track_enables,
-                const char * project);
-
     bool CheckStartTimecode(
-                std::vector<bool> & channel_enables,
+                const std::vector<bool> & track_enables,
                 framecount_t & start_timecode,
                 framecount_t pre_roll,
                 bool crash_record);
+
+    void Setup( framecount_t start_timecode,
+                const prodauto::ProjectName & project_name);
 
     bool Start(void);
 
@@ -186,11 +184,8 @@ private:
 
 // Per-channel data
 // Enables
-    //bool mChannelEnable[MAX_CHANNELS];
-    //bool mTrackEnable[MAX_CHANNELS * 5];
     std::vector<bool> mChannelEnable;
     std::vector<bool> mTrackEnable;
-    unsigned int mTracksPerChannel;
 
 public:
 // MXF filenames
@@ -199,7 +194,6 @@ public:
     bool mRecordingOK;
     unsigned int mIndex;
 
-    //RecordOptions   record_opt[MAX_RECORD];
 private:
     ACE_Thread_Mutex mDroppedFramesMutex;
     bool mDroppedFrames;
@@ -213,12 +207,8 @@ private:
 // Per-thread data
     std::vector<ThreadParam> mThreadParams;
 
-    //ThreadInvokeArg invoke_arg[MAX_RECORD];
-    //std::vector<ACE_thread_t> mThreadIds;
-
 // Thread functions are friends
     friend ACE_THR_FUNC_RETURN start_record_thread(void *p_arg);
-    //friend ACE_THR_FUNC_RETURN start_quad_thread(void *p_arg);
     friend ACE_THR_FUNC_RETURN manage_record_thread(void *p_arg);
 
 };

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.9 2008/10/10 05:36:42 stuart_hc Exp $
+# $Id: Makefile,v 1.10 2009/01/29 07:36:59 stuart_hc Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -27,11 +27,11 @@ LIBS=-L../../common -lcommon
 OPT=-mmmx -msse2
 FLAGS=$(CFLAGS) $(INCLUDES) $(OPT) -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 
-# dvs_sdk_paths.mk searches for sdk and sets HARDWARE_INCLUDE and HARDWARE_LIB
+# dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
 # search is overridden by setting DVSSDK
 include ../../common/dvs_sdk_paths.mk
 
-ifdef HARDWARE_INCLUDE
+ifdef DVS_HARDWARE_INCLUDE
   SDI_PROGS=dvs_sdi dvs_dummy testgen
 else
   $(warning dvs_sdi will not be built)
@@ -49,7 +49,7 @@ nexus_control.o: nexus_control.h nexus_control.c
 	g++ $(FLAGS) -c nexus_control.c
 
 dvs_sdi: dvs_sdi.c nexus_control.h
-	g++ $(FLAGS) $(HARDWARE_INCLUDE) dvs_sdi.c $(HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
+	g++ $(FLAGS) $(DVS_HARDWARE_INCLUDE) dvs_sdi.c $(DVS_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
 
 dvs_dummy: dvs_sdi.c nexus_control.h ../
 	g++ $(FLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_dummy

@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.3 2008/10/22 09:32:19 john_f Exp $
+ * $Id: nexus_control.c,v 1.4 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -66,6 +66,14 @@ extern const char *nexus_timecode_type_name(NexusTimecode tc_type)
 	};
 
 	return names[tc_type];
+}
+
+extern int nexus_lastframe_num_aud_samp(const NexusControl *pctl, uint8_t *ring[], int channel)
+{
+	const NexusBufCtl *pc = &pctl->channel[channel];
+
+	return *(int*)(ring[channel] + pctl->elementsize * (pc->lastframe % pctl->ringlen)
+								+ pctl->num_aud_samp_offset);
 }
 
 extern int nexus_lastframe_signal_ok(const NexusControl *pctl, uint8_t *ring[], int channel)

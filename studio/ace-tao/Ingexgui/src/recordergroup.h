@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: recordergroup.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $         *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -50,6 +53,7 @@ class RecorderGroupCtrl : public wxListBox
 		const wxSortedArrayString & GetProjectNames();
 		void SetCurrentProjectName(const wxString &);
 		const wxString & GetCurrentProjectName();
+		const wxString & GetCurrentDescription();
 		void Deselect(unsigned int);
 		enum RecorderGroupCtrlEventType {
 			DISABLE_REFRESH,
@@ -90,6 +94,7 @@ class RecorderGroupCtrl : public wxListBox
 		const wxXmlDocument * mDoc;
 		wxSortedArrayString mProjectNames;
 		wxString mCurrentProject;
+		wxString mCurrentDescription;
 		DECLARE_EVENT_TABLE()
 };
 

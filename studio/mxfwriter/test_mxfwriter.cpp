@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.6 2009/01/23 20:08:20 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.7 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Tests the MXF writer
  *

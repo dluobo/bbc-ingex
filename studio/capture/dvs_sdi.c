@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.14 2009/01/23 19:54:50 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.15 2009/01/29 07:36:59 stuart_hc Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -77,9 +77,11 @@ NexusControl	*p_control = NULL;
 uint8_t			*ring[MAX_CHANNELS] = {0};
 int				control_id, ring_id[MAX_CHANNELS];
 int				width = 0, height = 0;
+int				frame_rate_numer = 0, frame_rate_denom = 0;
 int				element_size = 0, dma_video_size = 0, dma_total_size = 0;
 static int		audio_offset = 0, audio_size = 0, audio_pair_size = 0;
 int				ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
+int				num_aud_samp_offset = 0;
 CaptureFormat	video_format = Format422PlanarYUV;
 CaptureFormat	video_secondary_format = FormatNone;
 static int verbose = 0;
@@ -203,6 +205,32 @@ static int check_sdk_version3(void)
 	SV_CHECK( sv_close(sv) );
 
 	return result;
+}
+
+static void framerate_for_videomode(int videomode, int *p_numer, int *p_denom)
+{
+	int video = videomode & SV_MODE_MASK;		// mask off everything except video
+
+	if (video == SV_MODE_PAL || video == SV_MODE_SMPTE274_25I) {
+		*p_numer = 25;
+		*p_denom = 1;
+	}
+	else if (video == SV_MODE_NTSC || video == SV_MODE_SMPTE274_30I) {
+		*p_numer = 30000;
+		*p_denom = 1001;
+	}
+	else if (video == SV_MODE_SMPTE296_50P) {
+		*p_numer = 50;
+		*p_denom = 1;
+	}
+	else if (video == SV_MODE_SMPTE296_60P) {
+		*p_numer = 60000;
+		*p_denom = 1001;
+	}
+	else {
+		*p_numer = 25;
+		*p_denom = 1;
+	}
 }
 
 static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
@@ -434,8 +462,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 
 	p_control->width = width;
 	p_control->height = height;
-	p_control->frame_rate_numer = 25;
-	p_control->frame_rate_denom = 1;
+	p_control->frame_rate_numer = frame_rate_numer;
+	p_control->frame_rate_denom = frame_rate_denom;
 	p_control->pri_video_format = video_format;
 	p_control->sec_video_format = video_secondary_format;
 	p_control->master_tc_type = master_type;
@@ -456,6 +484,7 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	p_control->vitc_offset = vitc_offset;
 	p_control->ltc_offset = ltc_offset;
 	p_control->signal_ok_offset = signal_ok_offset;
+	p_control->num_aud_samp_offset = num_aud_samp_offset;
 	p_control->sec_video_offset = dma_video_size + audio_size;
 
 	p_control->source_name_update = 0;
@@ -771,6 +800,11 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
 	// Set signal_ok flag
 	*(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
+
+	// Set number of audio samples captured into ring element (not constant for NTSC)
+	// audio[0].size is total size in bytes of 2 channels of 32bit samples
+	int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
+	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + num_aud_samp_offset, &num_audio_samples, sizeof(int));
 
 	// Get info structure for statistics
 	sv_fifo_info info;
@@ -1113,7 +1147,7 @@ int main (int argc, char ** argv)
 	int				n, max_channels = MAX_CHANNELS;
 	long long		opt_max_memory = 0;
 	const char		*logfiledir = ".";
-	int				opt_video_mode = -1;
+	int				opt_video_mode = -1, current_video_mode = -1;
 	int				opt_sync_type = -1;
 
 	time_t now;
@@ -1483,7 +1517,9 @@ int main (int argc, char ** argv)
 			if (res == SV_OK)
 			{
 				sv_status(a_sv[channel], &status_info);
-				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+				sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
+				framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
+				logTF("card %d: device present (%dx%d videomode=0x%08X rate=%d/%d)\n", card, status_info.xsize, status_info.ysize, current_video_mode, frame_rate_numer, frame_rate_denom);
 
 				if (width == 0)
 				{
@@ -1589,7 +1625,9 @@ int main (int argc, char ** argv)
 			if (res == SV_OK)
 			{
 				sv_status(a_sv[card], &status_info);
-				logTF("card %d: device present (%dx%d)\n", card, status_info.xsize, status_info.ysize);
+				sv_query(a_sv[card], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
+				framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
+				logTF("card %d: device present (%dx%d videomode=0x%08X rate=%d/%d)\n", card, status_info.xsize, status_info.ysize, current_video_mode, frame_rate_numer, frame_rate_denom);
 				num_sdi_threads++;
 				if (width == 0)
 				{
@@ -1647,10 +1685,11 @@ int main (int argc, char ** argv)
 
 	// audio_size is greater than 1920 * 4 * (4 or 8)
 	// so we use the spare bytes at end for timecode
-	vitc_offset         = audio_offset + audio_size - sizeof(int);
+	vitc_offset         = audio_offset + audio_size - 1 * sizeof(int);
 	ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
 	tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
 	signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
+	num_aud_samp_offset = audio_offset + audio_size - 5 * sizeof(int);
 
 	// Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
 	int secondary_video_size = width*height*3/2;
