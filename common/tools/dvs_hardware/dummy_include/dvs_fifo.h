@@ -124,6 +124,7 @@ int sv_fifo_getbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer ** pbuffer
 int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer, sv_fifo_bufferinfo * bufferinfo);
 int sv_fifo_stop(sv_handle * sv, sv_fifo * pfifo, int flags);
 int sv_fifo_status(sv_handle * sv, sv_fifo * pfifo, sv_fifo_info * pinfo);
+int sv_fifo_wait(sv_handle * sv, sv_fifo * pfifo);
 int sv_fifo_reset(sv_handle * sv, sv_fifo * pfifo);
 
 #ifdef __cplusplus

@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.5 2009/01/23 20:10:51 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.6 2009/01/29 07:02:25 stuart_hc Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -62,6 +62,9 @@ typedef struct {
 	int channel;
 	int width;
 	int height;
+	int frame_rate_numer;
+	int frame_rate_denom;
+	int videomode;
 	int frame_size;
 	int frame_count;
 	int dropped;
@@ -150,6 +153,45 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 	pbuffer->anctimecode.dvitc_tc[1] = (dvs->tc_quality == DvsTcLTC) ? 0 : dvs_tc;
 	pbuffer->anctimecode.dltc_tc = (dvs->tc_quality == DvsTcVITC) ? 0 : dvs_tc;
 
+	// For NTSC audio, vary the number of samples in a 5 frame sequence of:
+	// 1602, 1602, 1602, 1602, 1600 (found by experiment using DVS cards)
+	//
+	// Other formats:
+	// 1920 fixed					- PAL and SMPTE274/25I (1920x1080i50)
+	//  960 fixed					- SMPTE296/50P (1280x720p50)
+	// 1600 fixed					- SMPTE274/30I (60Hz interlaced)
+	// 1602, 1602, 1602, 1602, 1600	- SMPTE274/29I (59.94Hz interlaced)
+	//  800 fixed					- SMPTE296/60P (1280x720p60)
+	//  802, 800, 802, 800, 800		- SMPTE296/59P (1280x720p59.94)
+	int num_samples = 1920;
+	switch (dvs->videomode) {
+		case SV_MODE_NTSC:
+			num_samples = (dvs->frame_count % 5 == 0) ? 1600 : 1602;
+			break;
+		case SV_MODE_SMPTE274_25I:
+			num_samples = 1920;
+			break;
+		case SV_MODE_SMPTE274_29I:
+			num_samples = (dvs->frame_count % 5 == 0) ? 1600 : 1602;
+			break;
+		case SV_MODE_SMPTE274_30I:
+			num_samples = 1600;
+			break;
+		case SV_MODE_SMPTE296_50P:
+			num_samples = 960;
+			break;
+		case SV_MODE_SMPTE296_59P:
+			num_samples = (dvs->frame_count % 5 == 0 ||
+							dvs->frame_count % 5 == 2) ? 802 : 800;
+			break;
+		case SV_MODE_SMPTE296_60P:
+			num_samples = 800;
+			break;
+	}
+
+	// audio size is samples *2 (channels) *4 (32bit)
+	dvs->fifo_buffer.audio[0].size = num_samples * 2 * 4;
+
 	// Burn timecode in video at x,y offset 40,40
 	burn_mask_uyvy(dvs->frame_count, 40, 40, dvs->width, dvs->height, (unsigned char *)pbuffer->dma.addr);
 
@@ -162,12 +204,14 @@ int sv_fifo_putbuffer(sv_handle * sv, sv_fifo * pfifo, sv_fifo_buffer * pbuffer,
 
 	// Simulate typical behaviour of capture fifo by sleeping until next
 	// expected frame boundary. The simulated hardware clock is the system
-	// clock, with frames captured at every 40000 microsecond boundary since
-	// the initialisation of dvs->start_time.
+	// clock, with frames captured at every 40000 (for PAL) microsecond
+	// boundary since the initialisation of dvs->start_time.
 	int64_t diff = tv_diff_microsecs(&dvs->start_time, &now_time);
-	int64_t expected_diff = 40000 * dvs->frame_count;
-	if (expected_diff > diff)
+	int64_t expected_diff = (int64_t)dvs->frame_count * dvs->frame_rate_denom * 1000000 / dvs->frame_rate_numer;
+	if (expected_diff > diff) {
+		//printf("%dx%d usleep(%lld)\n", dvs->width, dvs->height, expected_diff - diff);
 		usleep(expected_diff - diff);
+	}
 
 #ifdef DVSDUMMY_LOGGING
 	if (dvs->log_fp)
@@ -193,6 +237,10 @@ int sv_fifo_status(sv_handle * sv, sv_fifo * pfifo, sv_fifo_info * pinfo)
 
 	return SV_OK;
 }
+int sv_fifo_wait(sv_handle * sv, sv_fifo * pfifo)
+{
+	return SV_OK;
+}
 int sv_fifo_reset(sv_handle * sv, sv_fifo * pfifo)
 {
 	return SV_OK;
@@ -200,6 +248,12 @@ int sv_fifo_reset(sv_handle * sv, sv_fifo * pfifo)
 
 int sv_query(sv_handle * sv, int cmd, int par, int *val)
 {
+	DvsCard *dvs = (DvsCard*)sv;
+
+	if (cmd == SV_QUERY_MODE_CURRENT) {
+		*val = dvs->videomode;
+		return SV_OK;
+	}
 	*val = SV_OK;
 	return SV_OK;
 }
@@ -267,6 +321,9 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	// Default is PAL width & height
 	dvs->width = 720;
 	dvs->height = 576;
+	dvs->frame_rate_numer = 25;
+	dvs->frame_rate_denom = 1;
+	dvs->videomode = SV_MODE_PAL;
 
 	// A ring buffer can be used for sample video and audio loaded from files
 	FILE *fp_video = NULL, *fp_audio = NULL;
@@ -276,7 +333,7 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	// Check DVSDUMMY_PARAM environment variable and change defaults if necessary.
 	// The value is a ':' separated list of parameters such as:
 	//
-	// video=1920x1080
+	// video=1920x1080i50 or 1920x1080i60 or 1280x720p50 or 1280x720p60 or NTSC
 	// good_tc=A/L/V
 	// vidfile=filename.uyvy			// UYVY 4:2:2
 	// audfile=filename.pcm				// 16bit stereo pair at 48kHz
@@ -297,13 +354,55 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 				param[len] = '\0';
 			}
 
-			printf("param[%s]\n", param);
+			printf("DVSDUMMY: processing param[%s]\n", param);
 
-			if (strncmp(param, "video=", strlen("video=")) == 0) {
-				int tmpw, tmph;
-				if (sscanf(param, "video=%dx%d", &tmpw, &tmph) == 2) {
+			if (strncmp(param, "help", strlen("help")) == 0) {
+				printf("DVSDUMMY: valid arguments are:\n");
+				printf("video=NTSC\n");
+				printf("video=1920x1080i50\n");
+				printf("video=1920x1080i60\n");
+				printf("video=1280x720p50\n");
+				printf("video=1280x720p60\n");
+				printf("vidfile=filename.uyvy\n");
+				printf("audfile=filename.pcm (16bit 48kHz audio)\n");
+				printf("good_tc=A/L/V (A=All, L=LTC, V=VITC)\n");
+			}
+			else if (strncmp(param, "video=", strlen("video=")) == 0) {
+				int tmpw, tmph, rate;
+				char ff;
+				if (strcmp(param, "video=NTSC") == 0) {
+					dvs->width = 720;
+					dvs->height = 480;
+					dvs->frame_rate_numer = 30000;
+					dvs->frame_rate_denom = 1001;
+					dvs->videomode = SV_MODE_NTSC;
+				}
+				else if (sscanf(param, "video=%dx%d%c%d", &tmpw, &tmph, &ff, &rate) == 4) {
 					dvs->width = tmpw;
 					dvs->height = tmph;
+					if (ff == 'p' && rate == 50) {
+						dvs->frame_rate_numer = 50;
+						dvs->frame_rate_denom = 1;
+						dvs->videomode = SV_MODE_SMPTE296_50P;
+					}
+					else if (ff == 'p' && rate == 60) {
+						dvs->frame_rate_numer = 60000;
+						dvs->frame_rate_denom = 1001;
+						dvs->videomode = SV_MODE_SMPTE296_60P;
+					}
+					else if (ff == 'i' && rate == 50) {
+						dvs->frame_rate_numer = 25;
+						dvs->frame_rate_denom = 1;
+						dvs->videomode = SV_MODE_SMPTE274_25I;
+					}
+					else if (ff == 'i' && rate == 60) {
+						dvs->frame_rate_numer = 30000;
+						dvs->frame_rate_denom = 1001;
+						dvs->videomode = SV_MODE_SMPTE274_30I;
+					}
+				}
+				else {
+					fprintf(stderr, "DVSDUMMY_PARAM: unsupported %s\n", param);
 				}
 			}
 			else if (strncmp(param, "good_tc=", strlen("good_tc=")) == 0) {

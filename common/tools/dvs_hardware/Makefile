@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.3 2008/10/08 10:17:39 john_f Exp $
+# $Id: Makefile,v 1.4 2009/01/29 07:02:25 stuart_hc Exp $
 #
 # Makefile for building DVS hardware capture & playout tools
 #
@@ -29,16 +29,16 @@ FLAGS=$(CFLAGS) $(OPT)
 SDI_PROGS=recplay playout record record_mxf playout_non_mt check_inputs
 PROGS=$(SDI_PROGS)
 
-# dvs_sdk_paths.mk searches for sdk and sets HARDWARE_INCLUDE and HARDWARE_LIB
+# dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
 # search is overridden by setting DVSSDK
 include ../../dvs_sdk_paths.mk
 
-ifndef HARDWARE_INCLUDE
+ifndef DVS_HARDWARE_INCLUDE
   $(info SDI tools will not be built)
   PROGS=
 endif
 
-INCLUDE=-I../.. -I.. $(HARDWARE_INCLUDE)
+INCLUDE=-I../.. -I.. $(DVS_HARDWARE_INCLUDE)
 
 
 .PHONY: all
@@ -49,22 +49,22 @@ libdvsoem_dummy.a: dvsoem_dummy.c
 	ar crv libdvsoem_dummy.a dvsoem_dummy.o
 	
 playout: playout.c
-	g++ $(FLAGS) $(INCLUDE) playout.c $(HARDWARE_LIB) -lpthread -o playout
+	g++ $(FLAGS) $(INCLUDE) playout.c $(DVS_HARDWARE_LIB) -lpthread -o playout
 
 record: record.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) record.c ../../libcommon.a $(HARDWARE_LIB) -lpthread -o record
+	g++ $(FLAGS) -I. $(INCLUDE) record.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -o record
 
 record_mxf: record_mxf.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) -I../../../libMXF/lib/include -I../../../libMXF/examples/archive -I../../../libMXF/examples/archive/write record_mxf.c ../../libcommon.a $(HARDWARE_LIB) -lpthread -L../../../libMXF/examples/archive/write -L../../../libMXF/lib -lwritearchivemxf -lMXF -luuid -o record_mxf
+	g++ $(FLAGS) -I. $(INCLUDE) -I../../../libMXF/lib/include -I../../../libMXF/examples/archive -I../../../libMXF/examples/archive/write record_mxf.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -L../../../libMXF/examples/archive/write -L../../../libMXF/lib -lwritearchivemxf -lMXF -luuid -o record_mxf
 
 recplay: recplay.c ../../libcommon.a
-	g++ $(FLAGS) -I. $(INCLUDE) recplay.c ../../libcommon.a $(HARDWARE_LIB) -lpthread -lncurses -o recplay
+	g++ $(FLAGS) -I. $(INCLUDE) recplay.c ../../libcommon.a $(DVS_HARDWARE_LIB) -lpthread -lncurses -o recplay
 
 playout_non_mt: playout_non_mt.c
-	g++ $(FLAGS) $(INCLUDE) playout_non_mt.c $(HARDWARE_LIB) -lpthread -o playout_non_mt
+	g++ $(FLAGS) $(INCLUDE) playout_non_mt.c $(DVS_HARDWARE_LIB) -lpthread -o playout_non_mt
 
 check_inputs: check_inputs.c
-	g++ $(FLAGS) $(INCLUDE) check_inputs.c $(HARDWARE_LIB) -o check_inputs
+	g++ $(FLAGS) $(INCLUDE) check_inputs.c $(DVS_HARDWARE_LIB) -o check_inputs
 
 clean:
 	rm -f $(SDI_PROGS) *.o libdvsoem_dummy.a
