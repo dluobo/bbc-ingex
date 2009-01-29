@@ -1,4 +1,4 @@
-// $Id: disk_rw_benchmark.c,v 1.1 2008/05/07 17:04:19 philipn Exp $
+// $Id: disk_rw_benchmark.c,v 1.2 2009/01/29 06:58:46 stuart_hc Exp $
 
 // fseeko() requires _LARGEFILE_SOURCE defined before including stdio.h
 #if ! defined(_LARGEFILE_SOURCE) && ! defined(_FILE_OFFSET_BITS)
@@ -58,7 +58,7 @@ static void usage_exit(void)
 {
 	fprintf(stderr, "disk_rw_benchmark [-o output] [input]\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "    -l <MBps_rate>      limit read/write rate to MBps rate\n");
+	fprintf(stderr, "    -l <MByte/s_rate>      limit read/write rate to MByte/s rate\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Before read testing you may wish to execute the following to flush caches\n");
 	fprintf(stderr, "  sync\n");
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
 			double diff_last = tv_diff_microsecs(&last_time, &now_time);
 			double rate_inst = written / diff_last * 1000000.0 / 1000000.0;	// megabytes per sec
 
-			printf("written %12llu, av rate=%10.3fMBps, inst rate=%10.3f\n", total_written, rate, rate_inst);
+			printf("written %12llu, av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_written, rate, rate_inst);
 			last_time = now_time;
 
 			if (rate_limit) {		// throttle write rate
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 			double diff_last = tv_diff_microsecs(&last_time, &now_time);
 			double rate_inst = read / diff_last * 1000000.0 / 1000000.0;	// megabytes per sec
 
-			printf("read %12llu, av rate=%10.3fMBps, inst rate=%10.3f\n", total_read, rate, rate_inst);
+			printf("read %12llu, av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_read, rate, rate_inst);
 			last_time = now_time;
 
 			if (rate_limit) {		// throttle reading rate
