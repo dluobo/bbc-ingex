@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.12 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: recorder_functions.cpp,v 1.13 2009/02/05 19:58:33 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -941,7 +941,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         for (std::vector<unsigned int>::const_iterator
             it = channels_in_use.begin(); it != channels_in_use.end(); ++it)
         {
-            while (IngexShm::Instance()->LastFrame(*it) == lastsaved[*it])
+            while ((IngexShm::Instance()->LastFrame(*it) % ring_length) == (lastsaved[*it] % ring_length))
             {
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms for channel %d\n"), src_name.c_str(), sleep_ms, *it));
                 ACE_OS::sleep(ACE_Time_Value(0, sleep_ms * 1000));
@@ -960,6 +960,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
         }
 
+        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("frames_to_code=%d\n"), frames_to_code));
 
         IngexShm::Instance()->InfoSetBacklog(channel_i, p_opt->index, quad_video, frames_to_code);
 
