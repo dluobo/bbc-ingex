@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.10 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.11 2009/02/09 19:16:02 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -26,6 +26,9 @@
 #include <cstdlib>
 #include <memory>
 #include <cstring>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 
 #include "LocalIngexPlayer.h"
 #include "IngexPlayerListener.h"
@@ -53,12 +56,12 @@ public:
 
     virtual void frameDisplayedEvent(const FrameInfo* frameInfo)
     {
-        printf("Frame %lld displayed\n", frameInfo->position);
+        printf("Frame %"PRIi64" displayed\n", frameInfo->position);
     }
 
     virtual void frameDroppedEvent(const FrameInfo* lastFrameInfo)
     {
-        printf("Frame %lld dropped\n", lastFrameInfo->position);
+        printf("Frame %"PRIi64" dropped\n", lastFrameInfo->position);
     }
 
     virtual void stateChangeEvent(const MediaPlayerStateEvent* event)
@@ -84,12 +87,12 @@ public:
 
     virtual void endOfSourceEvent(const FrameInfo* lastReadFrameInfo)
     {
-        printf("End of source reached (%lld)\n", lastReadFrameInfo->position);
+        printf("End of source reached (%"PRIi64")\n", lastReadFrameInfo->position);
     }
 
     virtual void startOfSourceEvent(const FrameInfo* firstReadFrameInfo)
     {
-        printf("Start of source reached (%lld)\n", firstReadFrameInfo->position);
+        printf("Start of source reached (%"PRIi64")\n", firstReadFrameInfo->position);
     }
 
     virtual void playerCloseRequested()
