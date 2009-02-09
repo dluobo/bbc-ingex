@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.15 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: dvs_sdi.c,v 1.16 2009/02/09 19:30:56 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -301,14 +301,18 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
 					{
 						logTF("card %d: failed opening second channel: %s\n", card, sv_geterrortext(res));
 					}
+					sv_close(a_sv[channel-2]);
+				}
+				else
+				{
+					sv_close(a_sv[channel-1]);
 				}
 			}
 			else
 			{
 				logTF("card %d: multichannel mode off\n", card);
+				sv_close(a_sv[channel-1]);
 			}
-
-			sv_close(a_sv[channel-2]);
 		}
 		else
 		{
@@ -908,12 +912,17 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 
 			// Increment timecode by 1 for dummy frames after the first
 			if (i > 0) {
-				last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
-				last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+				if (pc->lastframe >= 0) {
+					last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
+					last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+				}
 				last_vitc++;
 				last_ltc++;
 			}
-			int last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + tick_offset);
+			int last_ftk = 0;
+			if (pc->lastframe >= 0) {
+				last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + tick_offset);
+			}
 			last_ftk++;
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &last_vitc, sizeof(int));
 			memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &last_ltc, sizeof(int));
