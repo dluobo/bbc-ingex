@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.9 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: RecorderImpl.cpp,v 1.10 2009/02/09 19:18:17 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -692,6 +692,20 @@ bool RecorderImpl::UpdateFromDatabase()
     ok = ok && SetSourcePackages();
 
     return ok;
+}
+
+HardwareTrack RecorderImpl::TrackHwMap(long id)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mTrackMapMutex);
+
+    return mTrackMap[id];
+}
+
+unsigned int RecorderImpl::TrackIndexMap(long id)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mTrackIndexMapMutex);
+
+    return mTrackIndexMap[id];
 }
 
 

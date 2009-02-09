@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.4 2008/09/03 13:43:34 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.5 2009/02/09 19:18:17 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -55,6 +55,7 @@ struct EncodeParams
     bool bitc;
     std::string dir;
     std::string dest;
+    int copy_priority;
 };
 
 

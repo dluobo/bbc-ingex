@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: CopyManager.cpp,v 1.6 2009/02/09 19:18:17 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -70,9 +70,10 @@ void CopyManager::ClearSrcDest()
     mArgs.clear();
 }
 
-void CopyManager::AddSrcDest(const std::string & src, const std::string & dest)
+void CopyManager::AddSrcDest(const std::string & src, const std::string & dest, int priority)
 {
     // Only applicable to CopyMode::NEW
+    // priority not yet supported
     if (!src.empty() && !dest.empty())
     {
         mArgs += " \"";

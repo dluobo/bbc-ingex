@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.h,v 1.3 2008/09/03 13:43:33 john_f Exp $
+ * $Id: CopyManager.h,v 1.4 2009/02/09 19:18:17 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -40,7 +40,7 @@ public:
     void Command(const std::string & command);
     void RecorderName(const std::string & s);
     void ClearSrcDest();
-    void AddSrcDest(const std::string & src, const std::string & dest);
+    void AddSrcDest(const std::string & src, const std::string & dest, int priority);
     void StartCopying(unsigned int index);
     void StopCopying(unsigned int index);
 

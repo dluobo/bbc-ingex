@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.9 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: RecorderImpl.h,v 1.10 2009/02/09 19:18:17 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -162,6 +162,16 @@ public:
     int Fps() { return mFps; }
     bool Df() { return mDf; }
   
+public:
+// thread safe accessors for maps
+    HardwareTrack TrackHwMap(long id);
+    unsigned int TrackIndexMap(long id);
+
+private:
+// mutexes to protect maps
+    ACE_Thread_Mutex mTrackMapMutex;
+    ACE_Thread_Mutex mTrackIndexMapMutex;
+
 public:
 // data which needs to be visible to clases such as IngexRecorder
     ProdAuto::TrackList_var mTracks;

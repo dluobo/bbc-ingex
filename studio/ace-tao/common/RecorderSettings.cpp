@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.4 2008/09/03 13:43:34 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.5 2009/02/09 19:18:17 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -181,6 +181,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.bitc = encode1_bitc;
         ep.dir = encode1_dir;
         ep.dest = encode1_dest;
+        ep.copy_priority = 2; // hard-coded for now
         encodings.push_back(ep);
     }
     if (encode2_resolution)
@@ -192,6 +193,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.bitc = encode2_bitc;
         ep.dir = encode2_dir;
         ep.dest = encode2_dest;
+        ep.copy_priority = 1; // hard-coded for now
         encodings.push_back(ep);
     }
     if (quad_resolution)
@@ -203,6 +205,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.bitc = quad_bitc;
         ep.dir = quad_dir;
         ep.dest = quad_dest;
+        ep.copy_priority = 2; // hard-coded for now
         encodings.push_back(ep);
     }
 #if 0
