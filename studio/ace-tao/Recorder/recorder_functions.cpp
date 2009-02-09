@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.13 2009/02/05 19:58:33 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.14 2009/02/09 19:26:29 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -72,8 +72,6 @@ const bool DEBUG_NOWRITE = false;
     IngexShm::Instance()->InfoSetRecordError(channel_i, p_opt->index, quad_video, fmt, ## args); }
 
 
-const char PATH_SEPARATOR = '/';
-
 /**
 Thread function to encode and record a particular source.
 */
@@ -120,7 +118,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         (stc = sc->trackConfigs[0]) != 0 &&
         stc->dataDef == PICTURE_DATA_DEFINITION)
     {
-        channel_i = p_impl->mTrackMap[stc->getDatabaseID()].channel;
+        channel_i = p_impl->TrackHwMap(stc->getDatabaseID()).channel;
     }
 #else
     // Recording the input identified by p_opt->channel_num
@@ -174,6 +172,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Set Source name
     src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[channel_i]);
 #endif
+
+    // Note the recording location
+    long location_id = 0;
+    if (sc)
+    {
+        location_id = sc->recordingLocation;
+    }
+    std::string location;
+    if (location_id)
+    {
+        // Here we need a database method to get the name from the id
+        std::ostringstream ss;
+        ss << "location " << location_id;
+        location = ss.str();
+    }
 
     // ACE logging to file
     std::ostringstream id;
@@ -482,7 +495,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // For each track in mp, we keep a record of corresponding
     // hardware track.
-    //std::vector<HardwareTrack> mp_hw_trks;
+    std::vector<HardwareTrack> mp_hw_trks;
 
     // For each track in mp, we keep a record of corresponding
     // SourceTrackConfig database id
@@ -498,7 +511,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Get HardwareTrack based on SourceTrackConfig database id;
             prodauto::SourceTrackConfig * stc = sc->trackConfigs[i];
             mp_stc_dbids.push_back(stc->getDatabaseID());
-            //mp_hw_trks.push_back(p_impl->mTrackMap[stc->getDatabaseID()]);
+            mp_hw_trks.push_back(p_impl->TrackHwMap(stc->getDatabaseID()));
 
             // Material package track
             prodauto::Track * mp_trk = new prodauto::Track();
@@ -829,7 +842,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
             // Now need to find out which member of mTracks we are dealing with
-            unsigned int track_index = p_impl->mTrackIndexMap[mp_stc_dbids[i]];
+            unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
             p_rec->mFileNames[track_index] = fname;
         }
     }
@@ -909,7 +922,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     //framecount_t last_tc = IngexShm::Instance()->Timecode(channel_i, lastsaved[channel_i]);
     // Timecode value from first track (usually video).
     //HardwareTrack tc_hw = mp_hw_trks[0];
-    HardwareTrack tc_hw = p_impl->mTrackMap[mp_stc_dbids[0]];
+    HardwareTrack tc_hw = p_impl->TrackHwMap(mp_stc_dbids[0]);
     framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastsaved[tc_hw.channel]);
 
 
@@ -1039,8 +1052,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 void * p = 0;
                 prodauto::Track * mp_trk = mp->tracks[i];
-                //HardwareTrack hw = mp_hw_trks[i];
-                HardwareTrack hw = p_impl->mTrackMap[mp_stc_dbids[i]];
+#if 1
+                // Just to be slightly more efficient, avoid
+                // accessing the TrackHwMap in this loop.
+                HardwareTrack hw = mp_hw_trks[i];
+#else
+                HardwareTrack hw = p_impl->TrackHwMap(mp_stc_dbids[i]);
+#endif
 
                 if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
                 {
@@ -1401,6 +1419,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Get user comments (only available after stop)
     p_rec->GetMetadata(project_name, user_comments);
+
+    // Add a user comment for recording location
+    user_comments.push_back(
+        prodauto::UserComment(AVID_UC_LOCATION_NAME, location.c_str(), STATIC_COMMENT_POSITION, 0));
 
 
     // Complete MXF writing and save packages to database
