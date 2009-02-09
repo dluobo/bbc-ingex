@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
 #include <signal.h>
@@ -179,7 +180,7 @@ extern int main(int argc, char *argv[])
 			int owner_dead = 0;
 			if (kill(pctl->owner_pid, 0) == -1 && errno != EPERM)
 				owner_dead = 1;
-			printf("heartbeat stopped, owner_pid(%d) %s, heartbeat diff=%lldmicrosecs\n", pctl->owner_pid, owner_dead ? "dead" : "alive", diff);
+			printf("heartbeat stopped, owner_pid(%d) %s, heartbeat diff=%"PRIi64"microsecs\n", pctl->owner_pid, owner_dead ? "dead" : "alive", diff);
 		}
 		
 		for (i = 0; i < pctl->channels; i++)
