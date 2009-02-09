@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.7 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: IngexRecorder.h,v 1.8 2009/02/09 19:23:03 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -40,6 +40,9 @@
 const char * const SOURCE_NAME[] = {
     "input0", "input1", "input2", "input3", "input4", "input5", "input6", "input7" };
 const char * const QUAD_NAME = "quad";
+
+// Path separator.  It would be different for Windows.
+const char PATH_SEPARATOR = '/';
 
 
 // This interval ensures that timecode found during CheckStartTimecode() is still

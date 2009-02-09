@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: IngexRecorder.cpp,v 1.9 2009/02/09 19:23:03 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -46,14 +46,17 @@
 #define max(a,b) (((a)>(b))?(a):(b))
 #define min(a,b) (((a)<(b))?(a):(b))
 
+const bool USE_PROJECT_SUBDIR = true;
+
 static void clean_filename(std::string & filename)
 {
     const std::string allowed_chars = "0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const char replacement_char = '_';
 
     size_t pos;
     while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
     {
-        filename.replace(pos, 1, "-");
+        filename.replace(pos, 1, 1, replacement_char);
     }
 }
 
@@ -321,6 +324,7 @@ void IngexRecorder::Setup(
     // Store project name
     mProjectName = project_name;
 
+
     // Get current recorder settings
     RecorderSettings * settings = RecorderSettings::Instance();
     settings->Update(mpImpl->Recorder());
@@ -358,18 +362,28 @@ void IngexRecorder::Setup(
 
     // Create any needed paths.
     // NB. Paths need to be same as those used in recorder_fucntions.cpp
-    for (std::vector<EncodeParams>::const_iterator it = settings->encodings.begin();
+    for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
         it != settings->encodings.end(); ++it)
     {
+        if (USE_PROJECT_SUBDIR)
+        {
+            std::string project_subdir = mProjectName.name;
+            clean_filename(project_subdir);
+            it->dir += PATH_SEPARATOR;
+            it->dir += project_subdir;
+            it->dest += PATH_SEPARATOR;
+            it->dest += project_subdir;
+        }
+
         FileUtils::CreatePath(it->dir);
         // For MXF we also use "creating" and "failures" directories
         if (it->file_format == MXF_FILE_FORMAT_TYPE)
         {
             std::ostringstream creating_path;
-            creating_path << it->dir << '/' << settings->mxf_subdir_creating;
+            creating_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_creating;
             FileUtils::CreatePath(creating_path.str());
             std::ostringstream failures_path;
-            failures_path << it->dir << '/' << settings->mxf_subdir_failures;
+            failures_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_failures;
             FileUtils::CreatePath(failures_path.str());
         }
     }
@@ -466,6 +480,10 @@ void IngexRecorder::Setup(
         it->p_opt->file_ident = ident;
     }
 
+    // Set up some of the user comments
+    mUserComments.clear();
+    mUserComments.push_back(
+        prodauto::UserComment(AVID_UC_SHOOT_DATE_NAME, date.c_str(), STATIC_COMMENT_POSITION, 0));
 }
 
 
@@ -531,7 +549,7 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
         Timecode(stop_timecode, mFps, mDf).Text(), post_roll));
 
-    mUserComments.clear();
+    // Store description
     mUserComments.push_back(
         prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description, STATIC_COMMENT_POSITION, 0));
 
