@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.9 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.10 2009/02/09 19:28:20 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -333,6 +333,9 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
             // Remember last cut for when we start a new recording
             mLastSrc = src_name;
             mLastTc = tc;
+            mLastYear = year;
+            mLastMonth = month;
+            mLastDay = day;
 
             //save if file is open
             if (mpFile != 0)
