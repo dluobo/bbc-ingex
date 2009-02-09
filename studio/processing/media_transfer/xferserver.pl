@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $                          *
+# * $Id: xferserver.pl,v 1.6 2009/02/09 19:34:56 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -525,8 +525,7 @@ sub childLoop {
  my $retry = 0;
  my $msgs = 1; #print the idle message the first time round
  while (1) {
-
-	#wait for main thread or retry
+	#wait for main thread or retry interval
 	my $rin = "";
 	vec($rin, fileno(STDIN), 1) = 1;
 	if (!select $rin, undef, $rin, $retry ? RECHECK_INTERVAL : undef) {
@@ -556,7 +555,7 @@ sub childLoop {
 		foreach (sort keys %pairs) {
 			if (!opendir(SRC, $_)) {
 				Report("WARNING: failed to open source directory '$_/': $!: ignoring\n");
-				$$priRetry = 1;
+				$priRetry = 1;
 				$msgs = 1;
 			}
 			else {
@@ -660,18 +659,19 @@ sub childLoop {
 				# get progress from the copy while waiting for it to finish
 				my $buf;
 				my $signalled = 0;
-				while (sysread(COPYCHILD, $buf, 100)) { # can't use <> because there aren't any newlines
+				while (sysread(COPYCHILD, $buf, 100)) { # can't use <> because there aren't any intermediate newlines
 					if (!$signalled) { # first time the copy prog has printed anything so it's just come alive
 						$signalled = 1; # only need to do this once
-						kill 'USR2', $cpPid unless $transfers->{limit}; #switch to fast copying
+						kill 'USR2', $cpPid unless $transfers->{limit}; # switch to fast copying
 					}
 					$childMsgs .= $buf;
-					if ($childMsgs =~ /(\d+)%/) {
+					if ($childMsgs =~ /(\d+)%/) { # % complete
 						$share->lock(LOCK_EX);
 						$transfers = thaw($share->fetch);
 						$transfers->{current}{fileProgress} = $1;
 						$share->store(freeze $transfers);
 						$share->unlock;
+						$childMsgs =~ s/ *\n//s; # remove the blanking string and newline from the last thing printed, so we can add stuff on the same line
 						print $childMsgs;
 						$childMsgs = '';
 					}
@@ -704,7 +704,7 @@ sub childLoop {
 				$priRetry = 1;
 				last; # have to abandon the whole priority or it would break the ctime order
 			}
-			print " Done\n";
+			print " Done                              \n";
 			# update stats
 			$share->lock(LOCK_EX);
 			$transfers = thaw($share->fetch);
@@ -742,7 +742,7 @@ sub childLoop {
 		}
 		$retry |= $priRetry;
 	} # priorities loop
-	# remove temp incoming directoris
+	# remove temp incoming directories
 	foreach (keys %incomingDirs) {
 		rmdir;
 	}
@@ -751,7 +751,7 @@ sub childLoop {
 		if ($retry) {
 			Report('Pausing for ' . RECHECK_INTERVAL . " seconds before retrying.\n\n");
 		}
-		else {
+		elsif (!$transfers->{new}) {
 			print "Idle.\n\n";
 		}
 	}
