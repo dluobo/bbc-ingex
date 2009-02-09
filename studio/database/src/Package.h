@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.4 2008/09/03 14:27:23 john_f Exp $
+ * $Id: Package.h,v 1.5 2009/02/09 19:20:33 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -38,6 +38,7 @@
 #define AVID_UC_COMMENTS_NAME       "Comments"
 #define AVID_UC_DESCRIPTION_NAME    "Descript"
 #define AVID_UC_SHOOT_DATE_NAME     "Shoot Date"
+#define AVID_UC_LOCATION_NAME       "Location"
 
 #define STATIC_COMMENT_POSITION     (-1)
 #define POSITIONED_COMMENT_NAME     "Comment" 
