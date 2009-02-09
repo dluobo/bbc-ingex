@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.11 2009/02/09 19:24:20 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -611,9 +611,12 @@ void IngexRecorderImpl::StartCopying(unsigned int index)
     mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
     std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
-    for (std::vector<EncodeParams>::const_iterator it = encodings.begin(); it != encodings.end(); ++it)
+    // Use reverse iterator to get required priority order.
+    // Eventually CopyManager and copy script should support priority as an argument.
+    // NB. the cast below is needed because of bug in Visual C++ 7.1
+    for (std::vector<EncodeParams>::const_reverse_iterator it = encodings.rbegin(); it != (std::vector<EncodeParams>::const_reverse_iterator) encodings.rend(); ++it)
     {
-        mCopyManager.AddSrcDest(it->dir, it->dest);
+        mCopyManager.AddSrcDest(it->dir, it->dest, it->copy_priority);
     }
 
     mCopyManager.StartCopying(index);
