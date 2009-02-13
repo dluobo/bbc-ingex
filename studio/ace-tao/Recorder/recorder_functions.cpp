@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.14 2009/02/09 19:26:29 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.15 2009/02/13 10:24:17 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -173,20 +173,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     src_name = (quad_video ? QUAD_NAME : SOURCE_NAME[channel_i]);
 #endif
 
-    // Note the recording location
-    long location_id = 0;
-    if (sc)
-    {
-        location_id = sc->recordingLocation;
-    }
-    std::string location;
-    if (location_id)
-    {
-        // Here we need a database method to get the name from the id
-        std::ostringstream ss;
-        ss << "location " << location_id;
-        location = ss.str();
-    }
 
     // ACE logging to file
     std::ostringstream id;
@@ -234,6 +220,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                               + 5;
 #endif
 
+#if 0
     // Mask for MXF track enables
     uint32_t mxf_mask = 0;
     for (unsigned int i = 0; i < track_enables.size(); ++i)
@@ -243,6 +230,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             mxf_mask |= (1 << i);
         }
     }
+#endif
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -299,6 +287,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         file_format_name.c_str(), resolution_name.c_str(),
         (bitc ? "with BITC" : "")));
 
+    // Note the recording location
+    long location_id = 0;
+    if (sc)
+    {
+        location_id = sc->recordingLocation;
+    }
+    std::string location;
+    if (location_id)
+    {
+        location = p_impl->RecordingLocationMap(location_id);
+    }
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d recording location \"%C\"\n"),
+        src_name.c_str(), p_opt->index, location.c_str()));
+
+        
     // Set some flags based on encoding type
 
     // Initialising these to defaults which you will get for unsupported
@@ -593,15 +596,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (rsp_trk->dataDef == PICTURE_DATA_DEFINITION)
             {
                 fp_trk->sourceClip->position = start_tc;
+                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp video track edit rate %d, position %d\n"),
+                //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
             }
             else
             {
+                // Note that position is in terms of edit rate of the containing
+                // track, not the target track.
                 double audio_pos = start_tc;
                 audio_pos /= prodauto::g_palEditRate.numerator;
                 audio_pos *= prodauto::g_palEditRate.denominator;
-                audio_pos *= rsp_trk->editRate.numerator;
-                audio_pos /= rsp_trk->editRate.denominator;
+                audio_pos *= fp_trk->editRate.numerator;
+                audio_pos /= fp_trk->editRate.denominator;
                 fp_trk->sourceClip->position = (uint64_t) (audio_pos + 0.5);
+                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp audio track edit rate %d, position %d\n"),
+                //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
             }
 
             // Add file package track as source clip of material package track
@@ -736,7 +745,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         // Prevent "insufficient thread locking around avcodec_open/close()"
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        ffmpeg_encoder = ffmpeg_encoder_init(ff_res);
+        ffmpeg_encoder = ffmpeg_encoder_init(ff_res, THREADS_USE_BUILTIN_TUNING);
         if (!ffmpeg_encoder)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
@@ -844,6 +853,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Now need to find out which member of mTracks we are dealing with
             unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
             p_rec->mFileNames[track_index] = fname;
+
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_track %d filename \"%C\" track_index %d\n"),
+                src_name.c_str(), p_opt->index, i, fname.c_str(), track_index));
         }
     }
 
@@ -1014,9 +1026,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 unsigned int ch = channels_in_use[i];
                 frame[ch] = (lastsaved[ch] + 1) % ring_length;
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, Frame %d\n"),
-                    ch, frame[ch]));
+                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, Frame %d\n"), ch, frame[ch]));
             }
+
+            // Set up some audio pointers.
+            // NB. Assuming all from same hardware channel.
 
             // Pointer to audio12
             int32_t * p_audio12 = IngexShm::Instance()->pAudio12(channel_i, frame[channel_i]);
@@ -1076,7 +1090,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 {
                     //p = IngexShm::Instance()->pAudio(hw.channel, hw.track, frames[hw.channel]);
                     // Mono audio buffers not yet available
-                    p = a[i - 1];
+                    p = a[hw.track - 1];
                 }
                 p_input.push_back(p);
             }
