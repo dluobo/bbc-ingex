@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.4 2008/10/08 10:16:06 john_f Exp $
+ * $Id: nexus_save.c,v 1.5 2009/02/13 10:49:46 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -67,7 +67,9 @@ static void usage_exit(void)
     fprintf(stderr, "Usage: save_mem [options] videofile [audiofile]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -c channel save video on specified channel [default 0]\n");
+    fprintf(stderr, "    -f frames  limit to number of frames saved\n");
 #ifdef USE_FFMPEG
+    fprintf(stderr, "    -t threads number of threads for ffmpge encoder (use -1 for builtin tuned behaviour)\n");
     fprintf(stderr, "    -r res     encoder resolution (JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
 	fprintf(stderr, "               DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,DMIH264) [default is uncompressed]\n");
 #endif
@@ -82,6 +84,7 @@ extern int main(int argc, char *argv[])
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
 	int				channelnum = 0, sec_video = 0;
+	int				opt_num_frames = -1, opt_num_threads = -1;
 	char			*video_file = NULL, *audio_file = NULL;
 	FILE			*outfp = NULL, *audiofp = NULL;
 #ifdef USE_FFMPEG
@@ -102,6 +105,26 @@ extern int main(int argc, char *argv[])
 				channelnum > 7 || channelnum < 0)
 			{
 				fprintf(stderr, "-c requires integer channel number {0...7}\n");
+				return 1;
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-f") == 0)
+		{
+			if (n+1 >= argc ||
+				sscanf(argv[n+1], "%d", &opt_num_frames) != 1)
+			{
+				fprintf(stderr, "-f requires integer number of frames\n");
+				return 1;
+			}
+			n++;
+		}
+		else if (strcmp(argv[n], "-t") == 0)
+		{
+			if (n+1 >= argc ||
+				sscanf(argv[n+1], "%d", &opt_num_threads) != 1)
+			{
+				fprintf(stderr, "-t requires integer number of threads\n");
 				return 1;
 			}
 			n++;
@@ -250,7 +273,7 @@ extern int main(int argc, char *argv[])
 	uint8_t *out = NULL;
 	if (res != -1) {
 		// Initialise ffmpeg encoder
-		if ((ffmpeg_encoder = ffmpeg_encoder_init(res)) == NULL) {
+		if ((ffmpeg_encoder = ffmpeg_encoder_init(res, opt_num_threads)) == NULL) {
 			fprintf(stderr, "ffmpeg encoder init failed\n");
 			return 1;
 		}
@@ -290,6 +313,7 @@ extern int main(int argc, char *argv[])
 	}
 #endif
 
+	int frames_written = 0;
 	while (1)
 	{
 		if (last_saved == pc->lastframe) {
@@ -343,6 +367,8 @@ extern int main(int argc, char *argv[])
 		}
 #endif
 
+		frames_written++;
+
 		if (verbose) {
 			char tcstr[32], ltcstr[32];
 			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
@@ -350,6 +376,9 @@ extern int main(int argc, char *argv[])
 					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
 			fflush(stdout);
 		}
+
+		if (frames_written >= opt_num_frames)
+			break;
 
 		last_saved = pc->lastframe;
 	}
