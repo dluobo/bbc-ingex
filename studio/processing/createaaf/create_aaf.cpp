@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.8 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: create_aaf.cpp,v 1.9 2009/02/13 11:17:42 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -407,6 +407,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --audio-edits                  Include edits in the audio tracks in the multi-camera cut sequence\n");
     fprintf(stderr, "  --fcp-xml                      Prints Apple XML for Final Cut Pro- disables AAF\n");
     fprintf(stderr, "  --fcp-path <string>            Sets the path for FCP to see Ingex generated media\n");
+    fprintf(stderr, "  -n --pro-name <string>         Sets the project name for the edit file to use\n");
     fprintf(stderr, "  -d, --dns <string>             Database DNS (default '%s')\n", g_dns);
     fprintf(stderr, "  -u, --dbuser <string>          Database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
@@ -440,6 +441,7 @@ int main(int argc, const char* argv[])
     string tagName;
     string tagValue;
     string suffix;
+    string projName;
     vector<string> filenames;
     int videoResolutionID = DV50_MATERIAL_RESOLUTION;
     bool verbose = false;
@@ -586,6 +588,18 @@ int main(int argc, const char* argv[])
                 parseTag(argv[cmdlnIndex + 1], tagName, tagValue);
                 cmdlnIndex += 2;
             }
+            else if (strcmp(argv[cmdlnIndex], "-n") == 0 || //TODO
+                strcmp(argv[cmdlnIndex], "--pro-name") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+		projName = argv[cmdlnIndex + 1];
+                cmdlnIndex += 2;
+	    }
             else if (strcmp(argv[cmdlnIndex], "--mc-cuts") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
@@ -791,7 +805,7 @@ int main(int argc, const char* argv[])
             }
 
 
-            // remove all packages that are < fromTimecode (at fromDate) and > toTimecode (at toDate)
+           // remove all packages that are < fromTimecode (at fromDate) and > toTimecode (at toDate) and remove all packages that != project name
             vector<prodauto::MaterialPackage *> packagesToErase;
             MaterialPackageSet::const_iterator it;
             for (it = material.topPackages.begin(); it != material.topPackages.end(); ++it)
@@ -812,13 +826,20 @@ int main(int argc, const char* argv[])
                 {
                     packagesToErase.push_back(topPackage);
                 }
+ 		// packages != project name
+		else if (projName.size() != 0)
+		{
+		    if (topPackage->projectName.name == projName)
+		    {
+		    	packagesToErase.push_back(topPackage);
+		    }
+		} 
             }
             vector<prodauto::MaterialPackage*>::const_iterator it2;
             for (it2 = packagesToErase.begin(); it2 != packagesToErase.end(); it2++)
             {
                 material.topPackages.erase(*it2);
             }
-
             if (verbose)
             {
                 if (packagesToErase.size() > 0)
