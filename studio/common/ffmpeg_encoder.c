@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.3 2008/09/03 14:22:46 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.4 2009/02/13 10:26:47 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -114,7 +114,7 @@ static void cleanup (internal_ffmpeg_encoder_t * encoder)
     }
 }
 
-extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
+extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, int num_threads)
 {
     internal_ffmpeg_encoder_t * encoder;
 
@@ -266,7 +266,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
         encoded_frame_size = 917504;        // from VC-3 spec
         break;
     case FF_ENCODER_RESOLUTION_DMIH264:
-        encoded_frame_size = 200000;			// guess at maximum encoded size
+        encoded_frame_size = 200000;    		// guess at maximum encoded size
         encoder->codec_context->bit_rate = 15 * 1000000;	// a guess
         encoder->codec_context->gop_size = 1;	// I-frame only
         break;
@@ -274,13 +274,25 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init (ffmpeg_encoder_resolution_t res)
         break;
     }
 
-    // TODO - set number of threads from command-line or config file
-    // since it needs to be tuned according to hardware and codecs running
-    if (width > 720) {
-        // turn on threading for HD codecs
-        int num_threads = 4;
-        avcodec_thread_init(encoder->codec_context, num_threads);
-        encoder->codec_context->thread_count= num_threads;
+    // setup ffmpeg threads if specified
+    if (num_threads != 0) {
+        int threads = 0;
+        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        {
+            // select number of threaded based on picture size
+            if (width > 720)
+                threads = 4;
+        }
+        else
+        {
+            // use number of threads specified by function arg
+            threads = num_threads;
+        }
+        if (threads > 0)
+        {
+            avcodec_thread_init(encoder->codec_context, num_threads);
+            encoder->codec_context->thread_count= num_threads;
+        }
     }
 
     if (imx)
