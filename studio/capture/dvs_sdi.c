@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.16 2009/02/09 19:30:56 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.17 2009/02/13 10:48:53 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -420,16 +420,18 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	else {
 		// Reduce maximum to 1GiB to avoid misleading shmmat errors since
 		// Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
-		if (k_shmmax > 0x40000000) {
-			printf("shmmax=%lld (%.3fMiB) probably too big, reducing to 1024MiB\n", k_shmmax, k_shmmax / (1024*1024.0));
-			k_shmmax = 0x40000000;	// 1GiB
+		const long long shm_limit = 0x40000000;	// 1GiB
+
+		if (k_shmmax > shm_limit) {
+			printf("shmmax=%lld (%.3f MiB) probably too big, reducing to %lld MiB\n", k_shmmax, k_shmmax / (1024 * 1024.0), shm_limit / (1024 * 1024) );
+			k_shmmax = shm_limit;
 		}
 	}
 
 	// calculate reasonable ring buffer length
 	// reduce by small number 5 to leave a little room for other shared mem
 	ring_len = k_shmmax / num_channels / element_size - 5;
-	printf("shmmax=%lld (%.3fMiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
+	printf("shmmax=%lld (%.3f MiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
 
 	printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
 	if (ring_len < 10)
