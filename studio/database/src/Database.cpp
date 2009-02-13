@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: Database.cpp,v 1.6 2009/02/13 10:51:07 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -4043,5 +4043,34 @@ void Database::loadFileFormatNames(std::map<int, std::string> & file_format_name
     END_QUERY_BLOCK("Failed to load all file format names")
 }
 
+#define SQL_GET_LOCATION_NAME \
+" \
+    SELECT \
+        rlc_name \
+    FROM RecordingLocation \
+    WHERE \
+        rlc_identifier = ? \
+"
 
+std::string Database::loadLocationName(long databaseID)
+{
+    std::string name;
+    auto_ptr<Connection> connection(getConnection());
+    
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_LOCATION_NAME));
+        prepStatement->setLong(1, databaseID);
+        
+        odbc::ResultSet * result = prepStatement->executeQuery();
+        if (!result->next())
+        {
+            PA_LOGTHROW(DBException, ("Package %ld does not exist in database", databaseID));
+        }
+        name = result->getString(1);
+    }
+    END_QUERY_BLOCK("Failed to load location name")
+
+    return name;
+}
 

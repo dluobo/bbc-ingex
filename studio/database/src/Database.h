@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: Database.h,v 1.6 2009/02/13 10:51:07 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -178,6 +178,9 @@ public:
     // enumerations
     void loadResolutionNames(std::map<int, std::string> & resolution_names);
     void loadFileFormatNames(std::map<int, std::string> & file_format_names);
+
+    // recording location
+    std::string loadLocationName(long databaseID);
     
 protected:
     Database(std::string dsn, std::string username, std::string password,
