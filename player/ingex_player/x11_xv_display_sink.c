@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: x11_xv_display_sink.c,v 1.9 2009/02/13 10:17:44 john_f Exp $
  *
  *
  *
@@ -324,6 +324,7 @@ static int XVideoGetPort( Display *p_display,
 static void XVideoReleasePort( Display *p_display, int i_port )
 {
     XvUngrabPort( p_display, i_port, CurrentTime );
+    XSync(p_display, False); //required when X is tunnelling through SSH, or immediately calling XvGrabPort() will return XvAlreadyGrabbed
 }
 
 static void reset_streams(X11DisplayFrame* frame)
