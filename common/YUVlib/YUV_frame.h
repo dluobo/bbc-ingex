@@ -27,7 +27,7 @@ typedef enum
 {
     YV12, IF09, YVU9, IYUV,
     UYVY, YUY2, YVYU, HDYC,
-    Y42B, I420, YV16
+    Y42B, I420, YV16, YV24
 } formats;
 
 typedef enum

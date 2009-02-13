@@ -16,7 +16,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
     switch (format)
     {
     case YV12: case IF09: case YVU9: case IYUV:
-    case Y42B: case I420: case YV16:
+    case Y42B: case I420: case YV16: case YV24:
         frame->Y.pixelStride = 1;
         break;
     case UYVY: case YUY2: case YVYU: case HDYC:
@@ -59,6 +59,8 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.w = w / 2;
         frame->U.lineStride = frame->Y.lineStride / 2;
         break;
+    case YV24:
+        break;
     default:
         return 0;
     }
@@ -85,7 +87,7 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
         frame->U.buff = frame->Y.buff + (frame->Y.lineStride * frame->Y.h);
         frame->V.buff = frame->U.buff + (frame->U.lineStride * frame->U.h);
         break;
-    case YV12: case YV16:
+    case YV12: case YV16: case YV24:
         frame->Y.buff = buffer;
         frame->V.buff = frame->Y.buff + (frame->Y.lineStride * frame->Y.h);
         frame->U.buff = frame->V.buff + (frame->V.lineStride * frame->V.h);
@@ -112,6 +114,9 @@ int alloc_YUV_frame(YUV_frame* frame,
         break;
     case IF09: case YVU9:
         size = (w * h) * 9 / 8;
+        break;
+    case YV24:
+        size = (w * h) * 3;
         break;
     default:
         return 0;
