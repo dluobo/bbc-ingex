@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.10 2009/02/09 19:18:17 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.11 2009/02/13 10:20:23 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -504,9 +504,11 @@ bool RecorderImpl::UpdateFromDatabase()
 
 
         // Clear the set of SourceConfigs
-        // and the track map
+        // and the various maps
         mSourceConfigs.clear();
         mTrackMap.clear();
+        mTrackIndexMap.clear();
+        mRecordingLocationMap.clear();
 
         prodauto::RecorderConfig * rc = 0;
         if (rec && rec->hasConfig())
@@ -558,6 +560,24 @@ bool RecorderImpl::UpdateFromDatabase()
                         mSourceConfigs[id] = sc;
                     }
 
+                    // Update our map of RecordingLocation names
+                    if (sc)
+                    {
+                        long id = sc->recordingLocation;
+                        if (id)
+                        {
+                            try
+                            {
+                                mRecordingLocationMap[id] = prodauto::Database::getInstance()->loadLocationName(id);
+                                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Location %d \"%C\"\n"), id, mRecordingLocationMap[id].c_str()));
+                            }
+                            catch (const prodauto::DBException & dbe)
+                            {
+                                ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+                            }
+                        }
+                    }
+
                     // Update map from source to hardware tracks
                     if (stc)
                     {
@@ -572,10 +592,16 @@ bool RecorderImpl::UpdateFromDatabase()
                     // the user in that form.
 
                     // Update map from source to mTracks index
+                    long stc_db_id = 0;
                     if (stc)
                     {
-                        long id = stc->getDatabaseID();
-                        mTrackIndexMap[id] = track_i;
+                        stc_db_id = stc->getDatabaseID();
+                        // Check for duplicate input tracks
+                        if (mTrackIndexMap.find(stc_db_id) != mTrackIndexMap.end())
+                        {
+                            ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: Duplicate input tracks connected! This is likely to cause problems.\n")));
+                        }
+                        mTrackIndexMap[stc_db_id] = track_i;
                     }
 
                     mTracks->length(track_i + 1);
@@ -659,8 +685,8 @@ bool RecorderImpl::UpdateFromDatabase()
                         track.src.tape_name = CORBA::string_dup("");
                         track.src.track_name = CORBA::string_dup("");
                     }
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, src.track_name %C\n"),
-                        i, j, (const char *) track.src.track_name));
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Input %d, track %d, databse id %3d, src.track_name \"%C\"\n"),
+                        i, j, stc_db_id, (const char *) track.src.track_name));
 
                     ++track_i;
                 } // tracks
@@ -706,6 +732,13 @@ unsigned int RecorderImpl::TrackIndexMap(long id)
     ACE_Guard<ACE_Thread_Mutex> guard(mTrackIndexMapMutex);
 
     return mTrackIndexMap[id];
+}
+
+std::string RecorderImpl::RecordingLocationMap(long id)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mRecordingLocationMapMutex);
+
+    return mRecordingLocationMap[id];
 }
 
 

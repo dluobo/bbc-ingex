@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.10 2009/02/09 19:18:17 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.11 2009/02/13 10:20:23 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -166,11 +166,13 @@ public:
 // thread safe accessors for maps
     HardwareTrack TrackHwMap(long id);
     unsigned int TrackIndexMap(long id);
+    std::string RecordingLocationMap(long id);
 
 private:
 // mutexes to protect maps
     ACE_Thread_Mutex mTrackMapMutex;
     ACE_Thread_Mutex mTrackIndexMapMutex;
+    ACE_Thread_Mutex mRecordingLocationMapMutex;
 
 public:
 // data which needs to be visible to clases such as IngexRecorder
@@ -179,6 +181,9 @@ public:
     // maps with SourceTrackConfig database id as key
     std::map<long, HardwareTrack> mTrackMap;
     std::map<long, unsigned int> mTrackIndexMap;
+
+    // map with RecordingLocation database id as key
+    std::map<long, std::string> mRecordingLocationMap;
 
 protected:
 // data
