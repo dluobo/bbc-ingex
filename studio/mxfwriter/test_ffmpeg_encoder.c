@@ -107,7 +107,7 @@ extern int main(int argc, char *argv[])
 	}
 
 	// Initialise ffmpeg encoder
-    ffmpeg_encoder_t *ffmpeg_encoder = ffmpeg_encoder_init(res);
+    ffmpeg_encoder_t *ffmpeg_encoder = ffmpeg_encoder_init(res, THREADS_USE_BUILTIN_TUNING);
 	if (!ffmpeg_encoder) {
 		fprintf(stderr, "ffmpeg encoder init failed\n");
 		return 1;
