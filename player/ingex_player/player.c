@@ -1,10 +1,11 @@
 /*
- * $Id: player.c,v 1.16 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: player.c,v 1.17 2009/02/13 10:17:06 john_f Exp $
  *
  *
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
+ * Modifications: Matthew Marks
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -861,6 +862,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --disable-audio          Disable audio from the next input\n");
     fprintf(stderr, "  --src-name <name>        Set the source name (eg. used to label the sources in the split sink)\n");
     fprintf(stderr, "  --clip-id <val>          Set the clip identifier for the source\n");
+    fprintf(stderr, "  --disable-shuttle        Do not grab and use the jog-shuttle control\n");
     fprintf(stderr, "\n");
 }
 
@@ -968,7 +970,7 @@ int main(int argc, const char **argv)
     Rational frameRate = {0, 0};
     int disableStream[MAX_INPUTS * 3];
     int numDisabledStreams = 0;
-
+    int disableShuttle = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2097,6 +2099,11 @@ int main(int argc, const char **argv)
             inputs[numInputs].clipId = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
+        else if (strcmp(argv[cmdlnIndex], "--disable-shuttle") == 0)
+        {
+            disableShuttle = 1;
+            cmdlnIndex++;
+        }
         else
         {
             usage(argv[0]);
@@ -2183,7 +2190,7 @@ int main(int argc, const char **argv)
 
     /* open the shuttle input */
 
-    if (!shj_open_shuttle(&g_player.shuttle))
+    if (!disableShuttle && !shj_open_shuttle(&g_player.shuttle))
     {
         ml_log_warn("Failed to open shuttle input\n");
     }
