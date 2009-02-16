@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.4 2009/02/13 10:26:47 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.5 2009/02/16 17:27:27 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -290,8 +290,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         }
         if (threads > 0)
         {
-            avcodec_thread_init(encoder->codec_context, num_threads);
-            encoder->codec_context->thread_count= num_threads;
+            avcodec_thread_init(encoder->codec_context, threads);
+            encoder->codec_context->thread_count = threads;
         }
     }
 
