@@ -616,8 +616,8 @@ extern int udp_read_frame_header(int fd, IngexNetworkHeader *p_header)
 
 		break;
     }
-	printf(" width=%d height=%d audio_size=%d packets_per_frame=%d frame_number=%d source_name=\"%s\"\n",
-			p_header->width, p_header->height, p_header->audio_size, p_header->packets_per_frame, p_header->frame_number, p_header->source_name);
+	printf(" width=%d height=%d framerate=%d/%d audio_size=%d packets_per_frame=%d frame_number=%d source_name=\"%s\"\n",
+			p_header->width, p_header->height, p_header->framerate_numer, p_header->framerate_denom, p_header->audio_size, p_header->packets_per_frame, p_header->frame_number, p_header->source_name);
 	return 0;
 }
 
@@ -644,8 +644,8 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 	memset(&header, 0, sizeof(header));
 	header.packets_per_frame = packets_per_frame;
 	header.signal_ok = 1;
-	header.framerate_numer = 1;
-	header.framerate_denom = 25;
+	header.framerate_numer = 25;
+	header.framerate_denom = 1;
 	header.width = width;
 	header.height = height;
 	header.audio_size = audio_size;
