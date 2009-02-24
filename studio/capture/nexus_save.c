@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.5 2009/02/13 10:49:46 john_f Exp $
+ * $Id: nexus_save.c,v 1.6 2009/02/24 10:37:53 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -377,7 +377,7 @@ extern int main(int argc, char *argv[])
 			fflush(stdout);
 		}
 
-		if (frames_written >= opt_num_frames)
+		if (opt_num_frames && frames_written >= opt_num_frames)
 			break;
 
 		last_saved = pc->lastframe;
