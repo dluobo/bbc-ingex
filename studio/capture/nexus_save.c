@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.6 2009/02/24 10:37:53 john_f Exp $
+ * $Id: nexus_save.c,v 1.7 2009/02/24 10:40:09 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -84,7 +84,7 @@ extern int main(int argc, char *argv[])
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
 	int				channelnum = 0, sec_video = 0;
-	int				opt_num_frames = -1, opt_num_threads = -1;
+	int				opt_num_frames = 0, opt_num_threads = -1;
 	char			*video_file = NULL, *audio_file = NULL;
 	FILE			*outfp = NULL, *audiofp = NULL;
 #ifdef USE_FFMPEG
