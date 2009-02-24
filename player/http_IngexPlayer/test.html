@@ -1,0 +1,96 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+
+<title>Test HTTP Player</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8"/>
+
+<script type="text/javascript" src="test.js"></script>
+
+</head>
+
+<body onload="init_test()">
+
+<h1>Test HTTP Player</h1>
+
+<h2>State</h2>
+<table id="state">
+<tbody>
+	<tr>
+		<td>Closed</td>
+		<td id="closed-state"></td>
+	</tr>
+	<tr>
+		<td>Locked</td>
+		<td id="locked-state"></td>
+	</tr>
+	<tr>
+		<td>Play</td>
+		<td id="play-state"></td>
+	</tr>
+	<tr>
+		<td>Stop</td>
+		<td id="stop-state"></td>
+	</tr>
+	<tr>
+		<td>Speed</td>
+		<td id="speed-state"></td>
+	</tr>
+	<tr>
+		<td>Position</td>
+		<td id="position-state"></td>
+	</tr>
+	<tr>
+		<td>First Timecode</td>
+		<td id="timecode-state"></td>
+	</tr>
+</tbody>
+</table>
+
+
+<h2>Controls</h2>
+<table id="control-buttons">
+<tbody>
+	<tr>
+		<td><input id="dvs-output-button" type="button" value="DVS Output" onclick="set_dvs_output_type()"/></td>
+		<td><input id="dual-output-button" type="button" value="Dual Output" onclick="set_dual_output_type()"/></td>
+		<td><input id="x11-output-button" type="button" value="X11 Output" onclick="set_x11_output_type()"/></td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><input id="test-start-button" type="button" value="Test Start" onclick="test_start_player()"/></td>
+		<td><input id="close-button" type="button" value="Close" onclick="close_player()"/></td>
+		<td><input id="reset-button" type="button" value="Reset" onclick="reset_player()"/></td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><input id="play-button" type="button" value="Play" onclick="play()"/></td>
+		<td><input id="pause-button" type="button" value="Pause" onclick="pause()"/></td>
+		<td><input id="toggle-play-pause-button" type="button" value="Toggle Play/Pause" onclick="toggle_play_pause()"/></td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><input id="step-forwards" type="button" value="Step Forwards" onclick="step(true)"/></td>
+		<td><input id="step-backwards" type="button" value="Step Backwards" onclick="step(false)"/></td>
+		<td></td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><input id="ff-button" type="button" value="Fast Forward" onclick="fast_forward(2)"/></td>
+		<td><input id="fr-button" type="button" value="Fast Rewind" onclick="fast_rewind(2)"/></td>
+		<td><input id="jf-button" type="button" value="Jump Forward" onclick="jump_forward(10)"/></td>
+		<td><input id="jb-button" type="button" value="Jump Backward" onclick="jump_backward(10)"/></td>
+	</tr>
+	<tr>
+		<td><input id="home-button" type="button" value="Home" onclick="seek_home()"/></td>
+		<td><input id="end-button" type="button" value="End" onclick="seek_end()"/></td>
+		<td></td>
+		<td></td>
+	</tr>
+</tbody>
+</table>
+
+</body>
+</html>
+
