@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_xv.c,v 1.3 2008/09/03 14:13:34 john_f Exp $
+ * $Id: nexus_xv.c,v 1.4 2009/02/26 19:24:52 john_f Exp $
  *
  * Utility to display current video frame on X11 display.
  *
@@ -39,6 +39,7 @@
 #include <sys/times.h>
 
 #include "nexus_control.h"
+#include <video_conversion.h>
 
 
 #include <X11/Xlib.h>
@@ -262,7 +263,7 @@ static void usage_exit(void)
     fprintf(stderr, "Usage: nexus_xv [options]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -c channel view video on given channel [default 0]\n");
-    fprintf(stderr, "    -uyvy      switch to UYVY view (4:2:2)\n");
+    fprintf(stderr, "    -p         view primary video [default secondary]\n");
 	exit(1);
 }
 
@@ -271,7 +272,7 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
-	int				channelnum = 0, yuv420_mode = 1;
+	int				channelnum = 0, sec_video = 1;
 
 	int n;
 	for (n = 1; n < argc; n++)
@@ -291,9 +292,9 @@ extern int main(int argc, char *argv[])
 			}
 			n++;
 		}
-		else if (strcmp(argv[n], "-uyvy") == 0)
+		else if (strcmp(argv[n], "-p") == 0)
 		{
-			yuv420_mode = 0;
+			sec_video = 0;
 		}
 		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
 		{
@@ -347,23 +348,47 @@ extern int main(int argc, char *argv[])
 			printf("  attached to channel[%d]\n", i);
 	}
 
-	if (yuv420_mode == 0 && pctl->pri_video_format != Format422UYVY) {
-		printf("Cannot display UYVY buffer since primary video format is %s\n", nexus_capture_format_name(pctl->pri_video_format));
-		return 1;
-	}
+	int yuv420_mode = 0;
+	int format_convert = 0;
+	int width, height;
 
-	if (yuv420_mode == 1 &&
-		(pctl->sec_video_format != Format420PlanarYUV && pctl->sec_video_format != Format420PlanarYUVShifted)) {
-		printf("Cannot display YUV 4:2:0 buffer since secondary video format is %s\n", nexus_capture_format_name(pctl->sec_video_format));
-		return 1;
+	if (sec_video) {
+		if (pctl->sec_video_format != Format420PlanarYUV &&
+			pctl->sec_video_format != Format420PlanarYUVShifted) {
+			format_convert = 1;
+			printf("Using software convert to UYVY from secondary format %s\n", nexus_capture_format_name(pctl->sec_video_format));
+		}
+		switch (pctl->sec_video_format) {
+			case Format420PlanarYUV:
+			case Format420PlanarYUVShifted:
+				yuv420_mode = 1;
+				break;
+			case FormatNone:
+				printf("No secondary video\n");
+				return 1;
+				break;
+			default:
+				break;
+		}
+		width = pctl->sec_width;
+		height = pctl->sec_height;
 	}
+	else {
+		if (pctl->pri_video_format != Format422UYVY) {
+			format_convert = 1;
+			printf("Using software convert to UYVY from primary format %s\n", nexus_capture_format_name(pctl->pri_video_format));
+		}
+		yuv420_mode = 0;
+		width = pctl->width;
+		height = pctl->height;
+	}
+	printf("Picture is %dx%d\n", width, height);
 
 	int						xvport;
 	Display					*display;
 	Window					window;
 	GC						gc;
 	XvImage					*yuv_image = NULL;
-	int						width = pctl->width, height = pctl->height;
 	char					title_string[256] = {0};
 
 		if ((display = XOpenDisplay(NULL)) == NULL)
@@ -409,9 +434,8 @@ extern int main(int argc, char *argv[])
 		// Uncompressed video will be written into video_buffer[0] by libdv
 		XShmSegmentInfo			yuv_shminfo;
 		yuv_image = XvShmCreateImage(display, xvport,
-							yuv420_mode ? X11_FOURCC('I','4','2','0') :
-										X11_FOURCC('U','Y','V','Y'),
-										0, width, height, &yuv_shminfo);
+						yuv420_mode ? X11_FOURCC('I','4','2','0') : X11_FOURCC('U','Y','V','Y'),
+						0, width, height, &yuv_shminfo);
 		yuv_shminfo.shmid = shmget(IPC_PRIVATE, yuv_image->data_size,
 									IPC_CREAT | 0777);
 		yuv_image->data = (char*)shmat(yuv_shminfo.shmid, 0, 0);
@@ -452,11 +476,16 @@ extern int main(int argc, char *argv[])
 									(pc->lastframe % pctl->ringlen)
 							+ pctl->ltc_offset);
 
-		memcpy(yuv_image->data,
-					ring[channelnum] + video_offset +
+		uint8_t *in_video = ring[channelnum] + video_offset +
 									pctl->elementsize *
-									(pc->lastframe % pctl->ringlen),
-					frame_size);
+									(pc->lastframe % pctl->ringlen);
+
+		if (format_convert) {
+			yuv422_to_uyvy(width, height, 0, in_video, (uint8_t*)yuv_image->data);
+		}
+		else {
+			memcpy(yuv_image->data, in_video, frame_size);
+		}
 
 		XvShmPutImage(display, xvport, window, gc, yuv_image,
 						0, 0, yuv_image->width, yuv_image->height,

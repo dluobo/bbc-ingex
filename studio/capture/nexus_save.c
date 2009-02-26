@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.7 2009/02/24 10:40:09 john_f Exp $
+ * $Id: nexus_save.c,v 1.8 2009/02/26 19:24:52 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -45,8 +45,6 @@
 #endif
 
 
-int verbose = 1;
-
 static char *framesToStr(int tc, char *s)
 {
 	int frames = tc % 25;
@@ -83,6 +81,7 @@ extern int main(int argc, char *argv[])
 	int				shm_id, control_id;
 	uint8_t			*ring[MAX_CHANNELS];
 	NexusControl	*pctl = NULL;
+	int				verbose = 1;
 	int				channelnum = 0, sec_video = 0;
 	int				opt_num_frames = 0, opt_num_threads = -1;
 	char			*video_file = NULL, *audio_file = NULL;
@@ -97,6 +96,10 @@ extern int main(int argc, char *argv[])
 		if (strcmp(argv[n], "-q") == 0)
 		{
 			verbose = 0;
+		}
+		else if (strcmp(argv[n], "-v") == 0)
+		{
+			verbose++;
 		}
 		else if (strcmp(argv[n], "-c") == 0)
 		{
@@ -234,15 +237,16 @@ extern int main(int argc, char *argv[])
 	NexusBufCtl *pc;
 	pc = &pctl->channel[channelnum];
 	int tc, ltc;
-	int last_saved = -1;
-	int width = pctl->width;
-	int height = pctl->height;
+	int width = sec_video ? pctl->sec_width : pctl->width;
+	int height = sec_video ? pctl->sec_height : pctl->height;
 
 	// Default to primary 4:2:2 video
  	int frame_size = width*height*2;
 	int video_offset = 0;
 	int audio_offset = pctl->audio12_offset;
 	int audio_size = pctl->audio_size;
+
+	printf("  saved image is %dx%d\n", width, height);
 
 	if (sec_video) {
 		if (pctl->sec_video_format == FormatNone) {
@@ -270,15 +274,12 @@ extern int main(int argc, char *argv[])
 
 #ifdef USE_FFMPEG
 	ffmpeg_encoder_t *ffmpeg_encoder = NULL;
-	uint8_t *out = NULL;
 	if (res != -1) {
 		// Initialise ffmpeg encoder
 		if ((ffmpeg_encoder = ffmpeg_encoder_init(res, opt_num_threads)) == NULL) {
 			fprintf(stderr, "ffmpeg encoder init failed\n");
 			return 1;
 		}
-
-		out = (uint8_t *)malloc(frame_size);	// worst case compressed size
 	}
 
 	// Check that video buffer is compatible
@@ -313,40 +314,71 @@ extern int main(int argc, char *argv[])
 	}
 #endif
 
+	int retval = 0;
 	int frames_written = 0;
+	int last_saved = -1;
 	while (1)
 	{
-		if (last_saved == pc->lastframe) {
+		int lastframe = pc->lastframe;
+		if (last_saved == lastframe) {
 			usleep(2 * 1000);		// 0.020 seconds = 50 times a sec
 			continue;
 		}
 
-		int diff_to_last = pc->lastframe - last_saved;
+		int diff_to_last = lastframe - last_saved;
+		if (last_saved == -1)		// first entry to loop
+			diff_to_last = 1;
+
 		if (diff_to_last != 1) {
-			printf("\ndiff_to_last = %d\n", diff_to_last);
+			printf("backlog: diff_to_last = %d", diff_to_last);
+			if (diff_to_last > pctl->ringlen - 2) {
+				printf(", %d frames dropped", diff_to_last - 1);
+				diff_to_last = 1;
+				retval = 1;
+			}
+			printf("\n");
 		}
 
-		tc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
+		for (i = 0; i < diff_to_last; i++)
+		{
+			int frame_idx = lastframe - diff_to_last + 1 + i;
+
+			tc = *(int*)(ring[channelnum] + pctl->elementsize *
+									(frame_idx % pctl->ringlen)
 							+ pctl->vitc_offset);
-		ltc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
+			ltc = *(int*)(ring[channelnum] + pctl->elementsize *
+									(frame_idx % pctl->ringlen)
 							+ pctl->ltc_offset);
 
-		uint8_t *video_frame = ring[channelnum] + video_offset +
-								pctl->elementsize * (pc->lastframe % pctl->ringlen);
-		uint8_t *audio_frame = ring[channelnum] + audio_offset +
-								pctl->elementsize * (pc->lastframe % pctl->ringlen);
+			uint8_t *video_frame = ring[channelnum] + video_offset +
+								pctl->elementsize * (frame_idx % pctl->ringlen);
+			uint8_t *audio_frame = ring[channelnum] + audio_offset +
+								pctl->elementsize * (frame_idx % pctl->ringlen);
 
 #ifdef USE_FFMPEG
-		if (ffmpeg_encoder) {
-			int compressed_size = ffmpeg_encoder_encode(ffmpeg_encoder, video_frame, &out);
-			if ( fwrite(out, compressed_size, 1, outfp) != 1 ) {
+			if (ffmpeg_encoder) {
+				uint8_t *out = NULL;
+				int compressed_size = ffmpeg_encoder_encode(ffmpeg_encoder, video_frame, &out);
+				if (compressed_size < 0) {
+					fprintf(stderr, "ffmpeg_encoder_encode() failed\n");
+					return 1;
+				}
+				if (fwrite(out, compressed_size, 1, outfp) != 1 ) {
 					perror("fwrite video");
-					return(1);
+					return 1;
+				}
 			}
-		}
-		else {
+			else {
+				if (fwrite(video_frame, frame_size, 1, outfp) != 1) {
+					perror("fwrite video");
+					return 1;					
+				}
+				if (audiofp && fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
+					perror("fwrite audio");
+					return 1;					
+				}
+			}
+#else
 			if (fwrite(video_frame, frame_size, 1, outfp) != 1) {
 				perror("fwrite video");
 				return 1;					
@@ -355,33 +387,33 @@ extern int main(int argc, char *argv[])
 				perror("fwrite audio");
 				return 1;					
 			}
-		}
-#else
-		if (fwrite(video_frame, frame_size, 1, outfp) != 1) {
-			perror("fwrite video");
-			return 1;					
-		}
-		if (audiofp && fwrite(audio_frame, audio_size, 1, audiofp) != 1) {
-			perror("fwrite audio");
-			return 1;					
-		}
 #endif
 
-		frames_written++;
+			frames_written++;
 
-		if (verbose) {
-			char tcstr[32], ltcstr[32];
-			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
-					channelnum, pc->lastframe,
-					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
-			fflush(stdout);
+			if (verbose) {
+				char tcstr[32], ltcstr[32];
+				printf("%scam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s %s",
+						verbose == 1 ? "\r" : "",
+						channelnum, frame_idx,
+						tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr),
+						verbose > 1 ? "\n" : "");
+				fflush(stdout);
+			}
+
+			if (opt_num_frames && frames_written >= opt_num_frames)
+				goto finish;
+
+			last_saved = frame_idx;
 		}
-
-		if (opt_num_frames && frames_written >= opt_num_frames)
-			break;
-
-		last_saved = pc->lastframe;
 	}
 
-	return 0;
+finish:
+#ifdef USE_FFMPEG
+	ffmpeg_encoder_close(ffmpeg_encoder);
+#endif
+	fclose(outfp);
+	if (audiofp)
+		fclose(audiofp);
+	return retval;
 }

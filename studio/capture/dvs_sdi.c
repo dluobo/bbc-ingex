@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.17 2009/02/13 10:48:53 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.18 2009/02/26 19:24:52 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -45,6 +45,17 @@
 #include <mmintrin.h>
 #endif
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
+#ifdef __cplusplus
+}
+#endif
+
 #include "dvs_clib.h"
 #include "dvs_fifo.h"
 
@@ -69,14 +80,23 @@
 //#define MAX_CHANNELS 8  (defined in nexus_control.h)
 // each DVS card can have 2 channels, so 4 cards gives 8 channels
 
+// Each thread uses the following thread-specific data
+typedef struct {
+	struct SwsContext* scale_context;
+	AVFrame *inFrame;
+	AVFrame *outFrame;
+} SDIThreadData;
+
 // Globals
 pthread_t		sdi_thread[MAX_CHANNELS] = {0};
 sv_handle		*a_sv[MAX_CHANNELS] = {0};
+SDIThreadData	td[MAX_CHANNELS];
 int				num_sdi_threads = 0;
 NexusControl	*p_control = NULL;
 uint8_t			*ring[MAX_CHANNELS] = {0};
 int				control_id, ring_id[MAX_CHANNELS];
 int				width = 0, height = 0;
+int				sec_width = 0, sec_height = 0;
 int				frame_rate_numer = 0, frame_rate_denom = 0;
 int				element_size = 0, dma_video_size = 0, dma_total_size = 0;
 static int		audio_offset = 0, audio_size = 0, audio_pair_size = 0;
@@ -451,12 +471,14 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 			if ((control_id = shmget(9, sizeof(*p_control), IPC_CREAT | IPC_EXCL | 0666)) == -1)
 			{
 				perror("shmget control key 9");
+				fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
 				return 0;
 			}
 		}
 		else
 		{
 			perror("shmget control key 9");
+			fprintf(stderr, "Use\n\tipcs | grep '0x0000000[9abcd]'\nplus ipcrm -m <id> to cleanup\n");
 			return 0;
 		}
 	}
@@ -472,6 +494,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	p_control->frame_rate_denom = frame_rate_denom;
 	p_control->pri_video_format = video_format;
 	p_control->sec_video_format = video_secondary_format;
+	p_control->sec_width = sec_width;
+	p_control->sec_height = sec_height;
 	p_control->master_tc_type = master_type;
 	p_control->master_tc_channel = master_channel;
 
@@ -698,20 +722,55 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		memset( vid_dest + audio_offset, 0, audio_size);
 	}
 
+	// Convert primary video into secondary video buffer
 	if (video_secondary_format != FormatNone) {
-		if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted) {
-			// Repack to planar YUV 4:2:2
-			uyvy_to_yuv422(	width, height,
-							video_secondary_format == Format422PlanarYUVShifted,	// do DV50 line shift?
-							dma_dest,									// input
-							vid_dest + (audio_offset + audio_size));	// output
+		if (width > 720) {
+			// HD primary video, scale and reformat to SD secondary
+			int in_pixfmt = (video_format == Format422UYVY) ? PIX_FMT_UYVY422 : PIX_FMT_YUV422P;
+			int out_pixfmt = PIX_FMT_YUV420P;
+			if (video_secondary_format == Format422PlanarYUV ||
+				video_secondary_format == Format422PlanarYUVShifted) {
+				out_pixfmt = PIX_FMT_YUV422P;
+			}
+
+			td[chan].scale_context = sws_getCachedContext(td[chan].scale_context,
+					width, height,			// input WxH
+					in_pixfmt,
+					sec_width, sec_height,	// output WxH
+					out_pixfmt,
+					SWS_FAST_BILINEAR,
+					NULL, NULL, NULL);
+					// other flags include: SWS_FAST_BILINEAR, SWS_BILINEAR, SWS_BICUBIC, SWS_POINT
+					// SWS_AREA, SWS_BICUBLIN, SWS_GAUSS, ... SWS_PRINT_INFO (debug)
+			avpicture_fill(	(AVPicture*)td[chan].inFrame,
+							vid_dest,									// captured video
+							in_pixfmt,
+							width, height);
+			avpicture_fill(	(AVPicture*)td[chan].outFrame,
+							vid_dest + (audio_offset + audio_size),		// output to secondary video
+							out_pixfmt,
+							sec_width, sec_height);
+			sws_scale(td[chan].scale_context,
+					        td[chan].inFrame->data, td[chan].inFrame->linesize,
+							0, height,
+							td[chan].outFrame->data, td[chan].outFrame->linesize);
 		}
 		else {
-			// Downconvert to 4:2:0 YUV buffer located just after audio
-			uyvy_to_yuv420(	width, height,
-							video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
-							dma_dest,									// input
-							vid_dest + (audio_offset + audio_size));	// output
+			// SD primary video, reformat for SD secondary
+			if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted) {
+				// Repack to planar YUV 4:2:2
+				uyvy_to_yuv422(	width, height,
+								video_secondary_format == Format422PlanarYUVShifted,	// do DV50 line shift?
+								dma_dest,									// input
+								vid_dest + (audio_offset + audio_size));	// output
+			}
+			else {
+				// Downconvert to 4:2:0 YUV buffer located just after audio
+				uyvy_to_yuv420(	width, height,
+								video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
+								dma_dest,									// input
+								vid_dest + (audio_offset + audio_size));	// output
+			}
 		}
 	}
 
@@ -1030,7 +1089,12 @@ static void * sdi_monitor(void *arg)
 	sv_info				status_info;
 	sv_storageinfo		storage_info;
 
+	// Setup thread-specific data;
+	td[chan].scale_context = NULL;
+	td[chan].inFrame = avcodec_alloc_frame();
+	td[chan].outFrame = avcodec_alloc_frame();
 
+	// Get info on SDI capture
 	SV_CHECK( sv_status( sv, &status_info) );
 
 	SV_CHECK( sv_storage_status(sv,
@@ -1404,8 +1468,13 @@ int main (int argc, char ** argv)
 		{
 			aes_audio = 1;
 		}
+		else {
+			fprintf(stderr, "unknown argument \"%s\"\n", argv[n]);
+			return 1;
+		}
 	}
 
+	// Display info on primary video format
 	switch (video_format) {
 		case Format422UYVY:
 				logTF("Capturing video as UYVY (4:2:2)\n"); break;
@@ -1418,6 +1487,7 @@ int main (int argc, char ** argv)
 				return 1;
 	}
 
+	// Display info on secondary video format
 	switch (video_secondary_format) {
 		case FormatNone:
 				logTF("Secondary video buffer is disabled\n"); break;
@@ -1702,18 +1772,34 @@ int main (int argc, char ** argv)
 	signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
 	num_aud_samp_offset = audio_offset + audio_size - 5 * sizeof(int);
 
-	// Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
-	int secondary_video_size = width*height*3/2;
-	if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted)
-		secondary_video_size = width*height*2;
-
 	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
 	dma_total_size = dma_video_size		// video frame as captured by dma transfer
 					+ audio_size;		// DVS internal structure for audio channels
-										
 
+	// Compute size of secondary video (if any)
+	int secondary_video_size = 0;
+	if (video_secondary_format != FormatNone) {
+		// Secondary format is always SD even when primary is HD
+		switch (frame_rate_numer) {
+			case 25:
+			case 50:
+				sec_width = 720;
+				sec_height = 576;
+				break;
+			default:
+				sec_width = 720;
+				sec_height = 480;
+				break;
+		}
+
+		// Secondary video can be 4:2:2 or 4:2:0 so work out the correct size
+		secondary_video_size = sec_width*sec_height*3/2;
+		if (video_secondary_format == Format422PlanarYUV || video_secondary_format == Format422PlanarYUVShifted)
+			secondary_video_size = sec_width*sec_height*2;
+	}
+
+	// Element size made up from DMA transferred buffer plus secondary video (if any)
 	element_size = dma_total_size + secondary_video_size;
-
 
 	// Create "NO VIDEO" frame
 	no_video_frame = (uint8_t*)malloc(width*height*2);

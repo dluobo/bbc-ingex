@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.10 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: nexus_control.h,v 1.11 2009/02/26 19:24:52 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -123,12 +123,14 @@ typedef struct {
 	int				ringlen;			// number of elements in ring buffer
 	int				elementsize;		// an element is video + audio + timecode
 
-	int				width;				// width of video
-	int				height;				// height of video
+	int				width;				// width of primary video
+	int				height;				// height of primary video
 	int				frame_rate_numer;	// frame rate numerator e.g. 25
 	int				frame_rate_denom;	// frame rate denominator e.g 1
 	CaptureFormat	pri_video_format;	// primary video format: usually UYVY, YUV422, ...
-	CaptureFormat	sec_video_format;	// secondary video format: usually YUV420, ...
+	CaptureFormat	sec_video_format;	// secondary video format: usually NONE, YUV420, ...
+	int				sec_width;			// width of secondary video (if any)
+	int				sec_height;			// height of secondary video (if any)
 	NexusTimecode	master_tc_type;		// type of master timecode used (None, LTC, VITC, ...)
 	int				master_tc_channel;	// channel from which master timecode is sourced
 	int				owner_pid;			// process id of nominal owner of shared memory e.g. dvs_sdi

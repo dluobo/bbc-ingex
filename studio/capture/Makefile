@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.10 2009/01/29 07:36:59 stuart_hc Exp $
+# $Id: Makefile,v 1.11 2009/02/26 19:24:52 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -38,7 +38,7 @@ else
   SDI_PROGS=dvs_dummy testgen
 endif
 
-FFMPEG_LIBS=-lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
+FFMPEG_LIBS=-lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread
 
 PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nexus_multicast nexus_set_source 
 
@@ -49,10 +49,10 @@ nexus_control.o: nexus_control.h nexus_control.c
 	g++ $(FLAGS) -c nexus_control.c
 
 dvs_sdi: dvs_sdi.c nexus_control.h
-	g++ $(FLAGS) $(DVS_HARDWARE_INCLUDE) dvs_sdi.c $(DVS_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi
+	g++ $(FLAGS) $(DVS_HARDWARE_INCLUDE) dvs_sdi.c $(DVS_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi $(FFMPEG_LIBS)
 
 dvs_dummy: dvs_sdi.c nexus_control.h ../
-	g++ $(FLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_dummy
+	g++ $(FLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_dummy $(FFMPEG_LIBS)
 
 testgen: testgen.c nexus_control.h
 	g++ $(FLAGS) testgen.c $(LIBS) -lpthread -o testgen
@@ -76,7 +76,7 @@ nexus_multicast: nexus_multicast.c nexus_control.h nexus_control.o
 	g++ -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast nexus_control.o -L../../common -lcommon -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
 
 nexus_xv: nexus_xv.c nexus_control.h nexus_control.o
-	g++ $(FLAGS) nexus_xv.c -o nexus_xv nexus_control.o -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
+	g++ $(FLAGS) nexus_xv.c -o nexus_xv nexus_control.o $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
 
 clean:
 	rm -f core *.o dvs_sdi $(PROGS)

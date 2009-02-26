@@ -107,17 +107,21 @@ extern int main(int argc, char *argv[])
 		printf("connected to pctl\n");
 
 	if (verbose) {
-		printf("  channels=%d ringlen=%d elementsize=%d width,height=%dx%d fr=%d/%d\n",
+		printf("  channels=%d ringlen=%d elementsize=%d\n",
 				pctl->channels,
 				pctl->ringlen,
-				pctl->elementsize,
+				pctl->elementsize);
+		printf("  width,height=%dx%d fr=%d/%d\n",
 				pctl->width,
 				pctl->height,
 				pctl->frame_rate_numer,
 				pctl->frame_rate_denom);
-		printf("  pri_format=%s sec_format=%s master_tc_type=%s master_tc_channel=%d\n",
+		printf("  pri_format=%s sec_format=%s\n",
 				nexus_capture_format_name(pctl->pri_video_format),
-				nexus_capture_format_name(pctl->sec_video_format),
+				nexus_capture_format_name(pctl->sec_video_format));
+		printf("  sec_width,sec_height=%dx%d\n",
+				pctl->sec_width, pctl->sec_height);
+		printf("  master_tc_type=%s master_tc_channel=%d\n",
 				nexus_timecode_type_name(pctl->master_tc_type),
 				pctl->master_tc_channel);
 		struct timeval now;
