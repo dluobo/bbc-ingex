@@ -59,6 +59,7 @@ elsif (defined param("Send1") || defined param("Send2"))
     my $toDateStr;
     my $vres;
     my $fromCreationDateStr;
+    my $projNameStr;
         
     if (defined param("Send1") && !($errorMessage = validate_params($vresIds, "Send1")))
     {
@@ -167,6 +168,10 @@ elsif (defined param("Send1") || defined param("Send2"))
     
     ($vres) = param("vres") =~ /(\d+)/;
     
+    # project name
+    my ($proj) = param("projpop") =~ /(.*)/;	# TODO: no real untainting takes place here - global untainting function should be used to keep all user input consistent?
+    if($proj ne "[ANY PROJECT]"){$projNameStr = $proj;}
+
     if (!$errorMessage)
     {
         my $exportDir = get_avid_aaf_export_dir(param("sendto"));
@@ -228,10 +233,13 @@ elsif (defined param("Send1") || defined param("Send2"))
                         $fromCreationDateStr ? "" : "-t $toDateStr" . "S" . "$toTimeStr"), # to date and start timecode
                 "-d $ingexConfig{'db_odbc_dsn'}", # database DSN
                 "-u $ingexConfig{'db_user'}", # database user
+		$projNameStr ? 
+                	"-n \'$projNameStr\'" : "", # project name
                 "--dbpassword $ingexConfig{'db_password'}", # database password
                 ">$resultsFilename"
         );
-		system($cmd) == 0 or return_error_page("Failed to export Edit file. Using create_aaf in location: $ingexConfig{'create_aaf_dir'} and command $cmd");
+
+	system($cmd) == 0 or return_error_page("Failed to export Edit file. Using create_aaf in location: $ingexConfig{'create_aaf_dir'} and command $cmd");
         
         # extract the results
         open(AAFRESULTS, "<", "$resultsFilename") 
@@ -432,8 +440,9 @@ sub get_success_content
     
     foreach my $filename (@ { $filenames })
     {
-        push(@pageContent, "&nbsp;&nbsp;" . $filename); 
+        push(@pageContent, "&nbsp;&nbsp;$filename"); 
         push(@pageContent, "<br/>");
+	push(@pageContent, "&nbsp;&nbsp;<a href=\"/cgi-bin/ingex-modules/Material.ingexmodule/download.pl?fileIn=$filename\">Download</a>");
     }
     
 
@@ -466,6 +475,23 @@ sub get_page_content
 
     push(@pageContent, start_form({-id=>"avidForm", -action=>"javascript:sendForm('avidForm','avidaaf')"}));
 
+
+    # Extract project names from database
+    my $projects = db::load_projects($dbh) or 
+        return_error_page("failed to load recorder locations: $prodautodb::errstr");
+	
+    my %projectNames;
+    my @projectValues;
+	
+    $projectNames{'[ANY PROJECT]'} = '[ANY PROJECT]';
+    push(@projectValues, '[ANY PROJECT]');
+	
+    foreach my $p (@{$projects})
+    {
+        $projectNames{$p->{'NAME'}} = $p->{'NAME'};
+        push(@projectValues, $p->{'NAME'});
+    }
+    
     
     my $defaultSendTo;
     my @sendToValues;
@@ -618,6 +644,17 @@ sub get_page_content
                 label => 'Add audio edits to director\'s cut'
             }),
         ),
+    );
+
+    push(@pageContent, h3("Select project name"));
+    
+    push(@pageContent,
+    	popup_menu({
+    		-name => "projpop",
+    		-default => '',
+    		-values => \@projectValues,
+    		-labels => \%projectNames,
+    	}),
     );
     
     

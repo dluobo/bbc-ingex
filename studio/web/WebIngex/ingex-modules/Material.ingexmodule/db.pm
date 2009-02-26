@@ -388,6 +388,30 @@ sub get_material_count
     return $count || 0;
 }
 
+sub load_projects
+{
+    my ($dbh) = @_;
+    
+    my $proj;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT pjn_identifier AS id, 
+                pjn_name AS name
+            FROM Projectname
+            ");
+        $sth->execute;
+        
+        $proj = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $prodautodb::errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $proj;    
+}
 
 1;
 
