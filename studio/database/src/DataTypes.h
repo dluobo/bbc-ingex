@@ -1,5 +1,5 @@
 /*
- * $Id: DataTypes.h,v 1.2 2008/09/03 15:20:24 john_f Exp $
+ * $Id: DataTypes.h,v 1.3 2009/02/26 19:39:29 john_f Exp $
  *
  * General data types
  *
@@ -163,29 +163,32 @@ inline bool operator < (const UMID& l, const UMID& r)
 
 
 
-typedef struct
+struct Rational
 {
+    Rational() : numerator(0), denominator(0) {}
+    Rational(int32_t num, int32_t den) : numerator(num), denominator(den) {}
     int32_t numerator;
     int32_t denominator;
-} Rational;
+};
 
 inline bool operator == (const Rational& l, const Rational& r)
 {
-    return memcmp(&l, &r, sizeof(Rational)) == 0;
+    return l.numerator == r.numerator && l.denominator == r.denominator;
 }
 
 inline bool operator != (const Rational& l, const Rational& r)
 {
-    return memcmp(&l, &r, sizeof(Rational)) != 0;
+    return l.numerator != r.numerator || l.denominator != r.denominator;
 }
 
-static const Rational g_nullRational = {0, 0};
+const Rational g_nullRational (0, 0);
 
-static const Rational g_palEditRate = {25, 1};
-static const Rational g_ntscEditRate = {30000, 1001};
-static const Rational g_audioEditRate = {48000, 1};
+const Rational g_palEditRate (25, 1);
+const Rational g_ntscEditRate (30000, 1001);
+const Rational g_audioEditRate (48000, 1);
 
-
+const Rational g_4x3ImageAspect (4, 3);
+const Rational g_16x9ImageAspect (16, 9);
 
 };
 

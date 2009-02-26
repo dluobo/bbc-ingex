@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: test.cpp,v 1.6 2009/02/26 19:39:29 john_f Exp $
  *
  * Tests the database library
  *
@@ -255,7 +255,7 @@ static RecorderConfig* create_recorder_config(string name, long sourceConfigID)
     recorderConfig->setStringParam("string param", "string value");
     recorderConfig->setIntParam("int param", 1);
     recorderConfig->setBoolParam("bool param", true);
-    Rational rational = {4,3};
+    Rational rational = g_4x3ImageAspect;
     recorderConfig->setRationalParam("rational param", rational);
     
     recorderConfig->sourceConfigs.push_back(database->loadSourceConfig(sourceConfigID));
@@ -347,7 +347,7 @@ static void test_recorder()
         CHECK(recorderConfig->getIntParam("not int param", 0) == 0);
         CHECK(recorderConfig->getBoolParam("bool param", false) == true);
         CHECK(recorderConfig->getBoolParam("not bool param", false) == false);
-        Rational rational = {4,3};
+        Rational rational = g_4x3ImageAspect;
         CHECK(recorderConfig->getRationalParam("rational param", g_nullRational) == rational);
         CHECK(recorderConfig->getRationalParam("not rational param", g_nullRational) == g_nullRational);
 

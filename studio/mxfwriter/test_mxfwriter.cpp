@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.7 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: test_mxfwriter.cpp,v 1.8 2009/02/26 19:40:30 john_f Exp $
  *
  * Tests the MXF writer
  *
@@ -373,7 +373,7 @@ void* start_record_routine(void* data)
     try
     {
         // create writer for input (mask all except track 1,2,3)
-        Rational imageAspectRatio = {16, 9};
+        Rational imageAspectRatio = g_16x9ImageAspect;
         auto_ptr<MXFWriter> writer(new MXFWriter(
             recordData->recorder->getConfig()->getInputConfig(recordData->inputIndex),
             recordData->isPALProject, resolutionId, imageAspectRatio,
