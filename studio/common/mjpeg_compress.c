@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.c,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: mjpeg_compress.c,v 1.4 2009/02/26 19:28:07 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -43,6 +43,66 @@
 
 #include "mjpeg_compress.h"
 #include "YUVlib/YUV_scale_pic.h"
+
+// Following two tables were found in Avid Media Composer 3.0 MXF files for 2:1.
+// Content was brightly lit colourful studio for childrens' television.
+// Most tables in a 1 minute sequence were very close to these two tables.
+const unsigned int MJPEG_TABLE_2_1_LUMINANCE[64] = {
+1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,2,2,
+1,1,1,1,1,1,3,2,
+1,1,1,1,1,1,3,2,
+1,1,1,1,1,1,4,3,
+1,1,1,1,1,1,4,3,
+1,1,1,1,1,1,5,4,
+1,1,1,1,1,1,4,4
+};
+const unsigned int MJPEG_TABLE_2_1_CHROMINANCE[64] = {
+1,1,1,1,1,4,4,4,
+1,1,1,2,4,4,4,4,
+1,1,1,2,4,4,4,4,
+1,1,2,4,4,4,4,4,
+1,2,2,4,4,4,4,4,
+1,2,4,4,4,4,4,4,
+2,4,4,4,4,4,4,4,
+2,4,4,4,4,4,4,4
+};
+
+static int resolution_id_to_quality(int resID)
+{
+    // Resolution Id to bitrate based on experiment and the following table
+    // Avid Help has a "Estimated Storage Requirements: JFIF Interlaced" page
+    // which gives storage size per 30 minutes of video (1800 sec, 45000 frames)
+    // 4th column is Avid generated from DV50 capture at Elstree.
+    //
+    // 20:1     1.80 GB     8.6 Mbps    7.18 Mbps
+    // 10:1     3.60 GB     17.2 Mbps
+    // 3:1      10.32 GB    49.2 Mbps
+    // 2:1      15.48 GB    73.9 Mbps
+    // 1:1      36.6  GB    174.7 Mbps
+    // 1:1 10b  45.9  GB    219.0 Mbps
+    //
+    // 15:1s    0.618GB     2.9 Mbps
+    // 10:1m    ?           ?           2.86 MBps (288x296) (identify gives qual=85)
+    // 4:1m     ?           ?           35800 bytes per frame average
+
+    int quality;
+    switch (resID) {
+        case MJPEG_2_1: quality = 98; break;        // 2:1
+        case MJPEG_3_1: quality = 97; break;        // 3:1
+        case MJPEG_10_1: quality = 84; break;       // 10:1
+        case MJPEG_20_1: quality = 68; break;       // 20:1     gives 13.3Mbps for elstree sample
+        case MJPEG_15_1s: quality = 55; break;      // 15:1s
+        case MJPEG_10_1m: quality = 71; break;      // 10:1m
+        case MJPEG_4_1m: quality = 94; break;       // 4:1m
+        default:
+                fprintf(stderr, "Unknown resolution ID %d, compression failed\n", resID);
+                return 0;
+                break;
+    }
+
+	return quality;
+}
 
 // Utility functions for dealing with Avid's JPEG header format
 static void storeUInt16_BE(uint8_t *p, uint16_t value)
@@ -278,8 +338,7 @@ static unsigned mjpeg_compress_field_yuv(
                                 int y_linesize,
                                 int u_linesize,
                                 int v_linesize,
-                                int field,
-                                int quality)
+                                int field)
 {
     int i;
 
@@ -289,8 +348,19 @@ static unsigned mjpeg_compress_field_yuv(
     cinfo->raw_data_in = TRUE;
     
     jpeg_set_defaults(cinfo);
-    jpeg_set_quality(cinfo, quality, TRUE /* limit to baseline-JPEG values */);
     jpeg_set_colorspace(cinfo, JCS_YCbCr);
+
+	// Set quantizer tables
+	if (p->resID == MJPEG_2_1) {
+		// Use explicit table for 2:1 to get desired quality
+		jpeg_add_quant_table(cinfo, 0, MJPEG_TABLE_2_1_LUMINANCE, 100, FALSE);
+		jpeg_add_quant_table(cinfo, 1, MJPEG_TABLE_2_1_CHROMINANCE, 100, FALSE);
+	}
+	else {
+		// Use course 'quality' tables scaled from baseline
+		int quality = resolution_id_to_quality(p->resID);
+    	jpeg_set_quality(cinfo, quality, TRUE /* limit to baseline-JPEG values */);
+	}
 
     // component 0 (Y) set to 2x1 (4:2:2) sampling
     cinfo->raw_data_in = TRUE;          // supply downsampled data
@@ -404,42 +474,6 @@ static unsigned mjpeg_compress_field_yuv(
     return compressed_size;
 }
 
-static int resolution_id_to_quality(int resID)
-{
-    // Resolution Id to bitrate based on experiment and the following table
-    // Avid Help has a "Estimated Storage Requirements: JFIF Interlaced" page
-    // which gives storage size per 30 minutes of video (1800 sec, 45000 frames)
-    // 4th column is Avid generated from DV50 capture at Elstree.
-    //
-    // 20:1     1.80 GB     8.6 Mbps    7.18 Mbps
-    // 10:1     3.60 GB     17.2 Mbps
-    // 3:1      10.32 GB    49.2 Mbps
-    // 2:1      15.48 GB    73.9 Mbps
-    // 1:1      36.6  GB    174.7 Mbps
-    // 1:1 10b  45.9  GB    219.0 Mbps
-    //
-    // 15:1s    0.618GB     2.9 Mbps
-    // 10:1m    ?           ?           2.86 MBps (288x296) (identify gives qual=85)
-    // 4:1m     ?           ?           35800 bytes per frame average
-
-    int quality;
-    switch (resID) {
-        case MJPEG_2_1: quality = 98; break;        // 2:1
-        case MJPEG_3_1: quality = 97; break;        // 3:1
-        case MJPEG_10_1: quality = 84; break;       // 10:1
-        case MJPEG_20_1: quality = 68; break;       // 20:1     gives 13.3Mbps for elstree sample
-        case MJPEG_15_1s: quality = 55; break;      // 15:1s
-        case MJPEG_10_1m: quality = 71; break;      // 10:1m
-        case MJPEG_4_1m: quality = 94; break;       // 4:1m
-        default:
-                fprintf(stderr, "Unknown resolution ID %d, compression failed\n", resID);
-                return 0;
-                break;
-    }
-
-	return quality;
-}
-
 extern unsigned mjpeg_compress_frame_yuv(
                                 mjpeg_compress_t *p,
                                 const unsigned char *y,
@@ -450,19 +484,17 @@ extern unsigned mjpeg_compress_frame_yuv(
                                 int v_linesize,
                                 unsigned char **pp_output)
 {
-	int quality = resolution_id_to_quality(p->resID);
-
     unsigned total_size = 0;
     j_compress_ptr cinfo = &(p->cinfo);
 
     // compress top field
 	unsigned top_size = 0, bot_size = 0;
-    top_size = mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 0, quality);
+    top_size = mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 0);
 	total_size += top_size;
 
     if (! p->single_field) {
         // compress bottom field
-        bot_size += mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 1, quality);
+        bot_size += mjpeg_compress_field_yuv(p, y, u, v, y_linesize, u_linesize, v_linesize, 1);
         total_size += bot_size;
     }
 
@@ -698,7 +730,7 @@ static void *mjpeg_compress_worker_thread(void *p_obj)
 		pthread_mutex_unlock(&p->m_state_change);
 
 		p->last_compressed_size = p->compressed_size;
-		p->compressed_size = mjpeg_compress_field_yuv(p->handle, p->y, p->u, p->v, p->y_linesize, p->u_linesize, p->v_linesize, p->thread_num, p->quality);
+		p->compressed_size = mjpeg_compress_field_yuv(p->handle, p->y, p->u, p->v, p->y_linesize, p->u_linesize, p->v_linesize, p->thread_num);
 
         // reset field_number to 0 to treat as single-field compression
     	j_compress_ptr cinfo = &(p->handle->cinfo);
@@ -726,7 +758,6 @@ extern unsigned mjpeg_compress_frame_yuv_threaded(
                                 unsigned char **pp_output)
 {
 	mjpeg_thread_data_t *thread = p->thread;
-	int quality = resolution_id_to_quality(thread[0].handle->resID);
 
 	// Setup inputs
 	int i;
@@ -737,7 +768,6 @@ extern unsigned mjpeg_compress_frame_yuv_threaded(
 		thread[i].y_linesize = y_linesize;
 		thread[i].u_linesize = u_linesize;
 		thread[i].v_linesize = v_linesize;
-		thread[i].quality = quality;
 	}
 
 	for (i = 0; i < 2; i++) {

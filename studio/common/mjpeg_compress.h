@@ -1,5 +1,5 @@
 /*
- * $Id: mjpeg_compress.h,v 1.1 2008/09/03 14:22:12 john_f Exp $
+ * $Id: mjpeg_compress.h,v 1.2 2009/02/26 19:28:07 john_f Exp $
  *
  * MJPEG encoder.
  *
@@ -106,7 +106,6 @@ typedef struct mjpeg_thread_data_t {
     int y_linesize;
     int u_linesize;
     int v_linesize;
-    int quality;
 
 	/* field compression outputs */
 	int compressed_size;
