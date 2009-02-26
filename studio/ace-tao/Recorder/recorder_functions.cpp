@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.15 2009/02/13 10:24:17 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.16 2009/02/26 19:22:30 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -80,9 +80,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     ThreadParam * param = (ThreadParam *)p_arg;
     RecordOptions * p_opt = param->p_opt;
     IngexRecorder * p_rec = param->p_rec;
-    RecorderImpl * p_impl = p_rec->mpImpl;
+    IngexRecorderImpl * p_impl = p_rec->mpImpl;
 
     bool quad_video = p_opt->quad;
+
+    int ffmpeg_threads;
+    p_impl->GetGlobals(ffmpeg_threads);
 
     // Set up packages and tracks
     int channel_i = 0; // hardware channel for video track
@@ -199,38 +202,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Start timecode passed as metadata to MXFWriter
     int start_tc = p_rec->mStartTimecode;
 
-#if 0
-    // We make sure these offsets are positive numbers.
-    // For quad, channel_i is first enabled channel.
-    int quad0_offset = (p_rec->mStartFrame[0] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
-    int quad1_offset = (p_rec->mStartFrame[1] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
-    int quad2_offset = (p_rec->mStartFrame[2] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
-    int quad3_offset = (p_rec->mStartFrame[3] - p_rec->mStartFrame[channel_i] + ring_length) % ring_length;
-#endif
-
+    // Image parameters
     const int WIDTH = IngexShm::Instance()->Width();
     const int HEIGHT = IngexShm::Instance()->Height();
+    const bool INTERLACE = IngexShm::Instance()->Interlace();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
     const int SIZE_422 = WIDTH * HEIGHT * 2;
-
-#if 0
-    // Audio samples per frame not constant in NTSC so we add a few.
-    const int max_audio_samples_per_frame = 48000 * IngexShm::Instance()->FrameRateDenominator()
-                                              / IngexShm::Instance()->FrameRateNumerator()
-                                              + 5;
-#endif
-
-#if 0
-    // Mask for MXF track enables
-    uint32_t mxf_mask = 0;
-    for (unsigned int i = 0; i < track_enables.size(); ++i)
-    {
-        if (track_enables[i])
-        {
-            mxf_mask |= (1 << i);
-        }
-    }
-#endif
+    int frame_rate_numerator;
+    int frame_rate_denominator;
+    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
+    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -241,7 +222,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
     int file_format = p_opt->file_format;
-    bool uncompressed_video = (UNC_MATERIAL_RESOLUTION == resolution);
 
     bool mxf = (MXF_FILE_FORMAT_TYPE == file_format);
     bool one_file_per_track = mxf;
@@ -312,7 +292,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialising these just to avoid compiler warnings
     MJPEGResolutionID mjpeg_res = MJPEG_20_1;
     enum {PIXFMT_420, PIXFMT_422} pix_fmt = PIXFMT_422;
-    enum {ENCODER_NONE, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder = ENCODER_NONE;
+    enum {ENCODER_NONE, ENCODER_UNC, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder = ENCODER_NONE;
+    // For checking of codec/capture compatibility
+    enum {SD, HD_INTERLACED, HD_PROGRESSIVE, ANY} codec_input_format = SD;
 
     std::string filename_extension;
     switch (resolution)
@@ -386,26 +368,31 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX36p;
+        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX120p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120p;
+        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX185p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185p;
+        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX120i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120i;
+        codec_input_format = HD_INTERLACED;
         break;
     case DNX185i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185i;
+        codec_input_format = HD_INTERLACED;
         break;
     // H264
     case DMIH264_MATERIAL_RESOLUTION:
@@ -413,6 +400,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DMIH264;
         filename_extension = ".h264";
+        codec_input_format = ANY;
         break;
     // Browse formats
     case DVD_MATERIAL_RESOLUTION:
@@ -432,12 +420,33 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     case UNC_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
-        encoder = ENCODER_NONE;
+        encoder = ENCODER_UNC;
         filename_extension = ".yuv";
+        codec_input_format = ANY;
         break;
     default:
         break;
     }
+
+    if ((codec_input_format == HD_INTERLACED || codec_input_format == HD_PROGRESSIVE) && WIDTH == 720)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("HD encoder selected but capture is SD!\n")));
+        encoder = ENCODER_NONE;
+        p_rec->NoteFailure();
+    }
+    else if (codec_input_format == SD && WIDTH > 720)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("SD encoder selected but capture is HD!\n")));
+        encoder = ENCODER_NONE;
+        p_rec->NoteFailure();
+    }
+    else if (codec_input_format == HD_PROGRESSIVE && INTERLACE == true)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Progressive encoder selected but capture is interlaced!\n")));
+        encoder = ENCODER_NONE;
+        p_rec->NoteFailure();
+    }
+
 
     // Override file name extension for non-raw formats
     switch (file_format)
@@ -528,7 +537,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
             else
             {
-                mp_trk->editRate = prodauto::g_palEditRate;
+                mp_trk->editRate = FRAME_RATE;
             }
             //mp_trk->editRate = rsp_trk->editRate;
             //ACE_DEBUG((LM_INFO, ACE_TEXT("Track %d, edit rate %d/%d\n"), i, mp_trk->editRate.numerator, mp_trk->editRate.denominator));
@@ -583,7 +592,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
             else
             {
-                fp_trk->editRate = prodauto::g_palEditRate;
+                fp_trk->editRate = FRAME_RATE;
             }
             //fp_trk->editRate = rsp_trk->editRate;
             fp_trk->name = rsp_trk->name;
@@ -604,8 +613,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 // Note that position is in terms of edit rate of the containing
                 // track, not the target track.
                 double audio_pos = start_tc;
-                audio_pos /= prodauto::g_palEditRate.numerator;
-                audio_pos *= prodauto::g_palEditRate.denominator;
+                audio_pos /= FRAME_RATE.numerator;
+                audio_pos *= FRAME_RATE.denominator;
                 audio_pos *= fp_trk->editRate.numerator;
                 audio_pos /= fp_trk->editRate.denominator;
                 fp_trk->sourceClip->position = (uint64_t) (audio_pos + 0.5);
@@ -745,10 +754,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         // Prevent "insufficient thread locking around avcodec_open/close()"
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        ffmpeg_encoder = ffmpeg_encoder_init(ff_res, THREADS_USE_BUILTIN_TUNING);
+        ffmpeg_encoder = ffmpeg_encoder_init(ff_res, ffmpeg_threads);
         if (!ffmpeg_encoder)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
+            encoder = ENCODER_NONE;
         }
     }
     
@@ -1019,7 +1029,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         frames_to_code = 1;
 #endif
 
-        for (unsigned int fi = 0; fi < frames_to_code && !finished_record; ++fi)
+        for (int fi = 0; fi < frames_to_code && !finished_record; ++fi)
         {
             int frame[MAX_CHANNELS];
             for (unsigned int i = 0; i < channels_in_use.size(); ++i)
@@ -1272,15 +1282,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Write raw (non-MXF) files
             if (raw && !DEBUG_NOWRITE)
             {
-                if (uncompressed_video && p_inp_video)
+                size_t n = 0;
+                if (encoder == ENCODER_UNC && p_inp_video && fp_raw[0] != NULL)
                 {
-                    //fwrite(p_inp_video, SIZE_422, 1, fp_video);
-                    fwrite(p_inp_video, SIZE_422, 1, fp_raw[0]);
+                    n = fwrite(p_inp_video, SIZE_422, 1, fp_raw[0]);
                 }
-                else if (p_enc_video)
+                else if (p_enc_video && fp_raw[0] != NULL)
                 {
-                    //fwrite(p_enc_video, size_enc_video, 1, fp_video);
-                    fwrite(p_enc_video, size_enc_video, 1, fp_raw[0]);
+                    n = fwrite(p_enc_video, size_enc_video, 1, fp_raw[0]);
+                }
+                if (n == 0)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Write error!\n")));
+                    fclose(fp_raw[0]);
+                    fp_raw[0] = NULL;
                 }
             }
 
@@ -1308,12 +1323,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                             // write pcm audio
                             writer->writeSample(mp_trk->id, audio_samples_per_frame, (uint8_t *)p_input[i], audio_samples_per_frame * 2);
                         }
-                        else if (UNC_MATERIAL_RESOLUTION == resolution)
+                        else if (encoder == ENCODER_UNC)
                         {
                             // write uncompressed video
                             writer->writeSample(mp_trk->id, 1, (uint8_t *)p_inp_video, SIZE_422);
                         }
-                        else
+                        else if (encoder != ENCODER_NONE)
                         {
                             // write encoded video
                             writer->writeSample(mp_trk->id, 1, p_enc_video, size_enc_video);
@@ -1477,8 +1492,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             else
             {
                 double audio_len = p_opt->FramesWritten();
-                audio_len /= prodauto::g_palEditRate.numerator;
-                audio_len *= prodauto::g_palEditRate.denominator;
+                audio_len /= FRAME_RATE.numerator;
+                audio_len *= FRAME_RATE.denominator;
                 audio_len *= mt->editRate.numerator;
                 audio_len /= mt->editRate.denominator;
                 mt->sourceClip->position = (uint64_t) (audio_len + 0.5);

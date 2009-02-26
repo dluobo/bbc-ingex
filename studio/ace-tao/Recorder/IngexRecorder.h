@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.8 2009/02/09 19:23:03 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.9 2009/02/26 19:22:30 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -52,7 +52,7 @@ const int SEARCH_GUARD = 5;
 #include "Database.h"  // For Recorder
 #include "RecordOptions.h"
 #include "recorder_types.h" // for framecount_t
-#include "RecorderImpl.h"
+#include "IngexRecorderImpl.h"
 
 class IngexRecorder;
 
@@ -96,7 +96,7 @@ class IngexRecorder
 
 // Per-recording functions
 public:
-    IngexRecorder(RecorderImpl * impl, unsigned int index);
+    IngexRecorder(IngexRecorderImpl * impl, unsigned int index);
     ~IngexRecorder();
 
     bool CheckStartTimecode(
@@ -179,7 +179,7 @@ private:
     ACE_thread_t mManageThreadId;
 
 // The RecorderImpl which holds source configs etc.
-    RecorderImpl * mpImpl;
+    IngexRecorderImpl * mpImpl;
 
 // Duration
     framecount_t mTargetDuration;           ///< To signal when capture should stop

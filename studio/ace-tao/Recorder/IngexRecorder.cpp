@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.9 2009/02/09 19:23:03 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.10 2009/02/26 19:22:30 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -65,7 +65,7 @@ static void clean_filename(std::string & filename)
 Constructor clears all member data.
 The name parameter is used when reading config from database.
 */
-IngexRecorder::IngexRecorder(RecorderImpl * impl, unsigned int index)
+IngexRecorder::IngexRecorder(IngexRecorderImpl * impl, unsigned int index)
 : mpCompletionCallback(0), mpImpl(impl), mTargetDuration(0),
   mRecordingOK(true), mIndex(index), mDroppedFrames(false)
 {

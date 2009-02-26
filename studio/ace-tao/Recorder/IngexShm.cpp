@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: IngexShm.cpp,v 1.9 2009/02/26 19:22:30 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -140,6 +140,12 @@ void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
         PTHREAD_MUTEX_UNLOCK(&mpControl->m_source_name_update)
 #endif
     }
+}
+
+void IngexShm::GetFrameRate(int & numerator, int & denominator)
+{
+    numerator = mpControl->frame_rate_numer;
+    denominator = mpControl->frame_rate_denom;
 }
 
 // Informational updates from Recorder to shared memory

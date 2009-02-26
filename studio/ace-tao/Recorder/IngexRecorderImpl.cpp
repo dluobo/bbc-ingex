@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.11 2009/02/09 19:24:20 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.12 2009/02/26 19:22:30 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -33,6 +33,7 @@
 #include "IngexShm.h"
 #include "RecorderSettings.h"
 #include "IngexRecorderImpl.h"
+#include "IngexRecorder.h"
 #include "FileUtils.h"
 #include "Timecode.h"
 #include "DateTime.h"
@@ -61,21 +62,23 @@ void recording_completed(IngexRecorder * rec)
 #endif
 }
 
-// Implementation skeleton constructor
+// Implementation constructor
 // Note that CopyManager mode is set here.
 IngexRecorderImpl::IngexRecorderImpl (void)
-: mRecording(false), mRecordingIndex(1), mCopyManager(CopyMode::NEW)
+: mFfmpegThreads(-1), mRecording(false), mRecordingIndex(1), mCopyManager(CopyMode::NEW)
 {
     mInstance = this;
 }
 
 // Initialise the recorder
-bool IngexRecorderImpl::Init(const std::string & name)
+bool IngexRecorderImpl::Init(const std::string & name, int ffmpeg_threads)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C)\n"), name.c_str()));
 
-    // Shared memory initialisation
+    mFfmpegThreads = ffmpeg_threads;
     bool ok = true;
+
+    // Shared memory initialisation
     if (!IngexShm::Instance()->Init())
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared Memory init failed!\n")));
@@ -703,4 +706,13 @@ int IngexRecorderImpl::TranslateLocatorColour(ProdAuto::LocatorColour::EnumType 
     return i;
 }
 
+/**
+Get various global parameters in a thread-safe way.
+*/
+void IngexRecorderImpl::GetGlobals(int & ffmpeg_threads)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mGlobalsMutex);
+
+    ffmpeg_threads = mFfmpegThreads;
+}
 

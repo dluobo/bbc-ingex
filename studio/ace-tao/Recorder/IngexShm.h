@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.6 2008/09/04 15:38:44 john_f Exp $
+ * $Id: IngexShm.h,v 1.7 2009/02/26 19:22:30 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -62,7 +62,7 @@ public:
     int LastFrame(unsigned int channel_i)
     {
         int frame = 0;
-        if(channel_i < mChannels)
+        if (channel_i < mChannels)
         {
 #ifndef _MSC_VER
             PTHREAD_MUTEX_LOCK(&mpControl->channel[channel_i].m_lastframe)
@@ -113,6 +113,7 @@ public:
 
     unsigned int Width() { return mpControl->width; }
     unsigned int Height() { return mpControl->height; }
+    bool Interlace() { return true; } // not yet supported
 
     uint8_t * pVideoPri(int channel, int frame)
     {
@@ -178,6 +179,8 @@ public:
             return FormatNone;
         }
     }
+
+    void GetFrameRate(int & numerator, int & denominator);
 
     // Informational updates from Recorder to shared memory
     void InfoSetup(std::string name);

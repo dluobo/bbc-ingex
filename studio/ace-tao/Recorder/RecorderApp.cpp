@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.4 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: RecorderApp.cpp,v 1.5 2009/02/26 19:22:30 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -22,6 +22,8 @@
  * 02110-1301, USA.
  */
 
+#include <ace/Get_Opt.h>
+#include <ace/Log_Msg.h>
 #include <ace/Time_Value.h>
 #include <ace/OS_NS_unistd.h>
 #include <iostream>
@@ -31,8 +33,16 @@
 #include "DateTime.h"
 #include "DatabaseManager.h"
 #include "DBException.h"
+#include "ffmpeg_encoder.h" // for THREADS_USE_BUILTIN_TUNING
 
 #include "RecorderApp.h"
+
+const char * const USAGE =
+    "Usage: Recorder <name> <db_user> <db_pw> [-v] [-t <num ffmpeg threads>]"
+    " <CORBA options>\n"
+    "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
+
+const char * const OPTS = "vt:";
 
 // Static member
 RecorderApp * RecorderApp::mInstance = 0;
@@ -59,8 +69,16 @@ bool RecorderApp::Init(int argc, char * argv[])
 // other initialisation
     mTerminated = false;
 
-// initialise ORB
+// Initialise ORB
+    int initial_argc = argc;
     CorbaUtil::Instance()->InitOrb(argc, argv);
+
+// and check whether ORB options were supplied
+    if (argc == initial_argc)
+    {
+        // No CORBA options supplied
+        ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT (USAGE)), 0);
+    }
 
 // Now that InitOrb has consumed its arguments, check for
 // command line arguments.
@@ -80,17 +98,29 @@ bool RecorderApp::Init(int argc, char * argv[])
         db_password = argv[3];
     }
 
-    int verbosity = 2;
-    for (int i = 4; i < argc; ++i)
+    // get command line options
+    unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
+    int ffmpeg_threads = THREADS_USE_BUILTIN_TUNING;
+    ACE_Get_Opt cmd_opts (argc, argv, OPTS);
+
+    int option;
+    while ((option = cmd_opts ()) != EOF)
     {
-        if (0 == strcmp(argv[i], "-v"))
+        switch (option)
         {
-            ++verbosity;
+        case 'v':
+            // verbose
+            ++debug_level;
+            break;
+        case 't':
+            // ffmpeg threads
+            ffmpeg_threads = ACE_OS::atoi(cmd_opts.opt_arg());
+            break;
         }
     }
 
 // Set verbosity of debug messages
-    Logfile::DebugLevel(verbosity);  // need level 3 for LM_DEBUG messages
+    Logfile::DebugLevel(debug_level);
 
 	ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Recorder name \"%C\"\n\n"), recorder_name.c_str() ));
 
@@ -108,8 +138,8 @@ bool RecorderApp::Init(int argc, char * argv[])
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
     }
 
-// Initialise recorder with name
-    bool ok = mpServant->Init(recorder_name);
+// Initialise recorder with name and other parameters
+    bool ok = mpServant->Init(recorder_name, ffmpeg_threads);
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 8;

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $
+ * $Id: IngexRecorderImpl.h,v 1.6 2009/02/26 19:22:30 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -30,9 +30,10 @@
 
 
 #include "RecorderImpl.h"
-#include "IngexRecorder.h"
 #include "CopyManager.h"
 #include "recorder_types.h" // for framecount_t
+
+class IngexRecorder;
 
 
 class  IngexRecorderImpl
@@ -49,7 +50,7 @@ public:
 
 
   // Initialisation
-  bool Init(const std::string & name);
+  bool Init(const std::string & name, int ffmpeg_threads);
 
   // Identity
   const char * Name() const { return mName.c_str(); }
@@ -97,13 +98,21 @@ public:
   
 	void NotifyCompletion(IngexRecorder * rec);
 
+public:
+// methods
+    void GetGlobals(int & ffmpeg_threads);
+
 private:
 // methods
 	void DoStop(framecount_t timecode, framecount_t post_roll);
     void UpdateShmSourceNames();
     void StartCopying(unsigned int index);
     int TranslateLocatorColour(ProdAuto::LocatorColour::EnumType e);
+
 // data
+    ACE_Thread_Mutex mGlobalsMutex;
+    int mFfmpegThreads;
+
 	bool mRecording;
     unsigned int mRecordingIndex;
 	IngexRecorder * mpIngexRecorder;
