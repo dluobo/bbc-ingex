@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.12 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: LocalIngexPlayer.h,v 1.13 2009/02/26 19:13:25 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -194,6 +194,7 @@ public:
     virtual bool setOSDScreen(OSDScreen screen);
     virtual bool nextOSDScreen();
     virtual bool setOSDTimecode(int index, int type, int subType);
+    virtual bool showProgressBar(bool show);
     virtual bool nextOSDTimecode();
     virtual bool switchNextVideo();
     virtual bool switchPrevVideo();

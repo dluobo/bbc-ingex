@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.14 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.15 2009/02/26 19:13:25 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -1775,6 +1775,30 @@ bool LocalIngexPlayer::nextOSDTimecode()
         }
 
         mc_next_osd_timecode(ply_get_media_control(_playState->mediaPlayer));
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::showProgressBar(bool show)
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+
+        osd_set_progress_bar_visibility(msk_get_osd(_playState->mediaSink), show);
     }
     catch (...)
     {
