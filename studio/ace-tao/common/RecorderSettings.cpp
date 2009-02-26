@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.5 2009/02/09 19:18:17 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.6 2009/02/26 19:18:40 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -29,7 +29,7 @@
 // These are the default values that will be used if
 // config cannot be read from the database.
 
-const prodauto::Rational    IMAGE_ASPECT    = { 4, 3 };
+const prodauto::Rational    IMAGE_ASPECT    = prodauto::g_16x9ImageAspect;
 const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
 const char * const          COPY_COMMAND    = "";
 
