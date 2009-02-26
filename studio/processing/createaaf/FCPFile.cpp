@@ -1,5 +1,5 @@
 /*
- * $Id: FCPFile.cpp,v 1.3 2009/01/23 19:42:44 john_f Exp $
+ * $Id: FCPFile.cpp,v 1.4 2009/02/26 19:43:23 john_f Exp $
  *
  * Final Cut Pro XML file for defining clips, multi-camera clips, etc
  *
@@ -81,7 +81,6 @@ void FCPFile::addClip(MaterialPackage* materialPackage, PackageSet& packages)
     static const char * df ="DF";
     static const char * src = "source";
     
-    Rational palEditRate = {25, 1};
     int64_t st_time;
     int angle = 0;
     string temptest = "Main";
@@ -145,7 +144,7 @@ void FCPFile::addClip(MaterialPackage* materialPackage, PackageSet& packages)
 
     //Audio Channel Tag- right
     DOMElement * chnlElem = _doc->createElement(X("channelcount"));
-    st_time = getStartTime(topPackage, packages, palEditRate); //start frames from midnite
+    st_time = getStartTime(topPackage, packages, g_palEditRate); //start frames from midnite
 
     Timecode tc(st_time);  //returns true time code
 
@@ -415,7 +414,6 @@ bool FCPFile::addMCClipInternal(MCClipDef* itmcP, MaterialPackageSet& materialPa
         materialPackages.insert(topPackage1);
         //DOM Multicam 
         // add material to group that has same start time and creation date
-        Rational palEditRate = {25, 1};
         int64_t st_time;
         vector<prodauto::Track*>::const_iterator iter6;
         for (iter6 = topPackage1->tracks.begin(); iter6 != topPackage1->tracks.end(); iter6++) 
@@ -480,7 +478,7 @@ bool FCPFile::addMCClipInternal(MCClipDef* itmcP, MaterialPackageSet& materialPa
                                 MclipidElem->appendChild(MsyncElem);
                                 MclipidElem->setAttribute(X("id"), X(idname_ss.str().c_str()));
                             }
-                            st_time = getStartTime(topPackage1, packages, palEditRate);
+                            st_time = getStartTime(topPackage1, packages, g_palEditRate);
                             Timecode tc(st_time);
                             if (track->dataDef == PICTURE_DATA_DEFINITION) //VIDEO
                             { 
