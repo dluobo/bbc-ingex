@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: jpeg_info.pl,v 1.1 2008/05/07 17:04:19 philipn Exp $
+# $Id: jpeg_info.pl,v 1.2 2009/02/26 19:10:22 john_f Exp $
 #
 use IO::Seekable;
 use Getopt::Long;
@@ -9,7 +9,12 @@ use strict;
 my %summary;
 my $opt_summary = 0;
 my $opt_quiet = 0;
-GetOptions('s', \$opt_summary, 'q', \$opt_quiet);
+my $opt_dqt_single_line = 0;
+my $opt_display_bitstream_dqt = 0;
+GetOptions('s', \$opt_summary, 'q', \$opt_quiet,
+			'oneline', \$opt_dqt_single_line,
+			'bitstream_dqt', \$opt_display_bitstream_dqt,
+			);
 
 die "Need filename arg" if ! scalar(@ARGV);
 
@@ -171,25 +176,76 @@ if ($opt_summary) {
 	}
 }
 
+=pod
+ 1  2  6  7 15 16 28 29    zig-zag ordering
+ 3  5  8 14 17 27 30 43
+ 4  9 13 18 26 31 42 44
+10 12 19 25 32 41 45 54
+11 20 24 33 40 46 53 55
+21 23 34 39 47 52 56 61
+22 35 38 48 51 57 60 62
+36 37 49 50 58 59 63 64
+
+ 1  2  3  4  5  6  7  8    If this table is input to jpeg_add_quant_table()
+ 9 10 11 12 13 14 15 16    libjpeg will order it following zig-zag order
+17 18 19 20 21 22 23 24
+25 26 27 28 29 30 31 32
+33 34 35 36 37 38 39 40
+41 42 43 44 45 46 47 48
+49 50 51 52 53 54 55 56
+57 58 59 60 61 62 63 64
+
+ 1  2  9 17 10  3  4 11    resulting in this displayed output by old jpeg_info.pl
+18 25 33 26 19 12  5  6
+13 20 27 34 41 49 42 35
+28 21 14  7  8 15 22 29
+36 43 50 57 58 51 44 37
+30 23 16 24 31 38 45 52
+59 60 53 46 39 32 40 47
+54 61 62 55 48 56 63 64
+=cut
+
+sub dqtidx
+{
+	my ($i) = @_;
+	return $1 if $opt_display_bitstream_dqt;
+
+	# display DQT in zig-zag order for input to libjpeg
+	my @tab = qw(
+ 1  2  6  7 15 16 28 29
+ 3  5  8 14 17 27 30 43
+ 4  9 13 18 26 31 42 44
+10 12 19 25 32 41 45 54
+11 20 24 33 40 46 53 55
+21 23 34 39 47 52 56 61
+22 35 38 48 51 57 60 62
+36 37 49 50 58 59 63 64
+);
+	return $tab[$i] - 1;
+}
+
 sub dumpDQT
 {
 	my ($table) = @_;
 
 	my ($PqTq) = unpack('C', $table);
 	my $dest_id = $PqTq & 0x0f;
-	printf "    Pq=%d Tq=%d", $PqTq >> 4, $dest_id;
+	printf("    Pq=%d Tq=%d", $PqTq >> 4, $dest_id) unless $opt_dqt_single_line;
 	my $bpe = ($PqTq >> 4) ? 2 : 1;
-	printf "  (element precision=%d  destination id=%d)\n", $bpe * 8, $dest_id;
+	printf("  (element precision=%d  destination id=%d)\n", $bpe * 8, $dest_id) unless $opt_dqt_single_line;
 	for my $i (0 .. 63) {
 		print "      " if $i % 8 == 0;
 		if ($bpe == 1) {    # 8 bit precision
-			printf "%3d ", ord(substr($table, 1 + $i, 1));
+			printf "%3d ", ord(substr($table, 1 + dqtidx($i), 1));
 		}
 		else {              # 16 bit precision
 			printf "%5d ", unpack("n", substr($table, 1 + $i*2, 2));
 		}
-		print "\n" if $i % 8 == 7;
+		if (! $opt_dqt_single_line) {
+			print "\n" if $i % 8 == 7;
+		}
 	}
+	print "\n" if $opt_dqt_single_line;
 	return ($bpe, $dest_id);
 }
 
