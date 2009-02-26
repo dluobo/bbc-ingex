@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.9 2009/02/13 11:17:42 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.10 2009/02/26 19:42:05 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -588,7 +588,7 @@ int main(int argc, const char* argv[])
                 parseTag(argv[cmdlnIndex + 1], tagName, tagValue);
                 cmdlnIndex += 2;
             }
-            else if (strcmp(argv[cmdlnIndex], "-n") == 0 || //TODO
+            else if (strcmp(argv[cmdlnIndex], "-n") == 0 ||
                 strcmp(argv[cmdlnIndex], "--pro-name") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
@@ -829,7 +829,7 @@ int main(int argc, const char* argv[])
  		// packages != project name
 		else if (projName.size() != 0)
 		{
-		    if (topPackage->projectName.name == projName)
+		    if (topPackage->projectName.name != projName)
 		    {
 		    	packagesToErase.push_back(topPackage);
 		    }
