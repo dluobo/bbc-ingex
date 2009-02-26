@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: timepos.h,v 1.5 2009/02/26 19:17:10 john_f Exp $           *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -48,11 +51,12 @@ class Timepos : public wxEvtHandler
 		const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
 		const wxString GetPosition();
 		const wxString GetStartPosition();
-		static const wxString FormatTimecode(const ProdAuto::MxfTimecode tc);
+		static const wxString FormatPosition(const ProdAuto::MxfDuration);
+		static const wxString FormatTimecode(const ProdAuto::MxfTimecode);
 		unsigned long GetFrameCount();
 	private:
 		void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
-		const wxString FormatPosition(const wxTimeSpan);
+		static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfDuration);
 
 		bool mTimecodeRunning;
 		bool mPositionRunning;
@@ -63,7 +67,7 @@ class Timepos : public wxEvtHandler
 		wxDateTime mPositionOrigin;
 		wxDateTime mStopTime;
 		ProdAuto::MxfTimecode mStartTimecode;
-		ProdAuto::MxfTimecode mDuration;
+		ProdAuto::MxfDuration mDuration;
 		ProdAuto::MxfTimecode mLastTimecodeReceived;
 		ProdAuto::MxfTimecode mLastKnownTimecode;
 

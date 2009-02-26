@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.7 2009/01/29 07:36:58 stuart_hc Exp $           *
+ *   $Id: dialogues.cpp,v 1.8 2009/02/26 19:17:09 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1160,6 +1160,8 @@ int TestModeDlg::ShowModal()
 	mTimer->Stop();
 	mRunButton->SetValue(false);
 	mRecording = false;
+	mRunStopMessage->SetLabel(wxT("Stopped"));
+	mRunStopCountdown->SetLabel(wxT(""));
 	return rc;
 }
 
@@ -1234,14 +1236,14 @@ void TestModeDlg::Record(bool rec)
 		if (mRecording) {
 			mRunStopMessage->SetLabel(wxT("Recording for"));
 			int range = mMaxRecTime->GetValue() - mMinRecTime->GetValue() + 1;
-			while ((dur = rand()/(RAND_MAX/range)) > range); //avoid occasional truncation to range
+			while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
 			dur += mMinRecTime->GetValue();
 			mCountdown = wxTimeSpan::Minutes(dur);
 		}
 		else {
 			mRunStopMessage->SetLabel(wxT("Stopped for"));
 			int range = mMaxGapTime->GetValue() - mMinGapTime->GetValue() + 1;
-			while ((dur = rand()/(RAND_MAX/range)) > range); //avoid occasional truncation to range
+			while ((dur = rand()/(RAND_MAX/range)) > range) {}; //avoid occasional truncation to range
 			dur += mMinGapTime->GetValue();
 			mCountdown = wxTimeSpan::Seconds(dur);
 		}
@@ -1252,8 +1254,7 @@ void TestModeDlg::Record(bool rec)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define N_COLOURS 9 //including default - make sure this matches number of entries in array below
-const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAuto::LocatorColour::EnumType code;} colours[9] = {
+static const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAuto::LocatorColour::EnumType code;} colours[N_CUE_POINT_COLOURS] = {
 	{ "#FF0000", "#000000", "DEFAULT", ProdAuto::LocatorColour::DEFAULT_COLOUR }, //this must come first
 	{ "#FFFFFF", "#000000", "White", ProdAuto::LocatorColour::WHITE },
 	{ "#FF0000", "#000000", "Red", ProdAuto::LocatorColour::RED },
@@ -1286,9 +1287,9 @@ CuePointsDlg::CuePointsDlg(wxWindow * parent, wxXmlDocument & savedState) : wxDi
 	//accelerator table
 	wxAcceleratorEntry entries[11]; //NB number used below and later IDs used for colour menu
 	for (int entry = 0; entry < 10; entry++) {
-		entries[entry].Set(wxACCEL_NORMAL, (int) '0' + entry, wxID_HIGHEST + N_COLOURS + 2 + entry); //ID corresponds to key so we can find out which key is pressed
+		entries[entry].Set(wxACCEL_NORMAL, (int) '0' + entry, wxID_HIGHEST + N_CUE_POINT_COLOURS + 2 + entry); //ID corresponds to key so we can find out which key is pressed
 	}
-	entries[10].Set(wxACCEL_NORMAL, WXK_F2, wxID_HIGHEST + N_COLOURS + 1);
+	entries[10].Set(wxACCEL_NORMAL, WXK_F2, wxID_HIGHEST + N_CUE_POINT_COLOURS + 1);
 	wxAcceleratorTable accel(11, entries); //NB number used above
 	SetAcceleratorTable(accel);
 
@@ -1369,7 +1370,7 @@ void CuePointsDlg::Load()
 		 && shortcutVal < 10 //...in the right range
 		 && cuePointNode->GetPropVal(wxT("Colour"), &colour) //has a required attribute...
 		 && colour.ToULong(&colourVal) //... which is a number...
-		 && colourVal < N_COLOURS) { //...in the right range
+		 && colourVal < N_CUE_POINT_COLOURS) { //...in the right range
 			shortcutVal = (shortcutVal == 0) ? 9 : shortcutVal - 1; //row number
 			mGrid->SetCellValue(shortcutVal, 0, cuePointNode->GetNodeContent().Trim(false).Trim(true));
 			SetColour(shortcutVal, colourVal);
@@ -1489,20 +1490,20 @@ void CuePointsDlg::OnSetGridRow(wxCommandEvent & event)
 /// @param event Contains the menu ID.
 void CuePointsDlg::OnMenu(wxCommandEvent & event)
 {
-	if (event.GetId() < wxID_HIGHEST + 1 + N_COLOURS) { //a colour menu selection
+	if (event.GetId() < wxID_HIGHEST + 1 + N_CUE_POINT_COLOURS) { //a colour menu selection
 		SetColour(mCurrentRow, event.GetId() - wxID_HIGHEST - 1);
 		//Move the grid cursor away from the right hand column as it can't be "edited" as such
 		wxCommandEvent event(wxEVT_SET_GRID_ROW, mCurrentRow);
 		AddPendingEvent(event);
 	}
 	else if (mTextColour == mMessage->GetForegroundColour() && mTimecodeDisplay->IsShown()) { //shortcuts enabled
-		if (wxID_HIGHEST + N_COLOURS + 1 == event.GetId()) { //function key pressed
+		if (wxID_HIGHEST + N_CUE_POINT_COLOURS + 1 == event.GetId()) { //function key pressed
 			//return a blank (default) locator
 			mDescription.Clear();
 			mColour = 0;
 		}
 		else {
-			int row = event.GetId() == wxID_HIGHEST + N_COLOURS + 2 ? 9 : event.GetId() - N_COLOURS - wxID_HIGHEST - 3;
+			int row = event.GetId() == wxID_HIGHEST + N_CUE_POINT_COLOURS + 2 ? 9 : event.GetId() - N_CUE_POINT_COLOURS - wxID_HIGHEST - 3;
 			mDescription = mGrid->GetCellValue(row, 0).Trim(false).Trim(true);
 			mColour = mDescrColours[row];
 		}
@@ -1554,7 +1555,7 @@ void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 	}
 	if (1 == event.GetCol()) { //clicked in the colour column
 		wxMenu colourMenu(wxT("Choose colour"));
-		for (unsigned int i = 0; i < N_COLOURS; i++) {
+		for (unsigned int i = 0; i < N_CUE_POINT_COLOURS; i++) {
 			colourMenu.Append(wxID_HIGHEST + 1 + i, wxString(colours[i].label, *wxConvCurrent));
 		}
 		PopupMenu(&colourMenu);
@@ -1589,20 +1590,26 @@ const wxString CuePointsDlg::GetDescription()
 	return mDescription;
 }
 
-/// Returns the currently selected locator's colour code
-const ProdAuto::LocatorColour::EnumType CuePointsDlg::GetColourCode()
+/// Returns colour index of the currently selected locator
+size_t CuePointsDlg::GetColourIndex()
 {
-	return colours[mColour].code;
+	return mColour;
 }
 
-/// Returns the currently selected locator's displayed colour
-const wxColour CuePointsDlg::GetColour()
+/// Returns the locator colour code corresponding to an index
+ProdAuto::LocatorColour::EnumType CuePointsDlg::GetColourCode(const size_t index)
 {
-	return wxColour(wxString(colours[mColour].colour, *wxConvCurrent));
+	return colours[index].code;
 }
 
-/// Returns the currently selected locator's displayed label text colour
-const wxColour CuePointsDlg::GetLabelColour()
+/// Returns the displayed colour corresponding to an index
+const wxColour CuePointsDlg::GetColour(const size_t index)
 {
-	return wxColour(wxString(colours[mColour].labelColour, *wxConvCurrent));
+	return wxColour(wxString(colours[index].colour, *wxConvCurrent));
+}
+
+/// Returns the label colour corresponding to an index
+const wxColour CuePointsDlg::GetLabelColour(const size_t index)
+{
+	return wxColour(wxString(colours[index].labelColour, *wxConvCurrent));
 }

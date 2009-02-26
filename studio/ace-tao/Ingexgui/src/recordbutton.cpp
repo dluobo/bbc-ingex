@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: recordbutton.cpp,v 1.5 2009/02/26 19:17:10 john_f Exp $            *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -39,7 +42,7 @@ RecordButton::RecordButton(wxWindow * parent, wxWindowID id, const wxString & la
 /// @param event The mouse event.
 void RecordButton::OnLMouseDown(wxMouseEvent & event)
 {
-	if (mEnabled) {
+	if (mClickable) {
 		//act on the click
 		event.Skip();
 	}
@@ -68,7 +71,7 @@ bool RecordButton::Enable(bool state)
 //std::cerr << "enable false" << std::endl;
 		SetBackgroundColour(mInitialColour);
 	}
-	mEnabled = true; //let the underlying button handle this
+	mClickable = true; //let the underlying button handle this
 	return wxButton::Enable(state); //logic of return value is a bit broken
 }
 
@@ -86,7 +89,7 @@ void RecordButton::SetLabel(const wxString & label)
 void RecordButton::Record() {
 //std::cerr << "record" << std::endl;
 	wxButton::Enable(); //so it's not greyed out
-	mEnabled = false; //so it doesn't respond to mouse clicks
+	mClickable = false;
 	SetLabel(wxT(""));
 	SetBackgroundColour(wxColour(wxT("RED")));
 	mTimer->Stop();
@@ -96,7 +99,7 @@ void RecordButton::Record() {
 void RecordButton::Pending() {
 //std::cerr << "pending" << std::endl;
 	wxButton::Enable(); //so it's not greyed out
-	mEnabled = false; //so it doesn't respond to mouse clicks
+	mClickable = false; //so it doesn't respond to mouse clicks
 	wxButton::SetLabel(wxT(""));
 	SetBackgroundColour(wxColour(wxT("RED")));
 	mTimer->Start(125);
@@ -113,4 +116,9 @@ void RecordButton::OnTimer(wxTimerEvent & WXUNUSED(event)) {
 			SetBackgroundColour(mInitialColour);
 		}
 	}
+}
+
+/// Returns true if the button is clickable
+bool RecordButton::IsEnabled() {
+	return mClickable && wxButton::IsEnabled();
 }

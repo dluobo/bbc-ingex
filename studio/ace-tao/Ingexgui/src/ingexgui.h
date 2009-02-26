@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $              *
+ *   $Id: ingexgui.h,v 1.11 2009/02/26 19:17:10 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -51,7 +51,6 @@
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
 
 #define USING_ULONGLONG 0 //this allows larger numbers to be incrementable in tape ID cells but if the C runtime library does not support 64-bit numbers the increment buttons will not work at all
-
 
 static const ProdAuto::MxfTimecode InvalidMxfTimecode = { {0, 0}, 0, true};
 static const ProdAuto::MxfDuration InvalidMxfDuration = { {0, 0}, 0, true};

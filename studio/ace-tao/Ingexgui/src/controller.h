@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: controller.h,v 1.6 2009/02/26 19:17:09 john_f Exp $           *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -84,15 +87,16 @@ private:
 	Comms * mComms;
 	wxMutex mMutex;
 	wxTimer * mPollingTimer;
-	const wxString mName;
 	bool mTimecodeRunning;
 	bool mReconnecting;
-	bool mRouterRecorder;
 	Command mPendingCommand;
 	bool mPendingCommandSent;
 	wxDateTime mLastTimecodeRequest;
 	ProdAuto::MxfTimecode mLastTimecodeReceived;
-	//vbls written to in both contexts while thread is running
+	//simple vbls accessed in both contexts - don't need protecting
+	bool mRouterRecorder;
+	//vbls accessed in both contexts while thread is running
+	const wxString mName;
 	wxCondition* mCondition;
 	Command mCommand;
 	Command mPrevCommand;
@@ -133,7 +137,7 @@ public:
 	ControllerThreadEvent(const wxEventType & type) : wxNotifyEvent(type), mTrackStatusList(0), mTimecodeState(Controller::ABSENT), mTimecodeStateChanged(false) {};
 	~ControllerThreadEvent() {};
 	virtual wxEvent * Clone() const { return new ControllerThreadEvent(*this); }; //Called when posted to the event queue - must have exactly this prototype or base class one will be called which won't copy extra stuff
-	const CORBA::ULong GetNTracks() { if (mTrackStatusList.operator->()) return mTrackStatusList->length(); else return 0; };
+	CORBA::ULong GetNTracks() { if (mTrackStatusList.operator->()) return mTrackStatusList->length(); else return 0; };
 	void SetName(const wxString & name) { mName = name; };
 	void SetMessage(const wxString & msg) { mMessage = msg; };
 	void SetTrackList(ProdAuto::TrackList_var trackList) { mTrackList = trackList; };
@@ -148,11 +152,11 @@ public:
 	const wxString GetMessage() { return mMessage; };
 	ProdAuto::TrackList_var GetTrackList() { return mTrackList; };
 	ProdAuto::TrackStatusList GetTrackStatusList() { return mTrackStatusList; };
-	const Controller::Command GetCommand() { return mCommand; };
-	const Controller::Result GetResult() { return mResult; };
+	Controller::Command GetCommand() { return mCommand; };
+	Controller::Result GetResult() { return mResult; };
 	CORBA::StringSeq_var GetStrings() { return mStrings; };
 	const ProdAuto::MxfTimecode GetTimecode() { return mTimecode; };
-	const Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
+	Controller::TimecodeState GetTimecodeState() { return mTimecodeState; };
 	bool TimecodeStateHasChanged() { return mTimecodeStateChanged; };
 	DECLARE_DYNAMIC_CLASS(ControllerThreadEvent)
 private:

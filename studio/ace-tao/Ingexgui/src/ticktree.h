@@ -121,12 +121,12 @@ class ItemData : public wxTreeItemData
 	public:
 		ItemData(TickTreeCtrl::state state, int intValue = 0, bool boolValue = false) : mInt(intValue), mBool(boolValue), mLocked(false), mEnabledTracks(0), mUnderlyingState(state) {}
 		ItemData(TickTreeCtrl::state state, const wxString & stringValue, int intValue = 0, bool boolValue = false) : mString(stringValue), mInt(intValue),  mBool(boolValue), mLocked(false), mEnabledTracks(0), mUnderlyingState(state) {}
-		const int GetInt() { return mInt; }
+		int GetInt() { return mInt; }
 		void SetBool(bool state) { mBool = state; }
 		bool GetBool() { return mBool; }
 		const wxString & GetString() { return mString; }
 		void SetUnderlyingState(const TickTreeCtrl::state state) { mUnderlyingState = state; }
-		const TickTreeCtrl::state GetUnderlyingState() { return mUnderlyingState; }
+		TickTreeCtrl::state GetUnderlyingState() { return mUnderlyingState; }
 		void Lock() { mLocked = true; };
 		void Unlock() { mLocked = false; };
 		bool IsLocked() { return mLocked; };

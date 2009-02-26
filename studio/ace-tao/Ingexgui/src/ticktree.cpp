@@ -253,7 +253,7 @@ bool TickTreeCtrl::HasAllSignals()
 /// @return True if any recorders.
 bool TickTreeCtrl::HasRecorders()
 {
-	return GetCount() > 1;	
+	return GetCount() > 1;
 }
 
 /// Indicates whether at least one track is recording and there are no problems.

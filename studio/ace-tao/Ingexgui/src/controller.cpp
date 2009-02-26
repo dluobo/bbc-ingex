@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $          *
+ *   $Id: controller.cpp,v 1.7 2009/02/26 19:17:09 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -39,7 +39,7 @@ END_EVENT_TABLE()
 /// @param comms The comms object, to allow the recorder object to be resolved.
 /// @param handler The handler where events will be sent.
 Controller::Controller(const wxString & name, Comms * comms, wxEvtHandler * handler)
-: wxThread(wxTHREAD_JOINABLE), mComms(comms), mName(name), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPendingCommandSent(false), mPrevCommand(NONE) //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
+: wxThread(wxTHREAD_JOINABLE), mComms(comms), mTimecodeRunning(false), mReconnecting(false), mPendingCommand(NONE), mPendingCommandSent(false), mName(name), mPrevCommand(NONE)  //joinable means we can wait until the thread terminates, and this object doesn't delete itself when that happens
 {
 	mCondition = new wxCondition(mMutex);
 	SetNextHandler(handler); //allow thread ControllerThreadEvents to propagate to the frame
@@ -198,7 +198,9 @@ void Controller::Destroy()
 	}
 	else { //write a suicide note now
 		ControllerThreadEvent event(wxEVT_CONTROLLER_THREAD);
+		mMutex.Lock();
 		event.SetName(mName);
+		mMutex.Unlock();
 		event.SetCommand(DIE);
 		GetNextHandler()->AddPendingEvent(event);
 	}
@@ -228,7 +230,7 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 		GetNextHandler()->AddPendingEvent(event); //NB don't use Skip() because the next event handler can delete this controller, leading to a hang
 	}
 	else if (mPollingTimer) { //not waiting to die
-		if (CONNECT == event.GetCommand() && SUCCESS != event.GetResult() //failure to connect
+		if ((CONNECT == event.GetCommand() && SUCCESS != event.GetResult()) //failure to connect
 		   || (RECONNECT == event.GetCommand() && FAILURE == event.GetResult())) { //failure to reconnect
 			//let the parent know - parent will delete this controller
 //std::cerr << "connect/reconnect failure notification" << std::endl;
@@ -337,14 +339,16 @@ wxThread::ExitCode Controller::Entry()
 			{
 				case CONNECT: case RECONNECT: {
 //std::cerr << "thread CONNECT/RECONNECT" << std::endl;
-//					ProdAuto::MxfDuration maxPreroll, maxPostroll;
 					ProdAuto::MxfDuration maxPreroll = InvalidMxfDuration; //initialisation prevents compiler warning
 					ProdAuto::MxfDuration maxPostroll = InvalidMxfDuration; //initialisation prevents compiler warning
 					ProdAuto::TrackList_var trackList;
 					bool routerRecorder = false; //initialisation prevents compiler warning
 					event.SetTimecodeStateChanged(); //always trigger action
 					mLastTimecodeReceived.undefined = true; //guarantee that a valid timecode will be assumed to be running timecode
-					msg = mComms->SelectRecorder(mName, mRecorder);
+					mMutex.Lock();
+					wxString name = mName;
+					mMutex.Unlock();
+					msg = mComms->SelectRecorder(name, mRecorder);
 					if (msg.IsEmpty()) { //OK so far
 						try {
 							trackList = mRecorder->Tracks();
@@ -355,7 +359,7 @@ wxThread::ExitCode Controller::Entry()
 							strings = mRecorder->ProjectNames();
 						}
 						catch (const CORBA::Exception & e) {
-//std::cerr << "connect/reconnect exception" << std::endl;
+//std::cerr << "connect/reconnect exception: " << e._name() << std::endl;
 							msg = wxT("Error communicating with this recorder: ") + wxString(e._name(), *wxConvCurrent) + wxT(".  Is it operational and connected to the network?  The problem may resolve itself if you try again.");
 						}
 					}
@@ -464,7 +468,7 @@ wxThread::ExitCode Controller::Entry()
 						mRecorder->SetTapeNames(sourceNames, tapeIds);
 					}
 					catch (const CORBA::Exception & e) {
-//std::cerr << "set tape IDs exception" << std::endl;
+//std::cerr << "set tape IDs exception: " << e._name() << std::endl;
 						event.SetResult(COMM_FAILURE);
 					}
 					rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by SetTapeNames()
@@ -478,7 +482,7 @@ wxThread::ExitCode Controller::Entry()
 						mRecorder->AddProjectNames(projectNames);
 					}
 					catch (const CORBA::Exception & e) {
-//std::cerr << "AddProjectNames exception" << std::endl;
+//std::cerr << "AddProjectNames exception: " << e._name() << std::endl;
 						event.SetResult(COMM_FAILURE);
 					}
 					rc = ProdAuto::Recorder::SUCCESS; //no return code suppled by AddProject()
@@ -496,7 +500,7 @@ wxThread::ExitCode Controller::Entry()
 						rc = mRecorder->Start(timecode, preroll, rec_enable, project.c_str(), false);
 					}
 					catch (const CORBA::Exception & e) {
-//std::cerr << "start exception" << std::endl;
+//std::cerr << "start exception: " << e._name() << std::endl;
 						event.SetResult(COMM_FAILURE);
 					}
 					break;
@@ -513,7 +517,7 @@ wxThread::ExitCode Controller::Entry()
 						rc = mRecorder->Stop(timecode, postroll, description, locators, strings.out());
 					}
 					catch (const CORBA::Exception & e) {
-//std::cerr << "stop exception" << std::endl;
+//std::cerr << "stop exception: " << e._name() << std::endl;
 						event.SetResult(COMM_FAILURE);
 					}
 					event.SetTimecodeStateChanged(); //so that a timecode that was stuck during the recording will be reported as such
@@ -583,8 +587,8 @@ wxThread::ExitCode Controller::Entry()
 					}
 					break; //successful: no need to try again
 				}
-				catch (const CORBA::Exception &) {
-//std::cerr << "status exception" << std::endl;
+				catch (const CORBA::Exception & e) {
+//std::cerr << "status exception: " << e._name() << std::endl;
 					event.SetResult(COMM_FAILURE);
 				//indicated by list size being zero
 				}

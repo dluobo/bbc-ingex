@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.9 2009/01/29 07:36:58 stuart_hc Exp $              *
+ *   $Id: player.cpp,v 1.10 2009/02/26 19:17:10 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -42,6 +42,9 @@ BEGIN_EVENT_TABLE( Player, wxEvtHandler )
 	EVT_SOCKET( wxID_ANY, Player::OnSocketEvent )
 END_EVENT_TABLE()
 
+Rational zero = {0, 0};
+Rational fourthirds = {4, 3};
+
 /// Creates the player, but does not display it.
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param handler The handler where events will be sent.
@@ -49,7 +52,26 @@ END_EVENT_TABLE()
 /// @param outputType The output type - accelerated or unaccelerated; SDI or not.
 /// @param displayType The on screen display type.
 Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType) :
-LocalIngexPlayer(&mListenerRegistry, outputType), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0), mMuted(false) //simple LocalIngexPlayer constructor with defaults
+LocalIngexPlayer(&mListenerRegistry,
+	outputType,
+	QUAD_SPLIT_VIDEO_SWITCH,
+	4,
+	false,
+	true,
+	true,
+	0,
+	false,
+	false,
+	zero,
+	zero,
+	fourthirds,
+	1.0,
+	false,
+	0,
+	4, //non-default number of audio level monitors
+	-18.0,
+	true
+), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0), mMuted(false) //simple LocalIngexPlayer constructor with defaults
 {
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);

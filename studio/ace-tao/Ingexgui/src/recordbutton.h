@@ -1,6 +1,9 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   $Id: recordbutton.h,v 1.5 2009/02/26 19:17:10 john_f Exp $            *
+ *                                                                         *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
+ *   Author: Matthew Marks                                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,10 +36,11 @@ public:
 	virtual void SetLabel(const wxString &);
 	void Record();
 	void Pending();
+	bool IsEnabled();
 private:
 	void OnTimer(wxTimerEvent &);
 	void OnLMouseDown(wxMouseEvent &);
-	bool mEnabled;
+	bool mClickable;
 	wxColour mInitialColour;
 	wxTimer * mTimer;
 	wxString mLabel;

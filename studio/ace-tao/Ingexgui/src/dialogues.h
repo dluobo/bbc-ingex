@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $             *
+ *   $Id: dialogues.h,v 1.6 2009/02/26 19:17:09 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -233,6 +233,7 @@ class TestModeDlg : public wxDialog
 	DECLARE_EVENT_TABLE()
 };
 
+#define N_CUE_POINT_COLOURS 9 //including default
 
 class CuePointsDlg : public wxDialog
 {
@@ -241,9 +242,10 @@ class CuePointsDlg : public wxDialog
 		int ShowModal(const wxString = wxT(""));
 		void Shortcut(const int);
 		const wxString GetDescription();
-		const wxColour GetColour();
-		const wxColour GetLabelColour();
-		const ProdAuto::LocatorColour::EnumType GetColourCode();
+		size_t GetColourIndex();
+		static ProdAuto::LocatorColour::EnumType GetColourCode(const size_t);
+		static const wxColour GetColour(const size_t);
+		static const wxColour GetLabelColour(const size_t);
 	private:
 		void OnEditorShown(wxGridEvent &);
 		void OnEditorHidden(wxGridEvent &);

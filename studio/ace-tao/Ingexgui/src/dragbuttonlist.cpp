@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $             *
+ *   $Id: dragbuttonlist.cpp,v 1.7 2009/02/26 19:17:09 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -55,15 +55,15 @@ void DragButtonList::SetTracks(TakeInfo & takeInfo, std::vector<std::string> & f
 	if (takeInfo.GetFiles()->GetCount()) { //this take has files associated
 		for (size_t i = 0; i < takeInfo.GetFiles()->GetCount(); i++) { //recorder loop
 			for (size_t j = 0; j < (*takeInfo.GetFiles())[i]->length(); j++) { //file loop
-				if (ProdAuto::VIDEO == (*takeInfo.GetTracks())[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
+				if (ProdAuto::VIDEO == takeInfo.GetTracks()[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
 					fileNames.push_back((*takeInfo.GetFiles())[i][j].in());
-					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString((*takeInfo.GetTracks())[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
+					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString(takeInfo.GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
 					rb->Enable(false); //we don't know whether the player can open this file yet
 					rb->SetToolTip(wxString((*takeInfo.GetFiles())[i][j], *wxConvCurrent));
 					mSizer->Add(rb, -1, wxEXPAND);
-					trackNames.push_back((*takeInfo.GetTracks())[i][j].src.package_name.in());
+					trackNames.push_back(takeInfo.GetTracks()[i][j].src.package_name.in());
 				}
-				else if (ProdAuto::AUDIO == (*takeInfo.GetTracks())[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
+				else if (ProdAuto::AUDIO == takeInfo.GetTracks()[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
 					audioFileNames.push_back((*takeInfo.GetFiles())[i][j].in());
 				}
 			}

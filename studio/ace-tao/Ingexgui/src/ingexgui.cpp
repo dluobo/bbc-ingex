@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $            *
+ *   $Id: ingexgui.cpp,v 1.11 2009/02/26 19:17:10 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -342,15 +342,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 		mSavedState.SetRoot(rootNode); //dialogue will detect this as updated
 	}
 	mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, argc, argv, &mSavedState);
-	//currently selected project
-	wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
-	if (currentProject.IsEmpty()) {
-		SetTitle(TITLE);
-	}
-	else {
-		SetTitle(wxString(TITLE) + wxT(": ") + currentProject);
-		mRecorderGroup->SetCurrentProjectName(currentProject);
-	}
 	//window
 	wxBoxSizer * sizer1V = new wxBoxSizer(wxVERTICAL);
 	SetSizer(sizer1V);
@@ -424,7 +415,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	recordPage->SetSizer(recordPageSizer);
 	wxStaticBoxSizer * recProjectNameBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Project"));
 	recordPageSizer->Add(recProjectNameBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
-	mRecProjectNameCtrl = new wxStaticText(recordPage, wxID_ANY, mRecorderGroup->GetCurrentProjectName());
+	mRecProjectNameCtrl = new wxStaticText(recordPage, wxID_ANY, wxT("")); //name added later
 	recProjectNameBox->Add(mRecProjectNameCtrl, 1, wxEXPAND);
 	wxStaticBoxSizer * descriptionBox = new wxStaticBoxSizer(wxHORIZONTAL, recordPage, wxT("Description"));
 	recordPageSizer->Add(descriptionBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
@@ -488,6 +479,18 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	mCuePointsDlg = new CuePointsDlg(this, mSavedState); //this is done now so that a file doesn't have to be read each time a cue point is marked
 	mTestModeDlg = new TestModeDlg(this); //this is done now so that it can remember its parameters between invocations
+
+	//currently selected project
+	wxString currentProject = SetProjectDlg::GetCurrentProjectName(mSavedState);
+	if (currentProject.IsEmpty()) {
+		SetTitle(TITLE);
+	}
+	else {
+		SetTitle(wxString(TITLE) + wxT(": ") + currentProject);
+		mRecorderGroup->SetCurrentProjectName(currentProject);
+		mRecProjectNameCtrl->SetLabel(currentProject);
+		GetMenuBar()->FindItem(MENU_ClearLog)->Enable(mEventList->SetCurrentProjectName(currentProject));
+	}
 
 	//jog/shuttle
         mJogShuttle = new ingex::JogShuttle();
@@ -556,6 +559,7 @@ void IngexguiFrame::SetProjectName()
 		mRecorderGroup->SetCurrentProjectName(dlg.GetSelectedProject());
 		SetTitle(wxString(TITLE) + wxT(": ") + dlg.GetSelectedProject());
 		mRecProjectNameCtrl->SetLabel(dlg.GetSelectedProject());
+		GetMenuBar()->FindItem(MENU_ClearLog)->Enable(mEventList->SetCurrentProjectName(dlg.GetSelectedProject()));
 		mSavedState.Save(mSavedStateFilename);
 	}
 }
@@ -1051,6 +1055,10 @@ void IngexguiFrame::OnJogShuttleEvent(wxCommandEvent& event)
 				case 3: case 4: //1st row, right hand two
 					if (mJSListener->IsPressed(14) || mJSListener->IsPressed(15) //eith black button on Shuttle Pro 2
 					 || (mJSListener->IsPressed(4) && mJSListener->IsPressed(3))) { //or both buttons must be pressed
+						if (GetMenuBar()->FindItem(MENU_Stop)->IsEnabled()) {
+							//cancel any cue point entering operation
+							mCuePointsDlg->EndModal(wxID_CANCEL);
+						}
 						menuEvent.SetId(MENU_Stop);
 					}
 					break;
@@ -1135,11 +1143,11 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
 		case RECORDING :
 			{
 				ProdAuto::MxfTimecode timecode;
-				const wxString timecodeString = mTimepos->GetTimecode(&timecode);
-				const wxString positionString = mTimepos->GetPosition();
+				mTimepos->GetStartTimecode(&timecode);
 				const int64_t frameCount = mTimepos->GetFrameCount();
-				if (wxID_OK == mCuePointsDlg->ShowModal(timecodeString)) {
-					mEventList->AddEvent(EventList::CUE, timecode, positionString, mCuePointsDlg->GetDescription(), frameCount, mCuePointsDlg->GetColour(), mCuePointsDlg->GetLabelColour(), mCuePointsDlg->GetColourCode());
+				timecode.samples += frameCount; //will wrap automatically on display
+				if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
+					mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
 					UpdatePlayerAndEventControls();
 					mSavedState.Save(mSavedStateFilename);
 				}
@@ -1256,7 +1264,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 				SetStatus(RECORDING); //will prevent any more recorders being added
 				ProdAuto::MxfTimecode startTimecode;
 				mTimepos->GetStartTimecode(&startTimecode);
-				mEventList->AddEvent(EventList::START, startTimecode, mTimepos->GetStartPosition(), mRecorderGroup->GetCurrentProjectName()); //didn't start now - started before the preroll period
+				mEventList->AddEvent(EventList::START, &startTimecode); //didn't start now - started before the preroll period
 				UpdatePlayerAndEventControls();
 				mTimepos->SetPositionUnknown(); //don't know when recording started
 			}
@@ -1278,7 +1286,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 					mTimepos->Record(((RecorderData *) event.GetClientData())->GetTimecode());
 					ProdAuto::MxfTimecode startTimecode;
 					mTimepos->GetStartTimecode(&startTimecode);
-					mEventList->AddEvent(EventList::START, startTimecode, mTimepos->GetStartPosition(), mRecorderGroup->GetCurrentProjectName()); //don't automatically do this or if the first recorder to record is a router recorder we'll get an unknown start timecode
+					mEventList->AddEvent(EventList::START, &startTimecode); //don't automatically do this or if the first recorder to record is a router recorder we'll get an unknown start timecode
 					UpdatePlayerAndEventControls();
 				}
 				mTree->SetRecorderStateOK(event.GetString());
@@ -1300,8 +1308,6 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 				}
 				ProdAuto::MxfTimecode stopTimecode;
 				mTimepos->GetTimecode(&stopTimecode);
-				mEventList->AddEvent(EventList::STOP, stopTimecode, mTimepos->GetPosition(), mRecorderGroup->GetCurrentDescription()); //will not add more than one
-				UpdatePlayerAndEventControls();
 				GetMenuBar()->FindItem(MENU_ClearLog)->Enable(); //there is stuff in the list so can be deleted
 				//logging
 				CORBA::StringSeq_var fileList = ((RecorderData *) event.GetClientData())->GetFileList();
@@ -1313,6 +1319,8 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 				if (STOPPED != mStatus) {
 					//use the first returned timecode as the stop position
 					mTimepos->Stop(((RecorderData *) event.GetClientData())->GetTimecode());
+					ProdAuto::MxfTimecode tc = ((RecorderData *) event.GetClientData())->GetTimecode();
+					mEventList->AddEvent(EventList::STOP, &tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription()); //will not add more than one
 					SetStatus(STOPPED);
 				}
 				else {
@@ -1445,7 +1453,7 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
 			if (mTree->AllRecording()) {
 				ProdAuto::MxfTimecode timecode;
 				mTimepos->GetTimecode(&timecode);
-				mEventList->AddEvent(EventList::START, timecode, mTimepos->GetStartPosition(), mRecorderGroup->GetCurrentProjectName()); //just in case the only recorder is a router recorder, so a start event won't already have been issued FIXME: GetStartPosition will return unknown
+				mEventList->AddEvent(EventList::START, &timecode); //just in case the only recorder is a router recorder, so a start event won't already have been issued FIXME: GetStartPosition will return unknown
 				UpdatePlayerAndEventControls();
 			}
 			mRecordButton->SetLabel(wxString::Format(wxT("Record (%d track%s)"), mTree->EnabledTracks(), mTree->EnabledTracks() == 1 ? wxT("") : wxT("s")));
@@ -1542,10 +1550,8 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStatusCtrl->SetToolTip(wxT("Stopped"));
 			SetStatusText(wxT("Stopped."));
 			EnableButtonReliably(mRecordButton, enableRecordButton);
-			GetMenuBar()->FindItem(MENU_Record)->Enable(enableRecordButton);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(enableRecordButton);
 			mRecordButton->SetToolTip(wxT("Start a new recording"));
-			mStopButton->Disable();
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
@@ -1560,13 +1566,10 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStatusCtrl->SetToolTip(wxT("Running up"));
 			SetStatusText(wxT("Running up."));
 			mRecordButton->Pending();
-			GetMenuBar()->FindItem(MENU_Record)->Enable(false);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(false);
 			mRecordButton->SetToolTip(wxT(""));
-//			mStopButton->Enable();
-			EnableButtonReliably(mStopButton);
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
-			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
+			GetMenuBar()->FindItem(MENU_Stop)->Enable();
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable(false);
 			mTree->EnableChanges(false);
 			mPlayFileButton->Enable(false);
@@ -1587,13 +1590,10 @@ void IngexguiFrame::SetStatus(Stat status)
 //				mRecordButton->Enable();
 //				mRecordButton->SetToolTip(wxT("Re-send record command"));
 //			}
-			GetMenuBar()->FindItem(MENU_Record)->Enable(false);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(false);
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable();
 			GetMenuBar()->FindItem(MENU_Stop)->Enable();
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable(false);
-//			mStopButton->Enable();
-			EnableButtonReliably(mStopButton);
 			mStopButton->SetToolTip(wxT("Stop recording after postroll"));
 			mTree->EnableChanges(false);
 			mPlayFileButton->Enable(false);
@@ -1613,13 +1613,10 @@ void IngexguiFrame::SetStatus(Stat status)
 //				mRecordButton->Enable();
 //				mRecordButton->SetToolTip(wxT("Re-send record command"));
 //			}
-			GetMenuBar()->FindItem(MENU_Record)->Enable(false);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(false);
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable();
 			GetMenuBar()->FindItem(MENU_Stop)->Enable();
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
-//			mStopButton->Enable();
-			EnableButtonReliably(mStopButton);
 			mStopButton->SetToolTip(wxT("Stop recording after postroll"));
 			mTree->EnableChanges(false);
 			mPlayFileButton->Enable(false);
@@ -1632,10 +1629,8 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStatusCtrl->SetToolTip(wxT("Playing"));
 			SetStatusText(wxT("Playing."));
 			EnableButtonReliably(mRecordButton, enableRecordButton);
-			GetMenuBar()->FindItem(MENU_Record)->Enable(enableRecordButton);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(enableRecordButton);
 			mRecordButton->SetToolTip(wxT("Start a new recording"));
-			mStopButton->Disable();
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
@@ -1651,10 +1646,8 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStatusCtrl->SetToolTip(wxT("Playing backwards"));
 			SetStatusText(wxT("Playing backwards."));
 			EnableButtonReliably(mRecordButton, enableRecordButton);
-			GetMenuBar()->FindItem(MENU_Record)->Enable(enableRecordButton);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(enableRecordButton);
 			mRecordButton->SetToolTip(wxT("Start a new recording"));
-			mStopButton->Disable();
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			mStopButton->SetToolTip(wxT(""));
@@ -1670,10 +1663,8 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStatusCtrl->SetToolTip(wxT("Paused"));
 			SetStatusText(wxT("Paused."));
 			EnableButtonReliably(mRecordButton, enableRecordButton);
-			GetMenuBar()->FindItem(MENU_Record)->Enable(enableRecordButton);
 			GetMenuBar()->FindItem(MENU_TestMode)->Enable(enableRecordButton);
 			mRecordButton->SetToolTip(wxT("Start a new recording"));
-			mStopButton->Disable();
 			GetMenuBar()->FindItem(MENU_MarkCue)->Enable(false);
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
@@ -1682,6 +1673,9 @@ void IngexguiFrame::SetStatus(Stat status)
 			mPlayFileButton->Enable(mFileModeFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 	}
+	GetMenuBar()->FindItem(MENU_Record)->Enable(mRecordButton->IsEnabled());
+//	mStopButton->Enable(GetMenuBar()->FindItem(MENU_Stop)->IsEnabled());
+	EnableButtonReliably(mStopButton, GetMenuBar()->FindItem(MENU_Stop)->IsEnabled());
 	UpdatePlayerAndEventControls();
 }
 
@@ -1735,7 +1729,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 			);
 			//player control
 			TakeInfo * currentTakeInfo = mEventList->GetCurrentTakeInfo();
-			if (currentTakeInfo->GetFiles()->GetCount()) { //the take is complete and there are at least some files available
+			if (currentTakeInfo && currentTakeInfo->GetFiles()->GetCount()) { //the take is complete and there are at least some files available
 				if (mEventList->SelectedTakeHasChanged() || forceLoad) { //a new take
 					if (!forceLoad) { //not returning to previous situation
 						mTakeModeFrameOffset = 0;
@@ -1746,7 +1740,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 					std::vector<std::string> trackNames;
 					mPlaybackTrackSelector->SetTracks(*currentTakeInfo, fileNames, trackNames);
 					//load files and jump to current position
-					mPlayer->Load(&fileNames, &trackNames, prodauto::MXF_INPUT, mTakeModeFrameOffset, currentTakeInfo->GetCuePointFrames(), currentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - currentTakeInfo->GetStartIndex());
+					mPlayer->Load(&fileNames, &trackNames, prodauto::MXF_INPUT, mTakeModeFrameOffset, &currentTakeInfo->GetCuePointFrames(), currentTakeInfo->GetStartIndex(), mEventList->GetFirstSelected() - currentTakeInfo->GetStartIndex());
 				}
 				else if (mEventList->SelectedEventHasChanged() || forceNewCuePoint) { //a different selected event
 					mPlayer->JumpToCue(mEventList->GetFirstSelected() - currentTakeInfo->GetStartIndex());
