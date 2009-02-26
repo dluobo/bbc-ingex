@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.9 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.10 2009/02/26 19:44:27 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -670,7 +670,7 @@ int transcode_avid_mxf(Decoder* decoder,
     mxfPosition startPosition = 0;
     uint32_t audioQuantizationBits = 16;
     int videoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
-    prodauto::Rational imageAspectRatio = {4, 3};
+    prodauto::Rational imageAspectRatio = prodauto::g_4x3ImageAspect;
     prodauto::PackageSet::iterator iter1;
     vector<prodauto::SourcePackage*>::const_iterator iter2;
 
