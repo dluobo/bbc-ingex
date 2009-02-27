@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.7 2009/02/26 19:17:09 john_f Exp $             *
+ *   $Id: dragbuttonlist.cpp,v 1.8 2009/02/27 12:19:16 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -136,6 +136,35 @@ const wxString DragButtonList::SetMXFFiles(wxArrayString & paths, std::vector<st
 	}
 	return projName;
 }
+
+/// Alternative to SetTracks for E to E mode.
+/// Replaces current state with a new column of video source radio buttons, and with a quad split button at the top.
+/// Sources are given fixed names.
+/// All buttons are disabled.
+/// @param sources Returns the source name associated with each source.
+/// @param names Returns corresponding displayed names.
+void DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std::string> & names)
+{
+	mSizer->Clear(true); //delete all buttons
+	sources.clear();
+	names.clear();
+	wxRadioButton * quadSplit = new wxRadioButton(this, 0, wxT("Quad Split")); //the quad split is always the first video source (id = 0)
+	mSizer->Add(quadSplit, -1, wxEXPAND);
+	quadSplit->Enable(false); //enable later if any sources successfully opened
+	char source[3];
+	wxString name;
+	for (size_t i = 0; i < 4; i++) {
+		sprintf(source, "%dp", i);
+		sources.push_back(source);
+		name.Printf(wxT("Live %d"), i + 1);
+		names.push_back((const char *) name.mb_str(*wxConvCurrent));
+		wxRadioButton * rb = new wxRadioButton(this, sources.size(), name);
+		rb->Enable(false); //we don't know whether the player can open this source yet
+		mSizer->Add(rb, -1, wxEXPAND);
+	}
+	Layout();
+}
+
 
 /// Enables/disables and selects the track select buttons.
 /// COMMENTED OUT: Hides the quad split button if there is only one track enabled.

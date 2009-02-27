@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.8 2009/01/29 07:36:58 stuart_hc Exp $                                                                 *
+ *   $Id: player.h,v 1.9 2009/02/27 12:19:16 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -59,7 +59,7 @@ namespace PlayerMode { //this avoids clashes with different enums with the same 
 		PLAY_BACKWARDS,
 		PAUSE,
 		STOP,
-		CLOSE
+		CLOSE,
 	};
 }
 
@@ -95,7 +95,6 @@ class Listener : public prodauto::IngexPlayerListener
 		wxMutex mMutex;
 		unsigned int mStartIndex;
 		unsigned int mLastCuePointNotified;
-//		std::map<int64_t, int> mCuePointMap;ic
 		std::vector<int64_t> mCuePoints;
 };
 
@@ -160,6 +159,7 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		bool mLastPlayingBackwards;
 		wxSocketClient * mSocket;
 		bool mTrafficControl;
+		bool mOpeningSocket;
 		DECLARE_EVENT_TABLE()
 };
 

@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.10 2009/01/29 07:36:58 stuart_hc Exp $
+    # $Id: configure.in,v 1.11 2009/02/27 12:19:16 john_f Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -39,12 +39,12 @@ WXTEST
 
 # Verify minimus requires
 vers=`echo $wxversion | $AWK 'BEGIN { FS = "."; } { printf "% d", ($1 * 1000 + $2) * 1000 + $3;}'`
-if test -n "$vers" && test "$vers" -ge 2003003; then
+if test -n "$vers" && test "$vers" -ge 2008000; then
 	WX_CPPFLAGS="`$WXCONFIG --cppflags`"
 	WX_CXXFLAGS="`$WXCONFIG --cxxflags | sed -e 's/-fno-exceptions//'`"
 	WX_LIBS="`$WXCONFIG --libs`"
 else
-	AC_MSG_ERROR([wxWidgets 2.3.3 or newer is required])
+	AC_MSG_ERROR([wxWidgets 2.8.0 or newer is required])
 fi
 
 # WORKSPACE is set to the ingex top-level directory
@@ -70,12 +70,12 @@ AC_DEFUN([PLAYERTEST],
 				DVS_LDFLAGS="-L$DVS_LIB_PATH -ldvsoem"
 			else 
 				if test -n "$DVSSDK"; then
-					# DVS SDK version 3		
+					# DVS SDK version 3
 					AC_MSG_RESULT([yes])
 					DVS_LDFLAGS="-L$DVSSDK/linux-x86/lib -L$DVSSDK/linux-x86_64/lib -ldvsoem"
 				else
 					if test -n "$DVS_SDK_INSTALL"; then
-						# DVS SDK version 2		
+						# DVS SDK version 2
 						AC_MSG_RESULT([yes])
 						DVS_LDFLAGS="-L$DVS_SDK_INSTALL/linux/lib -ldvsoem"
 					else
@@ -86,6 +86,15 @@ AC_DEFUN([PLAYERTEST],
 			fi
 		else
 			AC_MSG_RESULT([no])
+			AC_MSG_WARN([You won't be able to play back through a DVS card to an external monitor.])
+		fi
+		AC_MSG_CHECKING([player for shared memory support])
+		if test `readelf -s $WORKSPACE/player/IngexPlayer/$PLAYERLIB | grep -c shm_read_frame` -gt 0; then
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([no])
+			AC_MSG_WARN([You won't be able to use E to E mode to show incoming material with the player.])
+			PLAYER_CPPFLAGS="-DDISABLE_SHARED_MEM_SOURCE"
 		fi
 	else
 		AC_MSG_RESULT([no])
@@ -119,7 +128,7 @@ AC_DEFUN([ACETAOTEST],
 #call ACETAOTEST func
 ACETAOTEST
 
-CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/player/jogshuttle -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/player/jogshuttle -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo $DVS_CPPFLAGS $PLAYER_CPPFLAGS"
 CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
 LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lavidmxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lswscale -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio"
 LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/libMXF/lib -L$WORKSPACE/libMXF/examples/avidmxfinfo -L$WORKSPACE/libMXF/examples/archive/info -L$WORKSPACE/libMXF/examples/reader -L$WORKSPACE/common -L$WORKSPACE/common/YUVlib"

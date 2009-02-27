@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: help.cpp,v 1.11 2009/02/26 19:17:09 john_f Exp $                *
+ *   $Id: help.cpp,v 1.12 2009/02/27 12:19:16 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -65,9 +65,18 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	notebook->AddPage(tapeIds, wxT("Tape IDs"));
 
 	wxTextCtrl * indicators = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-	message = wxT("Below the recorder selector and refresh button is a row of indicators.  The first shows the recorder status: stopped, running-up, recording, playing (forwards and backwards, and at various speeds), or paused.  Its function is echoed in the status text at the bottom of the window.\n\nTo the right of the status display is #Studio timecode#, as obtained from the recorders.  The title shows which recorder is supplying this timecode, if any.  (The controller prefers to use non-router recorders.)  It is followed by a health indicator which will warn of a problem - look at the source tree in the record tab for details.\n\nFinally, there is #Position#, which corresponds to the current recording.  This will show question marks if the recorder was already recording when you connected to it.");
+	message = wxT("Below the recorder selector and refresh button is a row of indicators and ");
+#ifndef DISABLE_SHARED_MEM_SOURCE
+	message += wxT("three");
+#else
+	message += wxT("two");
+#endif
+	message += wxT(" buttons.  The first indicator shows the recorder status: stopped, running-up, recording, playing (forwards and backwards, and at various speeds), or paused.  Its function is echoed in the status text at the bottom of the window.\n\nTo the right of the status display is #Studio timecode#, as obtained from the recorders.  The title shows which recorder is supplying this timecode, if any.  (The controller prefers to use non-router recorders.)  It is followed by a health indicator which will warn of a problem - look at the source tree in the record tab for details.\n\nFinally, there is #Position#, which corresponds to the current recording.  This will show question marks if the recorder was already recording when you connected to it.\n\nThe buttons control the player mode.  #Recordings# causes the player to play back recordings from the cue point display at the bottom of the window.  #Files# plays back files which have been selected in the #Player# menu.");
+#ifndef DISABLE_SHARED_MEM_SOURCE
+	message += wxT("  #E to E#  shows live incoming material if the application is running on a recorder.");
+#endif
 	StyleAndWrite(indicators, message);
-	notebook->AddPage(indicators, wxT("Indicators"));
+	notebook->AddPage(indicators, wxT("Indicators and Player Mode Buttons"));
 
 	wxTextCtrl * transport = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
 	message = wxT("When connected to at least one recorder, the #Record# button indicates the total number of tracks enabled to record.  If this is greater than zero, and all the enabled tracks (apart from router recorders) have tape IDs, it will be a dull red, indicating that recording is possible.  (If lack of tape IDs is preventing a recording occurring, #Set Tape IDs# will be orange to remind you that you must define some tape IDs before you can record.)  When pressed, #Record# will become bright red with no legend (as it can no longer be pressed), and will flash (\"running up\") until all applicable recorders have responded successfully to the record command.  #F1# provides a shortcut key for recording.\n\n#Stop# can only be pressed while recording, and sets the displayed status to stopped immediately, even if recorders are still post-rolling.  #Shift+F5# provides a shortcut key for stopping.\n\nWhile recording, #Mark cue# (or shortcut #F2#) adds a line to the cue point display to mark a point of interest.\n\nAfter at least one recording has been made, #Mark cue# becomes a play/pause button, explained in the instructions for the player.  #Stop# has no effect during playback.\n\n#Record# can be pressed during playback, which will immediately halt the player (to reduce load on the recording system) and commence a new recording.");
@@ -80,7 +89,11 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	notebook->AddPage(recordTab, wxT("Record tab"));
 
 	wxTextCtrl * player = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-	message = wxT("As soon as a recording has been completed, the player is activated (unless disabled via the #Player# menu).");
+	message = wxT("As soon as a recording has been completed,");
+#ifndef DISABLE_SHARED_MEM_SOURCE
+	message += wxT(" or #E to E# is selected,");
+#endif
+	message += wxT(" the player is activated (unless disabled via the #Player# menu).");
 #ifdef HAVE_DVS
 	message += wxT("  If an SDI card has been detected, playback can be to an external monitor exclusively, or as well as, the computer monitor - select from the #Player type# submenu of the #Player# menu.  (If external playback is disabled, an SDI card will output whatever is connected to its input.)");
 #endif
@@ -95,7 +108,13 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	notebook->AddPage(player, wxT("Video player and playback tab"));
 
 	wxTextCtrl * jogshuttle = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-	message = wxT("A Shuttle Pro or Shuttle Pro 2 USB jog/shuttle control can be used to provide the following functions:\n\nJog wheel and shuttle ring: jog/shuttle the player.\n\nTop row of buttons (L-R):\n\t#Record#\n\t#Mark cue#\n\t#Stop#*\n\t#Stop#*\n\n*The two right hand buttons need to be pressed simultaneously, or one of the buttons plus one of the black buttons on the Shuttle Pro 2, to stop.  If you are entering a cue point, the dialogue will be dismissed and the cue point will not be stored.\n\nSecond row of buttons (L-R):\n\tPlay backwards\n\tPause\n\tPlay forwards\n\tMute/Unmute\n\ttoggle #Play Files#.\n\nLeft hand long silver buttons:\n\tUp/Down cue points.\n\nRight hand long silver buttons:\n\tsame as #Previous Take# and #Next Take# buttons.");
+	message = wxT("A Shuttle Pro or Shuttle Pro 2 USB jog/shuttle control can be used to provide the following functions:\n\nJog wheel and shuttle ring: jog/shuttle the player.\n\nTop row of buttons (L-R):\n\t#Record#\n\t#Mark cue#\n\t#Stop#*\n\t#Stop#.*\n\n*The two right hand buttons need to be pressed simultaneously, or one of the buttons plus one of the black buttons on the Shuttle Pro 2, to stop.  If you are entering a cue point, the dialogue will be dismissed and the cue point will not be stored.\n\nSecond row of buttons (L-R):\n\tPlay backwards\n\tPause\n\tPlay forwards\n\ttoggle #Play Files#\n\t");
+#ifndef DISABLE_SHARED_MEM_SOURCE
+	message += wxT("toggle #E to E#");
+#else
+	message += wxT("Unassigned");
+#endif
+	message += wxT(".\n\nLeft hand long silver buttons:\n\tUp/Down cue points.\n\nRight hand long silver buttons:\n\tsame as #Previous Take# and #Next Take# buttons.");
 	StyleAndWrite(jogshuttle, message);
 	notebook->AddPage(jogshuttle, wxT("Jog/Shuttle Control"));
 
@@ -144,6 +163,10 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifndef HAVE_DVS
 	message += wxT("not ");
 #endif
-	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.11 2009/02/26 19:17:09 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2009/02/26 19:17:09 $.");
+	message += wxT("included.  Shared memory (\"E to E\") support ");
+#ifdef DISABLE_SHARED_MEM_SOURCE
+	message += wxT("not ");
+#endif
+	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.12 2009/02/27 12:19:16 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2009/02/27 12:19:16 $.");
 	textBox->SetValue(message);
 };

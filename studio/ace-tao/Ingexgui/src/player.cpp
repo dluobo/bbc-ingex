@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.10 2009/02/26 19:17:10 john_f Exp $              *
+ *   $Id: player.cpp,v 1.11 2009/02/27 12:19:16 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -71,7 +71,7 @@ LocalIngexPlayer(&mListenerRegistry,
 	4, //non-default number of audio level monitors
 	-18.0,
 	true
-), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0), mMuted(false) //simple LocalIngexPlayer constructor with defaults
+), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0), mMuted(false), mOpeningSocket(false)
 {
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
@@ -136,9 +136,10 @@ void Player::Enable(bool state)
 
 /// If player is enabled, tries to load the given filenames or re-load previously given filenames.  Starts polling if it can't open them all.
 /// If player is disabled, stores the given filenames for later.
-/// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
+/// @param fileNames List of file paths or source names for shared memory, or if zero, use previous supplied list and ignore all other parameters.
 /// @param trackNames List of track names corresponding to fileNames, for display as the player window title.
 /// @param inputType The type of the files
+/// The following are ignored if inputType is SHM_INPUT:
 /// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
@@ -154,18 +155,24 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 	if (fNames->size()) { //not a router recorder recording only, for instance
 		if (mEnabled) {
 			mFilePollTimer->Stop(); //may be running from another take
-			//see how many files we have before the player loads them, so we can start polling even if more appear just after loading
-			mNFilesExisting = 0;
-			for (size_t i = 0; i < fNames->size(); i++) {
-				if (wxFile::Exists(wxString((*fNames)[i].c_str(), *wxConvCurrent))) {
-					mNFilesExisting++;
+			if (SHM_INPUT != inputType) {
+				//see how many files we have before the player loads them, so we can start polling even if more appear just after loading
+				mNFilesExisting = 0;
+				for (size_t i = 0; i < fNames->size(); i++) {
+					if (wxFile::Exists(wxString((*fNames)[i].c_str(), *wxConvCurrent))) {
+						mNFilesExisting++;
+					}
 				}
 			}
-		}
-		//load the player (this will merely store the parameters if the player is not enabled
-		if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting && mEnabled) {
-			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
-			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
+			else {
+				//can't poll for shared memory sources
+				mNFilesExisting = mFileNames.size();
+			}
+			//load the player (this will merely store the parameters if the player is not enabled
+			if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting) {
+				//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
+				mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
+			}
 		}
 	}
 }
@@ -177,6 +184,7 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 /// @param fileNames List of file paths, or if zero, use previous supplied list and ignore all other parameters.
 /// @param trackNames Corresponding list of track names, for display as the player window title.
 /// @param inputType The type of the files
+/// The following are ignored if inputType is SHM_INPUT:
 /// @param offset Frame offset to jump to.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
@@ -208,7 +216,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			}
 		}
 		mLastRequestedCuePoint = cuePoint;
-		mMode = PlayerMode::PAUSE;
+		mMode = SHM_INPUT == inputType ? PlayerMode::PLAY : PlayerMode::PAUSE;
 	}
 	bool allFilesOpen = false;
 	if (mEnabled) {
@@ -221,20 +229,34 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			input.type = mInputType;
 			inputs.push_back(input);
 		}
-		mOK = start(inputs, mOpened, PlayerMode::PAUSE == mMode || PlayerMode::STOP == mMode, mLastFrameDisplayed); //play forwards or paused
+		mOK = start(inputs, mOpened, PlayerMode::PAUSE == mMode || PlayerMode::STOP == mMode, SHM_INPUT == mInputType ? 0 : mLastFrameDisplayed); //play forwards or paused
 		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
-			//(re)loading stored cue points
-			for (size_t i = 0; i < mCuePoints.size(); i++) {
-				markPosition(mCuePoints[i], 0); //so that an event is generated at each cue point
+			if (SHM_INPUT != mInputType) {
+				//(re)load stored cue points
+				for (size_t i = 0; i < mCuePoints.size(); i++) {
+					markPosition(mCuePoints[i], 0); //so that an event is generated at each cue point
+				}
+				if (PlayerMode::PLAY_BACKWARDS == mMode) {
+					playSpeed(-1);
+				}
+				SetOSD(mOSDtype);
+				if (!mLastFrameDisplayed) {
+					//if mLastRequestedCuePoint isn't zero (start), player was requested to go to a cue point in this clip while no files were available
+					JumpToCue(mLastRequestedCuePoint);
+				}
 			}
-			if (PlayerMode::PLAY_BACKWARDS == mMode) {
-				playSpeed(-1);
-			}
-			SetOSD(mOSDtype);
-			if (!mLastFrameDisplayed) {
-				//if mLastRequestedCuePoint isn't zero (start), player was requested to go to a cue point in this clip while no files were available
-				JumpToCue(mLastRequestedCuePoint);
+			else {
+				showProgressBar(false); //irrelevant
+				setOSDTimecode(-1, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE); //timecode from shared memory
+				if (mSpeed) {
+					mSpeed = 0;
+					TrafficControl(false); //not reading from disk
+				}
+				//clear the position display - no more FRAME_DISPLAYED events will be sent in this mode
+				wxCommandEvent event(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
+				event.SetInt(false); //invalid position
+				GetNextHandler()->AddPendingEvent(event); //don't add it to this handler or it will be blocked
 			}
 			// work out which track to select
 			unsigned int nFilesOpen = 0;
@@ -282,7 +304,6 @@ void Player::SelectTrack(const int id, const bool remember)
 //std::cerr << "Player Select Track" << std::endl;
 	if (mOK) {
 		wxString title;
-		switchVideo(id);
 		if (id) { //individual track
 			if (remember) {
 				mDesiredTrackName = mTrackNames[id - 1]; // -1 to offset for quad split
@@ -307,17 +328,27 @@ void Player::SelectTrack(const int id, const bool remember)
 				title.resize(title.size() - 2); //remove trailing semicolon and space
 			}
 		}
+		if (SHM_INPUT == mInputType && !mSpeed && remember) { //player doesn't respond to switchVideo when paused and showing shared memory
+			Start();
+		}
+		else {
+			switchVideo(id);
+		}
 		SetWindowName(title);
 	}
 }
 
 /// Plays at an absolute speed, forwards or backwards, or pauses.
-/// @param rate: 0 to pause; positive to play forwards; speed 2 ^ (absolute value - 1)
+/// @param rate: 0 to pause; positive to play forwards; speed = 2 ^ (absolute value - 1)
 void Player::PlayAbsolute(const int rate)
 {
-//std::cerr << "Player Play" << std::endl;
+//std::cerr << "Player PlayAbsolute" << std::endl;
 	if (mOK) {
-		if (rate > 0 && !AtEnd()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled clockwise at the end of a file
+		if (rate && SHM_INPUT == mInputType) {
+			//can only play forwards at normal speed from shared memory!
+			play();
+		}
+		else if (rate > 0 && !AtEnd()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled clockwise at the end of a file
 			playSpeed(1 << (rate - 1));
 		}
 		else if (rate < 0 && Within()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled anticlockwise at the beginning of a file
@@ -335,6 +366,7 @@ void Player::PlayAbsolute(const int rate)
 /// @param backwards True to play backwards if setDirection is true.
 void Player::Play(const bool setDirection, bool backwards)
 {
+//std::cerr << "Player Play\n";
 	if (mOK) {
 		if ((setDirection && !backwards && 0 >= mSpeed) //going backwards, or paused, and want to go forwards
 		 || (!setDirection && 0 == mSpeed && !mLastPlayingBackwards)) //paused after playing forwards
@@ -368,18 +400,30 @@ void Player::Play(const bool setDirection, bool backwards)
 	}
 }
 
-/// Indicates if playing at max forward speed.
+/// Indicates if can't go any faster forwards.
 /// @return True if at max speed.
 bool Player::AtMaxForwardSpeed()
 {
-	return mSpeed == MAX_SPEED;
+	if (SHM_INPUT != mInputType) {
+		return mSpeed == MAX_SPEED;
+	}
+	else {
+		//can only play at normal speed
+		return mSpeed;
+	}
 }
 
-/// Indicates if playing at max reverse speed.
+/// Indicates if can't go any faster backwards.
 /// @return True if at max speed.
 bool Player::AtMaxReverseSpeed()
 {
-	return mSpeed == -MAX_SPEED;
+	if (SHM_INPUT != mInputType) {
+		return mSpeed == -MAX_SPEED;
+	}
+	else {
+		//can only play forwards!
+		return true;
+	}
 }
 
 /// Pauses playback.
@@ -408,17 +452,13 @@ void Player::Reset()
 //std::cerr << "Player Reset" << std::endl;
 	mFilePollTimer->Stop();
 //	mFileNames.clear(); //to indicate that nothing's loaded if player is disabled
+	mOK = reset();
 	if (mOK) {
-		reset();
 		SetWindowName(wxT("Ingex Player - no files"));
-		if (mSpeed) {
-			mSpeed = 0;
-			TrafficControl(false);
-		}
-		//clear the position display
-		wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
-		guiFrameEvent.SetInt(false); //invalid position
-		AddPendingEvent(guiFrameEvent);
+	}
+	if (mSpeed) {
+		mSpeed = 0;
+		TrafficControl(false);
 	}
 }
 
@@ -491,40 +531,43 @@ void Player::SetOutputType(const PlayerOutputType outputType)
 	}
 }
 
-/// Responds to a frame displayed event from the listener.
-/// Detects moving into a take and generates a player event when this happens.
-/// Notes the frame number and if at the end of the file
-/// Skips the event so it passes to the parent handler
+/// Responds to a frame displayed event from the listener. If not playing from shared memory:
+/// - Detects reaching the start, the end or leaving the start/end of a file and generates a player event accordingly.
+/// - Pauses if the player is playing and hits an end stop.
+/// - Notes the frame number in case of reloading.
+/// - Skips the event so it passes to the parent handler for position display.
 /// @param event The command event.
 void Player::OnFrameDisplayed(wxCommandEvent& event) {
 	//remember the position to jump to if re-loading occurs
-	if (event.GetInt()) {
-		//a valid frame value (i,e, not the zero that's sent when the player is disabled)
-		if (!event.GetExtraLong()) { //at start
-			if (mLastFrameDisplayed) {
-				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_START);
-				AddPendingEvent(guiFrameEvent);
-				if (0 > mSpeed) { //playing backwards (i.e. not a replay from the end)
+	if (SHM_INPUT != mInputType) {
+		if (event.GetInt()) {
+			//a valid frame value (i,e, not the zero that's sent when the player is disabled)
+			if (!event.GetExtraLong()) { //at start
+				if (mLastFrameDisplayed) {
+					wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_START);
+					AddPendingEvent(guiFrameEvent);
+					if (0 > mSpeed) { //playing backwards (i.e. not a replay from the end)
+						Pause();
+					}
+				}
+			}
+			else if ((bool) event.GetClientData()) { //at end
+				if (!mAtEnd) {
+					wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_END);
+					AddPendingEvent(guiFrameEvent);
 					Pause();
 				}
 			}
-		}
-		else if ((bool) event.GetClientData()) { //at end
-			if (!mAtEnd) {
-				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_END);
+			else if (!mLastFrameDisplayed || mAtEnd) { //have just moved into a take
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, WITHIN);
 				AddPendingEvent(guiFrameEvent);
-				Pause();
 			}
+			mLastFrameDisplayed = event.GetExtraLong();
+			mAtEnd = (bool) event.GetClientData();
 		}
-		else if (!mLastFrameDisplayed || mAtEnd) { //have just moved into a take
-			wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, WITHIN);
-			AddPendingEvent(guiFrameEvent);
-		}
-		mLastFrameDisplayed = event.GetExtraLong();
-		mAtEnd = (bool) event.GetClientData();
+		//tell the gui so it can update the position display
+		event.Skip();
 	}
-	//tell the gui so it can update the position display
-	event.Skip();
 }
 
 /// Responds to a state change event from the listener.
@@ -603,6 +646,7 @@ void Player::OnSocketEvent(wxSocketEvent& WXUNUSED(event))
 //std::cerr << "Socket Connection made" << std::endl;
 	mSocket->Write(mTrafficControl ? "ingexgui\n0\n" : "ingexgui\n", mTrafficControl ? 11 : 9);
 	mSocket->Close();
+	mOpeningSocket = false;
 }
 
 /// Indicates whether player is at the very start of the file or not.
@@ -648,7 +692,7 @@ void Player::SetWindowName(const wxString & name)
 	if (!name.IsEmpty()) {
 		mName = name;
 	}
-	if (mOK) {
+//	if (mOK) {
 		wxString title = mName;
 		if (X11_OUTPUT == getActualOutputType() || DUAL_DVS_X11_OUTPUT == getActualOutputType()) {
 			title += wxT(" (unaccelerated)");
@@ -657,7 +701,7 @@ void Player::SetWindowName(const wxString & name)
 			title += wxT(" (Muted)");
 		}
 		setX11WindowName((const char*) title.mb_str(*wxConvCurrent));
-	}
+//	}
 }
 
 /// Sends a traffic control message to a server socket.
@@ -665,16 +709,21 @@ void Player::SetWindowName(const wxString & name)
 /// @param synchronous Don't use events - block until the message has been sent (with a timeout)
 void Player::TrafficControl(const bool state, const bool synchronous)
 {
-	mTrafficControl = state;
-	wxIPV4address addr;
-	addr.Hostname(wxT("localhost"));
-	addr.Service(TRAFFIC_CONTROL_PORT);
-	mSocket->Notify(!synchronous);
-	mSocket->Connect(addr, false); //mustn't block the GUI; instead generates an event on connect (don't bother handling the connection fail situation)
-	if (synchronous) {
-		mSocket->WaitOnConnect(3);
-		wxSocketEvent dummyEvent;
-		OnSocketEvent(dummyEvent);
+	if (!mOpeningSocket) { //without this, app can hang with 100% usage in gettimeofday() if there is a server
+		mTrafficControl = state;
+		wxIPV4address addr;
+		addr.Hostname(wxT("localhost"));
+		addr.Service(TRAFFIC_CONTROL_PORT);
+		mSocket->Notify(!synchronous);
+		mSocket->Connect(addr, false); //mustn't block the GUI; instead generates an event on connect (don't bother handling the connection fail situation)
+		if (synchronous) {
+			mSocket->WaitOnConnect(3);
+			wxSocketEvent dummyEvent;
+			OnSocketEvent(dummyEvent);
+		}
+		else {
+			mOpeningSocket = true;
+		}
 	}
 }
 

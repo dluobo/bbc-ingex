@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.11 2009/02/26 19:17:10 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.12 2009/02/27 12:19:16 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -115,7 +115,10 @@ class IngexguiFrame : public wxFrame
 		MENU_PlayerDisable,
 		MENU_PlayMOV,
 		MENU_PlayMXF,
-		MENU_TogglePlayFile,
+		MENU_TogglePlayFiles,
+#ifndef DISABLE_SHARED_MEM_SOURCE
+		MENU_ToggleEtoE,
+#endif
 		MENU_PlayerType,
 		MENU_PlayerAccelOutput,
 #ifdef HAVE_DVS
@@ -132,6 +135,11 @@ class IngexguiFrame : public wxFrame
 		MENU_PlayerMuteAudio,
 		MENU_PlayerAudioFollowsVideo,
 		MENU_TestMode,
+#ifndef DISABLE_SHARED_MEM_SOURCE
+		BUTTON_EtoE,
+#endif
+		BUTTON_PlayRecordings,
+		BUTTON_PlayFiles,
 		BUTTON_Record,
 		BUTTON_Stop,
 		BUTTON_Cue,
@@ -144,7 +152,6 @@ class IngexguiFrame : public wxFrame
 		BUTTON_PrevTake,
 		BUTTON_NextTake,
 		BUTTON_DeleteCue,
-		BUTTON_PlayFile,
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
@@ -199,7 +206,7 @@ class IngexguiFrame : public wxFrame
 		void OnFocusGot(wxFocusEvent&);
 		void OnFocusLost(wxFocusEvent&);
 		void OnTestMode(wxCommandEvent&);
-		void OnPlayFile(wxCommandEvent&);
+		void OnPlayerMode(wxCommandEvent&);
 		void OnJogShuttleEvent(wxCommandEvent&);
 		void OnPrevTake(wxCommandEvent&);
 		void OnNextTake(wxCommandEvent&);
@@ -209,13 +216,13 @@ class IngexguiFrame : public wxFrame
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
 		void ClearLog();
-		void ResetPlayer();
 		void ResetToDisconnected();
 		void Log(const wxString &);
 		void SetProjectName();
 		bool IsRecording();
 		void EnableButtonReliably(wxButton *, bool = true);
 		void CanEditCues(const bool);
+		void EtoE();
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
 		RecorderGroupCtrl * mRecorderGroup;
@@ -233,14 +240,17 @@ class IngexguiFrame : public wxFrame
 		wxTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
-		wxToggleButton * mPlayFileButton;
 		wxButton * mDeleteCueButton;
 		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;
 		CuePointsDlg * mCuePointsDlg;
 		TestModeDlg * mTestModeDlg;
 		wxStaticBoxSizer * mTimecodeBox;
-
+		wxToggleButton * mPlayRecordingsButton;
+		wxToggleButton * mPlayFilesButton;
+#ifndef DISABLE_SHARED_MEM_SOURCE
+		wxToggleButton * mEtoEButton;
+#endif
 		Stat mStatus;
 		long mEditRateNumerator, mEditRateDenominator;
 		Timepos * mTimepos;
@@ -250,10 +260,10 @@ class IngexguiFrame : public wxFrame
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
 		wxArrayString mFileModeFiles;
-		unsigned int mFileModeSelectedTrack;
+		unsigned int mFilesModeSelectedTrack;
 		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
-		int64_t mTakeModeFrameOffset;
+		int64_t mRecordingModeFrameOffset;
 		ingex::JogShuttle * mJogShuttle;
 		JSListener * mJSListener;
 		wxDateTime mToday;

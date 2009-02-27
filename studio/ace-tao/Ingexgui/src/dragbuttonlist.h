@@ -35,6 +35,7 @@ class DragButtonList : public wxScrolledWindow
 		DragButtonList(wxWindow *);
 		void SetTracks(TakeInfo &, std::vector<std::string> &, std::vector<std::string> &);
 		const wxString SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
+		void SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);
 		void Clear();
 		bool EarlierTrack(bool);

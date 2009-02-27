@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.2 2009/02/26 19:17:09 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.3 2009/02/27 12:19:16 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -577,7 +577,7 @@ void EventList::Load()
 {
 	wxXmlDocument doc;
 	bool haveProjectNameNode = false;
-	wxXmlNode * loadedRootNode;
+	wxXmlNode * loadedRootNode = 0; //initialisation prevents compiler warning
 	if (wxFile::Exists(mFilename) && doc.Load(mFilename) && (loadedRootNode = doc.GetRoot())) {
  		if (ROOT_NODE_NAME == loadedRootNode->GetName()) {
 			wxString str;
