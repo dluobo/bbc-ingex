@@ -1,11 +1,11 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.6 2009/02/09 19:34:56 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.7 2009/03/19 18:09:36 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
-# *   Author: Matthew Marks                                                 *
+# *   Authors: Philip de Nier, Matthew Marks                                *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU General Public License as published by  *
@@ -29,24 +29,25 @@
 
 # The script listens on network port CLIENT_PORT for clients to open connections, send parameters and then close connections.  These clients will typically be Ingex recorders or Ingex players.
 # Parameters are as follows:
-# <client name> [<identifier> [<source path> <destination path>]] ... (each terminated with a newline)
+# <client name> [<identifier> [<priority> <source path> <destination path>]] ... (each terminated with a newline)
 
 # The client name and identifier combination unambiguously identify an event requiring traffic control, to cater for, e.g., recorders which can make more than one recording simultaneously.
 # If no other parameters are supplied, this indicates the start of the event.  The name/identifier pair are added to an event list, and traffic control is switched on at rate SLOW_LIMIT.
-# Additional pair(s) of paths being supplied indicates the end of the event, or a recorder being started.  This will result in the event's identifier being removed from the event list (if present), and if the list is then empty, traffic control being switched off (reverting to copying at FAST_LIMIT, which is unlimited if set to zero).
+# Additional arguments being supplied indicates the end of the event, or a recorder being started.  This will result in the event's identifier being removed from the event list (if present), and if the list is then empty, traffic control being switched off (reverting to copying at FAST_LIMIT, which is unlimited if set to zero).
 # Identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all events belonging to the associated client.  This value should be sent when a client is started, so that the event list is cleared of any previous events belonging to this client.  This ensures that traffic control does not remain on permanently due to a client crashing and hence not indicating the end of an event.  It should not be used as an event identifier if the client can have more than one event in action simultaneously.
-# A further special case is to provide the client name on its own.  This is also interpreted as clearing the list of events belonging to this client, and is useful for clients such as players which do not provide copying path information.  (Players typically only play one file at once, which means that they can always supply the same identifier value to switch traffic control on.)
+# A further special case is to provide the client name on its own.  This is also interpreted as clearing the list of events belonging to this client (as if '0' followed by more arguments had been supplied), and is useful for clients such as players which do not provide copying path information.  (Players typically only play one file set at once, which means that they can always supply the same identifier value to switch traffic control on.)
 
-# The supplied pairs of paths are treated in descending order of priority, so that the script will attempt to copy all the files in all the first pairs before moving on to the second pairs, and so on.  (Offline files would normally be given higher priority than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  Paths are saved in configuration file PATHS_FILE to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
+# Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  Paths are saved in configuration file PATHS_FILE to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
 # In each source directory, every file whose name begins with 8 digits* and ends in ".mxf" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable, into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING directories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and it will not be copied because this might indicate a file name clash.  If a file fails to copy, any partial file is deleted and no more files are copied at that priority (because the order of copying must be maintained - see below).  Once a copy cycle has been completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
-# Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data copied to, the mount point.
+# Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data being copied to, the mount point, which may fill up a system drive.
+
 # For each priority, the files to copy are sorted by decreasing age using ctime, making sure that all files with the latest ctime have been accounted for.  Before copying a file, the amount of free space is checked to make sure it is likely to fit, and the priority is abandoned if it doesn't: this avoids wasting time repeatedly copying large files that won't succeed.  When copying of a particular priority is completed, the ctime of the most recent successfully-copied file is written to the configuration file, and any files older than this are subsequently ignored.  This allows files to be removed from the destination server without them being copied again if they remain on the recorder.  (ctime is used rather than mtime, because it indicates the time the source file was made visible by moving it into the source directory, therefore making it impossible for older files to appear subsequently, which would never be copied.)
-# There must not be more than one destination path for any source path (or the latest destination path will apply).  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
+# There must not be more than one destination path for any source path (or the latest destination path will apply).  When a path pair is supplied, an existing pair with the same source at another priority will be removed.  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
 
 # If EXTRA_DEST is not empty, it forms an additional destination for all files at the highest priority.  This is intended for use with a portable drive onto which to copy rushes.
-# As source directories are scanned, source files are deleted if they have been successfully copied (indicated by existing at the destination with the same size, or having a ctime older than the value stored in PATHS_FILE), and their mtimes are more than KEEP_PERIOD old.
+# As source directories are scanned, source files are deleted if they have been successfully copied (indicated by existing at the destination with the same size, or having a ctime older than the value stored in PATHS_FILE), and their mtimes are more than KEEP_PERIOD old, and the source directory is at least DELETE_THRESHOLD percent full.
 
 # The script also runs a very simple HTTP server.  This is configured to return JSON-formatted data at http://<host>:<MON_PORT>/ (status data) or .../availability (a "ping").
 
@@ -65,6 +66,7 @@ use constant CLIENT_PORT => 2000;
 use constant MON_PORT => 7010;
 use constant DEST_INCOMING => 'incoming'; #incoming file subdirectory - note that this must match the value in makebrowsed.pl to ensure that directories for incoming files are ignored
 use constant KEEP_PERIOD => 24 * 60 * 60 * 7; #a week (in seconds)
+use constant DELETE_THRESHOLD => 90; #disk must be at least this full (%) for deletions to start
 use constant PERMISSIONS => '0775'; #for directory creation
 #use constant COPY => '/home/ingex/bin/cpfs'; #for copying at different speeds
 use constant COPY => './cpfs'; #for copying at different speeds
@@ -205,14 +207,15 @@ while (1) {
 		else {
 			&serveStatus($client, $share);
 		}
-		$client->shutdown(2); #stopped using it - this seems to prevent partial status pages being served (when close() is used instead)
+		$client->shutdown(2); # stopped using it - this seems to prevent partial status pages being served (when close() is used instead)
 	}
 }
 
+# handle commands from a client, modifying the transfers hash and controlling traffic
 sub serveClient {
  my ($client, $share) = @_;
  my ($buf, $data);
- while (sysread($client, $buf, 100)) { #don't use buffered read or can hang if several strings arrive at once
+ while (sysread($client, $buf, 100)) { # don't use buffered read or can hang if several strings arrive at once
 	$data .= $buf;
  }
  if (!defined $data) {
@@ -222,8 +225,7 @@ sub serveClient {
  my @commands = split /\n/, $data;
  $client = shift @commands;
  my $identifier = shift @commands;
- my $priority = 1;
- if (@commands || !defined $identifier) { #event end, from recorder or player
+ if (@commands || !defined $identifier) { # event end, from recorder or player
 	print "\rClient '$client' ";
 	if (!defined $identifier || $identifier eq '0') { #all events
 		print "is clearing all events.\n";
@@ -240,10 +242,8 @@ sub serveClient {
 	my $transfers = thaw($share->fetch);
 	if (@commands) {
 		print "\rClient '$client' says copy:\n";
-		$priority = 1;
-		chomp @commands;
 		while (@commands) {
-			addPair($transfers, \@commands, $priority++);
+			addPair($transfers, \@commands, shift @commands);
 		}
 		print CHILD "\n"; #kicks the child into action if it's idle
 	}
@@ -272,6 +272,7 @@ sub serveClient {
  }
 }
 
+# return HTTP status data
 sub serveStatus {
  my ($client, $share) = @_;
  my ($buf, $req);
@@ -356,6 +357,7 @@ sub serveStatus {
  }
 }
 
+#escape backslash and quotes
 sub E {
 	my $string = shift;
 	$string =~ s/\\/\\\\/g;
@@ -363,6 +365,7 @@ sub E {
 	return "\"$string\"";
 }
 
+#save priorites, pairs and copy progress in a file for later resumption
 sub SaveConfig { #should be locked before doing this to prevent concurrent file writes
 	my $transfers = shift;
  	my $config = IO::File->new('>' . PATHS_FILE);
@@ -381,10 +384,16 @@ sub SaveConfig { #should be locked before doing this to prevent concurrent file 
  	}
 }
 
+# add a source/directory pair to the transfers hash and create destination directory if necessary
 sub addPair {
  my ($transfers, $dirs, $priority, $ctimeCleared) = @_;
  my $source = shift @$dirs;
  $source =~ s|/*$||o;
+ unless ($priority =~ /^\d+$/) {
+	print "\rWARNING: priority argument '$priority' is invalid: ignoring\n";
+	shift @$dirs; #dispose of destination (if any)
+	return;
+ }
  unless (@$dirs && $$dirs[0] =~ /^\S/) {
 	print "\rWARNING: source directory '$source/' has no corresponding destination directory: ignoring\n";
 	return;
@@ -396,14 +405,12 @@ sub addPair {
 	print "\r WARNING: source directory '$source/' doesn't exist: ignoring\n";
 	return;
  }
- if ($priority == 1 && EXTRA_DEST ne '') {
-	if (!-d EXTRA_DEST) {
-		if (MakeDir(EXTRA_DEST)) {
-			print "\r WARNING: cannot create extra destination '" . EXTRA_DEST . "/': $!: ignoring\n";
-		}
-		else {
-			print "\r Created extra destination '" . EXTRA_DEST . "/'\n";
-		}
+ if ($priority == 1 && EXTRA_DEST ne '' && !-d EXTRA_DEST) {
+	if (MakeDir(EXTRA_DEST)) {
+		print "\r WARNING: cannot create extra destination '" . EXTRA_DEST . "/': $!: ignoring\n";
+	}
+	else {
+		print "\r Created extra destination '" . EXTRA_DEST . "/'\n";
 	}
  }
  if (!-d $dest) {
@@ -415,7 +422,11 @@ sub addPair {
 		print "\r Created '$dest/'\n";
 	}
  }
- $transfers->{transfers}{$priority}{pairs}{$source} = $dest; #prevents duplication
+ #prevent duplication of paths at different priorities
+ foreach (keys %{$transfers->{transfers}}) {
+	delete $transfers->{transfers}{$_}{pairs}{$source};
+ }
+ $transfers->{transfers}{$priority}{pairs}{$source} = $dest; #this arrangement prevents duplication of sources
  if (defined $ctimeCleared) { #value supplied from file
  	$transfers->{transfers}{$priority}{ctimeCleared} = $ctimeCleared;
  }
@@ -425,6 +436,7 @@ sub addPair {
  $transfers->{new} = 1; #gets the child to restart scanning from the highest priority at the end of the current copy.  Do this while still locked after adding the directory pair to prevent the copying thread deleting the directory pair
 }
 
+# scan a source/destination directory pair, make a list of files that need to be copied, and delete unneeded source files
 sub Scan {
  my ($handle, $srcDir, $destRoot, $ctimeCleared, $essenceFiles, $retry, $msgs) = @_;
  my ($totalFiles, $totalSize, $latestCtime) = (0, 0, 0);
@@ -470,12 +482,12 @@ sub Scan {
 			$$msgs = 1;
 		}
 		#remove source file if it's old
-		elsif (time > $mtime + KEEP_PERIOD) {
+		elsif (time > $mtime + KEEP_PERIOD && dfportable($srcDir)->{per} >= DELETE_THRESHOLD) {
 			if ($opts{p}) {
-				Report("Would remove old file '$fullSource' if not prevented: copy found on server\n");
+				Report("Would remove old file '$fullSource' if not prevented by command-line option, as copy found on server\n");
 			}
 			else {
-				Report("Removing old file '$fullSource': copy found on server\n");
+				Report("Removing old file '$fullSource', as copy found on server\n");
 				unlink $fullSource or Report("WARNING: could not remove '$fullSource': $!\n");
 			}
 			$$msgs = 1;
@@ -484,12 +496,12 @@ sub Scan {
 	}
 	#don't copy if already copied; remove if old and already copied
 	elsif ($ctime <= $ctimeCleared) { #file has already been copied (but has disappeared off the server)
-		if (time > $mtime + KEEP_PERIOD) {
+		if (time > $mtime + KEEP_PERIOD && dfportable($srcDir)->{per} >= DELETE_THRESHOLD) {
 			if ($opts{p}) {
-				Report("Would remove old file '$fullSource' if not prevented: copy not on server but previously copied\n");
+				Report("Would remove old file '$fullSource' if not prevented by command-line option, as copy not on server but previously copied\n");
 			}
 			else {
-				Report("Removing old file '$fullSource': copy not on server but previously copied\n");
+				Report("Removing old file '$fullSource', as copy not on server but previously copied\n");
 				unlink $fullSource or Report("WARNING: could not remove '$fullSource': $!\n");
 			}
 			$$msgs = 1;
@@ -720,13 +732,13 @@ sub childLoop {
 		} #file copy loop
 		$share->lock(LOCK_EX);
 		$transfers = thaw($share->fetch);
-		delete $transfers->{current};
-		if (!$priRetry) {
+		if (!$transfers->{current}{totalFiles}) {
 			#no more files so must have copied everything at the last file's ctime
 			$transfers->{transfers}{$priority}{ctimeCleared} = $prevCtime;
 			SaveConfig($transfers);
 			$share->store(freeze $transfers);
 		}
+		delete $transfers->{current};
 		$share->unlock;
 		if ($transfers->{new}) { #new files have arrived
  			if ($priority > 1) {
