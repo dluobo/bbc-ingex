@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.15 2009/02/26 19:13:25 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.16 2009/03/19 17:46:57 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -802,7 +802,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case SHM_INPUT:
                 {
-                    if (!shared_mem_open(input.name.c_str(), &mediaSource))
+                    if (!shared_mem_open(input.name.c_str(), 0, &mediaSource))
                     {
                         ml_log_error("Failed to open shared memory source '%s'\n", input.name.c_str());
                         opened.push_back(false);
