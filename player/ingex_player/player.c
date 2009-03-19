@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.17 2009/02/13 10:17:06 john_f Exp $
+ * $Id: player.c,v 1.18 2009/03/19 17:43:40 john_f Exp $
  *
  *
  *
@@ -789,6 +789,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
     fprintf(stderr, "  --scale <float>          Scale the video (currently only works for the X11 Xv extension output)\n");
     fprintf(stderr, "  --sw-scale <factor>      Scale down the video in software, eg. to avoid Xv resolution limits. <factor> can be 2 or 3\n");
+    fprintf(stderr, "  --timeout <sec>          Timeout in decimal seconds when connecting to non-file inputs (default -1 (try forever))\n");
     fprintf(stderr, "  --loop                   Seek back to start when the last frame is reached\n");
     fprintf(stderr, "  --review-dur <sec>       Review duration in seconds (default 20 seconds)\n");
     fprintf(stderr, "  --half-split             A video switch with a half split view\n");
@@ -936,6 +937,7 @@ int main(int argc, const char **argv)
     MarkConfigs markConfigs;
     int64_t maxLength = -1;
     Rational maxLengthFrameRate = {0, 0};
+    double timeout = -1.0;
     int showFrameSequence = 0;
     FrameSequenceSink* frameSequenceSink = NULL;
     const char* bufferStateLogFilename = NULL;
@@ -1484,6 +1486,25 @@ int main(int argc, const char **argv)
                 fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--timeout") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            char *endptr = NULL;
+            timeout = strtod(argv[cmdlnIndex + 1], &endptr);
+            if (endptr == argv[cmdlnIndex + 1])
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Could not convert --timeout argument \"%s\" to floating point value\n", argv[cmdlnIndex + 1]);
+                return 1;
+            }
+
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--loop") == 0)
@@ -2231,7 +2252,7 @@ int main(int argc, const char **argv)
                 break;
 
             case SHM_INPUT:
-                if (!shared_mem_open(inputs[i].shmSourceName, &mediaSource))
+                if (!shared_mem_open(inputs[i].shmSourceName, timeout, &mediaSource))
                 {
                     ml_log_error("Failed to open shared memory source\n");
                     goto fail;

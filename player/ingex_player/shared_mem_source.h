@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.h,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: shared_mem_source.h,v 1.5 2009/03/19 17:43:40 john_f Exp $
  *
  *
  *
@@ -36,7 +36,7 @@ extern "C"
 
 /* shared memory source */
 
-int shared_mem_open(const char *channel_name, MediaSource** source);
+int shared_mem_open(const char *channel_name, double timeout, MediaSource** source);
 
 
 
