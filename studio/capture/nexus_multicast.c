@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.6 2008/10/22 09:32:19 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.7 2009/03/19 18:02:42 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -167,7 +167,7 @@ extern int main(int argc, char *argv[])
 
 	// Connect to NexusControl structure in shared mem
 	NexusConnection	nc;
-	nexus_connect_to_shared_mem(INT_MAX, 1, &nc);
+	nexus_connect_to_shared_mem(INT_MAX, 1, 1, &nc);
 
 	const NexusControl *pctl = nc.pctl;
 	const uint8_t	*const *ring = nc.ring;
@@ -220,7 +220,7 @@ extern int main(int argc, char *argv[])
 
 		if (! nexus_connection_status(&nc, NULL, NULL)) {
 			last_saved = -1;
-			if (nexus_connect_to_shared_mem(40000, 1, &nc)) {
+			if (nexus_connect_to_shared_mem(40000, 1, 1, &nc)) {
 				pctl = nc.pctl;
 				ring = nc.ring;
 				pc = &pctl->channel[channelnum];
