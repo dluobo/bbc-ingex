@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.6 2009/01/29 07:36:59 stuart_hc Exp $
+# $Id: Makefile,v 1.7 2009/03/19 18:11:12 john_f Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -10,7 +10,7 @@ COMMON_DIR = ../../../common
 YUVLIB_DIR = $(COMMON_DIR)/YUVlib
 
 
-
+CC = gcc
 CFLAGS = -g -Wall -Wundef -W -Wno-unused-parameter -O3 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
 INCLUDES = -I. -I$(STUDIOCOMMON_DIR) -I$(YUVLIB_DIR) -I/usr/local/include -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF_DIR) -I$(MXFREADER_DIR) -I$(DATABASELIB_DIR) -I$(MXFWRITER_DIR) -I/usr/local/include/ffmpeg/
 
@@ -81,10 +81,10 @@ transcode_avid_mxf: libmxfwriter.a transcode_avid_mxf.o
 	$(CPP_COMPILE) transcode_avid_mxf.o $(TRANSCODE_LIBS) -o $@
 
 yuv422_to_mjpeg: yuv422_to_mjpeg.c
-	$(CC) yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
+	$(CC) -g yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
 yuv422_to_mjpeg_threaded: yuv422_to_mjpeg_threaded.c
-	$(CC) yuv422_to_mjpeg_threaded.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
+	$(CC) -g yuv422_to_mjpeg_threaded.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
 
 	
