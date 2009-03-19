@@ -90,7 +90,8 @@ extern int main(int argc, char *argv[])
 
 	unsigned frame_size = width*height*2;
 
-	uint8_t *frame = (uint8_t*)malloc(frame_size);
+	uint8_t *orig_frame = (uint8_t*)malloc(frame_size);
+	uint8_t *frame = orig_frame;
 	uint8_t *tmp_frame = NULL;
 	if (input_is_uyvy) {
 		tmp_frame = (uint8_t*)malloc(frame_size);
@@ -112,9 +113,7 @@ extern int main(int argc, char *argv[])
 	int total_bytes = 0;
 	int frame_num = 0;
 	while (1) {
-		uint8_t *orig_frame = NULL;
 		if (input_is_uyvy) {
-			orig_frame = frame;
 			frame = tmp_frame;
 		}
 
@@ -171,11 +170,14 @@ extern int main(int argc, char *argv[])
 		}
 	}
 
-	mjpeg_compress_free(mc);
-
-	free(frame);
 	fclose(input_fp);
 	fclose(output_fp);
+
+	mjpeg_compress_free(mc);
+
+	free(orig_frame);
+	if (input_is_uyvy)
+		free(tmp_frame);
 
 	printf("Total compressed size=%u, frames=%d (bytes per frame=%.2f)\n", total_bytes, frame_num, (double)total_bytes / (double)frame_num);
 	return 0;
