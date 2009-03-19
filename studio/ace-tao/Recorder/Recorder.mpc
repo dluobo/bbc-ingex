@@ -14,7 +14,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   specific(vc71) {
     includes += $(LIBODBCPP)/include
   }
-  libs += avformat avcodec avutil bz2 z mp3lame x264 faac faad
+  libs += avformat avcodec avutil swscale bz2 z mp3lame x264 faac faad
   libs += jpeg
   //libs += jpeg-mmx
   libs += uuid
