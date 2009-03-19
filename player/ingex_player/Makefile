@@ -10,7 +10,7 @@ ifneq "$(MAKECMDGOALS)" "clean"
 
 # dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
 # search is overridden by setting DVSSDK
-include ../../common/dvs_sdk_paths.mk
+include $(COMMON_DIR)/dvs_sdk_paths.mk
 
 ifndef DVS_HARDWARE_INCLUDE
   $(warning no DVS available - set the DVSSDK environment variable to build with DVS hardware support)
@@ -33,14 +33,14 @@ endif
 endif
 
 ifndef DISABLE_SHARED_MEM_SOURCE
-	TEST_SHM_PATH := $(shell for f in ../../studio/capture/nexus_control.h; do test -e $$f && echo $$f && break; done)
+	TEST_SHM_PATH := $(shell for f in $(COMMON_DIR)/nexus_control.h; do test -e $$f && echo $$f && break; done)
 	ifeq "$(TEST_SHM_PATH)" ""
 $(warning shared memory source disabled)
 	endif
 endif
 
 ifndef DISABLE_UDP_SOURCE
-	TEST_UDP_PATH := $(shell for f in ../../common/multicast_video.h; do test -e $$f && echo $$f && break; done)
+	TEST_UDP_PATH := $(shell for f in $(COMMON_DIR)/multicast_video.h; do test -e $$f && echo $$f && break; done)
 	ifeq "$(TEST_UDP_PATH)" ""
 $(warning udp source disabled)
 	endif
@@ -144,7 +144,7 @@ endif
 ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
-	INCLUDEDIRS += -I../../common
+	INCLUDEDIRS += -I$(COMMON_DIR)
 	LIBDIRS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib
 	LIBS += -lcommon -lYUVlib
 	LIB_DEPS += $(COMMON_DIR)/libcommon.a $(COMMON_DIR)/YUVlib/libYUVlib.a
