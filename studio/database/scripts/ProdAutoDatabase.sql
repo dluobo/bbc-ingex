@@ -580,6 +580,22 @@ CREATE TABLE MultiCameraSelectorDef
     CONSTRAINT mcs_pkey PRIMARY KEY (mcs_identifier)
 ) WITHOUT OIDS;
 
+CREATE SEQUENCE mcc_id_seq;
+CREATE TABLE MultiCameraCut
+(
+    mcc_identifier INTEGER DEFAULT nextval('mcc_id_seq') NOT NULL,
+    mcc_multi_camera_track_def_id INTEGER NOT NULL,
+    mcc_multi_camera_selector_def_id INTEGER NOT NULL,
+    mcc_date DATE NOT NULL,
+    mcc_position BIGINT NOT NULL,
+    mcc_edit_rate Rational NOT NULL,
+    CONSTRAINT mcc_multi_camera_track_def_fkey FOREIGN KEY (mcc_multi_camera_track_def_id) REFERENCES MultiCameraTrackDef (mct_identifier)
+        ON DELETE CASCADE,
+    CONSTRAINT mcc_multi_camera_selector_def_fkey FOREIGN KEY (mcc_multi_camera_selector_def_id) REFERENCES MultiCameraSelectorDef (mcs_identifier)
+        ON DELETE CASCADE,
+    CONSTRAINT mcc_pkey PRIMARY KEY (mcc_identifier)
+) WITHOUT OIDS;
+
 
 
 -- PROXY DEFINITION
@@ -877,6 +893,7 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (15, 'DNX-185p');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (16, 'DNX-120i');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (17, 'DNX-185i');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (18, 'H264-DMI');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (19, 'DVCPRO-HD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (20, 'DVD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MPEG4');
 

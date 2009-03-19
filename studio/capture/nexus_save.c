@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.8 2009/02/26 19:24:52 john_f Exp $
+ * $Id: nexus_save.c,v 1.9 2009/03/19 18:01:58 john_f Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -62,17 +62,19 @@ static char *framesToStr(int tc, char *s)
 
 static void usage_exit(void)
 {
-    fprintf(stderr, "Usage: save_mem [options] videofile [audiofile]\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "    -c channel save video on specified channel [default 0]\n");
-    fprintf(stderr, "    -f frames  limit to number of frames saved\n");
+	fprintf(stderr, "Usage: save_mem [options] videofile [audiofile]\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "    -c channel save video on specified channel [default 0]\n");
+	fprintf(stderr, "    -f frames  limit to number of frames saved\n");
 #ifdef USE_FFMPEG
-    fprintf(stderr, "    -t threads number of threads for ffmpge encoder (use -1 for builtin tuned behaviour)\n");
-    fprintf(stderr, "    -r res     encoder resolution (JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
-	fprintf(stderr, "               DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,DMIH264) [default is uncompressed]\n");
+	fprintf(stderr, "    -t threads number of threads for ffmpge encoder (use -1 for builtin tuned behaviour)\n");
+	fprintf(stderr, "    -r res     encoder resolution [default is uncompressed]:\n");
+	fprintf(stderr, "               JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
+	fprintf(stderr, "               DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,DMIH264,\n");
+	fprintf(stderr, "               DV100_1080i50,DV100_720p50\n");
 #endif
-    fprintf(stderr, "    -s         save video from the secondary buffer (either 4:2:2 or 4:2:0)\n");
-    fprintf(stderr, "    -q         quiet operation (fewer messages)\n");
+	fprintf(stderr, "    -s         save video from the secondary buffer (either 4:2:2 or 4:2:0)\n");
+	fprintf(stderr, "    -q         quiet operation (fewer messages)\n");
 	exit(1);
 }
 
@@ -157,6 +159,10 @@ extern int main(int argc, char *argv[])
 				res = FF_ENCODER_RESOLUTION_DNX120i;
 			if (strcmp(argv[n+1], "DNX185i") == 0)
 				res = FF_ENCODER_RESOLUTION_DNX185i;
+			if (strcmp(argv[n+1], "DV100_1080i50") == 0)
+				res = FF_ENCODER_RESOLUTION_DV100_1080i50;
+			if (strcmp(argv[n+1], "DV100_720p50") == 0)
+				res = FF_ENCODER_RESOLUTION_DV100_720p50;
 			if (strcmp(argv[n+1], "DMIH264") == 0)
 				res = FF_ENCODER_RESOLUTION_DMIH264;
 			if (res == -1)
@@ -294,6 +300,8 @@ extern int main(int argc, char *argv[])
 	case FF_ENCODER_RESOLUTION_DNX185p:
 	case FF_ENCODER_RESOLUTION_DNX120i:
 	case FF_ENCODER_RESOLUTION_DNX185i:
+	case FF_ENCODER_RESOLUTION_DV100_1080i50:
+	case FF_ENCODER_RESOLUTION_DV100_720p50:
 		if (pctl->pri_video_format != Format422PlanarYUV) {
 			fprintf(stderr, "specified encoder resolution requires primary format of Format422PlanarYUV\n");
 			return 1;

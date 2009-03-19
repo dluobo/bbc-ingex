@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.5 2009/02/16 17:27:27 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.6 2009/03/19 18:05:35 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -28,9 +28,11 @@
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
+#include <ffmpeg/swscale.h>
 #else
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 #endif
 
 #include "ffmpeg_encoder.h"
@@ -89,9 +91,13 @@ typedef struct
     AVFrame * inputFrame;
     uint8_t * outputBuffer;
     unsigned int bufferSize;
-    // Following needed from frame padding
+    // following needed for frame padding and input scaling
     AVPicture * tmpFrame;
     uint8_t * inputBuffer;
+    int input_width;
+    int input_height;
+    struct SwsContext* scale_context;
+    int scale_image;
     int padtop;
     int padColour[3];
 } internal_ffmpeg_encoder_t;
@@ -107,8 +113,13 @@ static void cleanup (internal_ffmpeg_encoder_t * encoder)
         av_free(encoder->tmpFrame);
         if (encoder->codec_context)
         {
+            if (encoder->codec_context->intra_matrix)
+            {
+                av_free(encoder->codec_context->intra_matrix);
+            }
             avcodec_close(encoder->codec_context);
         }
+        sws_freeContext(encoder->scale_context);
         av_free(encoder->codec_context);
         av_free(encoder);
     }
@@ -136,6 +147,8 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     {
     case FF_ENCODER_RESOLUTION_DV25:
     case FF_ENCODER_RESOLUTION_DV50:
+    case FF_ENCODER_RESOLUTION_DV100_1080i50:
+    case FF_ENCODER_RESOLUTION_DV100_720p50:
         codec_id = CODEC_ID_DVVIDEO;
         break;
     case FF_ENCODER_RESOLUTION_IMX30:
@@ -180,6 +193,10 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     }
 
     // Set fields in AVCodecContext
+    encoder->codec_context->codec_type = CODEC_TYPE_VIDEO;
+    encoder->codec_context->time_base.num = 1;
+    encoder->codec_context->time_base.den = 25;
+    encoder->codec_context->pix_fmt = PIX_FMT_YUV422P;
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DV25:
@@ -189,13 +206,13 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     case FF_ENCODER_RESOLUTION_JPEG:
         encoder->codec_context->pix_fmt = PIX_FMT_YUVJ422P;
         break;
+    case FF_ENCODER_RESOLUTION_DV100_720p50:
+        encoder->codec_context->time_base.num = 1;
+        encoder->codec_context->time_base.den = 50;
+        break;
     default:
-        encoder->codec_context->pix_fmt = PIX_FMT_YUV422P;
         break;
     }
-    encoder->codec_context->time_base.num = 1;
-    encoder->codec_context->time_base.den = 25;
-    encoder->codec_context->codec_type = CODEC_TYPE_VIDEO;
 
     int width = 720;
     int height = 576;
@@ -265,10 +282,26 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
             encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
         encoded_frame_size = 917504;        // from VC-3 spec
         break;
+    case FF_ENCODER_RESOLUTION_DV100_1080i50:
+        width = 1440;                       // coded width (input scaled horizontally from 1920)
+        height = 1080;
+        encoder->input_width = 1920;
+        encoder->input_height = 1080;
+        encoder->scale_image = 1;
+        encoded_frame_size = 576000;        // SMPTE 370M spec
+        break;
+    case FF_ENCODER_RESOLUTION_DV100_720p50:
+        width = 960;                        // coded width (input scaled horizontally from 1280)
+        height = 720;
+        encoder->input_width = 1280;
+        encoder->input_height = 720;
+        encoder->scale_image = 1;
+        encoded_frame_size = 576000;        // SMPTE 370M spec
+        break;
     case FF_ENCODER_RESOLUTION_DMIH264:
-        encoded_frame_size = 200000;    		// guess at maximum encoded size
-        encoder->codec_context->bit_rate = 15 * 1000000;	// a guess
-        encoder->codec_context->gop_size = 1;	// I-frame only
+        encoded_frame_size = 200000;            // guess at maximum encoded size
+        encoder->codec_context->bit_rate = 15 * 1000000;    // a guess
+        encoder->codec_context->gop_size = 1;   // I-frame only
         break;
     default:
         break;
@@ -291,7 +324,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         if (threads > 0)
         {
             avcodec_thread_init(encoder->codec_context, threads);
-            encoder->codec_context->thread_count = threads;
+            encoder->codec_context->thread_count= threads;
         }
     }
 
@@ -341,8 +374,22 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         // Avid uses special intra quantiser matrix
         encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
         memcpy(encoder->codec_context->intra_matrix, intra_matrix, sizeof(uint16_t) * 64);
+
+        /* alloc input buffer */
+        encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
+        encoder->inputBuffer = av_mallocz(width * (height + encoder->padtop) * 2);
+        encoder->padColour[0] = 16;
+        encoder->padColour[1] = 128;
+        encoder->padColour[2] = 128;
     }
 
+    if (encoder->scale_image)
+    {
+        encoder->scale_image = 1;
+        // alloc buffers for scaling input video
+        encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
+        encoder->inputBuffer = av_mallocz(width * height * 2);
+    }
 
     avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
 
@@ -373,16 +420,6 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         return 0;
     }
     encoder->inputFrame->top_field_first = top_field_first;
-
-    /* alloc input buffer if we need to pad top of frame */
-    if (encoder->padtop)
-    {
-        encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
-        encoder->inputBuffer = av_mallocz(width * (height + encoder->padtop) * 2);
-        encoder->padColour[0] = 16;
-        encoder->padColour[1] = 128;
-        encoder->padColour[2] = 128;
-    }
 
     /* allocate output buffer */
     encoder->bufferSize = encoded_frame_size + 50000; // not sure why extra is needed
@@ -419,6 +456,32 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
             encoder->padtop, 0, 0, 0,
             encoder->padColour);
     }
+    else if (encoder->scale_image)
+    {
+        encoder->scale_context = sws_getCachedContext(encoder->scale_context,
+                    encoder->input_width, encoder->input_height,                   // input WxH
+                    encoder->codec_context->pix_fmt,
+                    encoder->codec_context->width, encoder->codec_context->height, // output WxH
+                    encoder->codec_context->pix_fmt,
+                    SWS_FAST_BILINEAR,
+                    NULL, NULL, NULL);
+
+        // Input image goes into tmpFrame
+        avpicture_fill((AVPicture*)encoder->tmpFrame, p_video,
+            encoder->codec_context->pix_fmt,
+            encoder->input_width, encoder->input_height);
+
+        // Output of scale operation goes into inputFrame
+        avpicture_fill((AVPicture*)encoder->inputFrame, encoder->inputBuffer,
+            encoder->codec_context->pix_fmt,
+            encoder->codec_context->width, encoder->codec_context->height);
+
+        // Perform the scale
+        sws_scale(encoder->scale_context,
+            encoder->tmpFrame->data, encoder->tmpFrame->linesize,
+            0, encoder->input_height,
+            encoder->inputFrame->data, encoder->inputFrame->linesize);
+    }
     else
     {
         /* set pointers in inputFrame to point to planes in p_video */
@@ -426,7 +489,6 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
             encoder->codec_context->pix_fmt,
             encoder->codec_context->width, encoder->codec_context->height);
     }
-
 
     /* compress video */
     int size = avcodec_encode_video(encoder->codec_context,

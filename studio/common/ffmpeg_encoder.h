@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.3 2009/02/13 10:26:47 john_f Exp $
+ * $Id: ffmpeg_encoder.h,v 1.4 2009/03/19 18:05:35 john_f Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -35,6 +35,8 @@ typedef void ffmpeg_encoder_t;
 typedef enum {
     FF_ENCODER_RESOLUTION_DV25,
     FF_ENCODER_RESOLUTION_DV50,
+    FF_ENCODER_RESOLUTION_DV100_1080i50,
+    FF_ENCODER_RESOLUTION_DV100_720p50,
     FF_ENCODER_RESOLUTION_IMX30,
     FF_ENCODER_RESOLUTION_IMX40,
     FF_ENCODER_RESOLUTION_IMX50,
