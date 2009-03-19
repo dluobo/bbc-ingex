@@ -1,0 +1,26 @@
+// Just to make a Visual Studio project for inspecting the source code.
+
+project(CreateAAF) {
+  exename = create_aaf
+  includes += ../../database/src
+  libpaths += ../../database/src
+  libs += prodautodb
+  includes += ../../common
+  libpaths += ../../common
+  libs += studiocommon
+  includes += ../../../common
+  libpaths += ../../../common
+  libs += common
+  includes += $(AAFSDKINSTALL)/include
+  libpaths += $(AAFSDKINSTALL)/lib
+  libs += aaflib aafiid
+  specific(vc71) {
+    includes += $(LIBODBCPP)/include
+  }
+  libs += odbc++
+  specific(vc71) {
+    includes += $(XERCES_ROOT)/include
+  }
+  libs += xerces-c
+}
+
