@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.11 2009/02/26 19:24:52 john_f Exp $
+# $Id: Makefile,v 1.12 2009/03/19 18:03:58 john_f Exp $
 #
 # Makefile for building ingex server and utilities.
 #
@@ -45,38 +45,35 @@ PROGS=$(SDI_PROGS) nexus_save nexus_xv nexus_stats nexus_web system_info_web nex
 .PHONY: all
 all: $(PROGS)
 
-nexus_control.o: nexus_control.h nexus_control.c
-	g++ $(FLAGS) -c nexus_control.c
-
-dvs_sdi: dvs_sdi.c nexus_control.h
+dvs_sdi: dvs_sdi.c
 	g++ $(FLAGS) $(DVS_HARDWARE_INCLUDE) dvs_sdi.c $(DVS_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_sdi $(FFMPEG_LIBS)
 
-dvs_dummy: dvs_sdi.c nexus_control.h ../
+dvs_dummy: dvs_sdi.c
 	g++ $(FLAGS) $(DUMMY_HARDWARE_INCLUDE) dvs_sdi.c $(DUMMY_HARDWARE_LIB) $(LIBS) -lpthread -o dvs_dummy $(FFMPEG_LIBS)
 
-testgen: testgen.c nexus_control.h
+testgen: testgen.c
 	g++ $(FLAGS) testgen.c $(LIBS) -lpthread -o testgen
 
-nexus_stats: nexus_stats.c nexus_control.h nexus_control.o
-	g++ $(FLAGS) nexus_stats.c nexus_control.o $(LIBS) -lpthread -o nexus_stats
+nexus_stats: nexus_stats.c
+	g++ $(FLAGS) nexus_stats.c $(LIBS) -lpthread -o nexus_stats
 
-nexus_web: nexus_web.c nexus_control.h nexus_control.o
-	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(FLAGS) nexus_web.c nexus_control.o $(LIBS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
+nexus_web: nexus_web.c
+	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(FLAGS) nexus_web.c $(LIBS) -lpthread -o nexus_web -lshttpd -ldl ; else echo "shttpd.h not found - nexus_web will not be built"; echo ; fi
 
 system_info_web: system_info_web.c
 	@if [ -r /usr/include/shttpd.h -o -r /usr/local/include/shttpd.h ] ; then set -x ; g++ $(FLAGS) system_info_web.c -o system_info_web -lshttpd -ldl -lpthread ; else echo "shttpd.h not found - system_info_web_web will not be built"; echo ; fi
 
-nexus_set_source: nexus_set_source.c nexus_control.h
+nexus_set_source: nexus_set_source.c
 	g++ $(FLAGS) nexus_set_source.c $(LIBS) -lpthread -o nexus_set_source
 
-nexus_save: nexus_save.c nexus_control.h nexus_control.o ../common/ffmpeg_encoder.o
-	g++ $(FLAGS) -DUSE_FFMPEG nexus_save.c -o nexus_save nexus_control.o ../common/ffmpeg_encoder.o $(FFMPEG_LIBS)
+nexus_save: nexus_save.c ../common/ffmpeg_encoder.o
+	g++ $(FLAGS) -DUSE_FFMPEG nexus_save.c -o nexus_save ../common/ffmpeg_encoder.o $(LIBS) $(FFMPEG_LIBS)
 
-nexus_multicast: nexus_multicast.c nexus_control.h nexus_control.o
-	g++ -I../../common $(FLAGS) nexus_multicast.c -o nexus_multicast nexus_control.o -L../../common -lcommon -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
+nexus_multicast: nexus_multicast.c
+	g++ $(FLAGS) nexus_multicast.c -o nexus_multicast $(LIBS) -L../../common/YUVlib -lYUVlib $(FFMPEG_LIBS)
 
-nexus_xv: nexus_xv.c nexus_control.h nexus_control.o
-	g++ $(FLAGS) nexus_xv.c -o nexus_xv nexus_control.o $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
+nexus_xv: nexus_xv.c
+	g++ $(FLAGS) nexus_xv.c -o nexus_xv $(LIBS) -L/usr/X11R6/lib -L/usr/X11R6/lib64 -lXv
 
 clean:
 	rm -f core *.o dvs_sdi $(PROGS)
