@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.18 2009/02/26 19:24:52 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.19 2009/03/19 18:04:59 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -518,8 +518,10 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	p_control->sec_video_offset = dma_video_size + audio_size;
 
 	p_control->source_name_update = 0;
-	if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0)
+	if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0) {
 		fprintf(stderr, "Mutex init error\n");
+		return 0;
+	}
 
 	// Allocate multiple element ring buffers containing video + audio + tc
 	//
@@ -726,8 +728,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	if (video_secondary_format != FormatNone) {
 		if (width > 720) {
 			// HD primary video, scale and reformat to SD secondary
-			int in_pixfmt = (video_format == Format422UYVY) ? PIX_FMT_UYVY422 : PIX_FMT_YUV422P;
-			int out_pixfmt = PIX_FMT_YUV420P;
+			PixelFormat in_pixfmt = (video_format == Format422UYVY) ? PIX_FMT_UYVY422 : PIX_FMT_YUV422P;
+			PixelFormat out_pixfmt = PIX_FMT_YUV420P;
 			if (video_secondary_format == Format422PlanarYUV ||
 				video_secondary_format == Format422PlanarYUVShifted) {
 				out_pixfmt = PIX_FMT_YUV422P;
