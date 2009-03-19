@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.16 2009/02/26 19:22:30 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.17 2009/03/19 17:52:38 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -202,17 +202,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Start timecode passed as metadata to MXFWriter
     int start_tc = p_rec->mStartTimecode;
 
-    // Image parameters
-    const int WIDTH = IngexShm::Instance()->Width();
-    const int HEIGHT = IngexShm::Instance()->Height();
-    const bool INTERLACE = IngexShm::Instance()->Interlace();
-    const int SIZE_420 = WIDTH * HEIGHT * 3/2;
-    const int SIZE_422 = WIDTH * HEIGHT * 2;
-    int frame_rate_numerator;
-    int frame_rate_denominator;
-    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
-    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
-
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
 
@@ -242,24 +231,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     int mxf_audio_bits = 16; // has to be 16 with current deinterleave function
     int browse_audio_bits = settings->browse_audio_bits;
 
-    // burnt-in timecode settings
     bool bitc = p_opt->bitc;
-
-    unsigned int tc_xoffset;
-    unsigned int tc_yoffset;
-    if (quad_video)
-    {
-        // centre
-        tc_xoffset = WIDTH / 2 - 100;
-        tc_yoffset = HEIGHT / 2 - 12;
-    }
-    else
-    {
-        // top centre
-        tc_xoffset = WIDTH / 2 - 100;
-        tc_yoffset = 30;
-    }
-
 
     ACE_DEBUG((LM_INFO,
         ACE_TEXT("start_record_thread(%C, start_tc=%C %C %C %C\n"),
@@ -293,8 +265,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     MJPEGResolutionID mjpeg_res = MJPEG_20_1;
     enum {PIXFMT_420, PIXFMT_422} pix_fmt = PIXFMT_422;
     enum {ENCODER_NONE, ENCODER_UNC, ENCODER_FFMPEG, ENCODER_FFMPEG_AV, ENCODER_MJPEG} encoder = ENCODER_NONE;
+
     // For checking of codec/capture compatibility
-    enum {SD, HD_INTERLACED, HD_PROGRESSIVE, ANY} codec_input_format = SD;
+    enum {SD_422, SD_422_SHIFTED, SD_420, SD_420_SHIFTED, HD_422, ANY_422} codec_input_format = SD_422;
 
     std::string filename_extension;
     switch (resolution)
@@ -302,6 +275,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // DV formats
     case DV25_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
+        codec_input_format = SD_420_SHIFTED;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV25;
         ff_av_res = FF_ENCODER_RESOLUTION_DV25_MOV;
@@ -309,18 +283,29 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     case DV50_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422_SHIFTED;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV50;
+        filename_extension = ".dv";
+        break;
+    // DV HD format
+    case DVCPROHD_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
+        encoder = ENCODER_FFMPEG;
+        ff_res = FF_ENCODER_RESOLUTION_DV100_1080i50; // temporarily assuming not 720p
         filename_extension = ".dv";
         break;
     // MJPEG formats
     case MJPEG21_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_2_1;
         break;
     case MJPEG31_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_3_1;
         break;
@@ -331,34 +316,40 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     case MJPEG151S_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_15_1s;
         break;
     case MJPEG201_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_MJPEG;
         mjpeg_res = MJPEG_20_1;
         break;
     case MJPEG101M_MATERIAL_RESOLUTION:
         encoder = ENCODER_MJPEG;
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         mjpeg_res = MJPEG_10_1m;
         break;
     // IMX formats
     case IMX30_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX30;
         filename_extension = ".m2v";
         break;
     case IMX40_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX40;
         filename_extension = ".m2v";
         break;
     case IMX50_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = SD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_IMX50;
         filename_extension = ".m2v";
@@ -366,41 +357,41 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // DNxHD formats
     case DNX36p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX36p;
-        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX120p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120p;
-        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX185p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185p;
-        codec_input_format = HD_PROGRESSIVE;
         break;
     case DNX120i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120i;
-        codec_input_format = HD_INTERLACED;
         break;
     case DNX185i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185i;
-        codec_input_format = HD_INTERLACED;
         break;
     // H264
     case DMIH264_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
+        codec_input_format = ANY_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DMIH264;
         filename_extension = ".h264";
-        codec_input_format = ANY;
         break;
     // Browse formats
     case DVD_MATERIAL_RESOLUTION:
@@ -413,6 +404,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     case MPEG4_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
+        codec_input_format = SD_420;
         encoder = ENCODER_FFMPEG_AV;
         ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
         mxf = false;
@@ -420,32 +412,172 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         break;
     case UNC_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
+        codec_input_format = ANY_422;
         encoder = ENCODER_UNC;
         filename_extension = ".yuv";
-        codec_input_format = ANY;
         break;
     default:
         break;
     }
 
-    if ((codec_input_format == HD_INTERLACED || codec_input_format == HD_PROGRESSIVE) && WIDTH == 720)
+    // Check which capture buffer has suitable format
+    bool use_primary_video = true;
+    switch (codec_input_format)
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("HD encoder selected but capture is SD!\n")));
-        encoder = ENCODER_NONE;
-        p_rec->NoteFailure();
+    case SD_422:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV
+            && IngexShm::Instance()->PrimaryWidth() == 720)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV
+            && IngexShm::Instance()->SecondaryWidth() == 720)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    case SD_422_SHIFTED:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUVShifted
+            && IngexShm::Instance()->PrimaryWidth() == 720)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUVShifted
+            && IngexShm::Instance()->SecondaryWidth() == 720)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    case SD_420:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format420PlanarYUV
+            && IngexShm::Instance()->PrimaryWidth() == 720)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format420PlanarYUV
+            && IngexShm::Instance()->SecondaryWidth() == 720)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    case SD_420_SHIFTED:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format420PlanarYUVShifted
+            && IngexShm::Instance()->PrimaryWidth() == 720)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format420PlanarYUVShifted
+            && IngexShm::Instance()->SecondaryWidth() == 720)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    case HD_422:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV
+            && IngexShm::Instance()->PrimaryWidth() > 720)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV
+            && IngexShm::Instance()->SecondaryWidth() > 720)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    case ANY_422:
+        if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV)
+        {
+            use_primary_video = true;
+        }
+        else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV)
+        {
+            use_primary_video = false;
+        }
+        else
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Incompatible capture format for %C\n"), resolution_name.c_str()));
+            encoder = ENCODER_NONE;
+            p_rec->NoteFailure();
+        }
+        break;
+
+    default:
+        use_primary_video = true;
+        break;
     }
-    else if (codec_input_format == SD && WIDTH > 720)
+    
+    // Image parameters
+    int WIDTH = 0;
+    int HEIGHT = 0;
+    if (use_primary_video)
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("SD encoder selected but capture is HD!\n")));
-        encoder = ENCODER_NONE;
-        p_rec->NoteFailure();
+        WIDTH = IngexShm::Instance()->PrimaryWidth();
+        HEIGHT = IngexShm::Instance()->PrimaryHeight();
     }
-    else if (codec_input_format == HD_PROGRESSIVE && INTERLACE == true)
+    else
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Progressive encoder selected but capture is interlaced!\n")));
-        encoder = ENCODER_NONE;
-        p_rec->NoteFailure();
+        WIDTH = IngexShm::Instance()->SecondaryWidth();
+        HEIGHT = IngexShm::Instance()->SecondaryHeight();
     }
+    const bool INTERLACE = IngexShm::Instance()->Interlace();
+    const int SIZE_420 = WIDTH * HEIGHT * 3/2;
+    const int SIZE_422 = WIDTH * HEIGHT * 2;
+    int frame_rate_numerator;
+    int frame_rate_denominator;
+    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
+    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
+
+    // burnt-in timecode settings
+    unsigned int tc_xoffset;
+    unsigned int tc_yoffset;
+    if (quad_video)
+    {
+        // centre
+        tc_xoffset = WIDTH / 2 - 100;
+        tc_yoffset = HEIGHT / 2 - 12;
+    }
+    else
+    {
+        // top centre
+        tc_xoffset = WIDTH / 2 - 100;
+        tc_yoffset = 30;
+    }
+
 
 
     // Override file name extension for non-raw formats
@@ -629,65 +761,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
     }
 
-
-    // Work out whether the primary video buffer (4:2:2 only) or the secondary
-    // video (4:2:2 or 4:2:0) is to be used as the video input for encoding.
-    bool use_primary_video = true;
-    if (PIXFMT_422 == pix_fmt)
-    {
-        // Of the 4:2:2 formats only DV50 requires the line shift
-        if (DV50_MATERIAL_RESOLUTION == resolution)
-        {
-            if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUVShifted)
-            {
-                use_primary_video = true;
-            }
-            else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUVShifted)
-            {
-                use_primary_video = false;
-            }
-            else
-            {
-                LOG_RECORD_ERROR("Incompatible 422 capture format for encoding resolution %s\n", resolution_name.c_str());
-            }
-        }
-        else // all other 4:2:2 resolutions
-        {
-            if (IngexShm::Instance()->PrimaryCaptureFormat() == Format422PlanarYUV)
-            {
-                use_primary_video = true;
-            }
-            else if (IngexShm::Instance()->SecondaryCaptureFormat() == Format422PlanarYUV)
-            {
-                use_primary_video = false;
-            }
-            else
-            {
-                LOG_RECORD_ERROR("Incompatible 422 capture format for encoding resolution %s\n", resolution_name.c_str());
-            }
-        }
-    }
-    else if (PIXFMT_420 == pix_fmt)
-    {
-        // Only the secondary buffer supports 4:2:0
-        use_primary_video = false;
-
-        // Of the 4:2:0 formats only DV25 requires the line shift
-        if (DV25_MATERIAL_RESOLUTION == resolution)
-        {
-            if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUVShifted)
-            {
-                LOG_RECORD_ERROR("Incompatible 420 capture format for encoding resolution %s\n", resolution_name.c_str());
-            }
-        }
-        else // all other 4:2:0 resolutions
-        {
-            if (IngexShm::Instance()->SecondaryCaptureFormat() != Format420PlanarYUV)
-            {
-                LOG_RECORD_ERROR("Incompatible 420 capture format for encoding resolution %s\n", resolution_name.c_str());
-            }
-        }
-    }
 
     // Directories
     const std::string & mxf_subdir_creating = settings->mxf_subdir_creating;
@@ -1279,38 +1352,45 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
 
-            // Write raw (non-MXF) files
+            // Write raw (non-MXF) tracks
             if (raw && !DEBUG_NOWRITE)
             {
-                size_t n = 0;
-                if (encoder == ENCODER_UNC && p_inp_video && fp_raw[0] != NULL)
+                for (unsigned int i = 0; i < mp->tracks.size(); ++i)
                 {
-                    n = fwrite(p_inp_video, SIZE_422, 1, fp_raw[0]);
-                }
-                else if (p_enc_video && fp_raw[0] != NULL)
-                {
-                    n = fwrite(p_enc_video, size_enc_video, 1, fp_raw[0]);
-                }
-                if (n == 0)
-                {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Write error!\n")));
-                    fclose(fp_raw[0]);
-                    fp_raw[0] = NULL;
+                    if (fp_raw.size() > i && fp_raw[i] != NULL)
+                    {
+                        FILE * & fp = fp_raw[i];
+                        prodauto::Track * & mp_trk = mp->tracks[i];
+                        if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
+                        {
+                            // Video
+                            size_t n = 0;
+                            if (encoder == ENCODER_UNC && p_inp_video)
+                            {
+                                n = fwrite(p_inp_video, SIZE_422, 1, fp);
+                            }
+                            else if (p_enc_video)
+                            {
+                                n = fwrite(p_enc_video, size_enc_video, 1, fp);
+                            }
+                            if (n == 0)
+                            {
+                                ACE_DEBUG((LM_ERROR, ACE_TEXT("Raw video file write error!\n")));
+                                fclose(fp);
+                                fp = NULL;
+                            }
+                        }
+                        else if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
+                        {
+                            // Audio
+                            //write_audio(fp, (uint8_t *)p_input[i], audio_samples_per_frame, 32, raw_audio_bits);
+                            write_audio(fp, (uint8_t *)p_input[i], audio_samples_per_frame, 16, raw_audio_bits);
+                        }
+                    }
                 }
             }
 
-            // Write uncompressed audio
-            for (unsigned int i = 0; i < mp->tracks.size(); ++i)
-            {
-                prodauto::Track * mp_trk = mp->tracks[i];
-                if (raw && mp_trk->dataDef == SOUND_DATA_DEFINITION && !DEBUG_NOWRITE)
-                {
-                    //write_audio(fp_raw[i], (uint8_t *)p_input[i], audio_samples_per_frame, 32, raw_audio_bits);
-                    write_audio(fp_raw[i], (uint8_t *)p_input[i], audio_samples_per_frame, 16, raw_audio_bits);
-                }
-            }
-
-            // Write to tracks of MXF files
+            // Write MXF tracks
             if (mxf && !DEBUG_NOWRITE)
             {
                 for (unsigned int i = 0; i < mp->tracks.size(); ++i)

@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.7 2009/02/26 19:22:30 john_f Exp $
+ * $Id: IngexShm.h,v 1.8 2009/03/19 17:52:38 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -113,6 +113,10 @@ public:
 
     unsigned int Width() { return mpControl->width; }
     unsigned int Height() { return mpControl->height; }
+    unsigned int PrimaryWidth() { return mpControl->width; }
+    unsigned int PrimaryHeight() { return mpControl->height; }
+    unsigned int SecondaryWidth() { return mpControl->sec_width; }
+    unsigned int SecondaryHeight() { return mpControl->sec_height; }
     bool Interlace() { return true; } // not yet supported
 
     uint8_t * pVideoPri(int channel, int frame)
