@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.h,v 1.6 2009/02/26 19:17:09 john_f Exp $           *
+ *   $Id: controller.h,v 1.7 2009/03/19 17:50:29 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -100,6 +100,7 @@ private:
 	wxCondition* mCondition;
 	Command mCommand;
 	Command mPrevCommand;
+	Command mCommandOnTimer;
 	CORBA::BooleanSeq mEnableList;
 	CORBA::StringSeq mSourceNames;
 	CORBA::StringSeq mProjectNames;

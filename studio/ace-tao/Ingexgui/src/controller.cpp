@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.7 2009/02/26 19:17:09 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.8 2009/03/19 17:50:29 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -245,7 +245,8 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 			if (event.GetCommand() == mPendingCommand || NONE == mPendingCommand) { //this isn't the result of a previous command which has been superceded
 				//try again
 //std::cerr << "retrying failed command" << std::endl;
-				Signal(event.GetCommand());
+				mCommandOnTimer = event.GetCommand();
+				mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT);
 			}
 		}
 		else if (COMM_FAILURE == event.GetResult()) {
@@ -267,7 +268,8 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 					mPendingCommandSent = false; //needs to be sent again when communication re-established
 				}
 			}
-			Signal(RECONNECT);
+			mCommandOnTimer = RECONNECT;
+			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT);
 		}
 		else if (RECONNECT == event.GetCommand()) { //just reconnected
 			//set tape IDs as may be a restarted recorder which won't have this information
@@ -293,18 +295,19 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 		else { //idle state
 //std::cerr << "ordinary notification" << std::endl;
 			GetNextHandler()->AddPendingEvent(event);
+			mCommandOnTimer = STATUS;
 			mPollingTimer->Start(POLLING_INTERVAL, wxTIMER_ONE_SHOT);
 		}
 	}
 	mPrevCommand = event.GetCommand();
 }
 
-/// Called by the polling timer, which should only happen in the idle, connected state.
-/// Makes a status request.
+/// Called by the polling timer
+/// Sends the stored command.
 void Controller::OnTimer(wxTimerEvent& WXUNUSED(event))
 {
 	//timer is one-shot so has stopped: it will be re-started if necessary when the thread returns an event in response to Signal() or the parent issues a command
-	Signal(STATUS);
+	Signal(mCommandOnTimer);
 }
 
 /// Thread entry point, called by wxWidgets.
@@ -529,6 +532,9 @@ wxThread::ExitCode Controller::Entry()
 			if (COMM_FAILURE != event.GetResult()) {
 				if (ProdAuto::Recorder::SUCCESS == rc) {
 					event.SetStrings(strings); //only relevant for STOP (list of files) and CONNECT (list of project names)
+					if (!timecode.edit_rate.numerator || !timecode.edit_rate.denominator) {
+						timecode.undefined = true;
+					}
 					event.SetTimecode(timecode); //only relevant for START and STOP
 				}
 				else {
