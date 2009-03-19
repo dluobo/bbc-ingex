@@ -1,5 +1,5 @@
 /*
- * $Id: dnxhd_stream_connect.c,v 1.4 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dnxhd_stream_connect.c,v 1.5 2009/03/19 17:42:56 john_f Exp $
  *
  *
  *
@@ -93,6 +93,7 @@ typedef struct
 
     unsigned char* dnxhdData;
     unsigned int dnxhdDataSize;
+    unsigned int dnxhdDataAllocSize;
 
     unsigned char* sinkBuffer;
     unsigned int sinkBufferSize;
@@ -408,10 +409,20 @@ static int ddc_allocate_buffer(void* data, int streamId, unsigned char** buffer,
         return 0;
     }
 
-    if (connect->dnxhdDataSize != bufferSize)
+    if (connect->dnxhdDataSize < bufferSize)
     {
-        ml_log_error("Invalid DNxHD buffer allocation request for stream %d in copy connect\n", streamId);
-        return 0;
+        /* allocate buffer if neccessary and set size */
+        if (connect->dnxhdDataAllocSize < bufferSize)
+        {
+            SAFE_FREE(&connect->dnxhdData);
+            connect->dnxhdDataSize = 0;
+            connect->dnxhdDataAllocSize = 0;
+
+            CALLOC_ORET(connect->dnxhdData, unsigned char,
+                bufferSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */);
+            connect->dnxhdDataAllocSize = bufferSize; /* we lie and don't include the FFMPEG extra space */
+        }
+        connect->dnxhdDataSize = bufferSize;
     }
 
     /* ask sink to allocate buffer for decoded frame */
@@ -614,15 +625,6 @@ int create_dnxhd_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
     newConnect->useWorkerThread = useWorkerThread;
     newConnect->decodedFormat = decodedStreamInfo.format;
-    newConnect->dnxhdDataSize = 606208;
-
-    if ((newConnect->dnxhdData = (unsigned char*)calloc(
-        newConnect->dnxhdDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */,
-        sizeof(unsigned char))) == NULL)
-    {
-        ml_log_error("Failed to allocate memory\n");
-        goto fail;
-    }
 
     newConnect->sink = sink;
     newConnect->sourceStreamId = sourceStreamId;

@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: mxf_source.c,v 1.9 2009/03/19 17:42:56 john_f Exp $
  *
  *
  *
@@ -984,6 +984,8 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     int isPAL;
     mxfRational mxfFrameRate;
 
+    CHK_ORET(initialise_stream_info(&commonStreamInfo));
+
     assert(MAX_SOURCE_INFO_VALUE_LEN <= 128);
     assert(sizeof(uint8_t) == sizeof(unsigned char));
     assert(sizeof(uint32_t) <= sizeof(unsigned int));
@@ -1094,7 +1096,6 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
 
     /* create the common source information */
 
-    CHK_ORET(initialise_stream_info(&commonStreamInfo));
     commonStreamInfo.sourceId = msc_create_id();
 
     get_frame_rate(newSource->mxfReader, &mxfFrameRate);
@@ -1241,7 +1242,11 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 outputStream->streamInfo.format = AVID_MJPEG_FORMAT;
                 outputStream->streamInfo.singleField = 1;
             }
-            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)))
+            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i185ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080p36ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD720p120ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD720p185ClipWrapped)))
             {
                 outputStream->streamInfo.format = AVID_DNxHD_FORMAT;
             }
