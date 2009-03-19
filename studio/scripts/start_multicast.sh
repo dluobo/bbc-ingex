@@ -7,6 +7,11 @@ LOCATION=den
 # multicast executable
 MULTICAST=/home/ingex/ap-workspace/ingex/studio/capture/nexus_multicast
 
+# -g option runs program under gdb so that a crash displays a stack trace
+if [ "$1" = "-g" ] ; then
+	MULTICAST="gdb -q -ex run -ex where --args $MULTICAST"
+	shift			# swallow option
+fi
 
 # stop all multicast processes
 
