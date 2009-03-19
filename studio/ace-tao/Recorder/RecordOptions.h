@@ -1,5 +1,5 @@
 /*
- * $Id: RecordOptions.h,v 1.5 2008/09/03 14:09:05 john_f Exp $
+ * $Id: RecordOptions.h,v 1.6 2009/03/19 17:54:48 john_f Exp $
  *
  * Class for channel-specific (i.e. thread-specific) recording data.
  *
@@ -34,7 +34,7 @@
 
 #include "integer_types.h"
 #include "recorder_types.h" // for framecount_t
-#include "RecorderSettings.h" // for Wrapping::EnumType
+//#include "RecorderSettings.h" // for Wrapping::EnumType
 
 // Description of a particular encoding, to be performed in a thread.
 class RecordOptions

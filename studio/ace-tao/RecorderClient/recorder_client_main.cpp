@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_client_main.cpp,v 1.2 2008/09/03 15:56:45 john_f Exp $
+ * $Id: recorder_client_main.cpp,v 1.3 2009/03/19 17:58:55 john_f Exp $
  *
  * Simple test client for Recorder.
  *
@@ -34,8 +34,6 @@
 #include "StatusClientImpl.h"
 
 const bool CLIENT = true;
-
-const ProdAuto::Rational EDIT_RATE = { 25, 1 }; // We are working at 25 frames per second
 
 // Globals
 RecorderManager * rec_manager;
