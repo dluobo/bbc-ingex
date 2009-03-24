@@ -9,10 +9,11 @@
 
 static int usage(char *argv[])
 {
-	fprintf(stderr, "Usage: %s [-r res] input.{uyvy,yuv} output.raw\n\n", argv[0]);
+	fprintf(stderr, "Usage: %s [-r res] input.yuv output.raw\n\n", argv[0]);
 	fprintf(stderr, "    -b n_frames    read one frame then loop n_frames\n");
 	fprintf(stderr, "    -r <res>       encoder resolution (JPEG,DV25,DV50,IMX30,IMX40,IMX50,\n");
-	fprintf(stderr, "                   DNX36p,DNX120p,DNX185p,DNX120i,DNX185i)\n");
+	fprintf(stderr, "                   DNX36p,DNX120p,DNX185p,DNX120i,DNX185i,\n");
+	fprintf(stderr, "                   DV100_1080i50,DV100_720p50)\n");
 	return 1;
 }
 
@@ -78,6 +79,14 @@ extern int main(int argc, char *argv[])
 				res = FF_ENCODER_RESOLUTION_DNX185i;
 				width = 1920; height = 1080;
 			}
+			if (strcmp(argv[n+1], "DV100_1080i50") == 0) {
+				res = FF_ENCODER_RESOLUTION_DV100_1080i50;
+				width = 1920; height = 1080;
+			}
+			if (strcmp(argv[n+1], "DV100_720p50") == 0) {
+				res = FF_ENCODER_RESOLUTION_DV100_720p50;
+				width = 1280; height = 720;
+			}
 			if (strcmp(argv[n+1], "DMIH264") == 0)
 				res = FF_ENCODER_RESOLUTION_DMIH264;
 			if (res == -1)
@@ -107,7 +116,7 @@ extern int main(int argc, char *argv[])
 	}
 
 	// Initialise ffmpeg encoder
-    ffmpeg_encoder_t *ffmpeg_encoder = ffmpeg_encoder_init(res, THREADS_USE_BUILTIN_TUNING);
+	ffmpeg_encoder_t *ffmpeg_encoder = ffmpeg_encoder_init(res, THREADS_USE_BUILTIN_TUNING);
 	if (!ffmpeg_encoder) {
 		fprintf(stderr, "ffmpeg encoder init failed\n");
 		return 1;
@@ -118,7 +127,6 @@ extern int main(int argc, char *argv[])
 		unc_frame_size = width*height*3/2;
 
 	in = (uint8_t *)malloc(unc_frame_size);
-	out = (uint8_t *)malloc(unc_frame_size);	// worst case compressed size
 
 	// Open output file
 	if (! benchmark_encode)
@@ -149,6 +157,10 @@ extern int main(int argc, char *argv[])
 		}
 
 		int compressed_size = ffmpeg_encoder_encode(ffmpeg_encoder, in, &out);
+		if (compressed_size < 0) {
+			fprintf(stderr, "ffmpeg_encoder_encode() failed, frames_encoded = %d\n", frames_encoded);
+			return(1);
+		}
 
 		if (! benchmark_encode)
 			if ( fwrite(out, compressed_size, 1, output_fp) != 1 ) {
@@ -167,8 +179,9 @@ extern int main(int argc, char *argv[])
 	fclose(input_fp);
 	if (! benchmark_encode)
 		fclose(output_fp);
+
 	free(in);
-	free(out);
+	ffmpeg_encoder_close(ffmpeg_encoder);
 
 	return 0;
 }
