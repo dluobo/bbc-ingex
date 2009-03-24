@@ -38,7 +38,7 @@ libprodautodb.a:
 	(cd ../common && gcc -Wall -W -g -c ffmpeg_encoder.c)
 
 test_ffmpeg_encoder: test_ffmpeg_encoder.c ../common/ffmpeg_encoder.o
-	gcc -Wall -W -g test_ffmpeg_encoder.c ../common/ffmpeg_encoder.o -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
+	gcc -Wall -W -g test_ffmpeg_encoder.c ../common/ffmpeg_encoder.o -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
 	
 libmxfwriter.a: $(LIBOBJECTS)
 	$(AR) $@ $(LIBOBJECTS)
@@ -60,13 +60,9 @@ test_mxfwriter: libprodautodb.a libwriteavidmxf.a libMXF.a libmxfwriter.a test_m
 
 .PHONY: clean
 clean:
-	@rm -f *.d *.o *.a *~ test_mxfwriter
-	
-	
+	@rm -f *.d *.o *.a *~ test_mxfwriter test_ffmpeg_encoder
+
 
 ifneq "$(MAKECMDGOALS)" "clean"
 -include $(DEPENDENCIES)
 endif	
-	
-
-
