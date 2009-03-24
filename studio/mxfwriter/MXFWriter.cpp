@@ -1,9 +1,10 @@
 /*
- * $Id: MXFWriter.cpp,v 1.8 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: MXFWriter.cpp,v 1.9 2009/03/24 19:26:37 john_f Exp $
  *
  * Writes essence data to MXF files
  *
- * Copyright (C) 2006  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2006-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Philip de Nier <philipn@users.sourceforge.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,7 +20,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
+
 #include <cassert>
 #include <sstream>
 #include <cerrno>
@@ -52,8 +53,8 @@ typedef struct
     uint32_t soundTrackCount;
 } TrackCount;
 
-    
-    
+
+
 static void convertUMID(prodauto::UMID& in, mxfUMID& out)
 {
     memcpy(&out, &in, 32);
@@ -72,9 +73,9 @@ static void convertRational(prodauto::Rational& in, mxfRational& out)
 static string createFilename(string filenamePrefix, bool isPicture, uint32_t inputTrackID, uint32_t trackNumber)
 {
     stringstream filename;
-    
+
     filename << filenamePrefix << "_" << inputTrackID << "_";
-    
+
     if (isPicture)
     {
         filename << "v";
@@ -84,10 +85,10 @@ static string createFilename(string filenamePrefix, bool isPicture, uint32_t inp
         filename << "a";
     }
     filename << trackNumber << ".mxf";
-    
+
     return filename.str();
 }
- 
+
 static string createCompleteFilename(string filePath, string filename)
 {
     string completeFilename = filePath;
@@ -100,7 +101,7 @@ static string createCompleteFilename(string filePath, string filename)
 #endif
     }
     completeFilename.append(filename);
-    
+
     return completeFilename;
 }
 
@@ -108,7 +109,7 @@ static void moveFile(string from, string to)
 {
     if (rename(from.c_str(), to.c_str()) != 0)
     {
-        PA_LOGTHROW(MXFWriterException, ("Failed to move file from %s to %s (error = %d)", 
+        PA_LOGTHROW(MXFWriterException, ("Failed to move file from %s to %s (error = %d)",
             from.c_str(), to.c_str(), errno));
     }
 }
@@ -119,16 +120,16 @@ static string createClipName(string sourceName, bool isPALProject, int64_t start
     {
         return sourceName + ".-1";
     }
-    
+
     char buf[48];
     int base = (isPALProject ? 25 : 30);
-    
-    sprintf(buf, ".%02d%02d%02d%02d", 
+
+    sprintf(buf, ".%02d%02d%02d%02d",
         (int)(startPosition / (60 * 60 * base)),
         (int)((startPosition % (60 * 60 * base)) / (60 * base)),
         (int)(((startPosition % (60 * 60 * base)) % (60 * base)) / base),
         (int)(((startPosition % (60 * 60 * base)) % (60 * base)) % base));
-    
+
     return sourceName + buf;
 }
 
@@ -142,7 +143,7 @@ OutputPackage::~OutputPackage()
     if (ownPackages)
     {
         delete materialPackage;
-        
+
         vector<SourcePackage*>::const_iterator iter;
         for (iter = filePackages.begin(); iter != filePackages.end(); iter++)
         {
@@ -154,13 +155,13 @@ OutputPackage::~OutputPackage()
     {
         free_package_definitions(&packageDefinitions);
     }
-    
+
     if (clipWriter != 0)
     {
         // files will be removed
         abort_writing(&clipWriter, 1);
     }
-    
+
     // sourcePackage is not owned by OutputPackage
 }
 
@@ -172,7 +173,7 @@ void OutputPackage::updateDuration(uint32_t materialTrackID, uint32_t numSamples
     {
         PA_LOGTHROW(MXFWriterException, ("Missing material package track %u", materialTrackID));
     }
-    
+
     // get referenced file package track
     SourcePackage* filePackage = 0;
     prodauto::Track* fileTrack = 0;
@@ -194,10 +195,10 @@ void OutputPackage::updateDuration(uint32_t materialTrackID, uint32_t numSamples
     {
         PA_LOGTHROW(MXFWriterException, ("Missing file package referenced by material package track %u", materialTrackID));
     }
-    
+
     // update file package track duration (numSamples is always in file package edit rate units)
     fileTrack->sourceClip->length += numSamples;
-    
+
     // update material package track duration, taking into account any differences in edit rate
     if (materialTrack->editRate == fileTrack->editRate)
     {
@@ -209,9 +210,9 @@ void OutputPackage::updateDuration(uint32_t materialTrackID, uint32_t numSamples
             (double)(materialTrack->editRate.denominator * fileTrack->editRate.numerator);
         materialTrack->sourceClip->length += (int64_t)(numSamples * factor + 0.5);
     }
-    
+
 }
-    
+
 
 
 
@@ -221,16 +222,16 @@ MXFTrackWriter::MXFTrackWriter()
 
 MXFTrackWriter::~MXFTrackWriter()
 {
-    // outputPackage is not owned by MXFTrackWriter 
+    // outputPackage is not owned by MXFTrackWriter
 }
 
 // TODO: ownership of packages and who delete them
-MXFWriter::MXFWriter(MaterialPackage* materialPackage, 
-    vector<SourcePackage*>& filePackages, 
+MXFWriter::MXFWriter(MaterialPackage* materialPackage,
+    vector<SourcePackage*>& filePackages,
     SourcePackage* tapeSourcePackage, bool ownPackages,
-    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
-    int64_t startPosition, 
-    string creatingFilePath, string destinationFilePath, string failuresFilePath, 
+    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits,
+    int64_t startPosition,
+    string creatingFilePath, string destinationFilePath, string failuresFilePath,
     string filenamePrefix,
     vector<UserComment> userComments,
     ProjectName projectName)
@@ -239,28 +240,28 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
 {
     map<MaterialPackage*, TrackCount> trackCounts;
     std::string filename;
-    
+
     Timestamp now = generateTimestampNow(); // give material and all file packages the same creationDate
-    
+
     // create a MXFTrackWriter for each connected and non-masked input track
     vector<Track*>::const_iterator iterMaterialTracks;
     for (iterMaterialTracks = materialPackage->tracks.begin();
-        iterMaterialTracks != materialPackage->tracks.end(); 
+        iterMaterialTracks != materialPackage->tracks.end();
         iterMaterialTracks++)
     {
         Track* materialTrack = *iterMaterialTracks;
-        
+
         if (!materialTrack->sourceClip)
         {
             continue;
         }
 
         uint32_t trackIndex = materialTrack->id;
-        
-        SourcePackage* filePackage = getSourcePackage(filePackages, 
+
+        SourcePackage* filePackage = getSourcePackage(filePackages,
             materialTrack->sourceClip->sourcePackageUID,
             materialTrack->sourceClip->sourceTrackID);
-            
+
         if (filePackage)
         {
             Track* filePackageTrack;
@@ -269,8 +270,8 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 PA_LOGTHROW(MXFWriterException, ("Expecting 1 track in the file source package, but found %d", filePackage->tracks.size()));
             }
             filePackageTrack = *filePackage->tracks.begin();
-            
-            // create a track writer        
+
+            // create a track writer
             MXFTrackWriter* trackWriter = new MXFTrackWriter();
             _trackWriters.insert(pair<uint32_t, MXFTrackWriter*>(trackIndex, trackWriter));
 
@@ -281,16 +282,16 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 outputPackage = new OutputPackage();
                 _outputPackages.push_back(outputPackage);
 
-                outputPackage->ownPackages = ownPackages;                
+                outputPackage->ownPackages = ownPackages;
                 outputPackage->sourcePackage = tapeSourcePackage;
                 outputPackage->materialPackage = materialPackage;
             }
             trackWriter->outputPackage = outputPackage;
-            
+
             // add file package to output package
             trackWriter->outputPackage->filePackages.push_back(filePackage);
-            
-            
+
+
             // get the source package track
             prodauto::Track* sourceTrack = outputPackage->sourcePackage->getTrack(filePackageTrack->sourceClip->sourceTrackID);
             if (sourceTrack == 0)
@@ -298,9 +299,9 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 PA_LOGTHROW(MXFWriterException, ("Failed to get source package track associated with recorder input track"));
             }
 
-            
+
             // create complete filename
-            filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION, 
+            filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION,
                 trackIndex, materialTrack->number);
             _filenames.insert(pair<UMID, string>(filePackage->uid, filename));
             _filenames2.insert(pair<uint32_t, string>(trackIndex, filename));
@@ -310,28 +311,28 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
                 PA_LOGTHROW(MXFWriterException, ("File Source Package descriptor is not a FileEssenceDescriptor"));
             }
             fileDesc->fileLocation = createCompleteFilename(creatingFilePath, filename);
-            
-            
+
+
             // record map input track ID to material package track ID
             trackWriter->inputToMPTrackMap.insert(pair<uint32_t, uint32_t>(trackIndex, materialTrack->id));
-            
-            
+
+
             // set the status to not (yet) successfull
             _filePackageToInputTrackMap.insert(pair<UMID, uint32_t>(filePackage->uid, trackIndex));
             _status.insert(pair<uint32_t, bool>(trackIndex, false));
         }
     }
-    
+
     construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
-    
 
 
-MXFWriter::MXFWriter(RecorderInputConfig* inputConfig, 
-    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits, 
-    uint32_t inputMask, 
-    int64_t startPosition, 
-    string creatingFilePath, string destinationFilePath, string failuresFilePath, 
+
+MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
+    bool isPALProject, int resolutionID, Rational imageAspectRatio, uint8_t audioQuantizationBits,
+    uint32_t inputMask,
+    int64_t startPosition,
+    string creatingFilePath, string destinationFilePath, string failuresFilePath,
     string filenamePrefix,
     vector<UserComment> userComments,
     ProjectName projectName)
@@ -343,17 +344,17 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
     std::string filename;
 
     Timestamp now = generateTimestampNow(); // give material and all file packages the same creationDate
-    
+
     if (inputConfig == 0)
     {
         PA_LOGTHROW(MXFWriterException, ("No recorder input config"));
     }
-    
-    
+
+
     // create a MXFTrackWriter for each connected and non-masked input track
     vector<RecorderInputTrackConfig*>::const_iterator iterTrackConfigs;
     for (iterTrackConfigs = inputConfig->trackConfigs.begin();
-        iterTrackConfigs != inputConfig->trackConfigs.end(); 
+        iterTrackConfigs != inputConfig->trackConfigs.end();
         iterTrackConfigs++)
     {
         RecorderInputTrackConfig* trackConfig = *iterTrackConfigs;
@@ -362,17 +363,17 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
         {
             PA_LOGTHROW(MXFWriterException, ("Track config track ID %u is out of range", trackConfig->index));
         }
-        
+
         if ((inputMask & (0x01 << (trackConfig->index - 1))) && trackConfig->isConnectedToSource())
         {
-            // check the source config associated with the track has been initialised with a source package            
+            // check the source config associated with the track has been initialised with a source package
             if (trackConfig->sourceConfig->getSourcePackage() == 0)
             {
                 PA_LOGTHROW(MXFWriterException, ("Source config associated with recorder input track %d, "
                     "has not being initialised with a source package", trackConfig->index));
             }
-            
-            // create a track writer        
+
+            // create a track writer
             MXFTrackWriter* trackWriter = new MXFTrackWriter();
             _trackWriters.insert(pair<uint32_t, MXFTrackWriter*>(trackConfig->index, trackWriter));
 
@@ -383,7 +384,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
                 outputPackage = new OutputPackage();
                 _outputPackages.push_back(outputPackage);
 
-                outputPackage->ownPackages = true;                
+                outputPackage->ownPackages = true;
                 outputPackage->sourcePackage = trackConfig->sourceConfig->getSourcePackage();
 
                 // create the material package
@@ -395,7 +396,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
                 outputPackage->materialPackage->projectName = projectName;
             }
             trackWriter->outputPackage = outputPackage;
-            
+
             // get the source package track
             prodauto::Track* sourceTrack = outputPackage->sourcePackage->getTrack(trackConfig->sourceTrackID);
             if (sourceTrack == 0)
@@ -403,7 +404,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
                 PA_LOGTHROW(MXFWriterException, ("Failed to get source package track associated with recorder input track"));
             }
 
-            
+
             // create file package associated with the source package track
             SourcePackage* filePackage = new SourcePackage();
             outputPackage->filePackages.push_back(filePackage);
@@ -413,7 +414,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             filePackage->sourceConfigName = trackConfig->sourceConfig->name;
             FileEssenceDescriptor* fileDesc = new FileEssenceDescriptor();
             filePackage->descriptor = fileDesc;
-            filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION, 
+            filename = createFilename(filenamePrefix, sourceTrack->dataDef == PICTURE_DATA_DEFINITION,
                 trackConfig->index, trackConfig->number);
             _filenames.insert(pair<UMID, string>(filePackage->uid, filename));
             _filenames2.insert(pair<uint32_t, string>(trackConfig->index, filename));
@@ -428,7 +429,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             {
                 fileDesc->audioQuantizationBits = audioQuantizationBits;
             }
-            
+
             prodauto::Track* fileTrack = new Track();
             filePackage->tracks.push_back(fileTrack);
             fileTrack->id = 1;
@@ -448,8 +449,8 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             fileTrack->sourceClip->sourceTrackID = sourceTrack->id;
             // fileTrack->length is filled in when writing is completed
             fileTrack->sourceClip->length = 0;
-            if (isPALProject && fileTrack->editRate == g_palEditRate ||
-                !isPALProject && fileTrack->editRate == g_ntscEditRate)
+            if ((isPALProject && fileTrack->editRate == g_palEditRate) ||
+                (!isPALProject && fileTrack->editRate == g_ntscEditRate))
             {
                 fileTrack->sourceClip->position = startPosition;
             }
@@ -468,8 +469,8 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
                 }
                 fileTrack->sourceClip->position = (int64_t)(startPosition * factor + 0.5);
             }
-            
-            
+
+
             // create material package track associated with the file package
             TrackCount& trackCount = (*trackCounts.find(outputPackage->materialPackage)).second;
             stringstream trackName;
@@ -523,18 +524,18 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
             // materialTrack->length is filled in when writing is completed
             materialTrack->sourceClip->length = 0;
             materialTrack->sourceClip->position = 0;
-            
-            
+
+
             // record map input track ID to material package track ID
             trackWriter->inputToMPTrackMap.insert(pair<uint32_t, uint32_t>(trackConfig->index, materialTrack->id));
-            
-            
+
+
             // set the status to not (yet) successfull
             _filePackageToInputTrackMap.insert(pair<UMID, uint32_t>(filePackage->uid, trackConfig->index));
             _status.insert(pair<uint32_t, bool>(trackConfig->index, false));
         }
     }
-    
+
     construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
 
@@ -548,25 +549,25 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
     for (iterOutPackages = _outputPackages.begin(); iterOutPackages != _outputPackages.end(); iterOutPackages++)
     {
         OutputPackage* outputPackage = *iterOutPackages;
-        
-        // create the clip writer        
+
+        // create the clip writer
         outputPackage->clipWriter = NULL;
         try
         {
             mxfUMID umid;
             mxfTimestamp timestamp;
             mxfRational editRate;
-            
-            // map to MXF package definitions        
-            
+
+            // map to MXF package definitions
+
             CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions));
-            
+
             // map the tape source package
             convertUMID(outputPackage->sourcePackage->uid, umid);
             convertTimestamp(outputPackage->sourcePackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_tape_source_package(outputPackage->packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_tape_source_package(outputPackage->packageDefinitions, &umid,
                 outputPackage->sourcePackage->name.c_str(), &timestamp));
-                
+
             // map the tape source package tracks
             vector<prodauto::Track*>::const_iterator iterTrack;
             for (iterTrack = outputPackage->sourcePackage->tracks.begin();
@@ -579,18 +580,18 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->tapeSourcePackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->tapeSourcePackage, track->id,
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
-                    &editRate, &umid, track->sourceClip->sourceTrackID, 
+                    &editRate, &umid, track->sourceClip->sourceTrackID,
                     track->sourceClip->position, track->sourceClip->length,
                     &mxfTrack));
             }
-                
-            
+
+
             // map the material package
             convertUMID(outputPackage->materialPackage->uid, umid);
             convertTimestamp(outputPackage->materialPackage->creationDate, timestamp);
-            CHECK_SUCCESS(create_material_package(outputPackage->packageDefinitions, &umid, 
+            CHECK_SUCCESS(create_material_package(outputPackage->packageDefinitions, &umid,
                 outputPackage->materialPackage->name.c_str(), &timestamp));
 
             // map the material package tracks
@@ -604,13 +605,13 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
                 convertUMID(track->sourceClip->sourcePackageUID, umid);
                 convertRational(track->editRate, editRate);
-                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->materialPackage, track->id, 
+                CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->materialPackage, track->id,
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
-                    &editRate, &umid, track->sourceClip->sourceTrackID, 
+                    &editRate, &umid, track->sourceClip->sourceTrackID,
                     track->sourceClip->position, track->sourceClip->length,
                     &mxfTrack));
             }
-                
+
             // add the user comments to the material package
             vector<UserComment>::const_iterator iterUC;
             for (iterUC = userComments.begin(); iterUC != userComments.end(); iterUC++)
@@ -620,7 +621,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 {
                     PA_LOGTHROW(MXFWriterException, ("Invalid zero length user comment name"));
                 }
-                
+
                 if (userComment.position < 0) // static comment
                 {
                     // add comment to material package destined for the mxf file
@@ -628,19 +629,19 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 }
 
                 // add comment to material package destined for the database
-                outputPackage->materialPackage->addUserComment(userComment.name, userComment.value, 
+                outputPackage->materialPackage->addUserComment(userComment.name, userComment.value,
                     userComment.position, userComment.colour);
             }
-            
-            
+
+
             // map the file packages
             vector<SourcePackage*>::const_iterator iterFilePackages;
-            for (iterFilePackages = outputPackage->filePackages.begin(); 
-                iterFilePackages != outputPackage->filePackages.end(); 
+            for (iterFilePackages = outputPackage->filePackages.begin();
+                iterFilePackages != outputPackage->filePackages.end();
                 iterFilePackages++)
             {
                 SourcePackage* filePackage = *iterFilePackages;
-                
+
                 assert(filePackage->tracks.size() == 1);
                 prodauto::Track* fileTrack = filePackage->tracks.back();
 
@@ -657,185 +658,185 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case UNC_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 UncUYVY, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DV25_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 IECDV25, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DV50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DVBased50, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG21_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res21;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG31_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res31;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG101_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res101;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG151S_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res151s;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG201_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res201;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case MJPEG101M_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
                             essenceInfo.mjpegResolution = Res101m;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 AvidMJPEG, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case IMX30_MATERIAL_RESOLUTION:
                         {
                             assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
                             essenceInfo.imxFrameSize = 150000; // max PAL frame size
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 IMX30, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case IMX40_MATERIAL_RESOLUTION:
                         {
                             assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
                             essenceInfo.imxFrameSize = 200000; // max PAL frame size
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 IMX40, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case IMX50_MATERIAL_RESOLUTION:
                         {
                             assert(isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
                             essenceInfo.imxFrameSize = 250000; // max PAL frame size
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 IMX50, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DNX36p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DNxHD1080p36, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DNX120p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DNxHD1080p120, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DNX185p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DNxHD1080p185, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DNX120i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DNxHD1080i120, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         case DNX185i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
-                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, 
-                                filePackage->name.c_str(), 
-                                &timestamp, fileDesc->fileLocation.c_str(), 
+                            CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
+                                filePackage->name.c_str(),
+                                &timestamp, fileDesc->fileLocation.c_str(),
                                 DNxHD1080i185, &essenceInfo, &mxfFilePackage));
                         }
                         break;
-                        
+
                         default:
                             PA_LOGTHROW(MXFWriterException, ("Unsupported resolution %d", resolutionID));
                             break;
@@ -845,27 +846,27 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 {
                     EssenceInfo essenceInfo;
                     essenceInfo.pcmBitsPerSample = audioQuantizationBits;
-                    CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(), 
-                        &timestamp, fileDesc->fileLocation.c_str(), 
+                    CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(),
+                        &timestamp, fileDesc->fileLocation.c_str(),
                         PCM, &essenceInfo, &mxfFilePackage));
                 }
-        
+
                 // map the file package track
                 ::Track* mxfTrack;
                 convertUMID(fileTrack->sourceClip->sourcePackageUID, umid);
                 convertRational(fileTrack->editRate, editRate);
-                CHECK_SUCCESS(create_track(mxfFilePackage, fileTrack->id, 
-                    0 /* number is ignored */, fileTrack->name.c_str(), 
+                CHECK_SUCCESS(create_track(mxfFilePackage, fileTrack->id,
+                    0 /* number is ignored */, fileTrack->name.c_str(),
                     fileTrack->dataDef == PICTURE_DATA_DEFINITION,
-                    &editRate, &umid, fileTrack->sourceClip->sourceTrackID, 
+                    &editRate, &umid, fileTrack->sourceClip->sourceTrackID,
                     fileTrack->sourceClip->position, fileTrack->sourceClip->length,
                     &mxfTrack));
             }
-            
-    
+
+
             // create the clip writer
             mxfRational mxfAspectRatio;
-            convertRational(imageAspectRatio, mxfAspectRatio); 
+            convertRational(imageAspectRatio, mxfAspectRatio);
             mxfRational mxfProjectEditRate;
             if (isPALProject)
             {
@@ -877,13 +878,13 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 mxfProjectEditRate.numerator = 30000;
                 mxfProjectEditRate.denominator = 1001;
             }
-            if (!create_clip_writer((projectName.name.empty() ? 0 : projectName.name.c_str()), 
-                (isPALProject ? PAL_25i : NTSC_30i), mxfAspectRatio, mxfProjectEditRate, 0 , 1, 
+            if (!create_clip_writer((projectName.name.empty() ? 0 : projectName.name.c_str()),
+                (isPALProject ? PAL_25i : NTSC_30i), mxfAspectRatio, mxfProjectEditRate, 0 , 1,
                 outputPackage->packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));
             }
-            
+
         }
         catch (...)
         {
@@ -894,13 +895,13 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
             throw;
         }
 
-        
+
         // set the clip writer in each input track writer that is part of the output package
         map<uint32_t, MXFTrackWriter*>::const_iterator iterWriters;
         for (iterWriters = _trackWriters.begin(); iterWriters != _trackWriters.end(); iterWriters++)
         {
             MXFTrackWriter* trackWriter = (*iterWriters).second;
-            
+
             if (trackWriter->outputPackage == outputPackage)
             {
                 trackWriter->clipWriter = outputPackage->clipWriter;
@@ -935,14 +936,14 @@ void MXFWriter::writeSample(uint32_t trackID, uint32_t numSamples, uint8_t* data
     {
         PA_LOGTHROW(MXFWriterException, ("Recording has already completed or aborted"));
     }
-    
+
     // check writing sample data has not started
     if (_sampleDataTracks.find(trackID) != _sampleDataTracks.end())
     {
         throw MXFWriterException("cannot write sample(s) in one go when writing sample data has started "
             "for track id %u", trackID);
     }
-    
+
     // get the recorder input track writer
     MXFTrackWriter* trackWriter;
     map<uint32_t, MXFTrackWriter*>::iterator iter1 = _trackWriters.find(trackID);
@@ -951,7 +952,7 @@ void MXFWriter::writeSample(uint32_t trackID, uint32_t numSamples, uint8_t* data
         PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
     }
     trackWriter = (*iter1).second;
-    
+
     // get the corresponding material package id
     uint32_t materialTrackID;
     map<uint32_t, uint32_t>::iterator iter2 = trackWriter->inputToMPTrackMap.find(trackID);
@@ -961,13 +962,13 @@ void MXFWriter::writeSample(uint32_t trackID, uint32_t numSamples, uint8_t* data
         PA_LOGTHROW(MXFWriterException, ("Missing recorder input track map for id %u", trackID));
     }
     materialTrackID = (*iter2).second;
-    
+
     // write the essence sample
     if (!write_samples(trackWriter->clipWriter, materialTrackID, numSamples, data, size))
     {
         PA_LOGTHROW(MXFWriterException, ("Failed to write samples for recorder track %u", trackID));
     }
-    
+
     // update the duration in the material and file packages
     trackWriter->outputPackage->updateDuration(materialTrackID, numSamples);
 }
@@ -993,7 +994,7 @@ void MXFWriter::startSampleData(uint32_t trackID)
         PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
     }
     trackWriter = (*iter1).second;
-    
+
     // get the corresponding material package id
     uint32_t materialTrackID;
     map<uint32_t, uint32_t>::iterator iter2 = trackWriter->inputToMPTrackMap.find(trackID);
@@ -1003,9 +1004,9 @@ void MXFWriter::startSampleData(uint32_t trackID)
         PA_LOGTHROW(MXFWriterException, ("Missing recorder input track map for id %u", trackID));
     }
     materialTrackID = (*iter2).second;
-    
-    
-    // start the sample data writing 
+
+
+    // start the sample data writing
     if (!start_write_samples(trackWriter->clipWriter, materialTrackID))
     {
         PA_LOGTHROW(MXFWriterException, ("Failed to start writing sample data for recorder track %u", trackID));
@@ -1018,13 +1019,13 @@ void MXFWriter::writeSampleData(uint32_t trackID, uint8_t* data, uint32_t size)
     {
         PA_LOGTHROW(MXFWriterException, ("Recording has already completed or aborted"));
     }
-    
+
     // check writing sample data has started
     if (_sampleDataTracks.find(trackID) == _sampleDataTracks.end())
     {
         PA_LOGTHROW(MXFWriterException, ("cannot write sample data before starting for track id %u", trackID));
     }
-    
+
     // get the recorder input track writer
     MXFTrackWriter* trackWriter;
     map<uint32_t, MXFTrackWriter*>::iterator iter1 = _trackWriters.find(trackID);
@@ -1033,7 +1034,7 @@ void MXFWriter::writeSampleData(uint32_t trackID, uint8_t* data, uint32_t size)
         PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
     }
     trackWriter = (*iter1).second;
-    
+
     // get the corresponding material package id
     uint32_t materialTrackID;
     map<uint32_t, uint32_t>::iterator iter2 = trackWriter->inputToMPTrackMap.find(trackID);
@@ -1043,7 +1044,7 @@ void MXFWriter::writeSampleData(uint32_t trackID, uint8_t* data, uint32_t size)
         PA_LOGTHROW(MXFWriterException, ("Missing recorder input track map for id %u", trackID));
     }
     materialTrackID = (*iter2).second;
-    
+
     // write the essence sample data
     if (!write_sample_data(trackWriter->clipWriter, materialTrackID, data, size))
     {
@@ -1057,13 +1058,13 @@ void MXFWriter::endSampleData(uint32_t trackID, uint32_t numSamples)
     {
         PA_LOGTHROW(MXFWriterException, ("Recording has already completed or aborted"));
     }
-    
+
     // check writing sample data has started and erase the record
     if (_sampleDataTracks.erase(trackID) != 1)
     {
         PA_LOGTHROW(MXFWriterException, ("cannot end writing sample data before starting for track id %u", trackID));
     }
-    
+
     // get the recorder input track writer
     MXFTrackWriter* trackWriter;
     map<uint32_t, MXFTrackWriter*>::iterator iter1 = _trackWriters.find(trackID);
@@ -1072,7 +1073,7 @@ void MXFWriter::endSampleData(uint32_t trackID, uint32_t numSamples)
         PA_LOGTHROW(MXFWriterException, ("Invalid recorder input track id %u", trackID));
     }
     trackWriter = (*iter1).second;
-    
+
     // get the corresponding material package id
     uint32_t materialTrackID;
     map<uint32_t, uint32_t>::iterator iter2 = trackWriter->inputToMPTrackMap.find(trackID);
@@ -1082,7 +1083,7 @@ void MXFWriter::endSampleData(uint32_t trackID, uint32_t numSamples)
         PA_LOGTHROW(MXFWriterException, ("Missing recorder input track map for id %u", trackID));
     }
     materialTrackID = (*iter2).second;
-    
+
     // complete writing the essence sample data
     if (!end_write_samples(trackWriter->clipWriter, materialTrackID, numSamples))
     {
@@ -1111,12 +1112,12 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
     }
     // if this function is called then it is complete (even if something fails later)
     _isComplete = true;
-    
+
 
     // check all sample data writing has ended
     if (_sampleDataTracks.size() > 0)
     {
-        throw MXFWriterException("Cannot complete when writing because %d tracks are still writing sample data", 
+        throw MXFWriterException("Cannot complete when writing because %d tracks are still writing sample data",
             _sampleDataTracks.size());
     }
 
@@ -1130,16 +1131,16 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
     {
         OutputPackage* outputPackage = *iter1;
         int result;
-        
+
         // complete writing the clip
         if (update)
         {
             // update user comments
-            
+
             packageDefinitions = outputPackage->packageDefinitions;
             clear_user_comments(packageDefinitions);
             outputPackage->materialPackage->clearUserComments();
-            
+
             vector<UserComment>::const_iterator iterUC;
             for (iterUC = userComments.begin(); iterUC != userComments.end(); iterUC++)
             {
@@ -1148,7 +1149,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 {
                     PA_LOGTHROW(MXFWriterException, ("Invalid zero length user comment name"));
                 }
-                
+
                 if (userComment.position < 0) // static comment
                 {
                     // add comment to material package destined for the mxf file
@@ -1156,20 +1157,20 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 }
 
                 // add comment to material package destined for the database
-                outputPackage->materialPackage->addUserComment(userComment.name, userComment.value, 
+                outputPackage->materialPackage->addUserComment(userComment.name, userComment.value,
                     userComment.position, userComment.colour);
             }
-            
+
             // update project name
-            
+
             outputPackage->materialPackage->projectName = projectName;
             vector<SourcePackage*>::const_iterator iter;
             for (iter = outputPackage->filePackages.begin(); iter != outputPackage->filePackages.end(); iter++)
             {
                 (*iter)->projectName = projectName;
             }
-            
-            
+
+
             result = update_and_complete_writing(&outputPackage->clipWriter, packageDefinitions, projectName.name.c_str());
         }
         else
@@ -1190,9 +1191,9 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
 
                 string filename = (*_filenames.find(filePackage->uid)).second;
                 string failureFilename = createCompleteFilename(_failuresFilePath, filename);
-                
+
                 FileEssenceDescriptor* fileDesc = dynamic_cast<FileEssenceDescriptor*>(filePackage->descriptor);
-                
+
                 try
                 {
                     moveFile(fileDesc->fileLocation, failureFilename);
@@ -1210,7 +1211,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
         else
         {
             bool failed = false;
-            
+
             // move files to destination directory and update the file locations
             vector<SourcePackage*>::const_iterator iter2;
             for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
@@ -1219,9 +1220,9 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
 
                 string filename = (*_filenames.find(filePackage->uid)).second;
                 string destFilename = createCompleteFilename(_destinationFilePath, filename);
-                
+
                 FileEssenceDescriptor* fileDesc = dynamic_cast<FileEssenceDescriptor*>(filePackage->descriptor);
-                
+
                 try
                 {
                     moveFile(fileDesc->fileLocation, destFilename);
@@ -1238,7 +1239,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
 
                 fileDesc->fileLocation = destFilename;
             }
-            
+
             if (failed)
             {
                 // move remaining files to failures directory
@@ -1246,12 +1247,12 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 for (iter3 = iter2; iter3 != outputPackage->filePackages.end(); iter3++)
                 {
                     SourcePackage* filePackage = *iter3;
-    
+
                     string filename = (*_filenames.find(filePackage->uid)).second;
                     string failureFilename = createCompleteFilename(_failuresFilePath, filename);
-                    
+
                     FileEssenceDescriptor* fileDesc = dynamic_cast<FileEssenceDescriptor*>(filePackage->descriptor);
-                    
+
                     try
                     {
                         moveFile(fileDesc->fileLocation, failureFilename);
@@ -1268,11 +1269,11 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 for (iter3 = outputPackage->filePackages.begin(); iter3 != iter2; iter3++)
                 {
                     SourcePackage* filePackage = *iter3;
-    
+
                     string filename = (*_filenames.find(filePackage->uid)).second;
                     string failureFilename = createCompleteFilename(_failuresFilePath, filename);
                     string destFilename = createCompleteFilename(_destinationFilePath, filename);
-                    
+
                     try
                     {
                         moveFile(destFilename, failureFilename);
@@ -1290,29 +1291,29 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 continue; // try the next output package
             }
 
-            
+
             // save the packages to the database
             try
             {
                 auto_ptr<Transaction> transaction(database->getTransaction());
-            
+
                 // save the file source packages first because material package has foreign key referencing it
                 for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
                 {
                     SourcePackage* filePackage = *iter2;
-        
+
                     database->savePackage(filePackage, transaction.get());
                 }
-        
+
                 database->savePackage(outputPackage->materialPackage, transaction.get());
-        
+
                 transaction->commitTransaction();
 
                 // record the successes
                 for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
                 {
                     SourcePackage* filePackage = *iter2;
-                    
+
                     // set the status to successfull
                     map<UMID, uint32_t>::iterator iter3 = _filePackageToInputTrackMap.find(filePackage->uid);
                     if (iter3 == _filePackageToInputTrackMap.end())
@@ -1331,11 +1332,11 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
                 {
                     SourcePackage* filePackage = *iter2;
-    
+
                     string filename = (*_filenames.find(filePackage->uid)).second;
                     string failureFilename = createCompleteFilename(_failuresFilePath, filename);
                     string destFilename = createCompleteFilename(_destinationFilePath, filename);
-                    
+
                     try
                     {
                         moveFile(destFilename, failureFilename);
@@ -1354,7 +1355,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
             }
         }
     }
-    
+
     if (numFailed > 0)
     {
         PA_LOGTHROW(MXFWriterException, ("Failed to complete and save %d clips", numFailed));
@@ -1372,21 +1373,21 @@ OutputPackage* MXFWriter::getOutputPackage(SourcePackage* sourcePackage)
             return *iter;
         }
     }
-    
+
     return 0;
 }
 
-SourcePackage* MXFWriter::getSourcePackage(vector<SourcePackage*>& sourcePackages, 
+SourcePackage* MXFWriter::getSourcePackage(vector<SourcePackage*>& sourcePackages,
     UMID sourcePackageUID, uint32_t sourceTrackID)
 
 {
     SourcePackage* sourcePackage;
-    
+
     vector<SourcePackage*>::const_iterator iter;
     for (iter = sourcePackages.begin(); iter != sourcePackages.end(); iter++)
     {
         sourcePackage = *iter;
-        
+
         if (sourcePackage->uid == sourcePackageUID)
         {
             if (sourcePackage->getTrack(sourceTrackID))
@@ -1437,5 +1438,5 @@ string MXFWriter::getFailuresFilename(string filename)
 {
     return createCompleteFilename(_failuresFilePath, filename);
 }
-    
+
 
