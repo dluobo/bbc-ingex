@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.6 2009/02/13 10:51:07 john_f Exp $
+ * $Id: Database.cpp,v 1.7 2009/03/25 14:01:05 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -1476,6 +1476,16 @@ RouterConfig* Database::loadRouterConfig(string name)
     FROM MultiCameraClipDef \
 "
 
+#define SQL_GET_MC_CLIP_DEF \
+" \
+    SELECT \
+        mcd_identifier, \
+        mcd_name \
+    FROM MultiCameraClipDef \
+    WHERE \
+        mcd_name = ? \
+"
+
 #define SQL_GET_MC_TRACK_DEFS \
 " \
     SELECT \
@@ -1577,15 +1587,280 @@ vector<MCClipDef*> Database::loadAllMultiCameraClipDefs()
     return allMCClipDefs.release();
 }
 
+MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
+{
+    auto_ptr<MCClipDef> mcClipDef(new MCClipDef());
+    auto_ptr<Connection> connection(getConnection());
+    
+    START_QUERY_BLOCK
+    {
+        // load multi-camera clip
+
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MC_CLIP_DEF));
+        prepStatement->setString(1, name);
+        
+        odbc::ResultSet* result = prepStatement->executeQuery();
+        if (!result->next())
+        {
+            PA_LOGTHROW(DBException, ("Multi-camera clip with name '%s' does not exist", name.c_str()));
+        }
+        
+        mcClipDef->wasLoaded(result->getInt(1));
+        mcClipDef->name = result->getString(2);
+
+        // load track defs
+
+        auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_MC_TRACK_DEFS));
+        prepStatement2->setInt(1, mcClipDef->getDatabaseID());
+        
+        odbc::ResultSet* result2 = prepStatement2->executeQuery();
+        while (result2->next())
+        {
+            uint32_t index = result2->getInt(2);
+            MCTrackDef * mcTrackDef = new MCTrackDef();
+            mcClipDef->trackDefs.insert(pair<uint32_t, MCTrackDef*>(index, mcTrackDef));
+            mcTrackDef->wasLoaded(result2->getInt(1));
+            mcTrackDef->index = index;
+            mcTrackDef->number = result2->getInt(3);
+            
+            // load selector defs
+            
+            auto_ptr<odbc::PreparedStatement> prepStatement3(connection->prepareStatement(SQL_GET_MC_SELECTOR_DEFS));
+            prepStatement3->setInt(1, mcTrackDef->getDatabaseID());
+            
+            odbc::ResultSet* result3 = prepStatement3->executeQuery();
+            while (result3->next())
+            {
+                index = result3->getInt(2);
+                MCSelectorDef * mcSelectorDef = new MCSelectorDef();
+                mcTrackDef->selectorDefs.insert(pair<uint32_t, MCSelectorDef*>(index, mcSelectorDef));
+                mcSelectorDef->wasLoaded(result3->getInt(1));
+                mcSelectorDef->index = index;
+                long sourceConfigID = result3->getInt(3);
+                if (!result3->wasNull() && sourceConfigID != 0)
+                {
+                    mcSelectorDef->sourceTrackID = result3->getInt(4);
+                    
+                    mcSelectorDef->sourceConfig = 
+                        mcClipDef->getSourceConfig(sourceConfigID, mcSelectorDef->sourceTrackID);
+                        
+                    if (mcSelectorDef->sourceConfig == 0)
+                    {
+                        // load source config
+                        mcSelectorDef->sourceConfig = loadSourceConfig(sourceConfigID);
+                        mcClipDef->sourceConfigs.push_back(mcSelectorDef->sourceConfig);
+                        if (mcSelectorDef->sourceConfig->getTrackConfig(mcSelectorDef->sourceTrackID) == 0)
+                        {
+                            PA_LOGTHROW(DBException, ("Reference to non-existing track in multi-camera selector def"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    END_QUERY_BLOCK("Failed to load multi-camera clip defs")
+    
+    return mcClipDef.release();
+}
+
 #if 0
-void Database::saveMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction)
+void Database::saveMultiCameraClipDef(MCClipDef * mcClipDef, Transaction * transaction)
 {
 }
 
-void Database::deleteMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction)
+void Database::deleteMultiCameraClipDef(MCClipDef * mcClipDef, Transaction * transaction)
 {
 }
 #endif
+
+#define SQL_GET_ALL_MC_CUTS \
+" \
+    SELECT \
+        mcc_identifier, \
+        mcc_multi_camera_track_def_id, \
+        mcc_multi_camera_selector_def_id, \
+        mcc_date::varchar, \
+        mcc_position, \
+        (mcc_edit_rate).numerator, \
+        (mcc_edit_rate).denominator \
+    FROM MultiCameraCuts \
+"
+
+#if 0
+#define SQL_GET_MC_TRACK_DEF \
+" \
+    SELECT \
+        mct_identifier, \
+        mct_index, \
+        mct_track_number \
+    FROM MultiCameraTrackDef \
+    WHERE \
+        mct_identifier = ? \
+"
+
+#define SQL_GET_MC_SELECTOR_DEF \
+" \
+    SELECT \
+        mcs_identifier, \
+        mcs_index, \
+        mcs_source_id, \
+        mcs_source_track_id \
+    FROM MultiCameraSelectorDef \
+    WHERE \
+        mcs_identifier = ? \
+"
+#endif
+
+vector<MCCut *> Database::loadAllMultiCameraCuts()
+{
+    VectorGuard<MCCut> allMCCuts;
+    auto_ptr<Connection> connection(getConnection());
+    
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::Statement> statement(connection->createStatement());
+        
+        odbc::ResultSet * result = statement->executeQuery(SQL_GET_ALL_MC_CUTS);
+        while (result->next())
+        {
+            MCCut * mcCut = new MCCut();
+            allMCCuts.get().push_back(mcCut);
+            
+            mcCut->wasLoaded(result->getInt(1));
+            mcCut->mcTrackId = result->getInt(2);
+            mcCut->mcSelectorId = result->getInt(3);
+            mcCut->cutDate = getDateFromODBC(result->getString(4));
+            
+#if 0    
+            // load track def
+            int track_id = result->getInt(2);
+            auto_ptr<odbc::PreparedStatement> prepStatement1(connection->prepareStatement(SQL_GET_MC_TRACK_DEF));
+            prepStatement1->setInt(1, track_id);
+            
+            odbc::ResultSet * result1 = prepStatement1->executeQuery();
+            if (result1->next())
+            {
+                mcTrackDef = new MCTrackDef();
+                mcCut->mcTrack = mcTrackDef;
+                mcTrackDef->wasLoaded(result1->getInt(1));
+                mcTrackDef->index = result1->getInt(2);
+                mcTrackDef->number = result1->getInt(3);
+            }
+
+            // load selector def
+            int selector_id = result->getInt(3);
+            auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_MC_SELECTOR_DEF));
+            prepStatement2->setInt(1, selector_id);
+            
+            odbc::ResultSet * result2 = prepStatement2->executeQuery();
+            if (result2->next())
+            {
+                mcSelectorDef = new MCSelectorDef();
+                mcCut->mcSelector = mcSelectorDef;
+                mcSelectorDef->wasLoaded(result2->getInt(1));
+                mcSelectorDef->index = result2->getInt(2);
+
+                // load sourceConfig and track id
+                long sourceConfigID = result2->getInt(3);
+                if (!result2->wasNull() && sourceConfigID != 0)
+                {
+                    mcSelectorDef->sourceTrackID = result2->getInt(4);
+
+                    mcSelectorDef->sourceConfig = loadSourceConfig(sourceConfigID);
+                    if (mcSelectorDef->sourceConfig->getTrackConfig(mcSelectorDef->sourceTrackID) == 0)
+                    {
+                        PA_LOGTHROW(DBException, ("Reference to non-existing track in multi-camera selector def"));
+                    }
+                }
+            }
+#endif                
+        }
+    }
+    END_QUERY_BLOCK("Failed to load multi-camera cuts")
+    
+    return allMCCuts.release();
+}
+
+#define SQL_INSERT_MCCUT \
+" \
+    INSERT INTO MultiCameraCut \
+    ( \
+        mcc_identifier, \
+        mcc_multi_camera_track_def_id, \
+        mcc_multi_camera_selector_def_id, \
+        mcc_date, \
+        mcc_position, \
+        mcc_edit_rate \
+    ) \
+    VALUES \
+    (?, ?, ?, ?, ?, (?, ?)) \
+"
+
+#define SQL_UPDATE_MCCUT \
+" \
+    UPDATE MultiCameraCut \
+        mcc_multi_camera_track_def_id = ?, \
+        mcc_multi_camera_selector_def_id = ?, \
+        mcc_date = ?, \
+        mcc_position = ?, \
+        mcc_edit_rate = (?, ?) \
+    WHERE \
+        mcc_identifier = ? \
+"
+
+void Database::saveMultiCameraCut(MCCut * mcCut, Transaction * transaction)
+{
+    auto_ptr<Connection> mConnection;
+    Connection* connection = transaction;
+    if (connection == 0)
+    {
+        mConnection = auto_ptr<Connection>(getConnection());
+        connection = mConnection.get();
+    }
+    
+    START_UPDATE_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement;
+        long nextDatabaseID = 0;
+        int paramIndex = 1;
+        
+        // insert
+        if (!mcCut->isPersistent())
+        {
+            prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_INSERT_MCCUT));
+            nextDatabaseID = getNextDatabaseID(connection, "mcc_id_seq");
+            prepStatement->setInt(paramIndex++, nextDatabaseID);
+            connection->registerCommitListener(nextDatabaseID, mcCut);
+        }
+        // update
+        else
+        {
+            nextDatabaseID = mcCut->getDatabaseID();
+            prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_MCCUT));
+        }
+        
+        prepStatement->setInt(paramIndex++, mcCut->mcTrackId);
+        prepStatement->setInt(paramIndex++, mcCut->mcSelectorId);
+        prepStatement->setString(paramIndex++, getDateString(mcCut->cutDate));
+        prepStatement->setLong(paramIndex++, mcCut->position);
+        prepStatement->setInt(paramIndex++, mcCut->editRate.numerator);
+        prepStatement->setInt(paramIndex++, mcCut->editRate.denominator);
+
+        // update
+        if (mcCut->isPersistent())
+        {
+            prepStatement->setInt(paramIndex++, mcCut->getDatabaseID());
+        }
+        
+        if (prepStatement->executeUpdate() != 1)
+        {
+            PA_LOGTHROW(DBException, ("No inserts/updates when saving multi-camera cut"));
+        }
+        
+		connection->commit();
+    }
+    END_UPDATE_BLOCK("Failed to save series")
+}
 
 
 
@@ -3931,6 +4206,22 @@ void Database::loadMaterial(string ucName, string ucValue, MaterialPackageSet* t
         }
     }
     END_QUERY_BLOCK("Failed to load material")
+}
+
+void Database::loadMaterial(const std::vector<long> & packageIDs, MaterialPackageSet * topPackages, PackageSet * packages)
+{
+    Package * topPackage;
+    for (std::vector<long>::const_iterator it = packageIDs.begin(); it != packageIDs.end(); ++it)
+    {
+        loadPackageChain(*it, &topPackage, packages);
+        if (topPackage->getType() != MATERIAL_PACKAGE)
+        {
+            // ID did not refer to a material package
+            delete topPackage;
+            PA_LOGTHROW(DBException, ("Database package is not a material package"));
+        }
+        topPackages->insert(dynamic_cast<MaterialPackage*>(topPackage));
+    }
 }
 
 

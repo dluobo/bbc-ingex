@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.6 2009/02/13 10:51:07 john_f Exp $
+ * $Id: Database.h,v 1.7 2009/03/25 14:01:04 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -94,10 +94,14 @@ public:
     // Multi-camera clip definitions
     
     std::vector<MCClipDef*> loadAllMultiCameraClipDefs();
+    MCClipDef * loadMultiCameraClipDef(const std::string & name);
     void saveMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction = 0);
     void deleteMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction = 0);
     
-    
+    // Multi-camera cuts (Director's cut)
+    std::vector<MCCut *> loadAllMultiCameraCuts();
+    void saveMultiCameraCut(MCCut * mcCut, Transaction * transaction = 0);
+
     
     // Editorial
 
@@ -174,6 +178,9 @@ public:
     // load all material packages (plus reference chain) referencing file packages 
     // where material package has user comment name/value
     void loadMaterial(std::string ucName, std::string ucValue, MaterialPackageSet* topPackages, PackageSet* packages);
+
+    // load material packages based on list of material package database IDs
+    void loadMaterial(const std::vector<long> & packageIDs, MaterialPackageSet * topPackages, PackageSet * packages);
     
     // enumerations
     void loadResolutionNames(std::map<int, std::string> & resolution_names);
