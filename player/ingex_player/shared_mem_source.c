@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.8 2009/03/19 17:43:40 john_f Exp $
+ * $Id: shared_mem_source.c,v 1.9 2009/03/25 13:50:40 john_f Exp $
  *
  *
  *
@@ -85,6 +85,7 @@ typedef struct
 
 /* Contains the pctl and ring pointers for the shared mem connection */
 static NexusConnection conn;
+static int connected = 0;
 
 static int shm_get_num_streams(void* data)
 {
@@ -244,15 +245,18 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     /* Check nexus connection is good */
     if (! nexus_connection_status(&conn, NULL, NULL))
     {
+        nexus_disconnect_from_shared_mem(&conn);
+
         /* Try to reconnect */
         if (! nexus_connect_to_shared_mem(100000, 0, 0, &conn))
         {
             /* Could not reconnect - time out */
+            ml_log_info("Could not re-connect to shared mem - timeout\n");
             return -2;
         }
     }
 
-    /* wait until a new frame is available in the ring buffer */
+    /* wait a little while until a new frame is available in the ring buffer */
     lastFrame = conn.pctl->channel[source->channel].lastframe - 1;
     waitCount = 0;
     while (lastFrame == source->prevLastFrame && waitCount < 60000 / sleepUSec)
@@ -264,8 +268,8 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     }
     if (lastFrame == source->prevLastFrame && waitCount >= 60000 / sleepUSec)
     {
-        /* waited a 1.5 frames - time out */
-        return -2;
+        /* warn about waits > 1.5 frames */
+        ml_log_info("shared_mem_source: waited >= 60ms for next frame\n");
     }
     source->prevLastFrame = lastFrame;
 
@@ -556,26 +560,31 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
         sprintf(title, "Shared Memory Video: channel %d secondary\n", channelNum);
     }
 
-    /* If timeout is negative, loop forever until shared mem connection made */
-    if (timeout < 0)
+    /* connect to shared memory */
+    if (! connected)
     {
-        ml_log_info("Waiting for shared memory to appear...\n");
-        while (1)
+        /* If timeout is negative, loop forever until shared mem connection made */
+        if (timeout < 0)
         {
-            if (nexus_connect_to_shared_mem(500000, 0, 0, &conn))
-                break;
+            ml_log_info("Waiting for shared memory to appear...\n");
+            while (1)
+            {
+                if (nexus_connect_to_shared_mem(500000, 0, 0, &conn))
+                    break;
+            }
         }
-    }
-    else
-    {
-        /* try to connect to shared mem within supplied timeout */
-        if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, 1, &conn))    /* convert timeout to microsec */
+        else
         {
-            ml_log_error("Failed to connect to shared memory\n");
-            return 0;
+            /* try to connect to shared mem within supplied timeout */
+            if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, 1, &conn))    /* convert timeout to microsec */
+            {
+                ml_log_error("Failed to connect to shared memory\n");
+                return 0;
+            }
         }
+        connected = 1;
+        ml_log_info("Connected to shared memory\n");
     }
-    ml_log_info("Connected to shared memory\n");
 
 
     captureFormat = primary ? conn.pctl->pri_video_format : conn.pctl->sec_video_format;
@@ -600,9 +609,21 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
 
     newSource->channel = channelNum;
     newSource->prevLastFrame = -1;
-    newSource->primary = primary;
     newSource->sourceNameUpdate = -1;
     newSource->captureFormat = captureFormat;
+    newSource->primary = primary;
+
+    int width, height;
+    if (primary)
+    {
+        width = conn.pctl->width;
+        height = conn.pctl->height;
+    }
+    else
+    {
+        width = conn.pctl->sec_width;
+        height = conn.pctl->sec_height;
+    }
 
     newSource->frameRate.num = conn.pctl->frame_rate_numer;
     newSource->frameRate.den = conn.pctl->frame_rate_denom;
@@ -635,34 +656,34 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
     newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
     newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
     newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.width = conn.pctl->width;
-    newSource->tracks[newSource->numTracks].streamInfo.height = conn.pctl->height;
+    newSource->tracks[newSource->numTracks].streamInfo.width = width;
+    newSource->tracks[newSource->numTracks].streamInfo.height = height;
     newSource->tracks[newSource->numTracks].streamInfo.aspectRatio.num = 16;
     newSource->tracks[newSource->numTracks].streamInfo.aspectRatio.den = 9;
     switch (captureFormat)
     {
         case Format422UYVY:
-            newSource->tracks[newSource->numTracks].frameSize = conn.pctl->width * conn.pctl->height * 2;
+            newSource->tracks[newSource->numTracks].frameSize = width * height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = UYVY_FORMAT;
             break;
 
         case Format422PlanarYUV:
-            newSource->tracks[newSource->numTracks].frameSize = conn.pctl->width * conn.pctl->height * 2;
+            newSource->tracks[newSource->numTracks].frameSize = width * height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
             break;
 
         case Format422PlanarYUVShifted:
-            newSource->tracks[newSource->numTracks].frameSize = conn.pctl->width * conn.pctl->height * 2;
+            newSource->tracks[newSource->numTracks].frameSize = width * height * 2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV422_FORMAT;
             break;
 
         case Format420PlanarYUV:
-            newSource->tracks[newSource->numTracks].frameSize = conn.pctl->width * conn.pctl->height * 3/2;
+            newSource->tracks[newSource->numTracks].frameSize = width * height * 3/2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
             break;
 
         case Format420PlanarYUVShifted:
-            newSource->tracks[newSource->numTracks].frameSize = conn.pctl->width * conn.pctl->height * 3/2;
+            newSource->tracks[newSource->numTracks].frameSize = width * height * 3/2;
             newSource->tracks[newSource->numTracks].streamInfo.format = YUV420_FORMAT;
             break;
         default:
