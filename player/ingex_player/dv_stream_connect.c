@@ -1,5 +1,5 @@
 /*
- * $Id: dv_stream_connect.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dv_stream_connect.c,v 1.7 2009/03/25 13:53:18 john_f Exp $
  *
  *
  *
@@ -338,7 +338,7 @@ static int decode_and_send_const(DVDecodeStreamConnect* connect, const unsigned 
                 connect->decoder->decFrame, connect->sinkBuffer);
         }
     }
-    else /* DV50_FORMAT */
+    else /* DV50_FORMAT or DV100_FORMAT */
     {
         if (connect->decodedFormat == UYVY_FORMAT)
         {
@@ -724,7 +724,8 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
     if (streamInfo->type != PICTURE_STREAM_TYPE ||
         (streamInfo->format != DV25_YUV420_FORMAT &&
             streamInfo->format != DV25_YUV411_FORMAT &&
-            streamInfo->format != DV50_FORMAT))
+            streamInfo->format != DV50_FORMAT &&
+            streamInfo->format != DV100_FORMAT))
     {
         return 0;
     }
@@ -743,7 +744,7 @@ int dv_connect_accept(MediaSink* sink, const StreamInfo* streamInfo)
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* DV50_FORMAT */
+    else /* DV50_FORMAT or DV100_FORMAT */
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
@@ -785,7 +786,7 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
 
         result = msk_accept_stream(sink, &decodedStreamInfo);
     }
-    else /* streamInfo->format == DV50_FORMAT */
+    else /* streamInfo->format == DV50_FORMAT || streamInfo->format == DV100_FORMAT */
     {
         decodedStreamInfo = *streamInfo;
         decodedStreamInfo.format = YUV422_FORMAT;
@@ -826,9 +827,13 @@ int create_dv_connect(MediaSink* sink, int sinkStreamId, int sourceStreamId,
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 144000 : 120000);
     }
-    else /* streamInfo->format == DV50_FORMAT */
+    else if (streamInfo->format == DV50_FORMAT)
     {
         newConnect->dvDataSize = (stream_is_pal_frame_rate(streamInfo) ? 288000 : 240000);
+    }
+    else /* streamInfo->format == DV100_FORMAT */
+    {
+        newConnect->dvDataSize = 576000;
     }
     if ((newConnect->dvData = (unsigned char*)calloc(
         newConnect->dvDataSize + FF_INPUT_BUFFER_PADDING_SIZE /* FFMPEG for some reason needs the extra space */,

@@ -1,5 +1,5 @@
 /*
- * $Id: raw_dv_source.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: raw_dv_source.c,v 1.5 2009/03/25 13:53:18 john_f Exp $
  *
  *
  *
@@ -152,9 +152,13 @@ static int read_dv_sequence(FILE* dvFile, SequenceInfo* info)
     {
         info->mbps = 50;
     }
-    else if (byte == 0x14 || byte == 0x15 || byte == 0x18)
+    else if (byte == 0x14 || byte == 0x18)
     {
-        ml_log_error("DV 100 not yet supported\n");
+        info->mbps = 100;
+    }
+    else if (byte == 0x15)
+    {
+        ml_log_error("DV 100 at 60Hz not yet supported\n");
         return 5;
     }
     else
@@ -213,10 +217,20 @@ static int get_dv_stream_info(RawDVSource* source)
         source->streamInfo.format = (info.isIEC && info.is625) ? DV25_YUV420_FORMAT : DV25_YUV411_FORMAT;
         source->frameSize = (info.is625 ? 144000 : 120000);
     }
-    else /* info.mbps == 50 */
+    else if (info.mbps == 50)
     {
         source->streamInfo.format = DV50_FORMAT;
         source->frameSize = (info.is625 ? 288000 : 240000);
+    }
+    else if (info.mbps == 100)
+    {
+        /* TODO - support 720p DV100 which would use 288000 frameSize and different WxH */
+        source->streamInfo.format = DV100_FORMAT;
+        source->streamInfo.width = 1440;
+        source->streamInfo.height = 1080;
+        source->streamInfo.aspectRatio.num = 16;
+        source->streamInfo.aspectRatio.den = 9;
+        source->frameSize = 576000;
     }
 
 
@@ -555,6 +569,9 @@ int rds_open(const char* filename, MediaSource** source)
             break;
         case DV50_FORMAT:
             CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 50"));
+            break;
+        case DV100_FORMAT:
+            CHK_OFAIL(add_known_source_info(&newSource->streamInfo, SRC_INFO_FILE_TYPE, "DV 100"));
             break;
         default:
             goto fail;

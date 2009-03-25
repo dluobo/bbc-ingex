@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.9 2009/03/19 17:42:56 john_f Exp $
+ * $Id: mxf_source.c,v 1.10 2009/03/25 13:53:18 john_f Exp $
  *
  *
  *
@@ -1241,6 +1241,11 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             {
                 outputStream->streamInfo.format = AVID_MJPEG_FORMAT;
                 outputStream->streamInfo.singleField = 1;
+            }
+            else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped)) ||
+                mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DVBased_100_720_50_P_ClipWrapped)))
+            {
+                outputStream->streamInfo.format = DV100_FORMAT;
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i120ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(DNxHD1080i185ClipWrapped)) ||

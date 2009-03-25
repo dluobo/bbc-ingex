@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.10 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_player.c,v 1.11 2009/03/25 13:53:18 john_f Exp $
  *
  *
  *
@@ -3652,6 +3652,9 @@ void ply_print_source_info(MediaPlayer* player)
                 break;
             case DV50_FORMAT:
                 printf("DV50");
+                break;
+            case DV100_FORMAT:
+                printf("DV100");
                 break;
             case D10_PICTURE_FORMAT:
                 printf("D10 Picture");

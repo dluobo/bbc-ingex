@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: frame_info.h,v 1.9 2009/03/25 13:53:18 john_f Exp $
  *
  *
  *
@@ -79,6 +79,7 @@ typedef enum
     DV25_YUV420_FORMAT,
     DV25_YUV411_FORMAT,
     DV50_FORMAT,
+    DV100_FORMAT,
     D10_PICTURE_FORMAT,
     AVID_MJPEG_FORMAT,
     AVID_DNxHD_FORMAT,
