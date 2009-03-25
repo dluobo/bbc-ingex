@@ -1,5 +1,5 @@
 /*
- * $Id: compare_archive_mxf.c,v 1.1 2008/05/07 17:04:18 philipn Exp $
+ * $Id: compare_archive_mxf.c,v 1.2 2009/03/25 13:47:26 john_f Exp $
  *
  * 
  *
@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
 
@@ -226,7 +227,7 @@ static int read_timecode(FILE* mxfFile, Timecode* vitc, Timecode* ltc)
 
 static void print_position_info(Summary* summary)
 {
-    printf("    count, pos A, pos B: %lld, %lld, %lld\n", summary->frameCount, summary->positionA, summary->positionB);
+    printf("    count, pos A, pos B: %"PRId64", %"PRId64", %"PRId64"\n", summary->frameCount, summary->positionA, summary->positionB);
 }
 
 static int position_file(FILE* mxfFile, Timecode* startVITC, Timecode* startLTC, int64_t* position)
@@ -588,7 +589,7 @@ static int diff_audio(Summary* summary, int quiet, unsigned char* bufferA, unsig
     }
     else
     {
-        printf("Skipping audio comparison for frame %lld\n", summary->frameCount);
+        printf("Skipping audio comparison for frame %"PRId64"\n", summary->frameCount);
     }
     
     /* shift the buffers */
@@ -685,7 +686,7 @@ int main(int argc, const char** argv)
         else if (strcmp(argv[cmdln], "--duration") == 0)
         {
             CHECK_ARGUMENT_PRESENT("--duration");
-            if (sscanf(argv[cmdln + 1], "%lld", &duration) != 1)
+            if (sscanf(argv[cmdln + 1], "%"PRId64"", &duration) != 1)
             {
                 usage(argv[0]);
                 fprintf(stderr, "Invalid frame count value '%s'\n", argv[cmdln + 1]);
@@ -748,7 +749,7 @@ int main(int argc, const char** argv)
     }
     if (duration >= 0)
     {
-        printf(", for duration %lld", duration);
+        printf(", for duration %"PRId64"", duration);
     }
     printf("\n");
     
@@ -896,8 +897,8 @@ int main(int argc, const char** argv)
     /* print result summary */
     
     fprintf(stderr, "\nResults:\n");
-    fprintf(stderr, "Compared %lld frames\n", summary.frameCount);
-    fprintf(stderr, "Started from position %lld in file A and position %lld in file B\n", 
+    fprintf(stderr, "Compared %"PRId64" frames\n", summary.frameCount);
+    fprintf(stderr, "Started from position %"PRId64" in file A and position %"PRId64" in file B\n", 
         startPositionA, startPositionB);
     
     if (audioSampleShift != 0)
@@ -914,13 +915,13 @@ int main(int argc, const char** argv)
         summary.audioDiffCount[3] > 0)
     {
         fprintf(stderr, "The essence data differs:\n");
-        fprintf(stderr, "    VITC   : %lld\n", summary.vitcDiffCount);
-        fprintf(stderr, "    LTC    : %lld\n", summary.ltcDiffCount);
-        fprintf(stderr, "    Video  : %lld\n", summary.videoDiffCount);
-        fprintf(stderr, "    Audio 1: %lld\n", summary.audioDiffCount[0]);
-        fprintf(stderr, "    Audio 2: %lld\n", summary.audioDiffCount[1]);
-        fprintf(stderr, "    Audio 3: %lld\n", summary.audioDiffCount[2]);
-        fprintf(stderr, "    Audio 4: %lld\n", summary.audioDiffCount[3]);
+        fprintf(stderr, "    VITC   : %"PRId64"\n", summary.vitcDiffCount);
+        fprintf(stderr, "    LTC    : %"PRId64"\n", summary.ltcDiffCount);
+        fprintf(stderr, "    Video  : %"PRId64"\n", summary.videoDiffCount);
+        fprintf(stderr, "    Audio 1: %"PRId64"\n", summary.audioDiffCount[0]);
+        fprintf(stderr, "    Audio 2: %"PRId64"\n", summary.audioDiffCount[1]);
+        fprintf(stderr, "    Audio 3: %"PRId64"\n", summary.audioDiffCount[2]);
+        fprintf(stderr, "    Audio 4: %"PRId64"\n", summary.audioDiffCount[3]);
     }
     else
     {
