@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.10 2009/02/26 19:42:05 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.11 2009/03/25 13:55:45 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -28,7 +28,6 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <sstream>
 
 #include "AAFFile.h"
@@ -397,6 +396,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -o, --grouponly                Only create AAF file with all clips included\n");
     fprintf(stderr, "      --no-ts-suffix             Don't use a timestamp for a group only file\n");
     fprintf(stderr, "  -m, --multicam                 Also create multi-camera clips\n");
+    fprintf(stderr, "  --mc-name <name>               Use only the named multi-cam group\n");
     fprintf(stderr, "  --ntsc                         Targets NTSC sources (default is PAL)\n");
     fprintf(stderr, "  -f, --from <date>S<timecode>   Includes clips created >= date and start timecode\n");
     fprintf(stderr, "  -t, --to <date>S<timecode>     Includes clips created < date and start timecode\n");
@@ -442,6 +442,7 @@ int main(int argc, const char* argv[])
     string tagValue;
     string suffix;
     string projName;
+    string mcGroupName;
     vector<string> filenames;
     int videoResolutionID = DV50_MATERIAL_RESOLUTION;
     bool verbose = false;
@@ -466,7 +467,7 @@ int main(int argc, const char* argv[])
     toDate.day = t.day;
 
 
-    
+    // parse command line arguments
     try
     {
         while (cmdlnIndex < argc)
@@ -536,6 +537,17 @@ int main(int argc, const char* argv[])
                 createMultiCam = true;
                 cmdlnIndex += 1;
             }
+            else if (strcmp(argv[cmdlnIndex], "--mc-name") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                mcGroupName = argv[cmdlnIndex + 1];
+                cmdlnIndex += 2;
+            }
             else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
             {
                 isPAL = false;
@@ -597,9 +609,9 @@ int main(int argc, const char* argv[])
                     fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-		projName = argv[cmdlnIndex + 1];
+                projName = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
-	    }
+            }
             else if (strcmp(argv[cmdlnIndex], "--mc-cuts") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
@@ -745,12 +757,26 @@ int main(int argc, const char* argv[])
         }
     }
 
+    // get database pointer
+    Database * database = Database::getInstance();
+
+    // get multi-cam clip defs
+    VectorGuard<MCClipDef> mcClipDefs;
+    if (mcGroupName.empty())
+    {
+        // load all
+        mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
+    }
+    else
+    {
+        // load specified group
+        MCClipDef * mcClip = database->loadMultiCameraClipDef(mcGroupName);
+        mcClipDefs.get().push_back(mcClip);
+    }
+
     // load the material    
-    Database* database = Database::getInstance();
     auto_ptr<EditorsFile> editorsFile;
     MaterialHolder material;
-    VectorGuard<MCClipDef> mcClipDefs;
-    mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
     try
     {
         if (tagName.size() != 0)
@@ -826,14 +852,14 @@ int main(int argc, const char* argv[])
                 {
                     packagesToErase.push_back(topPackage);
                 }
- 		// packages != project name
-		else if (projName.size() != 0)
-		{
-		    if (topPackage->projectName.name != projName)
-		    {
-		    	packagesToErase.push_back(topPackage);
-		    }
-		} 
+                // packages != project name
+                else if (projName.size() != 0)
+                {
+                    if (topPackage->projectName.name != projName)
+                    {
+                        packagesToErase.push_back(topPackage);
+                    }
+                } 
             }
             vector<prodauto::MaterialPackage*>::const_iterator it2;
             for (it2 = packagesToErase.begin(); it2 != packagesToErase.end(); it2++)
