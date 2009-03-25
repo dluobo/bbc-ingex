@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.7 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: routerloggerApp.cpp,v 1.8 2009/03/25 14:03:21 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -41,7 +41,7 @@
 
 const char * const USAGE =
     "Usage: Routerlogger.exe [-v] [-r <router port>] [-s] [-t <timecode port>] [-u]"
-    " [-n <name>] [-f <db file>]"
+    " [-n <name>] [-c <mc_clip_def_name>] [-f <db file>]"
     " [-d <name> -p <number>] [-m <MixerOut dest>]"
     " [-a <nameserver>]"
     " <CORBA options>\n"
@@ -50,7 +50,7 @@ const char * const USAGE =
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
     "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService";
 
-const char * const OPTS = "vr:st:un:f:a:d:p:m:";
+const char * const OPTS = "vr:st:un:c:f:a:d:p:m:";
 
 #ifdef WIN32
     const char * const DB_PATH = "C:\\TEMP\\RouterLogs\\";
@@ -157,9 +157,16 @@ bool routerloggerApp::Init(int argc, char * argv[])
             mServantInfo.back()->name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
             break;
 
+        case 'c':
+            // multi-cam clip def name
+            if (!mServantInfo.empty())
+            {
+                mServantInfo.back()->mc_clip_name = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
+            }
+            break;
+    
         case 'f':
-            // cuts databse filename
-            // If not supplied, a name will be generated.
+            // cuts database filename
             if (!mServantInfo.empty())
             {
                 mServantInfo.back()->db_file = ACE_TEXT_ALWAYS_CHAR( cmd_opts.opt_arg() );
@@ -310,7 +317,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
         servant_info->servant = new SimplerouterloggerImpl();
 
         // Initialise
-        if (servant_info->servant->Init(servant_info->name, servant_info->db_file,
+        if (servant_info->servant->Init(servant_info->name, servant_info->mc_clip_name, servant_info->db_file,
                                         servant_info->mix_dest, servant_info->destinations))
         {
             // Incarnate servant object

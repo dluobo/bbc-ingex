@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.10 2009/02/09 19:28:20 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.11 2009/03/25 14:03:20 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -36,6 +36,9 @@
 #include "CutsDatabase.h"
 #include "routerloggerApp.h"
 
+#include "Database.h"
+#include "DBException.h"
+
 //#ifdef WIN32
 //const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
 //#else
@@ -43,8 +46,8 @@
 //#endif
 
 // Constructor for Vt struct
-Vt::Vt(int rd, const std::string & n)
-: router_dest(rd), router_src(0), name(n)
+Vt::Vt(unsigned int rd, const std::string & n)
+: router_dest(rd), router_src(0), name(n), selector_id(0)
 {
 }
 
@@ -53,7 +56,7 @@ Vt::Vt(int rd, const std::string & n)
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpFile(0), mpCutsDatabase(0), mMixDestination(0)
+: mpFile(0), mpCutsDatabase(0), mMixDestination(0), mMcTrackId(0)
 {
 }
 
@@ -65,11 +68,11 @@ SimplerouterloggerImpl::~SimplerouterloggerImpl (void)
 
 
 // Initialise the routerlogger
-bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & db_file,
+bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & mc_clip_name, const std::string & db_file,
                                   unsigned int mix_dest, const std::vector<RouterDestination*> & dests)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Init() name \"%C\" mix_dest %d\n"),
-        name.c_str(), mix_dest));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SimplerouterloggerImpl::Init() name \"%C\", mix_dest \"%C\" on %d\n"),
+        name.c_str(), mc_clip_name.c_str(), mix_dest));
     bool ok = true;
 
     // Assume 25 fps
@@ -103,6 +106,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     }
 
 
+
     // Set destination
     mMixDestination = mix_dest;
 
@@ -116,6 +120,55 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C: dest %d \"%C\"\n"),
             mName.c_str(), rd->output_number, rd->name.c_str()));
     }
+
+    // Load multi-cam clip def we are recording cuts for.
+    prodauto::MCClipDef * mc_clip_def = 0;
+    if (!mc_clip_name.empty())
+    {
+        try
+        {
+            mc_clip_def = prodauto::Database::getInstance()->loadMultiCameraClipDef(mc_clip_name);
+        }
+        catch (const prodauto::DBException & ex)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+        }
+    }
+
+    // Now find multi-cam track def we are recording cuts for.
+    // We want the video track and assume it's the one with index == 1.
+    prodauto::MCTrackDef * mc_track_def = 0;
+    if (mc_clip_def)
+    {
+        mc_track_def = mc_clip_def->trackDefs[1];
+    }
+    if (mc_track_def)
+    {
+        // Store Id of track we are recording selections for.
+        mMcTrackId = mc_track_def->getDatabaseID();
+
+        // Look at the possible selectors and their source config names
+        for (std::map<uint32_t, prodauto::MCSelectorDef *>::const_iterator
+            it = mc_track_def->selectorDefs.begin(); it != mc_track_def->selectorDefs.end(); ++it)
+        {
+            prodauto::SourceConfig * sc = it->second->sourceConfig;
+            if (sc)
+            {
+                // Search for source config name in our list of VTs
+                bool found = false;
+                for (std::vector<Vt>::iterator vt = mVts.begin(); vt != mVts.end() && !found; ++vt)
+                {
+                    if (sc->name == vt->name)
+                    {
+                        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Selector with SourceConfig \"%C\" found\n"), sc->name.c_str()));
+                        found = true;
+                        vt->selector_id = it->second->getDatabaseID();
+                    }
+                }
+            }
+        }
+    }
+
 
     return ok;
 }
@@ -295,6 +348,12 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
     int year, month, day;
     DateTime::GetDate(year, month, day);
 
+    // Date as prodauto::Date
+    prodauto::Date date;
+    date.year = year;
+    date.month = month;
+    date.day = day;
+
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Observe: tc=%C\n"), tc.c_str()));
 
     // Update our routing records for the recorders
@@ -313,13 +372,16 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
         // Avoid VT1 if possible as that may be recording mixer out
         // so we take highest number match.
         std::string src_name;
+        long mc_selector = 0;
         for (std::vector<Vt>::const_iterator it = mVts.begin(); it != mVts.end(); ++it)
         {
             if (it->router_src == src)
             {
                 src_name = it->name;
+                mc_selector = it->selector_id;
             }
         }
+
         if (src_name.empty())
         {
             ACE_DEBUG((LM_INFO, ACE_TEXT ("%C: mix_dest src %d not being recorded\n"),
@@ -347,6 +409,27 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
             if (mpCutsDatabase)
             {
                 mpCutsDatabase->AppendEntry(src_name, tc, year, month, day);
+            }
+
+            // experimentally try writing to main database
+            if (mMcTrackId)
+            {
+                try
+                {
+                    std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
+
+                    mc_cut->mcTrackId = mMcTrackId;
+                    mc_cut->mcSelectorId = mc_selector;
+                    mc_cut->cutDate = date;
+                    mc_cut->position = Timecode(tc.c_str()).FramesSinceMidnight();
+                    mc_cut->editRate = prodauto::g_palEditRate;
+
+                    prodauto::Database::getInstance()->saveMultiCameraCut(mc_cut.get());
+                }
+                catch (const prodauto::DBException & ex)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+                }
             }
         }
     }

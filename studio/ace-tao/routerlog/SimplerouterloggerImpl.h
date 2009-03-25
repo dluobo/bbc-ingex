@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.8 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.9 2009/03/25 14:03:20 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -39,10 +39,11 @@
 class Vt
 {
 public:
-    Vt(int rd, const std::string & n);
+    Vt(unsigned int rd, const std::string & n);
     unsigned int router_dest;
     unsigned int router_src; // what is routed to that VT
     std::string name;
+    long selector_id; // MCSelector database id
 };
 
 class CutsDatabase;
@@ -61,7 +62,7 @@ public:
 
 
   // Initialisation
-  bool Init(const std::string & name, const std::string & db_file,
+  bool Init(const std::string & name, const std::string & mc_clip_name, const std::string & db_file,
             unsigned int mix_dest, const std::vector<RouterDestination*> & dests);
 
   void Destination(unsigned int dest) { mMixDestination = dest; }
@@ -132,6 +133,7 @@ private:
     CutsDatabase * mpCutsDatabase;
 
     unsigned int mMixDestination;
+    long mMcTrackId; // multi-cam track we are following
     std::vector<Vt> mVts;  // eventually from database
 
     // Details of last relevant cut

@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.h,v 1.5 2008/11/06 11:08:37 john_f Exp $
+ * $Id: routerloggerApp.h,v 1.6 2009/03/25 14:03:21 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -44,6 +44,7 @@ public:
     ServantInfo() : servant(0) {}
 
     std::string name;
+    std::string mc_clip_name;
     unsigned int mix_dest;
     std::vector<RouterDestination *> destinations;
     std::string db_file;
