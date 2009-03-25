@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.c,v 1.1 2009/03/19 16:58:19 john_f Exp $
+ * $Id: nexus_control.c,v 1.2 2009/03/25 13:46:37 john_f Exp $
  *
  * Module for creating and accessing nexus shared control memory
  *
@@ -168,6 +168,26 @@ extern int nexus_connect_to_shared_mem(int timeout_microsec, int read_only, int 
 			printf("  attached to channel[%d]: '%s'\n", i, p->pctl->channel[i].source_name);
 	}
 
+	return 1;
+}
+
+extern int nexus_disconnect_from_shared_mem(const NexusConnection *p)
+{
+	int i;
+	for (i = 0; i < p->pctl->channels; i++)
+	{
+		if (shmdt(p->ring[i]) == -1) {
+			fprintf(stderr, "p->ring[%d] (0x%p) ", i, p->ring[i]);
+			perror("shmdt");
+			return 0;
+		}
+	}
+
+	if (shmdt(p->pctl) == -1) {
+		fprintf(stderr, "p->pctl (0x%p) ", p->pctl);
+		perror("shmdt");
+		return 0;
+	}
 	return 1;
 }
 
