@@ -1,5 +1,5 @@
 /*
- * $Id: MCClipDef.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: MCClipDef.h,v 1.2 2009/03/25 13:59:52 john_f Exp $
  *
  * A multi-camera clip definition
  *
@@ -58,8 +58,7 @@ public:
     
     uint32_t index;
     uint32_t number;
-    std::map<uint32_t, MCSelectorDef*> selectorDefs;
-    
+    std::map<uint32_t, MCSelectorDef*> selectorDefs; // MCSelectorDef index as key
 };
 
     
@@ -73,7 +72,20 @@ public:
     
     std::string name;
     std::vector<SourceConfig*> sourceConfigs;
-    std::map<uint32_t, MCTrackDef*> trackDefs;
+    std::map<uint32_t, MCTrackDef*> trackDefs; // MCTrackDef index as key
+};
+
+class MCCut : public DatabaseObject
+{
+public:
+    MCCut();
+    ~MCCut();
+
+    long mcTrackId;
+    long mcSelectorId;
+    Date cutDate;
+    int64_t position;
+    Rational editRate;
 };
 
 

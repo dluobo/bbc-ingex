@@ -1,5 +1,5 @@
 /*
- * $Id: MCClipDef.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: MCClipDef.cpp,v 1.2 2009/03/25 13:59:52 john_f Exp $
  *
  * A multi-camera clip definition
  *
@@ -95,4 +95,11 @@ SourceConfig* MCClipDef::getSourceConfig(long sourceConfigID, uint32_t sourceTra
     return 0;
 }
     
+MCCut::MCCut()
+: DatabaseObject(), mcTrackId(0), mcSelectorId(0), position(0), editRate(g_nullRational)
+{}
+
+MCCut::~MCCut()
+{
+}
 
