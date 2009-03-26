@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.5 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.6 2009/03/26 18:50:09 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -32,9 +32,11 @@ This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
 #ifdef FFMPEG_OLD_INCLUDE_PATHS
 #include <ffmpeg/avcodec.h>
 #include <ffmpeg/avformat.h>
+#include <ffmpeg/swscale.h>
 #else
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 #endif
 
 #include "ffmpeg_encoder_av.h"
@@ -57,6 +59,14 @@ typedef struct
     uint8_t * video_outbuf;
     int video_outbuf_size;
     int64_t video_pts;
+
+    // following needed for input scaling
+    AVPicture * tmpFrame;
+    uint8_t * inputBuffer;
+    int input_width;
+    int input_height;
+    struct SwsContext * scale_context;
+    int scale_image;
 } internal_ffmpeg_encoder_t;
 
 
@@ -70,6 +80,10 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
     codec_context->codec_id = CODEC_ID_MPEG2VIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
+
+    int width = 720;
+    int height = 576;
+    avcodec_set_dimensions(codec_context, width, height);
 
     const int dvd_kbit_rate = 5000;
 
@@ -150,6 +164,10 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
     codec_context->codec_type = CODEC_TYPE_VIDEO;
     codec_context->pix_fmt = PIX_FMT_YUV420P;
 
+    int width = 720;
+    int height = 576;
+    avcodec_set_dimensions(codec_context, width, height);
+
     /* bit rate */
     const int kbit_rate = 800;
 
@@ -205,16 +223,47 @@ static int init_video_mpeg4(internal_ffmpeg_encoder_t * enc)
     return 0;
 }
 
-/* initialise video stream for DV25 encoding */
-static int init_video_dv25(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
+/* initialise video stream for DV encoding */
+static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_resolution_t res, int64_t start_tc)
 {
     AVCodecContext * codec_context = enc->video_st->codec;
 
     codec_context->codec_id = CODEC_ID_DVVIDEO;
     codec_context->codec_type = CODEC_TYPE_VIDEO;
-    codec_context->pix_fmt = PIX_FMT_YUV420P;
 
-    const int encoded_frame_size = 144000;
+    int encoded_frame_size = 0;
+    int top_field_first = 1;
+    int width = 720;
+    int height = 576;
+
+    switch(res)
+    {
+    case FF_ENCODER_RESOLUTION_DV25_MOV:
+        codec_context->pix_fmt = PIX_FMT_YUV420P;
+        encoded_frame_size = 144000;
+        top_field_first = 0;
+        break;
+    case FF_ENCODER_RESOLUTION_DV50_MOV:
+        codec_context->pix_fmt = PIX_FMT_YUV422P;
+        encoded_frame_size = 288000;
+        top_field_first = 0;
+        break;
+    case FF_ENCODER_RESOLUTION_DV100_MOV:
+        codec_context->pix_fmt = PIX_FMT_YUV422P;
+        enc->scale_image = 1;
+        enc->input_width = 1920;
+        enc->input_height = 1080;
+        width = 1440;                       // coded width (input scaled horizontally from 1920)
+        height = 1080;
+        enc->tmpFrame = av_mallocz(sizeof(AVPicture));
+        enc->inputBuffer = av_mallocz(width * height * 2);
+        encoded_frame_size = 576000;        // SMPTE 370M spec
+        break;
+    default:
+        break;
+    }
+
+    avcodec_set_dimensions(codec_context, width, height);
 
     enc->video_st->r_frame_rate.num = 25;
     enc->video_st->r_frame_rate.den = 1;
@@ -254,7 +303,7 @@ static int init_video_dv25(internal_ffmpeg_encoder_t * enc, int64_t start_tc)
         fprintf(stderr, "Could not allocate input frame\n");
         return 0;
     }
-    enc->inputFrame->top_field_first = 1;
+    enc->inputFrame->top_field_first = top_field_first;
 
     /* allocate output buffer */
     enc->video_outbuf = NULL;
@@ -275,6 +324,8 @@ static void close_video(internal_ffmpeg_encoder_t * enc)
 
     av_free(enc->inputFrame);
     av_free(enc->video_outbuf);
+    av_free(enc->inputBuffer);
+    av_free(enc->tmpFrame);
 }
 
 /* initialise audio stream for PCM encoding */
@@ -451,10 +502,40 @@ static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     int out_size;
     int ret;
     
-    /* set pointers in inputFrame to point to planes in p_video */
-    avpicture_fill((AVPicture*)enc->inputFrame, p_video,
-        c->pix_fmt,
-        c->width, c->height);
+    if (enc->scale_image)
+    {
+        // Set up parameters for scale
+        enc->scale_context = sws_getCachedContext(enc->scale_context,
+                    enc->input_width, enc->input_height,                   // input WxH
+                    c->pix_fmt,
+                    c->width, c->height, // output WxH
+                    c->pix_fmt,
+                    SWS_FAST_BILINEAR,
+                    NULL, NULL, NULL);
+
+        // Input image goes into tmpFrame
+        avpicture_fill((AVPicture*)enc->tmpFrame, p_video,
+            c->pix_fmt,
+            enc->input_width, enc->input_height);
+
+        // Output of scale operation goes into inputFrame
+        avpicture_fill((AVPicture*)enc->inputFrame, enc->inputBuffer,
+            c->pix_fmt,
+            c->width, c->height);
+
+        // Perform the scale
+        sws_scale(enc->scale_context,
+            enc->tmpFrame->data, enc->tmpFrame->linesize,
+            0, enc->input_height,
+            enc->inputFrame->data, enc->inputFrame->linesize);
+    }
+    else
+    {
+        /* set pointers in inputFrame to point to planes in p_video */
+        avpicture_fill((AVPicture *)enc->inputFrame, p_video,
+            c->pix_fmt,
+            c->width, c->height);
+    }
 
     /* encode the image */
     out_size = avcodec_encode_video(c, enc->video_outbuf, enc->video_outbuf_size, enc->inputFrame);
@@ -529,7 +610,7 @@ static int write_audio_frame(internal_ffmpeg_encoder_t *enc, int16_t *p_audio)
 
 
 
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int64_t start_tc)
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads)
 {
     internal_ffmpeg_encoder_t * enc;
     AVOutputFormat * fmt;
@@ -544,6 +625,8 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         fmt_name = "mov";
         break;
     case FF_ENCODER_RESOLUTION_DV25_MOV:
+    case FF_ENCODER_RESOLUTION_DV50_MOV:
+    case FF_ENCODER_RESOLUTION_DV100_MOV:
         fmt_name = "mov";
         break;
     default:
@@ -620,20 +703,20 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (0)
-    {
-    // 4:3
-        sar.num = 59;
-        sar.den = 54;
-    }
-    else
+    if (wide_aspect)
     {
     // 16:9
         sar.num = 118;
         sar.den = 81;
     }
-#if 1
-    // Bodge for FCP
+    else
+    {
+    // 4:3
+        sar.num = 59;
+        sar.den = 54;
+    }
+#if 0
+    // Bodge for FCP - no longer needed.
     // When writing track header in mov file, ffmpeg (see movenc.c) writes
     // width of sample_aspect_ratio * track->enc->width
     // It gets sample_aspect_ratio from the AVStream
@@ -647,10 +730,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 #endif
     enc->video_st->sample_aspect_ratio = sar;
     enc->video_st->codec->sample_aspect_ratio = sar;
-
-    /* Set size for video stream */
-    enc->video_st->codec->width = 720;  
-    enc->video_st->codec->height = 576;
 
     /* Set time base: This is the fundamental unit of time (in seconds) in terms
        in terms of which frame timestamps are represented.
@@ -671,11 +750,37 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         init_audio_mp3(enc);
         break;
     case FF_ENCODER_RESOLUTION_DV25_MOV:
-        init_video_dv25(enc, start_tc);
+    case FF_ENCODER_RESOLUTION_DV50_MOV:
+    case FF_ENCODER_RESOLUTION_DV100_MOV:
+        init_video_dv(enc, res, start_tc);
         init_audio_pcm(enc);
         break;
     default:
         break;
+    }
+
+    // Setup ffmpeg threads if specified
+    AVCodecContext * vcodec_context = enc->video_st->codec;
+    if (num_threads != 0) {
+        int threads = 0;
+        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        {
+            // select number of threaded based on picture size
+            if (vcodec_context->width > 720)
+            {
+                threads = 4;
+            }
+        }
+        else
+        {
+            // use number of threads specified by function arg
+            threads = num_threads;
+        }
+        if (threads > 0)
+        {
+            avcodec_thread_init(vcodec_context, threads);
+            vcodec_context->thread_count= threads;
+        }
     }
 
     /*

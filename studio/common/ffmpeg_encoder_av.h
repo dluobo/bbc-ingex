@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.h,v 1.2 2008/09/03 14:22:47 john_f Exp $
+ * $Id: ffmpeg_encoder_av.h,v 1.3 2009/03/26 18:50:09 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -26,6 +26,7 @@
 #define ffmpeg_encoder_av_h
 
 #include "integer_types.h"
+#include "ffmpeg_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,31 +36,29 @@ typedef void ffmpeg_encoder_av_t;
 typedef enum {
     FF_ENCODER_RESOLUTION_DVD,
     FF_ENCODER_RESOLUTION_MPEG4_MOV,
-    FF_ENCODER_RESOLUTION_DV25_MOV
+    FF_ENCODER_RESOLUTION_DV25_MOV,
+    FF_ENCODER_RESOLUTION_DV50_MOV,
+    FF_ENCODER_RESOLUTION_DV100_MOV
 } ffmpeg_encoder_av_resolution_t;
 
 /*
-* dvd_encoder_init : Creates a format context for the "dvd" format and returns
-*                    a pointer to it.
-* Input            : filename  - file name to write "dvd" formatted data to
-* Return           : Pointer to AVFormatContext object if successful
+* ffmpeg_encoder_av_init : Creates an encoder for the specified format and returns a pointer to it.
+* Input            : filename  - file name to write formatted data to
+* Return           : Pointer to ffmpeg_encoder_av_t object if successful
 *                    NULL if a problem occurred
 */
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int64_t start_tc);
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads);
 
 /*
-* dvd_encoder_encode : Encodes the input video and audio frames to the format
-*                    specified in input AVFormatContext object
-*                    a pointer to it.
-* Input            : dvd  - dvd_encoder_t object returned by dvd_encoder_init
+* ffmpeg_encoder_av_encode : Encodes the input video and audio frames to the format
+*                    specified in input ffmpeg_encoder_av_t object
+* Input            : in_enc  - pointer to ffmpeg_encoder_av_t object returned by ffmpeg_encoder_av_init
 *                  : p_video - pointer to one frame of video data
-*                  : p_audio - pointer to one frame of audio data
+*                  : p_audio - pointer to one frame of audio data (stereo, 16 bit/sample)
 * Return           : 0 if operation is successful
 *                  : -1 if operation failed
-*                   NOTE: expects an SD VIDEO frames in Planar YUV420 format
-*                         MP2 audion - stero 16 bits/sample
 */
-extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t *in_dvd, uint8_t *p_video, int16_t *p_audio);
+extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t * in_enc, uint8_t * p_video, int16_t * p_audio);
 
 /*
 * dvd_encoder_close : Releases resources allocated by the dvd_encoder_init

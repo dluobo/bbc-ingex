@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.4 2009/03/19 18:05:35 john_f Exp $
+ * $Id: ffmpeg_encoder.h,v 1.5 2009/03/26 18:50:09 john_f Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -26,6 +26,7 @@
 #define FFMPEG_ENCODER_H
 
 #include "integer_types.h"
+#include "ffmpeg_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,8 +50,6 @@ typedef enum {
     FF_ENCODER_RESOLUTION_JPEG
 } ffmpeg_encoder_resolution_t;
 
-/* special value for argument num_threads to ffmpeg_encoder_init */
-#define THREADS_USE_BUILTIN_TUNING -1
 
 /*
 * ffmpeg_encoder_init : Creates a format context for an avcodec
