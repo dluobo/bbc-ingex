@@ -59,6 +59,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CreateAAF", "..\processing\
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "studiocommonLib", "..\common\studiocommonLib.vcproj", "{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfiguration) = preSolution
 		Debug = Debug
@@ -113,6 +117,10 @@ Global
 		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Debug.Build.0 = Debug|Win32
 		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Release.ActiveCfg = Release|Win32
 		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Release.Build.0 = Release|Win32
+		{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}.Debug.ActiveCfg = Debug|Win32
+		{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}.Debug.Build.0 = Debug|Win32
+		{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}.Release.ActiveCfg = Release|Win32
+		{57FCDCCC-FECA-1BAD-8565-65E9ACA0C3E0}.Release.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 	EndGlobalSection
