@@ -27,6 +27,7 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RecorderClient", "RecorderClient\RecorderClient.vcproj", "{4B35EE27-FECA-1BAD-ABD4-A97AC8E97EC0}"
 	ProjectSection(ProjectDependencies) = postProject
 		{096B5C35-FECA-1BAD-8AF0-8C91516EF201} = {096B5C35-FECA-1BAD-8AF0-8C91516EF201}
+		{92BDA250-FECA-1BAD-6CA9-31FE07321746} = {92BDA250-FECA-1BAD-6CA9-31FE07321746}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CopyManager", "CopyManager\CopyManager.vcproj", "{5AAE2154-1509-41C5-95AC-3F73F2E2F389}"
@@ -42,6 +43,20 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "routerlogger", "routerlog\r
 	ProjectSection(ProjectDependencies) = postProject
 		{096B5C35-FECA-1BAD-8AF0-8C91516EF201} = {096B5C35-FECA-1BAD-8AF0-8C91516EF201}
 		{92BDA250-FECA-1BAD-6CA9-31FE07321746} = {92BDA250-FECA-1BAD-6CA9-31FE07321746}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RecorderMonitor", "RecorderMonitor\RecorderMonitor.vcproj", "{FCBFA412-E60D-48D5-9016-BFA3A96EAEC5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{096B5C35-FECA-1BAD-8AF0-8C91516EF201} = {096B5C35-FECA-1BAD-8AF0-8C91516EF201}
+		{92BDA250-FECA-1BAD-6CA9-31FE07321746} = {92BDA250-FECA-1BAD-6CA9-31FE07321746}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "commonLib", "..\..\common\commonLib.vcproj", "{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CreateAAF", "..\processing\createaaf\CreateAAF.vcproj", "{0D3255CB-FECA-1BAD-1510-C90184CAB406}"
+	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
 Global
@@ -86,6 +101,18 @@ Global
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Debug.Build.0 = Debug|Win32
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Release.ActiveCfg = Release|Win32
 		{2B4E910A-FECA-1BAD-5902-AECD38EFCAF5}.Release.Build.0 = Release|Win32
+		{FCBFA412-E60D-48D5-9016-BFA3A96EAEC5}.Debug.ActiveCfg = Debug|Win32
+		{FCBFA412-E60D-48D5-9016-BFA3A96EAEC5}.Debug.Build.0 = Debug|Win32
+		{FCBFA412-E60D-48D5-9016-BFA3A96EAEC5}.Release.ActiveCfg = Release|Win32
+		{FCBFA412-E60D-48D5-9016-BFA3A96EAEC5}.Release.Build.0 = Release|Win32
+		{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}.Debug.ActiveCfg = Debug|Win32
+		{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}.Debug.Build.0 = Debug|Win32
+		{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}.Release.ActiveCfg = Release|Win32
+		{50BFEE33-FECA-1BAD-AA95-11DAF63D975C}.Release.Build.0 = Release|Win32
+		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Debug.ActiveCfg = Debug|Win32
+		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Debug.Build.0 = Debug|Win32
+		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Release.ActiveCfg = Release|Win32
+		{0D3255CB-FECA-1BAD-1510-C90184CAB406}.Release.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 	EndGlobalSection
