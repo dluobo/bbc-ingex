@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.17 2009/03/19 17:52:38 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.18 2009/03/27 13:34:40 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -226,6 +226,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Encode parameters
     prodauto::Rational image_aspect = settings->image_aspect;
+    int wide_aspect = (image_aspect == prodauto::g_16x9ImageAspect ? 1 : 0);
     int raw_audio_bits = settings->raw_audio_bits;
     //int mxf_audio_bits = settings->mxf_audio_bits;
     int mxf_audio_bits = 16; // has to be 16 with current deinterleave function
@@ -286,6 +287,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         codec_input_format = SD_422_SHIFTED;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV50;
+        ff_av_res = FF_ENCODER_RESOLUTION_DV50_MOV;
         filename_extension = ".dv";
         break;
     // DV HD format
@@ -294,6 +296,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DV100_1080i50; // temporarily assuming not 720p
+        ff_av_res = FF_ENCODER_RESOLUTION_DV100_MOV;
         filename_extension = ".dv";
         break;
     // MJPEG formats
@@ -554,7 +557,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         WIDTH = IngexShm::Instance()->SecondaryWidth();
         HEIGHT = IngexShm::Instance()->SecondaryHeight();
     }
-    const bool INTERLACE = IngexShm::Instance()->Interlace();
+    //const bool INTERLACE = IngexShm::Instance()->Interlace();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
     const int SIZE_422 = WIDTH * HEIGHT * 2;
     int frame_rate_numerator;
@@ -861,7 +864,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
         if (0 == (enc_av = ffmpeg_encoder_av_init(filename.str().c_str(),
-            ff_av_res, start_tc)))
+            ff_av_res, wide_aspect, start_tc, ffmpeg_threads)))
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name.c_str()));
             encoder = ENCODER_NONE;
