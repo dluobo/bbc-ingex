@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.2 2008/10/10 17:07:03 john_f Exp $
+ * $Id: Timecode.cpp,v 1.3 2009/04/16 17:50:30 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -256,7 +256,15 @@ int Timecode::EditRateDenominator() const
     return denom;
 }
 
-
+/**
+Add a number of frames.
+*/
+void Timecode::operator+=(int frames)
+{
+    mFramesSinceMidnight += frames;
+    UpdateHoursMinsEtc();
+    UpdateText();
+}
 
 
 

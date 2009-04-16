@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.h,v 1.1 2008/09/03 10:50:32 john_f Exp $
+ * $Id: Timecode.h,v 1.2 2009/04/16 17:50:30 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -82,6 +82,7 @@ public:
     friend Duration operator-(const Timecode & lhs, const Timecode & rhs);
     //friend void operator+=(Timecode & lhs, const Timecode & rhs);
     //friend void operator-=(Timecode & lhs, const Timecode & rhs);
+    void operator+=(int frames);
 
 private:
 // fundamental data
