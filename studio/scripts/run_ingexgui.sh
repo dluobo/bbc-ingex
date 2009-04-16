@@ -7,4 +7,4 @@ if [ "$1" = "-g" ] ; then
 	shift			# swallow option
 fi
 
-$PRERUN ../ace-tao/Ingexgui/src/ingexgui -ORBDefaultInitRef corbaloc:iiop:192.168.1.18:8888 -ORBDottedDecimalAddresses 1
+$PRERUN /home/ingex/ap-workspace/ingex/studio/ace-tao/Ingexgui/src/ingexgui -ORBDefaultInitRef corbaloc:iiop:192.168.1.182:8888 -ORBDottedDecimalAddresses 1
