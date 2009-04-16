@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.18 2009/03/27 13:34:40 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.19 2009/04/16 18:07:58 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -199,8 +199,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         start_frame[i] = p_rec->mStartFrame[i];
     }
 
+    // Get frame rate in use
+    int frame_rate_numerator;
+    int frame_rate_denominator;
+    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
+    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
+
     // Start timecode passed as metadata to MXFWriter
     int start_tc = p_rec->mStartTimecode;
+    int64_t start_position = start_tc;
+
+    // What if we add some days to start_position?
+    //int day_offset = 2;
+    //start_position += day_offset * 24 * 60 * 60 * FRAME_RATE.numerator / FRAME_RATE.denominator;
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -211,6 +222,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
     int file_format = p_opt->file_format;
+
+    // For DVD resolution we override the file format
+    if (resolution == DVD_MATERIAL_RESOLUTION)
+    {
+        file_format = RAW_FILE_FORMAT_TYPE;
+    }
 
     bool mxf = (MXF_FILE_FORMAT_TYPE == file_format);
     bool one_file_per_track = mxf;
@@ -227,7 +244,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Encode parameters
     prodauto::Rational image_aspect = settings->image_aspect;
     int wide_aspect = (image_aspect == prodauto::g_16x9ImageAspect ? 1 : 0);
-    int raw_audio_bits = settings->raw_audio_bits;
+    //int raw_audio_bits = settings->raw_audio_bits;
+    int raw_audio_bits = 16; // has to be 16 with current deinterleave function
     //int mxf_audio_bits = settings->mxf_audio_bits;
     int mxf_audio_bits = 16; // has to be 16 with current deinterleave function
     int browse_audio_bits = settings->browse_audio_bits;
@@ -399,6 +417,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Browse formats
     case DVD_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_420;
+        codec_input_format = SD_420;
         encoder = ENCODER_FFMPEG_AV;
         ff_av_res = FF_ENCODER_RESOLUTION_DVD;
         mxf = false;
@@ -560,10 +579,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     //const bool INTERLACE = IngexShm::Instance()->Interlace();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
     const int SIZE_422 = WIDTH * HEIGHT * 2;
-    int frame_rate_numerator;
-    int frame_rate_denominator;
-    IngexShm::Instance()->GetFrameRate(frame_rate_numerator, frame_rate_denominator);
-    const prodauto::Rational FRAME_RATE (frame_rate_numerator, frame_rate_denominator);
 
     // burnt-in timecode settings
     unsigned int tc_xoffset;
@@ -582,7 +597,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
 
-
     // Override file name extension for non-raw formats
     switch (file_format)
     {
@@ -594,7 +608,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         filename_extension = ".mov";
         raw = false;
         break;
-    case UNSPECIFIED_FILE_FORMAT_TYPE:
+    case RAW_FILE_FORMAT_TYPE:
     default:
         break;
     }
@@ -648,6 +662,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // SourceTrackConfig database id
     std::vector<long> mp_stc_dbids;
 
+    // Count audio tracks to be recorded
+    unsigned int num_audio_tracks = 0;
+
     // Go through the tracks.
     for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
     {
@@ -669,6 +686,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
             {
                 mp_trk->editRate = prodauto::g_audioEditRate;
+                ++num_audio_tracks;
             }
             else
             {
@@ -739,7 +757,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             fp_trk->sourceClip->sourceTrackID = rsp_trk->id;
             if (rsp_trk->dataDef == PICTURE_DATA_DEFINITION)
             {
-                fp_trk->sourceClip->position = start_tc;
+                fp_trk->sourceClip->position = start_position;
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp video track edit rate %d, position %d\n"),
                 //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
             }
@@ -747,12 +765,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 // Note that position is in terms of edit rate of the containing
                 // track, not the target track.
-                double audio_pos = start_tc;
+                double audio_pos = start_position;
                 audio_pos /= FRAME_RATE.numerator;
                 audio_pos *= FRAME_RATE.denominator;
                 audio_pos *= fp_trk->editRate.numerator;
                 audio_pos /= fp_trk->editRate.denominator;
-                fp_trk->sourceClip->position = (uint64_t) (audio_pos + 0.5);
+                fp_trk->sourceClip->position = (int64_t) (audio_pos + 0.5);
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp audio track edit rate %d, position %d\n"),
                 //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
             }
@@ -856,6 +874,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialisation for av files
     // ffmpeg av encoder
     ffmpeg_encoder_av_t * enc_av = 0;
+    unsigned int ff_av_num_audio_streams = 0;
+    unsigned int ff_av_audio_channels_per_stream = 0;
     if (ENCODER_FFMPEG_AV == encoder)
     {
         // Prevent simultaneous calls to init function causing
@@ -863,8 +883,22 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         // and also "format not registered".
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
-        if (0 == (enc_av = ffmpeg_encoder_av_init(filename.str().c_str(),
-            ff_av_res, wide_aspect, start_tc, ffmpeg_threads)))
+        switch (ff_av_res)
+        {
+        case FF_ENCODER_RESOLUTION_DV25_MOV:
+        case FF_ENCODER_RESOLUTION_DV50_MOV:
+        case FF_ENCODER_RESOLUTION_DV100_MOV:
+            ff_av_num_audio_streams = num_audio_tracks;
+            ff_av_audio_channels_per_stream = 1;
+            break;
+        default:
+            ff_av_num_audio_streams = 1;
+            ff_av_audio_channels_per_stream = 2;
+            break;
+        }
+        enc_av = ffmpeg_encoder_av_init(filename.str().c_str(), ff_av_res,
+            wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
+        if (!enc_av)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_init() failed\n"), src_name.c_str()));
             encoder = ENCODER_NONE;
@@ -893,7 +927,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                                             resolution,
                                             image_aspect,
                                             mxf_audio_bits,
-                                            start_tc,
+                                            start_position,
                                             creating_path.str().c_str(),
                                             destination_path.str().c_str(),
                                             failures_path.str().c_str(),
@@ -1304,8 +1338,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
             // Mix audio for browse version
             int16_t mixed_audio[audio_samples_per_frame * 2];    // for stereo pair output
-#if 1
-// Needs update for mono 32-bit audio buffers
+
+// Needs update for mono 32-bit audio buffers when we have them
             if (browse_audio || ENCODER_FFMPEG_AV == encoder)
             {
                 mixer.Mix(p_audio12, p_audio34, mixed_audio, audio_samples_per_frame);
@@ -1316,14 +1350,42 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 write_audio(fp_audio_browse, (uint8_t *)mixed_audio, audio_samples_per_frame * 2, 16, browse_audio_bits);
             }
-#endif
 
-            // encode to browse av formats
+
+            // encode to av formats
             if (ENCODER_FFMPEG_AV == encoder && p_inp_video)
             {
-                if (ffmpeg_encoder_av_encode(enc_av, (uint8_t *)p_inp_video, mixed_audio) != 0)
+                int result = 0;
+                if (ff_av_num_audio_streams == 1)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("dvd_encoder_encode failed\n")));
+                    result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *)p_inp_video);
+                    result |= ffmpeg_encoder_av_encode_audio(enc_av, 0, audio_samples_per_frame, mixed_audio);
+                }
+                else if (ff_av_audio_channels_per_stream == 1)
+                {
+                    unsigned int astream_i = 0;
+                    for (unsigned int i = 0; i < mp->tracks.size() && astream_i < ff_av_num_audio_streams; ++i)
+                    {
+                        prodauto::Track * mp_trk = mp->tracks[i];
+                        if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
+                        {
+                            result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *)p_inp_video);
+                        }
+                        else if (SOUND_DATA_DEFINITION == mp_trk->dataDef)
+                        {
+                            result |= ffmpeg_encoder_av_encode_audio(enc_av, astream_i++, audio_samples_per_frame, (short *)p_input[i]);
+                        }
+                    }
+                }
+                else
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("AV audio streams mis-configured\n")));
+                    result = 1;
+                }
+
+                if (result != 0)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("AV encode failed\n")));
                     encoder = ENCODER_NONE;
                 }
             }
@@ -1603,11 +1665,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 it = file_packages.begin(); it != file_packages.end(); ++it)
             {
                 prodauto::SourcePackage * fp = *it;
-                ACE_DEBUG((LM_INFO, ACE_TEXT("Saving file package %C\n"), fp->name.c_str()));
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving file package %C\n"), fp->name.c_str()));
                 db->savePackage(fp, transaction.get());
             }
             // Now save material package
-            ACE_DEBUG((LM_INFO, ACE_TEXT("Saving material package %C\n"), mp->name.c_str()));
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving material package %C\n"), mp->name.c_str()));
             db->savePackage(mp, transaction.get());
 
             transaction->commitTransaction();
