@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.11 2009/03/25 13:55:45 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.12 2009/04/16 17:41:37 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -28,12 +28,16 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <sstream>
+#include <errno.h>
+#include <list>
 
 #include "AAFFile.h"
 #include "FCPFile.h"
 #include "CreateAAFException.h"
 #include "CutsDatabase.h"
+#include "ConfigReader.h"
 
 #include <Database.h>
 #include <MCClipDef.h>
@@ -42,13 +46,11 @@
 #include <Timecode.h>
 #include <XmlTools.h>
 
-#include <xercesc/util/PlatformUtils.hpp>
-#include <xercesc/util/XMLString.hpp>
-#include <xercesc/dom/DOM.hpp>
 
 
 using namespace std;
 using namespace prodauto;
+using namespace xercesc;
 
 
 static const char* g_dns = "prodautodb";
@@ -75,6 +77,8 @@ public:
     MaterialPackageSet topPackages; 
     PackageSet packages;
 };   
+
+
 
 static void parseDateAndTimecode(string dateAndTimecodeStr, bool isPAL, Date* date, int64_t* timecode)
 {
@@ -128,7 +132,6 @@ static void parseTag(string tag, string& tagName, string& tagValue)
     }
 }
 
-
 static string dateAndTimecodeString(Date date, int64_t timecode, bool isPAL)
 {
     char dateAndTimecodeStr[48];
@@ -175,6 +178,11 @@ static string createDateAndTimecodeSuffix(Date fromDate, int64_t fromTimecode, D
 }
 
 static string createTagSuffix()
+{
+    return timestampString(generateTimestampNow());
+}
+
+static string createIdSuffix()
 {
     return timestampString(generateTimestampNow());
 }
@@ -396,11 +404,11 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -o, --grouponly                Only create AAF file with all clips included\n");
     fprintf(stderr, "      --no-ts-suffix             Don't use a timestamp for a group only file\n");
     fprintf(stderr, "  -m, --multicam                 Also create multi-camera clips\n");
-    fprintf(stderr, "  --mc-name <name>               Use only the named multi-cam group\n");
     fprintf(stderr, "  --ntsc                         Targets NTSC sources (default is PAL)\n");
     fprintf(stderr, "  -f, --from <date>S<timecode>   Includes clips created >= date and start timecode\n");
     fprintf(stderr, "  -t, --to <date>S<timecode>     Includes clips created < date and start timecode\n");
     fprintf(stderr, "  -c, --from-cd <date>T<time>    Includes clips created >= CreationDate of clip\n");
+    fprintf(stderr, "  -w, --from-web                 Uses file material package database IDs- must pass webfile\n");    
     fprintf(stderr, "  --tag <name>=<value>           Includes clips with user comment tag <name> == <value>\n");
     fprintf(stderr, "  --mc-cuts <db name>            Includes sequence of multi-camera cuts from database\n");
     fprintf(stderr, "  --aaf-xml                      Outputs AAF file using the XML stored format\n");
@@ -411,6 +419,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -d, --dns <string>             Database DNS (default '%s')\n", g_dns);
     fprintf(stderr, "  -u, --dbuser <string>          Database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
+    fprintf(stderr, "  --xml-command <string>          XML command file\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
     fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff' (PAL: ff ranges 1..24, NTSC: ff ranges 1..29 and is non-drop frame)\n");
@@ -442,7 +451,6 @@ int main(int argc, const char* argv[])
     string tagValue;
     string suffix;
     string projName;
-    string mcGroupName;
     vector<string> filenames;
     int videoResolutionID = DV50_MATERIAL_RESOLUTION;
     bool verbose = false;
@@ -456,6 +464,13 @@ int main(int argc, const char* argv[])
     const char* toString = 0;
     const char* fromString = 0;
     Rational targetEditRate = g_palEditRate;
+    
+    std::vector<long> package_ids;
+    long pid;
+    
+    std::vector<std::string> pkgid;
+    
+    string xmlCommandPath;
     
     Timestamp t = generateTimestampStartToday();
     fromDate.year = t.year;
@@ -477,6 +492,17 @@ int main(int argc, const char* argv[])
             {
                 usage(argv[0]);
                 return 0;
+            }
+            else if (strcmp(argv[cmdlnIndex], "--xml-command") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                xmlCommandPath = argv[cmdlnIndex + 1];
+                cmdlnIndex += 2;
             }
             else if (strcmp(argv[cmdlnIndex], "-v") == 0 ||
                 strcmp(argv[cmdlnIndex], "--verbose") == 0)
@@ -537,17 +563,6 @@ int main(int argc, const char* argv[])
                 createMultiCam = true;
                 cmdlnIndex += 1;
             }
-            else if (strcmp(argv[cmdlnIndex], "--mc-name") == 0)
-            {
-                if (cmdlnIndex + 1 >= argc)
-                {
-                    usage(argv[0]);
-                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
-                    return 1;
-                }
-                mcGroupName = argv[cmdlnIndex + 1];
-                cmdlnIndex += 2;
-            }
             else if (strcmp(argv[cmdlnIndex], "--ntsc") == 0)
             {
                 isPAL = false;
@@ -588,6 +603,22 @@ int main(int argc, const char* argv[])
                 }
                 parseTimestamp(argv[cmdlnIndex + 1], &fromCreationDate);
                 cmdlnIndex += 2;
+            }
+   //????         
+            else if (strcmp(argv[cmdlnIndex], "-w") == 0 ||
+                strcmp(argv[cmdlnIndex], "--from-web") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                pid = atol(argv[cmdlnIndex + 1]);
+                package_ids.push_back(pid);
+                //parseWeb(argv[cmdlnIndex + 1], package_ids, pid);
+                cmdlnIndex += 2;
+   //????    
             }
             else if (strcmp(argv[cmdlnIndex], "--tag") == 0)
             {
@@ -706,6 +737,75 @@ int main(int argc, const char* argv[])
         return 1;
     }
     
+    if (xmlCommandPath.size() != 0)
+    {    
+        
+        ConfigReader appConfig;
+        appConfig.readConfigFile(xmlCommandPath);
+        cout << "Application verbose= " << appConfig.getVerbose() << endl;
+        cout << "Application prefix= "  << appConfig.getPrefix()  << endl;
+                            
+        std::string test = "TRUE";
+        ostringstream test_ss;
+        test_ss << test;
+
+        if (appConfig.getVerbose() == test_ss.str())
+        {
+            verbose = true;
+        }
+        if (appConfig.getGroupOnly() == test_ss.str())
+        {
+            createAAFGroupOnly = true;
+        }
+        if (appConfig.getGroup() == test_ss.str())
+        {
+            createAAFGroup = true;
+        }
+	if (appConfig.getMultiCam() == test_ss.str())
+        {
+	    createMultiCam = true;
+        }
+        if (appConfig.getNTSC() == test_ss.str())
+        {
+            isPAL = false;
+        }
+        if (appConfig.getFCP() == test_ss.str())
+        {
+            fcpxml = true;
+            fcpPath = appConfig.getEditPath();
+        }
+        if (appConfig.getDirCut() == test_ss.str())
+        {
+            includeMCCutsSequence = true;
+            mcCutsFilename = appConfig.getDirSource();
+        }
+        if (appConfig.getAudioEdit() == test_ss.str())
+        {
+            audioEdits = true;
+        }
+        
+        
+        dns = appConfig.getDNS();
+        dbUserName = appConfig.getUser();
+        dbPassword = appConfig.getPassword();
+        filenamePrefix = appConfig.getPrefix();
+
+        pkgid = appConfig.getPkgID();
+        
+        for (std::vector<std::string>::const_iterator it = pkgid.begin(); it != pkgid.end(); ++it)
+        {
+                ostringstream index_ss;
+                index_ss << *it;
+                long index = atol(index_ss.str().c_str());
+                cout << "Package IDs= " << index << endl;
+                package_ids.push_back(index);
+        }
+        
+        if (verbose)
+        {
+                printf("VERBOSE IS TRUE \n");
+        }
+    }
     targetEditRate = (isPAL ? g_palEditRate : g_ntscEditRate);
     
     // parse --to and --from now that we know whether it is PAL or NTSC
@@ -721,6 +821,11 @@ int main(int argc, const char* argv[])
     if (tagName.size() > 0)
     {
         suffix = createTagSuffix();
+    }
+    if (package_ids.size() > 0) //???? STILL TODO
+    {
+        suffix = createIdSuffix();
+        //need to make prefix and filename??
     }
     else
     {
@@ -757,26 +862,12 @@ int main(int argc, const char* argv[])
         }
     }
 
-    // get database pointer
-    Database * database = Database::getInstance();
-
-    // get multi-cam clip defs
-    VectorGuard<MCClipDef> mcClipDefs;
-    if (mcGroupName.empty())
-    {
-        // load all
-        mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
-    }
-    else
-    {
-        // load specified group
-        MCClipDef * mcClip = database->loadMultiCameraClipDef(mcGroupName);
-        mcClipDefs.get().push_back(mcClip);
-    }
-
     // load the material    
+    Database* database = Database::getInstance();
     auto_ptr<EditorsFile> editorsFile;
     MaterialHolder material;
+    VectorGuard<MCClipDef> mcClipDefs;
+    mcClipDefs.get() = database->loadAllMultiCameraClipDefs();
     try
     {
         if (tagName.size() != 0)
@@ -786,6 +877,16 @@ int main(int argc, const char* argv[])
             if (verbose)
             {
                 printf("Loaded %d clips from the database based on the tag %s=%s\n", (int)material.topPackages.size(), tagName.c_str(), tagValue.c_str());
+            }
+        }
+        if (package_ids.size() != 0)
+        {
+            // load all material with material packate database ids
+            database->loadMaterial(package_ids, &material.topPackages, &material.packages);
+            if (verbose)
+            {
+                //printf("Loaded %d clips from the database based on the web IDs file %s\n", (int)material.topPackages.size());
+                printf("Loaded clip based on package ID from command line");
             }
         }
         else if (fromCreationDate.year != 0)
@@ -902,74 +1003,77 @@ int main(int argc, const char* argv[])
     // remove any packages with an edit rate != the target edit rate and
     // go through the material package -> file package and remove any that reference
     // a file package with a non-zero videoResolutionID and !=  targetVideoResolutionID
-    vector<prodauto::MaterialPackage *> packagesToErase;
-    MaterialPackageSet::const_iterator iter1;
-    for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
-    {
-        MaterialPackage* topPackage = *iter1;
+    if (package_ids.size() == 0)
+    {        
+            vector<prodauto::MaterialPackage *> packagesToErase;
+            MaterialPackageSet::const_iterator iter1;
 
-        // check package edit rate        
-        Rational packageEditRate = getVideoEditRate(topPackage, material.packages);
-        if (packageEditRate != targetEditRate && packageEditRate != g_nullRational)
-        {
-            packagesToErase.push_back(topPackage);
-            continue;
-        }
-
-        // check video resolution IDs
-        vector<Track*>::const_iterator iter2;
-        for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
-        {
-            Track* track = *iter2;
-            
-            SourcePackage dummy;
-            dummy.uid = track->sourceClip->sourcePackageUID;
-            PackageSet::iterator result = material.packages.find(&dummy);
-            if (result != material.packages.end())
+            for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
             {
-                Package* package = *result;
-                
-                if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
+                MaterialPackage* topPackage = *iter1;
+        
+                // check package edit rate        
+                Rational packageEditRate = getVideoEditRate(topPackage, material.packages);
+                if (packageEditRate != targetEditRate && packageEditRate != g_nullRational)
                 {
-                    continue;
-                }
-                SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-                if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
-                {
-                    continue;
-                }
-                
-                FileEssenceDescriptor* fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(
-                    sourcePackage->descriptor);
-                if (fileDescriptor->videoResolutionID != 0 && 
-                    fileDescriptor->videoResolutionID != videoResolutionID)
-                {
-                    // material package has wrong video resolution
                     packagesToErase.push_back(topPackage);
-                    break; // break out of track loop
+                    continue;
+                }
+        
+                // check video resolution IDs
+                vector<Track*>::const_iterator iter2;
+                for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
+                {
+                    Track* track = *iter2;
+                    
+                    SourcePackage dummy;
+                    dummy.uid = track->sourceClip->sourcePackageUID;
+                    PackageSet::iterator result = material.packages.find(&dummy);
+                    if (result != material.packages.end())
+                    {
+                        Package* package = *result;
+                        
+                        if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
+                        {
+                            continue;
+                        }
+                        SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
+                        if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
+                        {
+                            continue;
+                        }
+                        
+                        FileEssenceDescriptor* fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(
+                            sourcePackage->descriptor);
+                        if (fileDescriptor->videoResolutionID != 0 && 
+                            fileDescriptor->videoResolutionID != videoResolutionID)
+                        {
+                            // material package has wrong video resolution
+                            packagesToErase.push_back(topPackage);
+                            break; // break out of track loop
+                        }
+                    }
+        
+                }
+            }    
+            vector<prodauto::MaterialPackage *>::const_iterator it;
+            for (it = packagesToErase.begin(); it != packagesToErase.end(); it++)
+            {
+                material.topPackages.erase(*it);
+            }
+            
+            if (verbose)
+            {
+                if (packagesToErase.size() > 0)
+                {
+                    printf("Removed %zd clips from those loaded that did not match the video resolution\n", packagesToErase.size());
+                }
+                else
+                {
+                    printf("All clips either match the video resolution or are audio only\n");
                 }
             }
-
-        }
     }
-    vector<prodauto::MaterialPackage *>::const_iterator it;
-    for (it = packagesToErase.begin(); it != packagesToErase.end(); it++)
-    {
-        material.topPackages.erase(*it);
-    }
-    
-    if (verbose)
-    {
-        if (packagesToErase.size() > 0)
-        {
-            printf("Removed %zd clips from those loaded that did not match the video resolution\n", packagesToErase.size());
-        }
-        else
-        {
-            printf("All clips either match the video resolution or are audio only\n");
-        }
-    }
-
     // So we now have the relevant MaterialPackages in...    material.topPackages
     // and relevant SourcePackages in...                     material.packages
         

@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: AAFFile.cpp,v 1.4 2009/04/16 17:41:36 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -21,6 +21,7 @@
  */
  
 #include <cassert>
+#include <cstdlib>
 
 #include <AAFResult.h>
 #include <AAFClassDefUIDs.h>

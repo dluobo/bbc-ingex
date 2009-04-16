@@ -8,6 +8,8 @@
 
 #include <DataTypes.h>
 
+#include "CutInfo.h"
+
 
 namespace prodauto
 {
@@ -20,15 +22,6 @@ public:
     std::string sourceId;
     Date date;
     int64_t timecode;
-};
-
-class CutInfo
-{
-public:
-    CutInfo() : position(0) {}
-    
-    int64_t position;
-    std::string source;
 };
 
 
