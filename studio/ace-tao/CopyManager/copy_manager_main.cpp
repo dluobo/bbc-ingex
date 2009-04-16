@@ -1,5 +1,5 @@
 /*
- * $Id: copy_manager_main.cpp,v 1.1 2007/09/11 14:08:19 stuart_hc Exp $
+ * $Id: copy_manager_main.cpp,v 1.2 2009/04/16 18:32:04 john_f Exp $
  *
  * Client to manage copying of recordings.
  *
@@ -32,7 +32,6 @@
 
 #include "CpMgrStatusClientImpl.h"
 
-const ProdAuto::Rational EDIT_RATE = { 25, 1 }; // We are working at 25 frames per second
 
 // Globals
 bool done = false;
@@ -40,7 +39,7 @@ bool done = false;
 // Handler to terminate the event loop
 extern "C" void handler (int)
 {
-	done = true;
+    done = true;
 }
 
 
@@ -51,31 +50,31 @@ int main(int argc, char * argv[])
     ACE_Sig_Action sa ((ACE_SignalHandler) handler, SIGINT);
 
 // Initialise ORB
-	CorbaUtil::Instance()->InitOrb(argc, argv);
+    CorbaUtil::Instance()->InitOrb(argc, argv);
 
 // Apply timeout for CORBA operations
-	const int timeoutsecs = 5;
-	CorbaUtil::Instance()->SetTimeout(timeoutsecs);
+    const int timeoutsecs = 5;
+    CorbaUtil::Instance()->SetTimeout(timeoutsecs);
 
 // Get the naming service object reference(s) using initial references
 // which were passed to Orb from command line arguments.
-	CorbaUtil::Instance()->InitNs();
+    CorbaUtil::Instance()->InitNs();
 
 // Get object reference for recorder from naming service
-	CosNaming::Name name;
-	name.length(3);
-	name[0].id = CORBA::string_dup("ProductionAutomation");
-	name[1].id = CORBA::string_dup("RecordingDevices");
-	if(argc > 1)
-	{
-		name[2].id = CORBA::string_dup(ACE_TEXT_ALWAYS_CHAR(argv[1]));
-	}
-	else
-	{
-		name[2].id = CORBA::string_dup("Studio A");
-	}
+    CosNaming::Name name;
+    name.length(3);
+    name[0].id = CORBA::string_dup("ProductionAutomation");
+    name[1].id = CORBA::string_dup("RecordingDevices");
+    if(argc > 1)
+    {
+        name[2].id = CORBA::string_dup(ACE_TEXT_ALWAYS_CHAR(argv[1]));
+    }
+    else
+    {
+        name[2].id = CORBA::string_dup("Studio A");
+    }
 
-	CORBA::Object_var obj = CorbaUtil::Instance()->ResolveObject(name);
+    CORBA::Object_var obj = CorbaUtil::Instance()->ResolveObject(name);
 
 // Setup RecorderManager
     RecorderManager rec_manager;
@@ -89,28 +88,29 @@ int main(int argc, char * argv[])
     CpMgrStatusClientImpl * p_servant = new CpMgrStatusClientImpl();
 
 // Activate POA manager
-	CorbaUtil::Instance()->ActivatePoaMgr();
+    CorbaUtil::Instance()->ActivatePoaMgr();
 
 // Incarnate servant object
-	ProdAuto::StatusClient_var client_ref = p_servant->_this();
+    ProdAuto::StatusClient_var client_ref = p_servant->_this();
 
 // Attach client to recorder
     rec_manager.AddStatusClient(client_ref.in());
 
 // Now wait on events
-	while ( !done )
-	{
-		// Check for incoming CORBA requests
-		//std::cout << "C" << std::flush;
-	    ACE_Time_Value corba_timeout(0, 100000);  // seconds, microseconds
-	    CorbaUtil::Instance()->OrbRun(corba_timeout);
-	}
+    while ( !done )
+    {
+        // Check for incoming CORBA requests
+        //std::cout << "C" << std::flush;
+        ACE_Time_Value corba_timeout(0, 100000);  // seconds, microseconds
+        CorbaUtil::Instance()->OrbRun(corba_timeout);
+    }
 
-	// Detach client from recorder
+    // Detach client from recorder
     rec_manager.RemoveStatusClient(client_ref.in());
 
-	// Destroy client servant object
-	p_servant->Destroy();
+    // Destroy client servant object
+    p_servant->Destroy();
 
-	return 0;
+    return 0;
 }
+
