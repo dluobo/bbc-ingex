@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.6 2009/02/26 19:18:40 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.7 2009/04/16 17:54:34 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -34,19 +34,19 @@ const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
 const char * const          COPY_COMMAND    = "";
 
 const int           ENCODE1_RESOLUTION      = MJPEG21_MATERIAL_RESOLUTION;
-const int           ENCODE1_FILE_FORMAT     = UNSPECIFIED_FILE_FORMAT_TYPE;
+const int           ENCODE1_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE1_BITC            = false;
 const char * const  ENCODE1_DIR             = "/video";
 const char * const  ENCODE1_DEST            = "/store";
 
 const int           ENCODE2_RESOLUTION      = 0;
-const int           ENCODE2_FILE_FORMAT     = UNSPECIFIED_FILE_FORMAT_TYPE;
+const int           ENCODE2_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE2_BITC            = false;
 const char * const  ENCODE2_DIR             = "/video";
 const char * const  ENCODE2_DEST            = "/store";
 
 const int           QUAD_RESOLUTION     = 0;
-const int           QUAD_FILE_FORMAT    = UNSPECIFIED_FILE_FORMAT_TYPE;
+const int           QUAD_FILE_FORMAT    = RAW_FILE_FORMAT_TYPE;
 const bool          QUAD_BITC           = true;
 const char * const  QUAD_DIR            = "/video";
 const char * const  QUAD_DEST           = "";
@@ -54,7 +54,7 @@ const char * const  QUAD_DEST           = "";
 const bool BROWSE_AUDIO = false;
 
 const int MPEG2_BITRATE = 5000;
-const int RAW_AUDIO_BITS = 32;
+const int RAW_AUDIO_BITS = 16;
 const int MXF_AUDIO_BITS = 16;
 const int BROWSE_AUDIO_BITS = 16;
 
@@ -225,64 +225,5 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     return true;
 }
 
-/*
-The actual names in the database can now be obtained via
-the DatabaseEnums class.
-
-const char * RecorderSettings::ResolutionName(int resolution)
-{
-    switch (resolution)
-    {
-    case UNC_MATERIAL_RESOLUTION:
-        return "Uncompressed";
-    case DV25_MATERIAL_RESOLUTION:
-        return "DV25";
-    case DV50_MATERIAL_RESOLUTION:
-        return "DV50";
-    case MJPEG21_MATERIAL_RESOLUTION:
-        return "MJPEG 2:1";
-    case MJPEG31_MATERIAL_RESOLUTION:
-        return "MJPEG 3:1";
-    case MJPEG101_MATERIAL_RESOLUTION:
-        return "MJPEG 10:1";
-    case MJPEG151S_MATERIAL_RESOLUTION:
-        return "MJPEG 15:1s";
-    case MJPEG201_MATERIAL_RESOLUTION:
-        return "MJPEG 20:1";
-    case MJPEG101M_MATERIAL_RESOLUTION:
-        return "MJPEG 10:1m";
-    // IMX formats
-    case IMX30_MATERIAL_RESOLUTION:
-        return "IMX30";
-    case IMX40_MATERIAL_RESOLUTION:
-        return "IMX40";
-    case IMX50_MATERIAL_RESOLUTION:
-        return "IMX50";
-    // DNxHD formats
-    case DNX36p_MATERIAL_RESOLUTION:
-        return "DNX36p";
-    case DNX120p_MATERIAL_RESOLUTION:
-        return "DNX120p";
-    case DNX185p_MATERIAL_RESOLUTION:
-        return "DNX185p";
-    case DNX120i_MATERIAL_RESOLUTION:
-        return "DNX120i";
-    case DNX185i_MATERIAL_RESOLUTION:
-        return "DNX185i";
-    // H264
-    case DMIH264_MATERIAL_RESOLUTION:
-        return "H264-DMI";
-    // Browse formats
-    case DVD_MATERIAL_RESOLUTION:
-        return "DVD";
-    case MPEG4_MATERIAL_RESOLUTION:
-        return "MPEG4";
-    default:
-        return "Unknown";
-    }
-
-    return "Unknown";
-}
-*/
 
 

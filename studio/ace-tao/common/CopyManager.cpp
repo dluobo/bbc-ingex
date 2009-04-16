@@ -1,5 +1,5 @@
 /*
- * $Id: CopyManager.cpp,v 1.6 2009/02/09 19:18:17 john_f Exp $
+ * $Id: CopyManager.cpp,v 1.7 2009/04/16 17:54:34 john_f Exp $
  *
  * Class to manage file copying in a separate process.
  *
@@ -76,11 +76,19 @@ void CopyManager::AddSrcDest(const std::string & src, const std::string & dest, 
     // priority not yet supported
     if (!src.empty() && !dest.empty())
     {
+#if 1
+    // with priority
+        std::ostringstream ss;
+        ss << " " << priority << " \"" << src << "\" \"" << dest << "\"";
+        mArgs += ss.str();
+#else
+    // old way without priority
         mArgs += " \"";
         mArgs += src;
         mArgs += "\" \"";
         mArgs += dest;
         mArgs += "\"";
+#endif
     }
 }
 
