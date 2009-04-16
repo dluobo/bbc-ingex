@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.7 2009/03/25 14:01:05 john_f Exp $
+ * $Id: Database.cpp,v 1.8 2009/04/16 18:14:20 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -21,6 +21,7 @@
  */
  
 #include <cassert>
+#include <cstring>
 
 #include <odbc++/drivermanager.h>
 #include <odbc++/connection.h>
@@ -1730,6 +1731,9 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
             mcCut->mcTrackId = result->getInt(2);
             mcCut->mcSelectorId = result->getInt(3);
             mcCut->cutDate = getDateFromODBC(result->getString(4));
+            mcCut->position = result->getLong(5);
+            mcCut->editRate.numerator = result->getInt(6);
+            mcCut->editRate.denominator = result->getInt(7);
             
 #if 0    
             // load track def
@@ -1779,6 +1783,79 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
     END_QUERY_BLOCK("Failed to load multi-camera cuts")
     
     return allMCCuts.release();
+}
+
+#define SQL_GET_MC_CUTS \
+" \
+    SELECT \
+        mcc_identifier, \
+        mcc_multi_camera_track_def_id, \
+        mcc_multi_camera_selector_def_id, \
+        mcc_date::varchar, \
+        mcc_position, \
+        (mcc_edit_rate).numerator, \
+        (mcc_edit_rate).denominator \
+    FROM MultiCameraCuts \
+    WHERE \
+        mcc_date >= ? AND \
+        mcc_date <= ? AND \
+        mcc_multi_camera_track_def_id = ? \
+"
+
+vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
+                                              Date startDate, int64_t startTimecode, Date endDate, int64_t endTimecode)
+{
+    // Find multi-cam track def we are interested in.
+    // We want the video track and assume it's the one with index == 1.
+    prodauto::MCTrackDef * mc_track_def = 0;
+    if (mc_clip_def)
+    {
+        mc_track_def = mc_clip_def->trackDefs[1];
+    }
+    long mc_track_def_id = 0;
+    if (mc_track_def)
+    {
+        mc_track_def_id = mc_track_def->getDatabaseID();
+    }
+
+    VectorGuard<MCCut> theMCCuts;
+    auto_ptr<Connection> connection(getConnection());
+    
+    START_QUERY_BLOCK
+    {
+        auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MC_CUTS));
+        prepStatement->setString(1, getDateString(startDate));
+        prepStatement->setString(2, getDateString(endDate));
+        prepStatement->setInt(3, mc_track_def_id);
+        
+        odbc::ResultSet * result = prepStatement->executeQuery();
+        while (result->next())
+        {
+            MCCut * mcCut = new MCCut();
+            
+            mcCut->wasLoaded(result->getInt(1));
+            mcCut->mcTrackId = result->getInt(2);
+            mcCut->mcSelectorId = result->getInt(3);
+            mcCut->cutDate = getDateFromODBC(result->getString(4));
+            mcCut->position = result->getLong(5);
+            mcCut->editRate.numerator = result->getInt(6);
+            mcCut->editRate.denominator = result->getInt(7);
+
+            if (mcCut->cutDate == startDate && mcCut->position < startTimecode
+                || mcCut->cutDate == endDate && mcCut->position >= endTimecode)
+            {
+                // Reject cuts not in correct timecode range
+                delete mcCut;
+            }
+            else
+            {
+                theMCCuts.get().push_back(mcCut);
+            }
+        }
+    }
+    END_QUERY_BLOCK("Failed to load multi-camera cuts")
+    
+    return theMCCuts.release();
 }
 
 #define SQL_INSERT_MCCUT \
@@ -4044,7 +4121,7 @@ int Database::loadSourceReference(UMID sourcePackageUID, uint32_t sourceTrackID,
 
         // load the package and get the track
         
-        auto_ptr<Package> package(loadPackage(result->getLong(1)));
+        auto_ptr<Package> package(loadPackage(result->getInt(1)));
         Track* track = package->getTrack(sourceTrackID);
         if (track == 0)
         {
