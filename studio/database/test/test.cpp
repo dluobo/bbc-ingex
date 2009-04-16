@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.6 2009/02/26 19:39:29 john_f Exp $
+ * $Id: test.cpp,v 1.7 2009/04/16 18:29:46 john_f Exp $
  *
  * Tests the database library
  *
@@ -25,6 +25,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <assert.h>
+#include <memory>
 
 #include <Database.h>
 #include <Utilities.h>
