@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.19 2009/03/19 18:04:59 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.20 2009/04/16 18:03:58 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -109,6 +109,7 @@ static int verbose_channel = -1;	// which channel to show when verbose is on
 static int audio8ch = 0;
 static int anc_tc = 0;				// read timecodes from RP188/RP196 ANC data
 static int test_avsync = 0;
+static uint8_t *video_work_area[MAX_CHANNELS];
 static int benchmark = 0;
 static uint8_t *benchmark_video = NULL;
 static char *video_sample_file = NULL;
@@ -350,10 +351,13 @@ static int set_videomode_on_all_channels(int max_channels, int opt_video_mode)
 
 void set_aes_option(int channel, int enable_aes)
 {
-	if (! enable_aes)
-		return;
+    int res;
+    if (enable_aes) {
+        res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU);
+    } else {
+        res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AIV);
+    }
 
-	int res = sv_option_set(a_sv[channel], SV_OPTION_AUDIOINPUT, SV_AUDIOINPUT_AESEBU);
 	if (res != SV_OK) {
 		logTF("channel %d: sv_option_set(SV_OPTION_AUDIOINPUT) failed: %s\n", channel, sv_geterrortext(res));
 	}
@@ -613,6 +617,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	sv_fifo_buffer		*pbuffer;
 	sv_fifo_bufferinfo	bufferinfo;
 	int					get_res;
+	int					put_res;
 	int					ring_len = p_control->ringlen;
 	NexusBufCtl			*pc = &(p_control->channel[chan]);
 
@@ -653,8 +658,13 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
 	uint8_t *dma_dest = vid_dest;
 	if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted) {
+#if 0
 		// Store frame at pc->lastframe+2 to allow space for UYVY->YUV422 conversion
 		dma_dest = ring[chan] + element_size * ((pc->lastframe+2) % ring_len);
+#else
+        // Store frame in video work area (it is faster)
+        dma_dest = video_work_area[chan];
+#endif
 	}
 	pbuffer->dma.addr = (char *)dma_dest;
 	pbuffer->dma.size = dma_total_size;			// video + audio
@@ -663,8 +673,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// reception of a SIGUSR1 can sometimes cause this to fail
 	// If it fails we should restart fifo.
 	//logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
-	if (sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo) != SV_OK)
+	put_res = sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo);
+	if (put_res != SV_OK)
 	{
+        sv_errorprint(sv, put_res);
 		fprintf(stderr, "sv_fifo_putbuffer failed, restarting fifo\n");
 		SV_CHECK( sv_fifo_reset(sv, poutput) );
 		SV_CHECK( sv_fifo_start(sv, poutput) );
@@ -704,11 +716,18 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 		if (benchmark)
 			vid_input = benchmark_video;
 
+        // Time this
+        //int64_t start = gettimeofday64();
+
 		// Repack to planar YUV 4:2:2
 		uyvy_to_yuv422(		width, height,
 							video_format == Format422PlanarYUVShifted,	// do DV50 line shift?
 							vid_input,						// input
 							vid_dest);						// output
+
+        // End of timing
+        //int64_t end = gettimeofday64();
+        //fprintf(stderr, "uyvy_to_yuv422() took %6"PRIi64" microseconds\n", end - start);
 
 		// copy audio to match
 		if (!no_audio)
@@ -1599,6 +1618,12 @@ int main (int argc, char ** argv)
 			}
 			if (res == SV_OK)
 			{
+                /*
+                int alignment = 0;
+                sv_query(a_sv[channel], SV_QUERY_DMAALIGNMENT, 0, &alignment);
+                fprintf(stderr, "Minimum memory alignment for DMA transfers = %d\n", alignment);
+                */
+
 				sv_status(a_sv[channel], &status_info);
 				sv_query(a_sv[channel], SV_QUERY_MODE_CURRENT, 0, &current_video_mode);
 				framerate_for_videomode(current_video_mode, &frame_rate_numer, &frame_rate_denom);
@@ -1825,6 +1850,7 @@ int main (int argc, char ** argv)
 		benchmark_video = (uint8_t*)malloc(width*height*2);
 		FILE *fp_sample = fopen(video_sample_file, "rb");
 		if (! fp_sample) {
+			fprintf(stderr, "Error opening benchmark video file \"%s\" ", video_sample_file);
 			perror("fopen");
 			return 1;
 		}
@@ -1835,14 +1861,33 @@ int main (int argc, char ** argv)
 		logTF("Read one frame (%dx%d) for use as benchmark frame from %s\n", width, height, video_sample_file);
 	}
 
+    // Allocate working buffers for video conversions (uvyv to 422 etc.)
+    // This is faster than doing it in the shared memory.
+    int chan;
+    for (chan = 0; chan < MAX_CHANNELS; chan++)
+    {
+        if (chan < num_sdi_threads)
+        {
+            video_work_area[chan] = (uint8_t *) memalign(16, dma_total_size);
+            if (!video_work_area[chan])
+            {
+                fprintf(stderr, "Failed to allocate video work buffer.\n");
+                return 1;
+            }
+        }
+        else
+        {
+            video_work_area[chan] = NULL;
+        }
+    }
+
 	// Allocate shared memory buffers
 	if (! allocate_shared_buffers(num_sdi_threads, opt_max_memory))
 	{
 		return 1;
 	}
 
-	int chan;
-	for (chan= 0; chan < num_sdi_threads; chan++)
+    for (chan = 0; chan < num_sdi_threads; chan++)
 	{
 		int err;
 		logTF("chan %d: starting capture thread\n", chan);
@@ -1865,6 +1910,12 @@ int main (int argc, char ** argv)
 		usleep(100 * 1000);
 	}
 	pthread_join(sdi_thread[0], NULL);
+
+	// Cleanup
+    for (chan = 0; chan < MAX_CHANNELS; chan++)
+    {
+        free (video_work_area[chan]);
+    }
 
 	return 0; // silence gcc warning
 }
