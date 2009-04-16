@@ -26,7 +26,7 @@ static void read_sample(const char *input_name, size_t frame_size, uint8_t *fram
 
 	size_t r;
 	if ((r = fread(frame, 1, frame_size, fp_input)) != frame_size) {
-		fprintf(stderr, "Expected %u, read %u\n", frame_size, r);
+		fprintf(stderr, "Expected %zu, read %zu\n", frame_size, r);
 		perror("fread");
 		exit(1);
 	}

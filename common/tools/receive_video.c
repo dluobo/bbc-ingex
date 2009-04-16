@@ -26,6 +26,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #include "multicast_video.h"
 #include <audio_utils.h>
@@ -131,7 +133,7 @@ extern int main(int argc, char *argv[])
 		while (raw_read) {
 			uint8_t buf[5000];
 			ssize_t bytes_read = recv(fd, buf, PACKET_SIZE, 0);
-			printf("\rRead %d bytes", bytes_read);
+			printf("\rRead %zd bytes", bytes_read);
 
 			if (fwrite(buf, bytes_read, 1, fp_video) != 1) {
 				perror("fwrite");
@@ -221,9 +223,9 @@ extern int main(int argc, char *argv[])
 
 		if (verbose) {
 			if (verbose > 1)
-				printf("packet=%5d frame_number=%d packets_read=%d video_file_size=%llu\n", packet_count, header.frame_number, packets_read, video_file_size);
+				printf("packet=%5d frame_number=%d packets_read=%d video_file_size=%"PRIu64"\n", packet_count, header.frame_number, packets_read, video_file_size);
 			else {
-				printf("\rpacket=%5d frame_number=%d packets_read=%d video_file_size=%llu", packet_count, header.frame_number, packets_read, video_file_size);
+				printf("\rpacket=%5d frame_number=%d packets_read=%d video_file_size=%"PRIu64"", packet_count, header.frame_number, packets_read, video_file_size);
 				fflush(stdout);
 			}
 		}

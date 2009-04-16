@@ -1,4 +1,4 @@
-// $Id: disk_rw_benchmark.c,v 1.2 2009/01/29 06:58:46 stuart_hc Exp $
+// $Id: disk_rw_benchmark.c,v 1.3 2009/04/16 17:45:48 john_f Exp $
 
 // fseeko() requires _LARGEFILE_SOURCE defined before including stdio.h
 #if ! defined(_LARGEFILE_SOURCE) && ! defined(_FILE_OFFSET_BITS)
@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <string.h>
 #include <sys/time.h>
@@ -50,7 +51,7 @@ static void handle_terminate_signals(int sig)
 	double diff = tv_diff_now_microsecs(&start_time);
 
 	printf("\n");
-	printf("total time = %f sec, total bytes = %llu, rate = %f\n", diff / 1000000.0, total, total / diff);
+	printf("total time = %f sec, total bytes = %"PRIu64", rate = %f\n", diff / 1000000.0, total, total / diff);
    	exit(0);
 }
 
@@ -158,7 +159,7 @@ int main(int argc, char *argv[])
 			double diff_last = tv_diff_microsecs(&last_time, &now_time);
 			double rate_inst = written / diff_last * 1000000.0 / 1000000.0;	// megabytes per sec
 
-			printf("written %12llu, av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_written, rate, rate_inst);
+			printf("written %12"PRIu64", av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_written, rate, rate_inst);
 			last_time = now_time;
 
 			if (rate_limit) {		// throttle write rate
@@ -206,7 +207,7 @@ int main(int argc, char *argv[])
 			double diff_last = tv_diff_microsecs(&last_time, &now_time);
 			double rate_inst = read / diff_last * 1000000.0 / 1000000.0;	// megabytes per sec
 
-			printf("read %12llu, av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_read, rate, rate_inst);
+			printf("read %12"PRIu64", av rate=%10.3f, inst rate=%10.3f MByte/s\n", total_read, rate, rate_inst);
 			last_time = now_time;
 
 			if (rate_limit) {		// throttle reading rate

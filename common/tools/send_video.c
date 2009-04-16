@@ -24,6 +24,8 @@
 #include <stdlib.h>
 #include <unistd.h>			/* for getopt */
 #include <sys/time.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #include "multicast_video.h"
 #include "YUV_scale_pic.h"
@@ -317,7 +319,7 @@ extern int main(int argc, char *argv[])
 		{
 			double rate = total_written / diff;				// megabytes per sec
 
-			printf("\rtotal_written = %12llu, av rate=%10.3fMbps (%10.3fMBps)", total_written, rate * 8, rate);
+			printf("\rtotal_written = %12"PRIu64", av rate=%10.3fMbps (%10.3fMBps)", total_written, rate * 8, rate);
 			fflush(stdout);
 		}
 
