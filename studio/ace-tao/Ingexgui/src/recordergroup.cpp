@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.6 2009/01/29 07:36:58 stuart_hc Exp $       *
+ *   $Id: recordergroup.cpp,v 1.7 2009/04/16 17:56:11 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -447,7 +447,8 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 				frameEvent.SetClientData(recorderData);
 				AddPendingEvent(frameEvent);
 			}
-			else if (event.GetName() == mTimecodeRecorder && event.TimecodeStateHasChanged()) { //change to status of current display recorder
+//			else if (event.GetName() == mTimecodeRecorder && event.TimecodeStateHasChanged()) { //change to status of current display recorder
+			else if (event.GetName() == mTimecodeRecorder) { //current display recorder
 				if (Controller::ABSENT == event.GetTimecodeState()) {
 					//display no source
 					SetTimecodeRecorder();

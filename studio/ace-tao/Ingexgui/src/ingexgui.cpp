@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.12 2009/02/27 12:19:16 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.13 2009/04/16 17:56:11 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -351,7 +351,9 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 		wxXmlNode * rootNode = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("Ingexgui"));
 		mSavedState.SetRoot(rootNode); //dialogue will detect this as updated
 	}
-	mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, argc, argv, &mSavedState);
+	wxSize size = wxDefaultSize;
+	size.SetHeight(80); //bodge to show at least three lines
+	mRecorderGroup = new RecorderGroupCtrl(this, wxID_ANY, wxDefaultPosition, size, argc, argv, &mSavedState);
 	//window
 	wxBoxSizer * sizer1V = new wxBoxSizer(wxVERTICAL);
 	SetSizer(sizer1V);

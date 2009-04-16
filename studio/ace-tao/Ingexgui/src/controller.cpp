@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.8 2009/03/19 17:50:29 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.9 2009/04/16 17:56:11 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -238,6 +238,10 @@ void Controller::OnThreadEvent(ControllerThreadEvent & event)
 		}
 		else if (FAILURE == event.GetResult()) {
 			if (event.GetCommand() != mPrevCommand) {
+				mMutex.Lock();
+				mStartTimecode.undefined = true; //in case we're recording and the start time requested is no longer in the buffer
+				mStopTimecode.undefined = true; //in case we're stopping and the stop time requested is no longer in the buffer
+				mMutex.Unlock();
 				//let the parent know
 //std::cerr << "command failure notification" << std::endl;
 				GetNextHandler()->AddPendingEvent(event);
