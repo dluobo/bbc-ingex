@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.7 2009/03/19 18:02:42 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.8 2009/04/16 18:02:09 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -173,8 +173,8 @@ extern int main(int argc, char *argv[])
 	const uint8_t	*const *ring = nc.ring;
 	const NexusBufCtl *pc = &pctl->channel[channelnum];
 	int last_saved = -1;
-	int width = pctl->width;
-	int height = pctl->height;
+	int width = pctl->sec_width;
+	int height = pctl->sec_height;
 
 	// get the alternative video frame (4:2:0 or 4:2:2 planar)
 	int video_offset = pctl->sec_video_offset;
