@@ -1,5 +1,5 @@
 /*
- * $Id: ArchiveMXFReader.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: ArchiveMXFReader.cpp,v 1.2 2009/04/16 17:52:48 john_f Exp $
  *
  * 
  *
@@ -21,6 +21,7 @@
  */
  
 #include "ArchiveMXFReader.h"
+#include <memory>
 
 
 using namespace std;

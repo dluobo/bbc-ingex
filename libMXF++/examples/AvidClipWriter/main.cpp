@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: main.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
  *
  * 
  *
@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 
 #include "AvidClipWriter.h"
 

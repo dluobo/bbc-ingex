@@ -1,5 +1,5 @@
 /*
- * $Id: AvidClipWriter.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: AvidClipWriter.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
  *
  * 
  *
@@ -26,6 +26,8 @@
 #include "AvidClipWriter.h"
 #include <mxf/mxf_avid.h>
 #include <mxf/mxf_logging.h>
+#include <cstring>
+#include <memory>
 
 
 using namespace std;

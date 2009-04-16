@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $
+ * $Id: test.cpp,v 1.2 2009/04/16 17:52:50 john_f Exp $
  *
  * Test libMXF++
  *
@@ -21,6 +21,7 @@
  */
  
 #include <libMXF++/MXF.h>
+#include <memory>
 
 
 using namespace std;
