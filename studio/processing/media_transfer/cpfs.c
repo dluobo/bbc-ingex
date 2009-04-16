@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: cpfs.c,v 1.6 2009/02/09 19:34:04 john_f Exp $                  *
+ *   $Id: cpfs.c,v 1.7 2009/04/16 18:19:50 john_f Exp $                  *
  *                                                                         *
  *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -47,7 +47,8 @@ void usage_exit(const char *);
 int slow;
 unsigned long slow_rate;
 int new_mode;
-int signalled = 0;
+int signalled = 0; /* used to flag when a signal has been received */
+int alreadyPrinted = 0; /* prevents it leaving an "Opening destination file..." message behind if signalled soon after starting */
 unsigned long long total_written, written_since_sleep, written_this_mode, written_since_display = 0;
 struct stat src_st;
 struct timeval start_time, sleep_time, mode_change_time, display_time;
@@ -164,7 +165,9 @@ void update(const int nospeed) {
 		signalled = 0;
 		if (new_mode != slow) {
 			slow = new_mode;
-			printf("\n"); /* to preserve the previous mode's report */
+			if (alreadyPrinted) {
+				printf("\n"); /* to preserve the previous mode's report */
+			}
 			gettimeofday(&mode_change_time, NULL);
 			written_this_mode = 0;
 			/* start measuring for bandwidth limit */
@@ -201,6 +204,7 @@ void update(const int nospeed) {
 	fflush(stdout);
 	display_time = now;
 	written_since_display = 0;
+	alreadyPrinted = 1;
 }
 
 void handler(const int signum) {
