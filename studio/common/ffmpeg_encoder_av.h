@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.h,v 1.3 2009/03/26 18:50:09 john_f Exp $
+ * $Id: ffmpeg_encoder_av.h,v 1.4 2009/04/16 18:00:17 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -47,7 +47,8 @@ typedef enum {
 * Return           : Pointer to ffmpeg_encoder_av_t object if successful
 *                    NULL if a problem occurred
 */
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads);
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads,
+                                                     int num_audio_streams, int num_audio_channels_per_stream);
 
 /*
 * ffmpeg_encoder_av_encode : Encodes the input video and audio frames to the format
@@ -58,16 +59,16 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 * Return           : 0 if operation is successful
 *                  : -1 if operation failed
 */
-extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t * in_enc, uint8_t * p_video, int16_t * p_audio);
+extern int ffmpeg_encoder_av_encode_audio (ffmpeg_encoder_av_t * in_enc, int stream_i, int num_samples, short * p_audio);
+extern int ffmpeg_encoder_av_encode_video (ffmpeg_encoder_av_t * in_enc, uint8_t * p_video);
 
 /*
-* dvd_encoder_close : Releases resources allocated by the dvd_encoder_init
-*                   : function
-* Input            : dvd  - dvd_encoder_t object returned by dvd_encoder_init
+* ffmpeg_encoder_av_close : Releases resources allocated by the ffmpeg_encoder_av_init function
+* Input            : in_enc  - ffmpeg_encoder_av_t object returned by ffmpeg_encoder_av_init
 * Return           : 0 if operation is successful
 *                  : -1 if operation failed
 */
-extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_dvd);
+extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc);
 
 #ifdef __cplusplus
 }

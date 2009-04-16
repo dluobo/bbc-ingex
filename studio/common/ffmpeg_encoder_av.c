@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.6 2009/03/26 18:50:09 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.7 2009/04/16 18:00:17 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -41,26 +41,47 @@ This file is based on ffmpeg/output_example.c from the ffmpeg source tree.
 
 #include "ffmpeg_encoder_av.h"
 
-#define MPA_FRAME_SIZE 1152 // taken from ffmpeg's private mpegaudio.h
+#define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
+#define PAL_VIDEO_FRAME_AUDIO_SIZE  1920
+#define MAX_AUDIO_STREAMS 8
 
-
-typedef struct 
+typedef struct
 {
-    AVFormatContext * oc; ///< output format context
-    AVStream * audio_st; ///< audio stream
-    int audio_enc_samples_per_frame;
-    int16_t * audio_inbuf;
+    AVStream * audio_st;
+    int num_audio_channels;
+    int audio_samples_per_input_frame;
+    int audio_samples_per_output_frame;
+    short * audio_inbuf;
     int audio_inbuf_size;
     int audio_inbuf_offset;
     uint8_t * audio_outbuf;
     int audio_outbuf_size;
+} audio_encoder_t;
+
+/*
+Note that avcodec_encode_audio wants a short * for input audio samples.
+Need to check what is really happening regarding input sample size and
+whether we rely on sizeof(short) being 2.
+*/
+
+
+typedef struct 
+{
+    // output format context
+    AVFormatContext * oc;
+
+    // video
     AVStream * video_st; ///< video stream
     AVFrame * inputFrame;
     uint8_t * video_outbuf;
     int video_outbuf_size;
     int64_t video_pts;
 
-    // following needed for input scaling
+    // audio
+    int num_audio_streams;
+    audio_encoder_t * audio_encoder[MAX_AUDIO_STREAMS];
+
+    // following needed for video scaling
     AVPicture * tmpFrame;
     uint8_t * inputBuffer;
     int input_width;
@@ -109,14 +130,6 @@ static int init_video_dvd(internal_ffmpeg_encoder_t * enc)
            this doesnt happen with normal video, it just happens here as the 
            motion of the chroma plane doesnt match the luma plane */
         codec_context->mb_decision = 2;
-    }
-
-    // some formats want stream headers to be seperate
-    if(!strcmp(enc->oc->oformat->name, "mp4")
-        || !strcmp(enc->oc->oformat->name, "mov")
-        || !strcmp(enc->oc->oformat->name, "3gp"))
-    {
-        codec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
 
     /* find the video encoder */
@@ -316,22 +329,10 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_reso
     return 0;
 }
 
-static void close_video(internal_ffmpeg_encoder_t * enc)
+/* initialise audio streams for PCM encoding */
+static int init_audio_pcm(audio_encoder_t * aenc)
 {
-    AVStream * st = enc->video_st;
-
-    avcodec_close(st->codec);
-
-    av_free(enc->inputFrame);
-    av_free(enc->video_outbuf);
-    av_free(enc->inputBuffer);
-    av_free(enc->tmpFrame);
-}
-
-/* initialise audio stream for PCM encoding */
-static int init_audio_pcm(internal_ffmpeg_encoder_t * enc)
-{
-    AVCodecContext * codec_context = enc->audio_st->codec;
+    AVCodecContext * codec_context = aenc->audio_st->codec;
 
     /* 16-bit signed big-endian */
     codec_context->codec_id = CODEC_ID_PCM_S16BE;
@@ -348,7 +349,7 @@ static int init_audio_pcm(internal_ffmpeg_encoder_t * enc)
 
     /* coding parameters */
     codec_context->sample_rate = 48000;
-    codec_context->channels = 2;
+    codec_context->channels = aenc->num_audio_channels;
 
     /* open it */
     if (avcodec_open(codec_context, codec) < 0)
@@ -357,21 +358,22 @@ static int init_audio_pcm(internal_ffmpeg_encoder_t * enc)
         return -1;
     }
 
-    /* input and output buffers */
-    enc->audio_enc_samples_per_frame = 1920;
-    enc->audio_inbuf_size = codec_context->channels * enc->audio_enc_samples_per_frame * sizeof(int16_t);
-    enc->audio_inbuf = malloc(enc->audio_inbuf_size);
+    /* Set up audio buffer parameters */
+    int nch = aenc->num_audio_channels;
+    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
+    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short);
 
-    enc->audio_outbuf_size =  enc->audio_inbuf_size;
-    enc->audio_outbuf = malloc(enc->audio_outbuf_size);
+    aenc->audio_samples_per_output_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
+    /* coded frame size */
+    aenc->audio_outbuf_size = aenc->audio_samples_per_output_frame * nch * sizeof(short);
 
     return 0;
 }
 
 /* initialise audio stream for DVD encoding */
-static int init_audio_dvd(internal_ffmpeg_encoder_t * enc)
+static int init_audio_dvd(audio_encoder_t * aenc)
 {
-    AVCodecContext * codec_context = enc->audio_st->codec;
+    AVCodecContext * codec_context = aenc->audio_st->codec;
 
     /* mp2 is the default audio codec for DVD format */
     codec_context->codec_id = CODEC_ID_MP2;
@@ -398,22 +400,24 @@ static int init_audio_dvd(internal_ffmpeg_encoder_t * enc)
         return -1;
     }
 
-    /* input and output buffers */
-    enc->audio_enc_samples_per_frame = MPA_FRAME_SIZE;
+    /* Set up audio buffer parameters */
+    int nch = aenc->num_audio_channels;
+    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
+    /* We have to do some buffering of input, hence the * 2 on the end */
+    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short) * 2;
 
-    enc->audio_inbuf_size = 20000;
-    enc->audio_inbuf = malloc(enc->audio_inbuf_size);
-
-    enc->audio_outbuf_size = 15000;
-    enc->audio_outbuf = malloc(enc->audio_outbuf_size);
+    /* samples per coded frame */
+    aenc->audio_samples_per_output_frame = MPA_FRAME_SIZE;
+    /* coded frame size */
+    aenc->audio_outbuf_size = 960; // enough for 320 kbit/s
 
     return 0;
 }
 
 /* initialise audio stream for MP3 encoding */
-static int init_audio_mp3(internal_ffmpeg_encoder_t * enc)
+static int init_audio_mp3(audio_encoder_t * aenc)
 {
-    AVCodecContext * codec_context = enc->audio_st->codec;
+    AVCodecContext * codec_context = aenc->audio_st->codec;
 
     /* We use mp3 codec rather than default */
     const int codec_id = CODEC_ID_MP3;
@@ -443,52 +447,50 @@ static int init_audio_mp3(internal_ffmpeg_encoder_t * enc)
         return -1;
     }
 
-    /* input and output buffers */
-    enc->audio_enc_samples_per_frame = MPA_FRAME_SIZE;
+    /* Set up audio buffer parameters */
+    int nch = aenc->num_audio_channels;
+    aenc->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
+    /* We have to do some buffering of input, hence the * 2 on the end */
+    aenc->audio_inbuf_size = aenc->audio_samples_per_input_frame * nch * sizeof(short) * 2;
 
-    enc->audio_inbuf_size = 20000;
-    enc->audio_inbuf = malloc(enc->audio_inbuf_size);
-
-    enc->audio_outbuf_size = 15000;
-    enc->audio_outbuf = malloc(enc->audio_outbuf_size);
+    /* samples per coded frame */
+    aenc->audio_samples_per_output_frame = MPA_FRAME_SIZE;
+    /* coded frame size */
+    aenc->audio_outbuf_size = 960; // enough for 320 kbit/s
 
     return 0;
-}
-
-static void close_audio(internal_ffmpeg_encoder_t * enc)
-{
-    AVStream *st = enc->audio_st;
-    avcodec_close(st->codec);
-    
-    av_free(enc->audio_outbuf);
-    av_free(enc->audio_inbuf);
 }
 
 static void cleanup (internal_ffmpeg_encoder_t * enc)
 {
     if (enc)
     {
-        if (enc->video_st)
-        {
-            close_video(enc);
-        }
-        if (enc->audio_st)
-        {
-            close_audio(enc);
-        }
-
         if (enc->oc)
         {
+            // free the streams
             unsigned int i;
-            //free the streams
-            for (i = 0; i < enc->oc->nb_streams; i++)
+            for (i = 0; i < enc->oc->nb_streams; ++i)
             {
                 av_freep(&enc->oc->streams[i]);
             }
             av_free(enc->oc);
         }
 
-        av_free (enc);
+        av_free(enc->inputFrame);
+        av_free(enc->video_outbuf);
+        av_free(enc->inputBuffer);
+        av_free(enc->tmpFrame);
+
+        int i;
+        for (i = 0; i < enc->num_audio_streams; ++i)
+        {
+            audio_encoder_t * aenc = enc->audio_encoder[i];
+            av_free(aenc->audio_outbuf);
+            av_free(aenc->audio_inbuf);
+            av_free(aenc);
+        }
+
+        av_free(enc);
         enc = NULL;
     }
 }
@@ -582,22 +584,23 @@ static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
     }
 }
 
-static int write_audio_frame(internal_ffmpeg_encoder_t *enc, int16_t *p_audio)
+static int write_audio_frame(internal_ffmpeg_encoder_t * enc, int stream_i, short * p_audio)
 {
     AVFormatContext * oc = enc->oc;
-    AVStream * st = enc->audio_st;
-    AVCodecContext * c;
+    audio_encoder_t * aenc = enc->audio_encoder[stream_i];
+    AVStream * st = aenc->audio_st;
+    AVCodecContext * c = st->codec;
+
     AVPacket pkt;
     av_init_packet(&pkt);
-    
-    c = st->codec;
 
-    pkt.size = avcodec_encode_audio(c, enc->audio_outbuf, enc->audio_outbuf_size, p_audio);
+    //fprintf(stderr, "Writing audio frame, to audio stream %d, outbuf_size = %d\n", stream_i, aenc->audio_outbuf_size);
+    pkt.size = avcodec_encode_audio(c, aenc->audio_outbuf, aenc->audio_outbuf_size, p_audio);
 
     pkt.pts = av_rescale_q(c->coded_frame->pts, c->time_base, st->time_base);
     pkt.flags |= PKT_FLAG_KEY;
     pkt.stream_index = st->index;
-    pkt.data = enc->audio_outbuf;
+    pkt.data = aenc->audio_outbuf;
 
     /* write the compressed frame to the media file */
     if (av_write_frame(oc, &pkt) != 0)
@@ -605,12 +608,14 @@ static int write_audio_frame(internal_ffmpeg_encoder_t *enc, int16_t *p_audio)
         fprintf(stderr, "Error while writing audio frame\n");
         return -1;
     }
+
     return 0;
 }
 
 
 
-extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads)
+extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmpeg_encoder_av_resolution_t res, int wide_aspect, int64_t start_tc, int num_threads,
+                                                     int num_audio_streams, int num_audio_channels_per_stream)
 {
     internal_ffmpeg_encoder_t * enc;
     AVOutputFormat * fmt;
@@ -650,6 +655,13 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         return NULL;
     }
 
+    /* Check number of audio tracks */
+    if (num_audio_streams > MAX_AUDIO_STREAMS)
+    {
+        fprintf (stderr, "ffmpeg_encoder_av_init: too many audio tracks (%d)\n", num_audio_streams);
+        return NULL;
+    }
+
     /* Allocate encoder object and set all members to zero */
     enc = av_mallocz (sizeof(internal_ffmpeg_encoder_t));
     if (!enc)
@@ -658,8 +670,19 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         return NULL;
     }
 
+    /* Allocate audio encoder objects and set all members to zero */
+    int i;
+    for (i = 0; i < num_audio_streams; ++i)
+    {
+        enc->audio_encoder[i] = av_mallocz (sizeof(audio_encoder_t));
+    }
+
+
+    /* Set audio track info */
+    enc->num_audio_streams = num_audio_streams;
+
     /* Allocate the output media context */
-    enc->oc = av_alloc_format_context();
+    enc->oc = avformat_alloc_context();
     if (!enc->oc)
     {
         cleanup(enc);
@@ -668,10 +691,7 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     }
     enc->oc->oformat = fmt;
 
-    /* Set output filename */
-    snprintf (enc->oc->filename, sizeof(enc->oc->filename), "%s", filename);
-
-    /* Set parameters */
+    /* Set parameters for output media context*/
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DVD:
@@ -684,22 +704,6 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         break;
     }
 
-    
-    /* Add the audio and videostreams */
-    enc->video_st = av_new_stream(enc->oc, 0);
-    if (!enc->video_st)
-    {
-        fprintf(stderr, "Could not alloc video stream\n");
-        cleanup(enc);
-        return NULL;
-    }
-    enc->audio_st = av_new_stream(enc->oc, 1);
-    if (!enc->audio_st)
-    {
-        fprintf(stderr, "Could not alloc audio stream\n");
-        cleanup(enc);
-        return NULL;
-    }
 
     /* Set aspect ratio for video stream */
     AVRational sar;
@@ -728,6 +732,16 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     sar.num = 1;
     sar.den = 1;
 #endif
+
+    /* Add the video stream */
+    enc->video_st = av_new_stream(enc->oc, 0);
+    if (!enc->video_st)
+    {
+        fprintf(stderr, "Could not alloc video stream\n");
+        cleanup(enc);
+        return NULL;
+    }
+
     enc->video_st->sample_aspect_ratio = sar;
     enc->video_st->codec->sample_aspect_ratio = sar;
 
@@ -738,25 +752,65 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
     enc->video_st->codec->time_base.num = 1;
     enc->video_st->codec->time_base.den = 25;
 
-    /* Initialise the codecs */
+    /* Initialise video codec */
     switch (res)
     {
     case FF_ENCODER_RESOLUTION_DVD:
         init_video_dvd(enc);
-        init_audio_dvd(enc);
         break;
     case FF_ENCODER_RESOLUTION_MPEG4_MOV:
         init_video_mpeg4(enc);
-        init_audio_mp3(enc);
         break;
     case FF_ENCODER_RESOLUTION_DV25_MOV:
     case FF_ENCODER_RESOLUTION_DV50_MOV:
     case FF_ENCODER_RESOLUTION_DV100_MOV:
         init_video_dv(enc, res, start_tc);
-        init_audio_pcm(enc);
         break;
     default:
         break;
+    }
+    
+    /* Add the audio streams */
+    for (i = 0; i < enc->num_audio_streams; ++i)
+    {
+        audio_encoder_t * aenc = enc->audio_encoder[i];
+
+        aenc->audio_st = av_new_stream(enc->oc, 1 + i);
+        if (!aenc->audio_st)
+        {
+            fprintf(stderr, "Could not alloc audio stream[%d]\n", i);
+            cleanup(enc);
+            return NULL;
+        }
+    }
+
+    /* Initialise audio codecs */
+    for (i = 0; i < enc->num_audio_streams; ++i)
+    {
+        audio_encoder_t * aenc = enc->audio_encoder[i];
+        aenc->num_audio_channels = num_audio_channels_per_stream;
+        switch (res)
+        {
+        case FF_ENCODER_RESOLUTION_DVD:
+            init_audio_dvd(aenc);
+            break;
+        case FF_ENCODER_RESOLUTION_MPEG4_MOV:
+            init_audio_mp3(aenc);
+            break;
+        case FF_ENCODER_RESOLUTION_DV25_MOV:
+        case FF_ENCODER_RESOLUTION_DV50_MOV:
+        case FF_ENCODER_RESOLUTION_DV100_MOV:
+            init_audio_pcm(aenc);
+            break;
+        default:
+            break;
+        }
+
+        /* allocate audio input buffer */
+        aenc->audio_inbuf = av_malloc(aenc->audio_inbuf_size);
+
+        /* allocate audio (coded) output buffer */
+        aenc->audio_outbuf = av_malloc(aenc->audio_outbuf_size);
     }
 
     // Setup ffmpeg threads if specified
@@ -783,6 +837,20 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         }
     }
 
+    // Set separate stream header if format requires it.
+    if (!strcmp(enc->oc->oformat->name, "mp4")
+        || !strcmp(enc->oc->oformat->name, "mov")
+        || !strcmp(enc->oc->oformat->name, "3gp"))
+    {
+        vcodec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+        for (i = 0; i < enc->num_audio_streams; ++i)
+        {
+            audio_encoder_t * aenc = enc->audio_encoder[i];
+            AVCodecContext * acodec_context = aenc->audio_st->codec;
+            acodec_context->flags |= CODEC_FLAG_GLOBAL_HEADER;
+        }
+    }
+
     /*
     * Set the output parameters - must be done even if no parameters 
     */
@@ -793,9 +861,10 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         return NULL;
     }
 
-    /*
-    *   open the output file
-    */
+    /* Set output filename */
+    snprintf (enc->oc->filename, sizeof(enc->oc->filename), "%s", filename);
+
+    /* Open the output file */
     if (!(fmt->flags & AVFMT_NOFILE))
     {
         if (url_fopen(&enc->oc->pb, enc->oc->filename, URL_WRONLY) < 0)
@@ -806,15 +875,13 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
         }
     }
 
-    /*
-    * write stream header if any 
-    */
+    /* Write stream header if any */
     av_write_header(enc->oc);
 
     return (ffmpeg_encoder_av_t *)enc;
 }
 
-extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t * in_enc, uint8_t * p_video, int16_t * p_audio)
+extern int ffmpeg_encoder_av_encode_video (ffmpeg_encoder_av_t * in_enc, uint8_t * p_video)
 {
     internal_ffmpeg_encoder_t * enc = (internal_ffmpeg_encoder_t *)in_enc;
     if (!enc)
@@ -828,27 +895,44 @@ extern int ffmpeg_encoder_av_encode (ffmpeg_encoder_av_t * in_enc, uint8_t * p_v
         return -1;
     }
 
+    return 0;
+}
+
+extern int ffmpeg_encoder_av_encode_audio (ffmpeg_encoder_av_t * in_enc, int stream_i, int num_samples, short * p_audio)
+{
+    internal_ffmpeg_encoder_t * enc = (internal_ffmpeg_encoder_t *)in_enc;
+    if (!enc)
+    {
+        return -1;
+    }
+
+    audio_encoder_t * aenc = enc->audio_encoder[stream_i];
+    int nch = aenc->num_audio_channels;
+
     /* encode and write audio */
     if (p_audio)
     {
         /*
-        Audio comes in in video frames (1920 samples) but may be encoded
+        Audio comes in in video frames (num_samples e.g. 1920) but may be encoded
         as MPEG frames (1152 samples) so we need to buffer.
         NB. audio_inbuf_offset is in terms of 16-bit samples, hence the
         rather confusing pointer arithmetic.
         */
-        memcpy (enc->audio_inbuf + enc->audio_inbuf_offset, p_audio, 1920*2*2);
-        enc->audio_inbuf_offset += (1920*2);
-        while (enc->audio_inbuf_offset >= (enc->audio_enc_samples_per_frame * 2))
+        //fprintf (stderr, "audio_inbuf_offset = %d, num_samples = %d, num_channels = %d\n", aenc->audio_inbuf_offset, num_samples, nch);
+        memcpy (aenc->audio_inbuf + aenc->audio_inbuf_offset, p_audio, num_samples * 2 * nch);
+        aenc->audio_inbuf_offset += (num_samples * nch);
+        int diff;
+        while ((diff = aenc->audio_inbuf_offset - (aenc->audio_samples_per_output_frame * nch)) >= 0)
         {
-            if (write_audio_frame (enc, enc->audio_inbuf) == -1)
+            if (write_audio_frame (enc, stream_i, aenc->audio_inbuf) == -1)
             {
                 return -1;
             }
-            enc->audio_inbuf_offset -= (enc->audio_enc_samples_per_frame * 2);
-            memmove (enc->audio_inbuf, enc->audio_inbuf+(enc->audio_enc_samples_per_frame * 2), enc->audio_inbuf_offset*2);
+            memmove (aenc->audio_inbuf, aenc->audio_inbuf + (aenc->audio_samples_per_output_frame * nch), diff * 2);
+            aenc->audio_inbuf_offset -= (aenc->audio_samples_per_output_frame * nch);
         }
     }
+
     return 0;
 }
 
@@ -862,13 +946,18 @@ extern int ffmpeg_encoder_av_close (ffmpeg_encoder_av_t * in_enc)
 
     if (enc->video_st)
     {
-        close_video(enc);
+        avcodec_close(enc->video_st->codec);
         enc->video_st = NULL;
     }
-    if (enc->audio_st)
+    int i;
+    for (i = 0; i < enc->num_audio_streams; ++i)
     {
-        close_audio(enc);
-        enc->audio_st = NULL;
+        audio_encoder_t * aenc = enc->audio_encoder[i];
+        if (aenc->audio_st)
+        {
+            avcodec_close(aenc->audio_st->codec);
+            aenc->audio_st = NULL;
+        }
     }
 
     /* write the trailer, if any */
