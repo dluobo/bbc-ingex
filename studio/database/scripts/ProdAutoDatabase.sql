@@ -875,6 +875,12 @@ INSERT INTO SourceConfigType (srt_identifier, srt_name) VALUES (1, 'Tape');
 INSERT INTO SourceConfigType (srt_identifier, srt_name) VALUES (2, 'LiveRecording');
 
 
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (1, 'Raw');
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (2, 'MXF');
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (3, 'MOV');
+INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (4, 'MPG');
+
+
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (1, 'Uncompressed UYVY');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (2, 'DV-25');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (3, 'DV-50');
@@ -934,10 +940,6 @@ INSERT INTO UserCommentColour (ucc_identifier, ucc_name) VALUES (8, 'Black');
 INSERT INTO RecordingLocation (rlc_identifier, rlc_name) VALUES (1, 'Unspecified');
 SELECT setval('rlc_id_seq', max(rlc_identifier)) FROM RecordingLocation;
 
-INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (1, 'Unspecified');
-INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (2, 'MXF');
-INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (3, 'MOV');
-SELECT setval('fft_id_seq', max(fft_identifier)) FROM FileFormat;
 
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.5 2009/03/19 18:07:17 john_f Exp $
+ * $Id: DatabaseEnums.h,v 1.6 2009/04/16 18:15:21 john_f Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -29,9 +29,10 @@
 #define PICTURE_DATA_DEFINITION             1
 #define SOUND_DATA_DEFINITION               2
 
-#define UNSPECIFIED_FILE_FORMAT_TYPE        1
+#define RAW_FILE_FORMAT_TYPE                1
 #define MXF_FILE_FORMAT_TYPE                2
 #define MOV_FILE_FORMAT_TYPE                3
+#define MPG_FILE_FORMAT_TYPE                4
 
 #define FILE_ESSENCE_DESC_TYPE              1
 #define TAPE_ESSENCE_DESC_TYPE              2
