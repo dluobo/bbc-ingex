@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.11 2009/03/25 14:03:20 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.12 2009/04/16 18:32:47 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -205,6 +205,11 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
+    ACE_UNUSED_ARG (pre_roll);
+    ACE_UNUSED_ARG (rec_enable);
+    ACE_UNUSED_ARG (project);
+    ACE_UNUSED_ARG (test_only);
+
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Start()\n"), mName.c_str()));
 
     //FileUtils::CreatePath(RECORD_DIR);
@@ -242,6 +247,11 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
+    ACE_UNUSED_ARG (mxf_stop_timecode);
+    ACE_UNUSED_ARG (mxf_post_roll);
+    ACE_UNUSED_ARG (description);
+    ACE_UNUSED_ARG (locators);
+
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Stop()\n"), mName.c_str()));
 
     StopSaving();
