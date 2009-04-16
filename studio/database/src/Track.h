@@ -1,5 +1,5 @@
 /*
- * $Id: Track.h,v 1.1 2007/09/11 14:08:40 stuart_hc Exp $
+ * $Id: Track.h,v 1.2 2009/04/16 18:16:25 john_f Exp $
  *
  * A Track in a Package
  *
@@ -50,6 +50,7 @@ public:
     uint32_t number;
     std::string name;
     Rational editRate;
+    int64_t origin;
     int dataDef;
     SourceClip* sourceClip;
 };

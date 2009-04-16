@@ -1,5 +1,5 @@
 /*
- * $Id: Track.cpp,v 1.1 2007/09/11 14:08:40 stuart_hc Exp $
+ * $Id: Track.cpp,v 1.2 2009/04/16 18:16:25 john_f Exp $
  *
  * A Track in a Package
  *
@@ -35,7 +35,7 @@ using namespace prodauto;
 
 
 Track::Track()
-: DatabaseObject(), id(0), number(0), editRate(g_palEditRate), dataDef(0), sourceClip(0)
+: DatabaseObject(), id(0), number(0), editRate(g_palEditRate), origin(0), dataDef(0), sourceClip(0)
 {}
 
 Track::~Track()
