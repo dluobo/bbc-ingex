@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.5 2009/02/26 19:22:30 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.6 2009/04/16 18:09:29 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -49,20 +49,6 @@ RecorderApp * RecorderApp::mInstance = 0;
 
 bool RecorderApp::Init(int argc, char * argv[])
 {
-#if 1
-// Set logging to file
-	Logfile::Init();
-	Logfile::AddPathComponent("var");
-	Logfile::AddPathComponent("tmp");
-	Logfile::AddPathComponent("IngexLogs");
-	std::string dir = "Recorder_";
-	dir += DateTime::DateTimeNoSeparators();
-
-    Logfile::AddPathComponent(dir.c_str());
-	Logfile::Open("Main", false);
-	ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Main thread\n\n") ));
-#endif
-
 // Create the servant object.
     mpServant = new IngexRecorderImpl();
 
@@ -82,7 +68,7 @@ bool RecorderApp::Init(int argc, char * argv[])
 
 // Now that InitOrb has consumed its arguments, check for
 // command line arguments.
-    std::string recorder_name;
+    std::string recorder_name = "Ingex"; // default name
     std::string db_username;
     std::string db_password;
     if (argc > 1)
@@ -118,6 +104,19 @@ bool RecorderApp::Init(int argc, char * argv[])
             break;
         }
     }
+
+// Set logging to file
+    Logfile::Init();
+    Logfile::AddPathComponent("var");
+    Logfile::AddPathComponent("tmp");
+    Logfile::AddPathComponent("IngexLogs");
+    std::string dir = recorder_name;
+    dir += '_';
+    dir += DateTime::DateTimeNoSeparators();
+
+    Logfile::AddPathComponent(dir.c_str());
+    Logfile::Open("Main", false);
+    ACE_DEBUG(( LM_NOTICE, ACE_TEXT("Main thread\n\n") ));
 
 // Set verbosity of debug messages
     Logfile::DebugLevel(debug_level);
