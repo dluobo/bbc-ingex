@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
-<!-- $Id: index.html,v 1.2 2009/02/02 05:07:26 stuart_hc Exp $ $Name:  $ -->
+<!-- $Id: index.html,v 1.3 2009/04/16 18:35:40 john_f Exp $ $Name:  $ -->
 <head>
 	<style type="text/css">
 	body { font-family: arial,helvetica,sans-serif; font-size: 1.0em; margin: 1; }
@@ -19,6 +19,7 @@
 <b>Ingex Studio</b> is a commodity PC based multi-camera capture, transcode and MXF wrapping system.  Studio SDI sources are first captured using SDI I/O cards in a commodity PC.  The uncompressed video is transcoded in real-time using software codecs and then wrapped in MXF and made available immediately for editing by MXF-based editors such as Avid Media Composer.
 
 <H2>Hardware requirements</H2>
+<p>
 The Ingex developers have used the <a href="http://www.dvs.de/english/products/oem/centaurus_II.html">DVS Centaurus II</a> SDI I/O boards to develop and test the Ingex software.  The SDI hardware capture software is isolated to the <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio/capture/dvs_sdi.c">dvs_sdi.c</a> source file so adding support for other capture hardware would require replacing this source file with one supporting the new hardware.  A simulated hardware capture program can be used to test Ingex Studio without requiring any special SDI capture hardware, by running the <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio/capture/testgen.c">testgen</a> process instead of <b>dvs_sdi</b>.
 <p>
 The PC hardware required depends greatly upon how many channels will be captured and how many software transcodes will be run together in real-time.  The following table can be used as a rough guide, but extensive testing will be necessary to prove real-time capability and overall reliability.
@@ -29,16 +30,23 @@ The PC hardware required depends greatly upon how many channels will be captured
 </table>
 
 <H2>System configuration</H2>
+<p>
 We have found <a href="http://en.wikipedia.org/wiki/XFS">xfs</a> to be the most efficient filesystem when writing multiple streams of video to disk.  A bechmarking tool is available <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/tools/disk_rw_benchmark.c">here</a> to help compare filesystems and disk configurations.
 
 <H2>Installing Ingex Studio</H2>
+<p>
 The <a href="../contact.html">authors</a> of Ingex develop and test using <a href="http://en.opensuse.org">openSUSE</a> 10.3 and later.
 
 Although we plan to provide updated RPMs for the various modules that make up
 the software, currently it needs to be built from the source code. This
 is available from <a href="http://ingex.cvs.sourceforge.net/ingex/ingex/studio">cvs</a> and the following dependencies are needed for the build.
 <ul>
-<li>libjpeg and FFmpeg codec libraries (use this <a href="ffmpeg-DVCPROHD-r11056.patch">patch</a> by Dan Maas to add DVCPRO-HD codec support to FFmpeg)
+<li>libjpeg and FFmpeg codec libraries.  For DVCPRO-HD codec support (1080i50, 1080i60 and 720p60) use Dan Maas's patch which is available as a patch against the following FFmpeg releases and snapshots:
+<ul>
+<li><a href="ffmpeg-DVCPROHD-0.5.patch">ffmpeg-DVCPROHD-0.5.patch</a> (2009-03-04)
+<li><a href="ffmpeg-DVCPROHD-r15593.patch">ffmpeg-DVCPROHD-r15593.patch</a> (2008-10-09)
+<li><a href="ffmpeg-DVCPROHD-r11056.patch">ffmpeg-DVCPROHD-r11056.patch</a> (2007-11-19)
+</ul>
 <li>ace-tao CORBA libraries
 <li>postgresql, libpqxx and libodbc++ for database access
 </ul>
