@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.6 2009/01/29 07:02:25 stuart_hc Exp $
+ * $Id: dvsoem_dummy.c,v 1.7 2009/04/16 17:44:52 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -254,6 +254,11 @@ int sv_query(sv_handle * sv, int cmd, int par, int *val)
 		*val = dvs->videomode;
 		return SV_OK;
 	}
+	else if (cmd == SV_QUERY_DMAALIGNMENT) {
+		*val = 16;
+		return SV_OK;
+	}
+	*val = SV_OK;
 	*val = SV_OK;
 	return SV_OK;
 }
