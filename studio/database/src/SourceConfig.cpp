@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: SourceConfig.cpp,v 1.2 2009/04/16 18:13:02 john_f Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -21,6 +21,7 @@
  */
  
 #include <cassert>
+#include <memory>
 
 #include "SourceConfig.h"
 #include "Database.h"

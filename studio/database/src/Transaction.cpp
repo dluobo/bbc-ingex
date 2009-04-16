@@ -1,5 +1,5 @@
 /*
- * $Id: Transaction.cpp,v 1.1 2007/09/11 14:08:40 stuart_hc Exp $
+ * $Id: Transaction.cpp,v 1.2 2009/04/16 18:13:02 john_f Exp $
  *
  * A database transaction
  *
@@ -21,6 +21,7 @@
  */
  
 #include <cassert>
+#include <cstring>
 
 #include <odbc++/connection.h>
 

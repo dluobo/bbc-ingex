@@ -1,5 +1,5 @@
 /*
- * $Id: Connection.h,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: Connection.h,v 1.2 2009/04/16 18:13:02 john_f Exp $
  *
  * Wraps a ODBC connection to the database
  *
@@ -24,6 +24,7 @@
 #define __PRODAUTO_CONNECTION_H__
 
 #include <vector>
+#include <cstring>
 
 #include <odbc++/connection.h>
 #include <odbc++/statement.h>
