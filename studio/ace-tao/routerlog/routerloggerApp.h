@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.h,v 1.6 2009/03/25 14:03:21 john_f Exp $
+ * $Id: routerloggerApp.h,v 1.7 2009/04/16 18:33:48 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -94,6 +94,9 @@ private:
 
     // Timecode reader
     TimecodeReader * mpTcReader;
+
+    // Timecode adjustment
+    int mTcAdjust;
 
     // CORBA servants
     std::vector<ServantInfo *> mServantInfo;

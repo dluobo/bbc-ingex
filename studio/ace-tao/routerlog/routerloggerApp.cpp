@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.8 2009/03/25 14:03:21 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.9 2009/04/16 18:33:48 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -33,6 +33,7 @@
 #include "quartzRouter.h"
 #include "EasyReader.h"
 #include "ClockReader.h"
+#include "Timecode.h"
 #include "DatabaseManager.h"
 #include "DBException.h"
 
@@ -44,13 +45,14 @@ const char * const USAGE =
     " [-n <name>] [-c <mc_clip_def_name>] [-f <db file>]"
     " [-d <name> -p <number>] [-m <MixerOut dest>]"
     " [-a <nameserver>]"
+    " [-o <timecode adjustment in frames>]"
     " <CORBA options>\n"
     "    -s  router on TCP socket, router port in format host:port\n"
     "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
     "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService";
 
-const char * const OPTS = "vr:st:un:c:f:a:d:p:m:";
+const char * const OPTS = "vr:st:un:c:f:a:d:p:m:o:";
 
 #ifdef WIN32
     const char * const DB_PATH = "C:\\TEMP\\RouterLogs\\";
@@ -64,7 +66,7 @@ routerloggerApp * routerloggerApp::mInstance = 0;
 
 // Constructor
 routerloggerApp::routerloggerApp()
-: mpRouter(0)
+: mpRouter(0), mTcAdjust(0)
 {
 }
 
@@ -209,6 +211,11 @@ bool routerloggerApp::Init(int argc, char * argv[])
         case 'h':
             ACE_ERROR_RETURN
                 ((LM_ERROR, ACE_TEXT (USAGE)), 0);  // help 
+            break;
+
+        case 'o':
+            // Timecode offset
+            mTcAdjust = ACE_OS::atoi( cmd_opts.opt_arg() );
             break;
 
         case ':':
@@ -420,7 +427,9 @@ void routerloggerApp::Clean()
 
 std::string routerloggerApp::Timecode()
 {
-    return mpTcReader->Timecode();
+    ::Timecode tc(mpTcReader->Timecode().c_str());
+    tc += mTcAdjust;
+    return std::string(tc.Text());
 }
 
 
