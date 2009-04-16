@@ -169,13 +169,13 @@ elsif (defined param("Send1") || defined param("Send2"))
     ($vres) = param("vres") =~ /(\d+)/;
     
     # project name
-    my ($proj) = param("projpop") =~ /(.*)/;	# TODO: no real untainting takes place here - global untainting function should be used to keep all user input consistent?
+    my ($proj) = param("projpop") =~ /(.*)/;
     if($proj ne "[ANY PROJECT]"){$projNameStr = $proj;}
 
     if (!$errorMessage)
     {
         my $exportDir = get_avid_aaf_export_dir(param("sendto"));
-        my ($filenamePrefix) = param("fprefix") =~ /^\s*(.*\S)\s*$/;
+       	my ($filenamePrefix) = param("fprefix") =~ /^\s*(.*\S)\s*$/;
         $filenamePrefix =~ s/\"/\\\"/g;
         
         my $prefix;
@@ -201,7 +201,7 @@ elsif (defined param("Send1") || defined param("Send2"))
 
 		my $fcpOptions ="";
 		if(defined param("software") && param("software") eq "fcp") {
-			$fcpOptions = "--xml";
+			$fcpOptions = "--fcp-xml";
 			my $fcploc = param("fcploc");
 			if(defined param("fcploc") && $fcploc ne "") {
 				$fcpOptions .= " --fcp-path ";
@@ -210,6 +210,8 @@ elsif (defined param("Send1") || defined param("Send2"))
 				$fcpOptions .= '"'.$fcpMaterialDir.'"';
 			}
 		}
+        
+        my $dbPassword = $ingexConfig{"db_password"} =~ /(.*)/;
 
         # TODO: wait for X seconds and then assume it has failed and then
         # return error to user
@@ -217,9 +219,10 @@ elsif (defined param("Send1") || defined param("Send2"))
         #TODO: handle error where no files are included
         
         my $resultsFilename = mktemp("/tmp/createaafresultsXXXXXX");
+
         my $cmd = join(" ",
-                "create_aaf", 
-				$fcpOptions,
+                "create_aaf",
+                $fcpOptions,
                 "-p \"$prefix\"", # AAF filename prefix
                 "-r $vres", # video resolution
                 "-o", # group only
@@ -227,17 +230,18 @@ elsif (defined param("Send1") || defined param("Send2"))
                 "-m", # include multi-camera clips
                 $includeDirectorsCut && $dcDb ? "--mc-cuts \"$dcDb\"" : "", # director's cut database
                 $addAudioEdits ? "--audio-edits" : "", # add audio edits to the audio tracks in the director's cut sequence
-                $fromCreationDateStr ? 
+                $fromCreationDateStr ?
                     "-c $fromCreationDateStr" : # from creation date (timestamp)
-                    join(" ", "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode 
+                    join(" ", "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode
                         $fromCreationDateStr ? "" : "-t $toDateStr" . "S" . "$toTimeStr"), # to date and start timecode
                 "-d $ingexConfig{'db_odbc_dsn'}", # database DSN
                 "-u $ingexConfig{'db_user'}", # database user
-		$projNameStr ? 
-                	"-n \'$projNameStr\'" : "", # project name
-                "--dbpassword $ingexConfig{'db_password'}", # database password
+                $projNameStr ?
+                        "-n \'$projNameStr\'" : "", # project name
+                "--dbpassword $dbPassword", # database password
                 ">$resultsFilename"
         );
+
 
 	system($cmd) == 0 or return_error_page("Failed to export Edit file. Using create_aaf in location: $ingexConfig{'create_aaf_dir'} and command $cmd");
         
