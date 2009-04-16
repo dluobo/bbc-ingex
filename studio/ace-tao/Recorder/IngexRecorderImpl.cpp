@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.12 2009/02/26 19:22:30 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.13 2009/04/16 18:10:15 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -560,6 +560,11 @@ char * IngexRecorderImpl::RecordingFormat (
         ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
         ts.rec = 0;
     }
+
+    // Debug to measure delay in responding to Stop command
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Stop() Returning %C at time           %C\n"),
+        "SUCCESS",
+        DateTime::Timecode().c_str()));
 
     // Return
     return ProdAuto::Recorder::SUCCESS;
