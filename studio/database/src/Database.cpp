@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.8 2009/04/16 18:14:20 john_f Exp $
+ * $Id: Database.cpp,v 1.9 2009/04/21 18:04:16 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -1841,8 +1841,8 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
             mcCut->editRate.numerator = result->getInt(6);
             mcCut->editRate.denominator = result->getInt(7);
 
-            if (mcCut->cutDate == startDate && mcCut->position < startTimecode
-                || mcCut->cutDate == endDate && mcCut->position >= endTimecode)
+            if ((mcCut->cutDate == startDate && mcCut->position < startTimecode)
+                || (mcCut->cutDate == endDate && mcCut->position >= endTimecode))
             {
                 // Reject cuts not in correct timecode range
                 delete mcCut;
