@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.8 2009/04/16 18:02:09 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.9 2009/04/24 16:08:31 john_f Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -173,15 +173,51 @@ extern int main(int argc, char *argv[])
 	const uint8_t	*const *ring = nc.ring;
 	const NexusBufCtl *pc = &pctl->channel[channelnum];
 	int last_saved = -1;
-	int width = pctl->sec_width;
-	int height = pctl->sec_height;
 
-	// get the alternative video frame (4:2:0 or 4:2:2 planar)
-	int video_offset = pctl->sec_video_offset;
+    // Choose primary or secondary capture buffer
+    int use_primary_video = 0;
 	int video_422yuv = 0;
-	if (pctl->sec_video_format == Format422PlanarYUV || pctl->sec_video_format == Format422PlanarYUVShifted)
-		video_422yuv = 1;
-	printf("Using secondary video buffer with format %s\n", nexus_capture_format_name(pctl->sec_video_format));
+
+    if (pctl->sec_video_format == Format420PlanarYUV || pctl->sec_video_format == Format420PlanarYUVShifted)
+    {
+        use_primary_video = 0;
+        video_422yuv = 0;
+    }
+    else if (pctl->sec_video_format == Format422PlanarYUV || pctl->sec_video_format == Format422PlanarYUVShifted)
+    {
+        use_primary_video = 0;
+        video_422yuv = 1;
+    }
+    else if ((pctl->pri_video_format == Format422PlanarYUV || pctl->pri_video_format == Format422PlanarYUVShifted)
+        && pctl->width == 720)
+    {
+        use_primary_video = 1;
+        video_422yuv = 1;
+    }
+    else
+    {
+        fprintf(stderr, "No suitable capture format!\n");
+        return 1;
+    }
+
+    int video_offset = 0;
+    int width = 0;
+    int height = 0;
+    if (use_primary_video)
+    {
+        video_offset = 0;
+        width = pctl->width;
+        height = pctl->height;
+        printf("Using primary video buffer with format %s\n", nexus_capture_format_name(pctl->pri_video_format));
+    }
+    else
+    {
+        video_offset = pctl->sec_video_offset;
+        width = pctl->sec_width;
+        height = pctl->sec_height;
+        printf("Using secondary video buffer with format %s\n", nexus_capture_format_name(pctl->sec_video_format));
+    }
+
 
 	uint8_t *scaled_frame = (uint8_t *)malloc(out_width * out_height * 3/2);
 
