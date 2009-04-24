@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.12 2009/04/16 17:41:37 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.13 2009/04/24 16:02:00 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -20,18 +20,13 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
+
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+
 #include <sstream>
-#include <errno.h>
-#include <list>
+#include <memory>
 
 #include "AAFFile.h"
 #include "FCPFile.h"
