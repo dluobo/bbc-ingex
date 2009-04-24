@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.19 2009/04/16 18:07:58 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.20 2009/04/24 16:06:46 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -646,7 +646,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // check track enables.
     prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
     mp->uid = prodauto::generateUMID();
-    mp->name = p_opt->file_ident;
+#if 0
+    mp->name = p_opt->file_ident; // long-winded name
+#elif 0
+    mp->name = rsp->name; // tape name
+#else
+    mp->name = sc->name; // source (e.g. camera) name
+#endif
     mp->creationDate = now;
     mp->projectName = project_name;
 
