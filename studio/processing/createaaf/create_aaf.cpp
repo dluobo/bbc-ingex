@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.13 2009/04/24 16:02:00 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.14 2009/05/01 13:34:06 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -33,6 +33,7 @@
 #include "CreateAAFException.h"
 #include "CutsDatabase.h"
 #include "ConfigReader.h"
+#include "package_utils.h"
 
 #include <Database.h>
 #include <MCClipDef.h>
@@ -53,6 +54,7 @@ static const char* g_databaseUserName = "bamzooki";
 static const char* g_databasePassword = "bamzooki";
 static const char* g_filenamePrefix = "ingex";
 static const char* g_resultsPrefix = "RESULTS:";
+
 
 // utility class to clean-up Package pointers
 class MaterialHolder
@@ -354,7 +356,64 @@ static void getDirectorsCutSources(MCClipDef* mcClipDef, MaterialPackageSet& mat
     
 }
 
-static vector<CutInfo> getDirectorsCutSequence(CutsDatabase* database, MCClipDef* mcClipDef, 
+// Get cuts from main database
+static vector<CutInfo> getDirectorsCuts(Database* database, MCClipDef* mcClipDef, 
+    Date startDate, int64_t startTimecode, Date endDate, int64_t endTimecode)
+{
+    vector<CutInfo> cuts;
+
+    // Find multi-cam track def we are interested in.
+    // We want the video track and assume it's the one with index == 1.
+    prodauto::MCTrackDef * mcTrackDef = 0;
+    if (mcClipDef)
+    {
+        mcTrackDef = mcClipDef->trackDefs[1];
+    }
+
+    // Load cuts
+    vector<MCCut *> mccuts = database->loadMultiCameraCuts(mcTrackDef, startDate, startTimecode, endDate, endTimecode);
+
+    // Translate from MCCut to CutInfo
+    for (vector<MCCut *>::const_iterator it = mccuts.begin(); mcTrackDef && it != mccuts.end(); ++it)
+    {
+        const MCCut * mc_cut = *it;
+        MCSelectorDef * mcSelector = mcTrackDef->selectorDefs[mc_cut->mcSelectorIndex];
+        SourceConfig * sc = 0;
+        if (mcSelector)
+        {
+            sc = mcSelector->sourceConfig;
+        }
+        if (sc)
+        {
+            // For compatibility with the corresponding method of
+            // CutsDatabase (database in file) class, we need an
+            // initial source selection at position zero.
+            if (cuts.empty() && mc_cut->position != startTimecode)
+            {
+                // We choose selector with lowest index
+                SourceConfig * sc_initial = 0;
+                sc_initial = mcTrackDef->selectorDefs.begin()->second->sourceConfig;
+                if (sc_initial)
+                {
+                    CutInfo cut;
+                    cut.position = 0;
+                    cut.source = sc_initial->name;
+                    cuts.push_back(cut);
+                }
+            }
+
+            CutInfo cut;
+            cut.position = mc_cut->position - startTimecode;
+            cut.source = sc->name;
+            cuts.push_back(cut);
+        }
+    }
+
+    return cuts;
+}
+
+// Get cuts from database file
+static vector<CutInfo> getDirectorsCutsFromFile(CutsDatabase* database, MCClipDef* mcClipDef, 
     MaterialPackageSet& materialPackages, PackageSet& packages,
     Timestamp creationTs, int64_t startTimecode)
 {
@@ -374,7 +433,6 @@ static vector<CutInfo> getDirectorsCutSequence(CutsDatabase* database, MCClipDef
 
     return database->getCuts(creationDate, startTimecode, sources, defaultSource);
 }
-
 
 
 
@@ -405,7 +463,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -c, --from-cd <date>T<time>    Includes clips created >= CreationDate of clip\n");
     fprintf(stderr, "  -w, --from-web                 Uses file material package database IDs- must pass webfile\n");    
     fprintf(stderr, "  --tag <name>=<value>           Includes clips with user comment tag <name> == <value>\n");
-    fprintf(stderr, "  --mc-cuts <db name>            Includes sequence of multi-camera cuts from database\n");
+    fprintf(stderr, "  --mc-cuts <db file>            Includes sequence of multi-camera cuts from database file\n");
+    fprintf(stderr, "  --mc-cuts-db                   Includes sequence of multi-camera cuts from main database\n");
     fprintf(stderr, "  --aaf-xml                      Outputs AAF file using the XML stored format\n");
     fprintf(stderr, "  --audio-edits                  Include edits in the audio tracks in the multi-camera cut sequence\n");
     fprintf(stderr, "  --fcp-xml                      Prints Apple XML for Final Cut Pro- disables AAF\n");
@@ -650,6 +709,11 @@ int main(int argc, const char* argv[])
                 includeMCCutsSequence = true;
                 cmdlnIndex += 2;
             }
+            else if (strcmp(argv[cmdlnIndex], "--mc-cuts-db") == 0)
+            {
+                includeMCCutsSequence = true;
+                cmdlnIndex += 2;
+            }
             else if (strcmp(argv[cmdlnIndex], "-d") == 0 ||
                 strcmp(argv[cmdlnIndex], "--dns") == 0)
             {
@@ -843,8 +907,8 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
-    // open the cuts database
-    if (includeMCCutsSequence)
+    // open the cuts database file
+    if (!mcCutsFilename.empty())
     {
         try
         {
@@ -1162,6 +1226,14 @@ int main(int argc, const char* argv[])
                     
                     MaterialPackageSet materialPackages;
                     materialPackages.insert(topPackage1);
+
+                    int64_t startTimecode = 0;
+                    Date startDate;
+                    int64_t endTimecode = 0;
+                    Date endDate;
+
+                    getStartAndEndTimes(topPackage1, material.packages, targetEditRate,
+                        startTimecode, startDate, endTimecode, endDate);
                     
                     // add material to group that has same start time and creation date
                     MaterialPackageSet::iterator iter2;
@@ -1182,12 +1254,13 @@ int main(int argc, const char* argv[])
 
                     // materialPackages now contains all MaterialPackages with same start time and creation date
 
-                    vector<MCClipDef*>::iterator iter3;
+                    // Go through all the mc clip defs
                     int index = 0;
             
-                    for (iter3 = mcClipDefs.get().begin(); iter3 != mcClipDefs.get().end(); iter3++)
+                    for (std::vector<MCClipDef *>::const_iterator
+                        it = mcClipDefs.get().begin(); it != mcClipDefs.get().end(); ++it)
                     {
-                        MCClipDef* mcClipDef = *iter3;
+                        MCClipDef * mcClipDef = *it;
                         vector<CutInfo> sequence;
                         
                         // exclude clip defs referencing sources with wrong video edit rate
@@ -1197,11 +1270,15 @@ int main(int argc, const char* argv[])
                             continue;
                         }
                         
-                        if (mcCutsDatabase != 0)
+                        if (includeMCCutsSequence && mcCutsDatabase)
                         {
                             // TODO: director's cut database doesn't yet have flag indicating PAL/NTSC
-                            sequence = getDirectorsCutSequence(mcCutsDatabase, mcClipDef, materialPackages, material.packages, 
-                                topPackage1->creationDate, getStartTime(topPackage1, material.packages, targetEditRate));
+                            sequence = getDirectorsCutsFromFile(mcCutsDatabase, mcClipDef, materialPackages, material.packages, 
+                                topPackage1->creationDate, startTimecode);
+                        }
+                        else if (includeMCCutsSequence)
+                        {
+                            sequence = getDirectorsCuts(database, mcClipDef, startDate, startTimecode, endDate, endTimecode);
                         }
 
                         if (!fcpxml && !createAAFGroupOnly)

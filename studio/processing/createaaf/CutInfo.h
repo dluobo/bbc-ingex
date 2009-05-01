@@ -1,5 +1,5 @@
 /*
- * $Id: CutInfo.h,v 1.1 2009/04/16 17:41:06 john_f Exp $
+ * $Id: CutInfo.h,v 1.2 2009/05/01 13:34:05 john_f Exp $
  *
  * Vision mix cut info.
  *
@@ -36,7 +36,7 @@ class CutInfo
 public:
     CutInfo() : position(0) {}
     
-    int64_t position;
+    int64_t position;  ///< position in sequence, not the timecode
     std::string source;
 };
 

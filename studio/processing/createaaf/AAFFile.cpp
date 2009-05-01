@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.4 2009/04/16 17:41:36 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.5 2009/05/01 13:34:05 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -37,6 +37,7 @@
 
 #include "AAFFile.h"
 #include "CreateAAFException.h"
+#include "package_utils.h"
 
 #include <DatabaseEnums.h>
 #include <Logging.h>
@@ -558,6 +559,7 @@ bool AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
             SourcePackage* sourcePackage = 0;
             Track* sourceTrack = 0;
 
+            // Go through tracks of material package.
             vector<Track*>::const_iterator iter2;
             for (iter2 = materialPackage->tracks.begin(); iter2 != materialPackage->tracks.end(); iter2++)
             {
@@ -566,12 +568,15 @@ bool AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
                 // get the source package and track for this material package track
                 if (getSource(track, packages, &fileSourcePackage, &sourcePackage, &sourceTrack))
                 {
+                    // Go through tracks of the multi-cam group.
+                    // First track would generally be the one and only video track.
                     bool donePackage = false;
                     map<uint32_t, MCTrackDef*>::const_iterator iter3;
                     for (iter3 = mcClipDef->trackDefs.begin(); !donePackage && iter3 != mcClipDef->trackDefs.end(); iter3++)
                     {
                         MCTrackDef* trackDef = (*iter3).second;
                         
+                        // Now go through the selectors for the track.
                         map<uint32_t, MCSelectorDef*>::const_iterator iter4;
                         for (iter4 = trackDef->selectorDefs.begin(); !donePackage && iter4 != trackDef->selectorDefs.end(); iter4++)
                         {
@@ -582,7 +587,7 @@ bool AAFFile::addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackag
                                 continue;
                             }
                             
-                            // if the source package and track match the multi-camera selection
+                            // if the source package and track match the multi-camera selector
                             if (selectorDef->sourceConfig->name.compare(fileSourcePackage->sourceConfigName) == 0 && 
                                 sourceTrack->id == selectorDef->sourceTrackID)
                             {

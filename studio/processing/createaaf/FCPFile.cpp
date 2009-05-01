@@ -1,5 +1,5 @@
 /*
- * $Id: FCPFile.cpp,v 1.4 2009/02/26 19:43:23 john_f Exp $
+ * $Id: FCPFile.cpp,v 1.5 2009/05/01 13:34:05 john_f Exp $
  *
  * Final Cut Pro XML file for defining clips, multi-camera clips, etc
  *
@@ -28,6 +28,7 @@
 #include "FCPFile.h"
 #include "CutsDatabase.h"
 #include "CreateAAFException.h"
+#include "package_utils.h"
 
 #include <Logging.h>
 #include <XmlTools.h>

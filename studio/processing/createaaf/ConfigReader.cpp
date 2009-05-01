@@ -1,5 +1,5 @@
 /*
- * $Id: ConfigReader.cpp,v 1.1 2009/04/16 17:41:37 john_f Exp $
+ * $Id: ConfigReader.cpp,v 1.2 2009/05/01 13:34:05 john_f Exp $
  *
  * Class to read XML options for create_aaf
  *
@@ -27,10 +27,13 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <sstream>
 #include <errno.h>
 #include <list>
+#ifndef _MSC_VER
+#include <unistd.h>
+#endif
+
 #include <XmlTools.h>
 #include <Utilities.h>
 
@@ -105,8 +108,8 @@ ConfigReader::ConfigReader()
 void ConfigReader::readConfigFile(const std::string & configFile)
         throw(std::runtime_error)
 {
+#ifndef _MSC_VER
     // Test to see if the file is OK.
-    
     struct stat fileStatus;
     
     int iretStat = stat(configFile.c_str(), &fileStatus);
@@ -120,6 +123,7 @@ void ConfigReader::readConfigFile(const std::string & configFile)
             throw (std::runtime_error("Permission denied"));
     else if (iretStat == ENAMETOOLONG)
             throw (std::runtime_error("File can not be read\n"));
+#endif
     
     // Configure DOM parser
     m_ConfigFileParser->setValidationScheme( XercesDOMParser::Val_Never);

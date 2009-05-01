@@ -1,5 +1,5 @@
 /*
- * $Id: EditorsFile.h,v 1.2 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: EditorsFile.h,v 1.3 2009/05/01 13:34:05 john_f Exp $
  *
  * Editor's file
  *
@@ -49,23 +49,10 @@ public:
     // add a multi-camera clip and cut sequence
     virtual bool addMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPackages, PackageSet& packages,
         std::vector<CutInfo> sequence) = 0;
-    
 };
 
 
-// get the startTime in the file SourcePackage referenced by the materialPackage
-int64_t getStartTime(MaterialPackage* materialPackage, PackageSet& packages, Rational editRate);
-
-Rational getVideoEditRate(Package* package);
-Rational getVideoEditRate(Package* package, PackageSet& packages);
-Rational getVideoEditRate(MCClipDef* mcClipDef);
-
-int64_t convertLength(Rational inRate, int64_t inLength, Rational outRate);
-uint16_t getTimecodeBase(Rational rate);
-
-
 };
-
 
 
 #endif

@@ -1,9 +1,10 @@
 /*
- * $Id: EditorsFile.cpp,v 1.2 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: package_utils.cpp,v 1.1 2009/05/01 13:34:06 john_f Exp $
  *
- * Editor's file
+ * Package-related utility functions
  *
- * Copyright (C) 2008, BBC, Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2009 British Broadcasting Corporation
+ * All rights reserved
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,15 +21,13 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include "EditorsFile.h"
+#include "package_utils.h"
 #include "CreateAAFException.h"
-#include <Logging.h>
+#include "Logging.h"
 
+#include <vector>
 
-using namespace std;
 using namespace prodauto;
-
-
 
 static bool isVideoEditRate(Rational editRate)
 {
@@ -76,7 +75,7 @@ static bool getPhysicalSourcePackage(Track* track, PackageSet& packages, SourceP
 
 static Rational getVideoEditRate(SourceConfig* sourceConfig)
 {
-    vector<SourceTrackConfig*>::const_iterator iter;
+    std::vector<SourceTrackConfig*>::const_iterator iter;
     for (iter = sourceConfig->trackConfigs.begin(); iter != sourceConfig->trackConfigs.end(); iter++)
     {
         SourceTrackConfig* trackConfig = *iter;
@@ -90,11 +89,9 @@ static Rational getVideoEditRate(SourceConfig* sourceConfig)
     return g_nullRational; // no video track and no track with a known video edit rate
 }
 
-
-
 int64_t prodauto::getStartTime(MaterialPackage* materialPackage, PackageSet& packages, Rational editRate)
 {
-    vector<Track*>::const_iterator iter;
+    std::vector<Track*>::const_iterator iter;
     for (iter = materialPackage->tracks.begin(); iter != materialPackage->tracks.end(); iter++)
     {
         Track* track = *iter;
@@ -135,11 +132,90 @@ int64_t prodauto::getStartTime(MaterialPackage* materialPackage, PackageSet& pac
     PA_LOGTHROW(CreateAAFException, ("Could not determine package start time"));
 }
 
+void prodauto::getStartAndEndTimes(MaterialPackage * materialPackage, PackageSet & packages, Rational editRate,
+                                int64_t & startTimecode, Date & startDate, int64_t & endTimecode, Date & endDate)
+{
+    int64_t length = 0;
+    int64_t position = 0;
+    prodauto::Timestamp timestamp = g_nullTimestamp;
+    bool done = false;
+
+    // Start date from material package creation date
+    timestamp = materialPackage->creationDate;
+
+    for (std::vector<prodauto::Track *>::iterator
+        it = materialPackage->tracks.begin(); !done && it != materialPackage->tracks.end(); ++it)
+    {
+        prodauto::Track * mt = *it;
+
+        // Look for video track
+        if (mt->dataDef == PICTURE_DATA_DEFINITION)
+        {
+            // Length from material package track sourceclip
+            prodauto::SourceClip * mt_sc = mt->sourceClip;
+            if (mt_sc)
+            {
+                length = mt_sc->length;
+                if (mt->editRate != editRate)
+                {
+                    double factor = editRate.numerator * mt->editRate.denominator / 
+                        (double)(editRate.denominator * mt->editRate.numerator);
+                    length = (int64_t) (mt->sourceClip->length * factor + 0.5);
+                }
+
+                // Start timecode from file package track sourcelip
+                SourcePackage dummy;
+                dummy.uid = mt_sc->sourcePackageUID;
+                uint32_t file_track_id = mt->sourceClip->sourceTrackID;
+                PackageSet::iterator result = packages.find(&dummy);
+                if (result != packages.end())
+                {
+                    prodauto::Package * file_package = (*result);
+                    // It would be nice to find track straight from the ID but instead
+                    // we have to search for it.
+                    for (std::vector<prodauto::Track *>::const_iterator
+                        it = file_package->tracks.begin(); !done && it != file_package->tracks.end(); ++it)
+                    {
+                        prodauto::Track * file_track = *it;
+                        if (file_track->id == file_track_id)
+                        {
+                            prodauto::SourceClip * sc = file_track->sourceClip;
+                            if (sc)
+                            {
+                                position = sc->position;
+                                done = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!done)
+    {
+        PA_LOGTHROW(CreateAAFException, ("Could not determine package start and end times"));
+    }
+
+    // Return results
+    startTimecode = position;
+    endTimecode = position + length;
+
+    startDate.year = timestamp.year;
+    startDate.month = timestamp.month;
+    startDate.day = timestamp.day;
+
+    // Not correct for recordings over midnight but all this date
+    // stuff needs to be revised anyway.
+    endDate.year = timestamp.year;
+    endDate.month = timestamp.month;
+    endDate.day = timestamp.day;
+}
 
 
 Rational prodauto::getVideoEditRate(Package* package)
 {
-    vector<Track*>::const_iterator iter;
+    std::vector<Track*>::const_iterator iter;
     for (iter = package->tracks.begin(); iter != package->tracks.end(); iter++)
     {
         Track* track = *iter;
@@ -157,7 +233,7 @@ Rational prodauto::getVideoEditRate(Package* package)
 Rational prodauto::getVideoEditRate(Package* package, PackageSet& packages)
 {
     // check the package and any referenced physcial source package
-    vector<Track*>::const_iterator iter1;
+    std::vector<Track*>::const_iterator iter1;
     for (iter1 = package->tracks.begin(); iter1 != package->tracks.end(); iter1++)
     {
         Track* track = *iter1;
@@ -184,7 +260,7 @@ Rational prodauto::getVideoEditRate(Package* package, PackageSet& packages)
 
 Rational prodauto::getVideoEditRate(MCClipDef* mcClipDef)
 {
-    vector<SourceConfig*>::const_iterator iter;
+    std::vector<SourceConfig*>::const_iterator iter;
     for (iter = mcClipDef->sourceConfigs.begin(); iter != mcClipDef->sourceConfigs.end(); iter++)
     {
         SourceConfig* sourceConfig = *iter;
