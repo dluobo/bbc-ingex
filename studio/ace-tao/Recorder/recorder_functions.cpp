@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.20 2009/04/24 16:06:46 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.21 2009/05/01 13:40:22 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -650,6 +650,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     mp->name = p_opt->file_ident; // long-winded name
 #elif 0
     mp->name = rsp->name; // tape name
+#elif 0
+    // tape name plus timecode
+    mp->name = rsp->name;
+    mp->name += '.';
+    mp->name += Timecode(start_tc, fps, df).TextNoSeparators();
 #else
     mp->name = sc->name; // source (e.g. camera) name
 #endif
