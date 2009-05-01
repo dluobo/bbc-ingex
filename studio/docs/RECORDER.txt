@@ -40,9 +40,9 @@ root> make scripts/mod/  (trailing slash important)
 DVS SDKs are available to registered users here:
   http://www.dvs.de/products/video-boards/centaurus-ii/login-area/video-boards/sdk.html
 
-get SDK e.g. sdk3.2.1.0.tar.gz and untar
+get SDK e.g. sdk3.2.14.9.tar.gz and untar
 
-ingex> cd linux-x86/driver
+ingex> cd linux-x86_64/driver
 ingex> ./driver_create
 ingex> sudo ./driver_load
 
@@ -99,6 +99,20 @@ ingex> make RecorderClient-target
 
 You should now have the recorder programme:
   ingex/studio/ace-tao/Recorder/Recorder
+
+
+Media transfer
+--------------
+
+If you want to copy media files (e.g. to a fileserver)
+
+ingex> cd $workspace/ingex/studio/processing/media_transfer
+ingex> make
+
+You will also need to install the following perl modules:
+  IPC-ShareLite
+  Filesys-DfPortable
+
 
 
 Samba shares
