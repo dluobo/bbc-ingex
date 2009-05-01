@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.12 2009/04/16 18:32:47 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.13 2009/05/01 13:39:03 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -47,7 +47,7 @@
 
 // Constructor for Vt struct
 Vt::Vt(unsigned int rd, const std::string & n)
-: router_dest(rd), router_src(0), name(n), selector_id(0)
+: router_dest(rd), router_src(0), name(n), selector_index(0)
 {
 }
 
@@ -56,7 +56,7 @@ Vt::Vt(unsigned int rd, const std::string & n)
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpFile(0), mpCutsDatabase(0), mMixDestination(0), mMcTrackId(0)
+: mpFile(0), mpCutsDatabase(0), mMixDestination(0), mMcTrackId(0), mLastSelectorIndex(0), mSaving(false)
 {
 }
 
@@ -99,10 +99,13 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     mFormat = "*ROUTER*";
 
     // Init cuts database
-    mpCutsDatabase = new CutsDatabase();
-    if (mpCutsDatabase)
+    if (! db_file.empty())
     {
-        mpCutsDatabase->Filename(db_file);
+        mpCutsDatabase = new CutsDatabase();
+        if (mpCutsDatabase)
+        {
+            mpCutsDatabase->Filename(db_file);
+        }
     }
 
 
@@ -162,7 +165,7 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
                     {
                         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Selector with SourceConfig \"%C\" found\n"), sc->name.c_str()));
                         found = true;
-                        vt->selector_id = it->second->getDatabaseID();
+                        vt->selector_index = it->second->index;
                     }
                 }
             }
@@ -205,7 +208,6 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
-    ACE_UNUSED_ARG (pre_roll);
     ACE_UNUSED_ARG (rec_enable);
     ACE_UNUSED_ARG (project);
     ACE_UNUSED_ARG (test_only);
@@ -214,22 +216,30 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 
     //FileUtils::CreatePath(RECORD_DIR);
 
-    //std::string date = DateTime::DateNoSeparators();
-    //Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
-    //std::ostringstream ss;
-    //ss << RECORD_DIR << date << "_" << tc.TextNoSeparators() << "_" << mName << ".txt";
+    // Calculate start timecode
+    Timecode tc;
+    if (start_timecode.undefined)
+    {
+        // Start now
+        tc = routerloggerApp::Instance()->Timecode().c_str();
+    }
+    else
+    {
+        // Start at start - pre-roll
+        tc = start_timecode.samples - pre_roll.samples;
+    }
 
 
     // Start saving to cuts database
-    StartSaving();
+    StartSaving(tc);
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
 
     // Return start timecode
-    // (otherwise with start now it would be left as zero)
-    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
     start_timecode.undefined = false; 
+    start_timecode.edit_rate.numerator = tc.EditRateNumerator();
+    start_timecode.edit_rate.denominator = tc.EditRateDenominator();
     start_timecode.samples = tc.FramesSinceMidnight();
 
     // Return
@@ -247,7 +257,6 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ::CORBA::SystemException
   )
 {
-    ACE_UNUSED_ARG (mxf_stop_timecode);
     ACE_UNUSED_ARG (mxf_post_roll);
     ACE_UNUSED_ARG (description);
     ACE_UNUSED_ARG (locators);
@@ -259,7 +268,15 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 0;
 
-    // Create out parameter
+    // Return stop timecode
+    // (otherwise with stop now it would be left as zero)
+    Timecode tc = routerloggerApp::Instance()->Timecode().c_str();
+    mxf_stop_timecode.undefined = false; 
+    mxf_stop_timecode.edit_rate.numerator = tc.EditRateNumerator();
+    mxf_stop_timecode.edit_rate.denominator = tc.EditRateDenominator();
+    mxf_stop_timecode.samples = tc.FramesSinceMidnight();
+
+    // Create out parameter to return (dummy) filename
     files = new ::CORBA::StringSeq;
     files->length(1);
     // TODO: Put the actual filename in here
@@ -280,7 +297,7 @@ void SimplerouterloggerImpl::SetRouterPort(std::string rp)
 }
 
 
-void SimplerouterloggerImpl::StartSaving()
+void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
 {
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
@@ -323,6 +340,39 @@ void SimplerouterloggerImpl::StartSaving()
             mpCutsDatabase->AppendEntry(mLastSrc, mLastTc, mLastYear, mLastMonth, mLastDay);
         }
     }
+
+    // Add an initial entry at the start record timecode
+    if (mMcTrackId && mLastSelectorIndex)
+    {
+        // Get date
+        int year, month, day;
+        DateTime::GetDate(year, month, day);
+
+        // Date as prodauto::Date
+        prodauto::Date date;
+        date.year = year;
+        date.month = month;
+        date.day = day;
+
+        try
+        {
+            std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
+
+            mc_cut->mcTrackId = mMcTrackId;
+            mc_cut->mcSelectorIndex = mLastSelectorIndex;
+            mc_cut->cutDate = date;
+            mc_cut->position = tc.FramesSinceMidnight();
+            mc_cut->editRate = prodauto::g_palEditRate;
+
+            prodauto::Database::getInstance()->saveMultiCameraCut(mc_cut.get());
+        }
+        catch (const prodauto::DBException & ex)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+        }
+    }
+    
+    mSaving = true;
 }
 
 void SimplerouterloggerImpl::StopSaving()
@@ -347,6 +397,8 @@ void SimplerouterloggerImpl::StopSaving()
     {
         mpCutsDatabase->Close();
     }
+
+    mSaving = false;
 }
 
 void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
@@ -382,13 +434,13 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
         // Avoid VT1 if possible as that may be recording mixer out
         // so we take highest number match.
         std::string src_name;
-        long mc_selector = 0;
+        uint32_t mc_selector_index = 0;
         for (std::vector<Vt>::const_iterator it = mVts.begin(); it != mVts.end(); ++it)
         {
             if (it->router_src == src)
             {
                 src_name = it->name;
-                mc_selector = it->selector_id;
+                mc_selector_index = it->selector_index;
             }
         }
 
@@ -404,6 +456,7 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
 
             // Remember last cut for when we start a new recording
             mLastSrc = src_name;
+            mLastSelectorIndex = mc_selector_index;
             mLastTc = tc;
             mLastYear = year;
             mLastMonth = month;
@@ -421,15 +474,15 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
                 mpCutsDatabase->AppendEntry(src_name, tc, year, month, day);
             }
 
-            // experimentally try writing to main database
-            if (mMcTrackId)
+            // write to main database
+            if (mSaving && mMcTrackId)
             {
                 try
                 {
                     std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
 
                     mc_cut->mcTrackId = mMcTrackId;
-                    mc_cut->mcSelectorId = mc_selector;
+                    mc_cut->mcSelectorIndex = mc_selector_index;
                     mc_cut->cutDate = date;
                     mc_cut->position = Timecode(tc.c_str()).FramesSinceMidnight();
                     mc_cut->editRate = prodauto::g_palEditRate;

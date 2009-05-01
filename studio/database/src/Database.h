@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.8 2009/04/16 18:14:20 john_f Exp $
+ * $Id: Database.h,v 1.9 2009/05/01 13:37:00 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -101,7 +101,7 @@ public:
     
     // Multi-camera cuts (Director's cut)
     std::vector<MCCut *> loadAllMultiCameraCuts();
-    std::vector<MCCut *> loadMultiCameraCuts(MCClipDef * mcClipDef,
+    std::vector<MCCut *> loadMultiCameraCuts(MCTrackDef * mcTrackDef,
         Date startDate, int64_t startTimecode, Date endDate, int64_t endTimecode);
     void saveMultiCameraCut(MCCut * mcCut, Transaction * transaction = 0);
 

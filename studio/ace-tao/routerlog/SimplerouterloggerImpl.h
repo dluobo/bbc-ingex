@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.9 2009/03/25 14:03:20 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.10 2009/05/01 13:39:03 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -35,6 +35,7 @@
 #include "TimecodeReader.h"
 #include "RouterObserver.h"
 #include "RouterDestination.h"
+#include "Timecode.h"
 
 class Vt
 {
@@ -43,7 +44,7 @@ public:
     unsigned int router_dest;
     unsigned int router_src; // what is routed to that VT
     std::string name;
-    long selector_id; // MCSelector database id
+    uint32_t selector_index; // MCSelector index
 };
 
 class CutsDatabase;
@@ -71,10 +72,6 @@ public:
   void SetTimecodePort(std::string tcp);
 
   void SetRouterPort(std::string rp);
-
-  void StartSaving();
-
-  void StopSaving();
 
   
   virtual
@@ -123,8 +120,8 @@ public:
 
 
 private:
-// static instance pointer
-    //static SimplerouterloggerImpl * mInstance;
+    void StartSaving(const Timecode & tc);
+    void StopSaving();
 
     FILE * mpFile;
     std::string mRouterPort;
@@ -138,10 +135,13 @@ private:
 
     // Details of last relevant cut
     std::string mLastSrc;
+    int32_t mLastSelectorIndex;
     std::string mLastTc;
     int mLastYear;
     int mLastMonth;
     int mLastDay;
+
+    bool mSaving; // whether recording in progress
 };
 
 

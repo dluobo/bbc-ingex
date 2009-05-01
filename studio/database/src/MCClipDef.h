@@ -1,5 +1,5 @@
 /*
- * $Id: MCClipDef.h,v 1.2 2009/03/25 13:59:52 john_f Exp $
+ * $Id: MCClipDef.h,v 1.3 2009/05/01 13:37:00 john_f Exp $
  *
  * A multi-camera clip definition
  *
@@ -82,7 +82,7 @@ public:
     ~MCCut();
 
     long mcTrackId;
-    long mcSelectorId;
+    uint32_t mcSelectorIndex;
     Date cutDate;
     int64_t position;
     Rational editRate;

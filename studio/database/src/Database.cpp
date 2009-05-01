@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.9 2009/04/21 18:04:16 john_f Exp $
+ * $Id: Database.cpp,v 1.10 2009/05/01 13:37:00 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -1679,12 +1679,12 @@ void Database::deleteMultiCameraClipDef(MCClipDef * mcClipDef, Transaction * tra
     SELECT \
         mcc_identifier, \
         mcc_multi_camera_track_def_id, \
-        mcc_multi_camera_selector_def_id, \
+        mcc_multi_camera_selector_index, \
         mcc_date::varchar, \
         mcc_position, \
         (mcc_edit_rate).numerator, \
         (mcc_edit_rate).denominator \
-    FROM MultiCameraCuts \
+    FROM MultiCameraCut \
 "
 
 #if 0
@@ -1729,7 +1729,7 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
             
             mcCut->wasLoaded(result->getInt(1));
             mcCut->mcTrackId = result->getInt(2);
-            mcCut->mcSelectorId = result->getInt(3);
+            mcCut->mcSelectorIndex = result->getInt(3);
             mcCut->cutDate = getDateFromODBC(result->getString(4));
             mcCut->position = result->getLong(5);
             mcCut->editRate.numerator = result->getInt(6);
@@ -1790,32 +1790,25 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
     SELECT \
         mcc_identifier, \
         mcc_multi_camera_track_def_id, \
-        mcc_multi_camera_selector_def_id, \
+        mcc_multi_camera_selector_index, \
         mcc_date::varchar, \
         mcc_position, \
         (mcc_edit_rate).numerator, \
         (mcc_edit_rate).denominator \
-    FROM MultiCameraCuts \
+    FROM MultiCameraCut \
     WHERE \
         mcc_date >= ? AND \
         mcc_date <= ? AND \
         mcc_multi_camera_track_def_id = ? \
 "
 
-vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
+vector<MCCut *> Database::loadMultiCameraCuts(MCTrackDef * mcTrackDef,
                                               Date startDate, int64_t startTimecode, Date endDate, int64_t endTimecode)
 {
-    // Find multi-cam track def we are interested in.
-    // We want the video track and assume it's the one with index == 1.
-    prodauto::MCTrackDef * mc_track_def = 0;
-    if (mc_clip_def)
-    {
-        mc_track_def = mc_clip_def->trackDefs[1];
-    }
     long mc_track_def_id = 0;
-    if (mc_track_def)
+    if (mcTrackDef)
     {
-        mc_track_def_id = mc_track_def->getDatabaseID();
+        mc_track_def_id = mcTrackDef->getDatabaseID();
     }
 
     VectorGuard<MCCut> theMCCuts;
@@ -1835,7 +1828,7 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
             
             mcCut->wasLoaded(result->getInt(1));
             mcCut->mcTrackId = result->getInt(2);
-            mcCut->mcSelectorId = result->getInt(3);
+            mcCut->mcSelectorIndex = result->getInt(3);
             mcCut->cutDate = getDateFromODBC(result->getString(4));
             mcCut->position = result->getLong(5);
             mcCut->editRate.numerator = result->getInt(6);
@@ -1864,7 +1857,7 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
     ( \
         mcc_identifier, \
         mcc_multi_camera_track_def_id, \
-        mcc_multi_camera_selector_def_id, \
+        mcc_multi_camera_selector_index, \
         mcc_date, \
         mcc_position, \
         mcc_edit_rate \
@@ -1877,7 +1870,7 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCClipDef * mc_clip_def,
 " \
     UPDATE MultiCameraCut \
         mcc_multi_camera_track_def_id = ?, \
-        mcc_multi_camera_selector_def_id = ?, \
+        mcc_multi_camera_selector_index = ?, \
         mcc_date = ?, \
         mcc_position = ?, \
         mcc_edit_rate = (?, ?) \
@@ -1917,7 +1910,7 @@ void Database::saveMultiCameraCut(MCCut * mcCut, Transaction * transaction)
         }
         
         prepStatement->setInt(paramIndex++, mcCut->mcTrackId);
-        prepStatement->setInt(paramIndex++, mcCut->mcSelectorId);
+        prepStatement->setInt(paramIndex++, mcCut->mcSelectorIndex);
         prepStatement->setString(paramIndex++, getDateString(mcCut->cutDate));
         prepStatement->setLong(paramIndex++, mcCut->position);
         prepStatement->setInt(paramIndex++, mcCut->editRate.numerator);

@@ -585,14 +585,11 @@ CREATE TABLE MultiCameraCut
 (
     mcc_identifier INTEGER DEFAULT nextval('mcc_id_seq') NOT NULL,
     mcc_multi_camera_track_def_id INTEGER NOT NULL,
-    mcc_multi_camera_selector_def_id INTEGER NOT NULL,
+    mcc_multi_camera_selector_index INTEGER NOT NULL,
     mcc_date DATE NOT NULL,
     mcc_position BIGINT NOT NULL,
     mcc_edit_rate Rational NOT NULL,
-    CONSTRAINT mcc_multi_camera_track_def_fkey FOREIGN KEY (mcc_multi_camera_track_def_id) REFERENCES MultiCameraTrackDef (mct_identifier)
-        ON DELETE CASCADE,
-    CONSTRAINT mcc_multi_camera_selector_def_fkey FOREIGN KEY (mcc_multi_camera_selector_def_id) REFERENCES MultiCameraSelectorDef (mcs_identifier)
-        ON DELETE CASCADE,
+    CONSTRAINT mcc_multi_camera_track_def_fkey FOREIGN KEY (mcc_multi_camera_track_def_id) REFERENCES MultiCameraTrackDef (mct_identifier),
     CONSTRAINT mcc_pkey PRIMARY KEY (mcc_identifier)
 ) WITHOUT OIDS;
 
