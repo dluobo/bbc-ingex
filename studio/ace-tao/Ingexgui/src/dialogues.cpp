@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.8 2009/02/26 19:17:09 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.9 2009/05/01 13:41:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1612,4 +1612,163 @@ const wxColour CuePointsDlg::GetColour(const size_t index)
 const wxColour CuePointsDlg::GetLabelColour(const size_t index)
 {
 	return wxColour(wxString(colours[index].labelColour, *wxConvCurrent));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+BEGIN_EVENT_TABLE(ChunkingDlg, wxDialog)
+	EVT_SPINCTRL(wxID_ANY, ChunkingDlg::OnChangeChunkSize)
+	EVT_TOGGLEBUTTON(wxID_ANY, ChunkingDlg::OnEnable)
+	EVT_TIMER(wxID_ANY, ChunkingDlg::OnTimer)
+END_EVENT_TABLE()
+
+#define MAX_CHUNK_SIZE 120 //minutes
+
+/// Sets up dialogue.
+/// @param parent Parent window.
+/// @param chunkButton The "chunk now" button, for "pressing" and manipulating the label.
+/// @param savedState The XML document for retrieving and saving settings.
+ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mChunkButton(chunkButton), mTimepos(timepos), mSavedState(savedState), mRecording(false)
+{
+	//controls
+	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+	SetSizer(mainSizer);
+	wxStaticBoxSizer * sizeBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Chunk Size"));
+	mainSizer->Add(sizeBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mChunkSizeCtrl = new wxSpinCtrl(this, wxID_ANY, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, MAX_CHUNK_SIZE, 10);
+	sizeBox->Add(mChunkSizeCtrl, 0, wxALIGN_CENTRE);
+	sizeBox->Add(new wxStaticText(this, wxID_ANY, wxT(" min")), 0, wxALIGN_CENTRE);
+	mEnableButton = new wxToggleButton(this, wxID_ANY, wxT("Enable"));
+	mainSizer->Add(mEnableButton, 0, wxALIGN_CENTRE);
+	mainSizer->Add(new wxButton(this, wxID_OK, wxT("OK")), 1, wxEXPAND | wxALL, CONTROL_BORDER);
+	Fit();
+	mCountdownTimer = new wxTimer(this);
+
+	//saved state
+	wxXmlNode * chunkingNode = mSavedState.GetRoot()->GetChildren();
+	while (chunkingNode && chunkingNode->GetName() != wxT("Chunking")) {
+		chunkingNode = chunkingNode->GetNext();
+	}
+	if (chunkingNode) {
+		long size;
+		if (chunkingNode->GetNodeContent().ToLong(&size) && 0 < size && MAX_CHUNK_SIZE >= size) {
+			mChunkSizeCtrl->SetValue(size);
+		}
+		mEnableButton->SetValue(wxT("Yes") == chunkingNode->GetPropVal(wxT("Enabled"), wxT("No")));
+	}
+	SetNextHandler(parent);
+	Reset();
+}
+
+/// Overloads Show Modal to update the XML document
+int ChunkingDlg::ShowModal()
+{
+	wxDialog::ShowModal();
+	//Remove old nodes
+	wxXmlNode * node = mSavedState.GetRoot()->GetChildren();
+	while (node) {
+		if (wxT("Chunking") == node->GetName()) {
+			wxXmlNode * deadNode = node;
+			node = node->GetNext();
+			mSavedState.GetRoot()->RemoveChild(deadNode);
+			delete deadNode;
+		}
+		else {
+			node = node->GetNext();
+		}
+	}
+	//Create new node (element node with one attribute, containing text node)
+	new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableButton->GetValue() ? wxT("Yes") : wxT("No"))), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
+	return wxID_OK;
+}
+
+/// Responds to chunking enable button being toggled by starting/stopping chunking if recording, and updating the button label
+void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
+{
+	if (mRecording) {
+		if (mEnableButton->GetValue()) {
+			//start chunk countdown from now
+			ProdAuto::MxfTimecode currentTimecode;
+			mTimepos->GetTimecode(&currentTimecode);
+			RunFrom(currentTimecode);
+		}
+		else {
+			//stop chunk countdown
+			RunFrom();
+			mRecording = true; //calling RunFrom() will clear mRecording
+		}
+	}
+	SetCountdownLabel();
+}
+
+/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down
+void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
+{
+	if (!mCountdownTimer->IsRunning()) {
+		Reset();
+	}
+}
+
+/// Starts or stops the countdown.
+/// @param startTimecode Timecode from which to calculate when to trigger a chunk.  Stops the countdown if undefined flag set.
+/// @param postroll Subtracted from the time to trigger a chunk.  If undefined flag set, previous stored value is used.
+void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll)
+{
+	Reset();
+	mRecording = !startTimecode.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
+	if (!postroll.undefined) {
+		mPostroll = postroll;
+	}
+	if (mRecording) {
+		if (mEnableButton->GetValue()) {
+			//start chunking
+			ProdAuto::MxfTimecode triggerTimecode = startTimecode;
+			triggerTimecode.samples += (int64_t) mChunkLength * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator - mPostroll.samples; //trigger the stop command before a postroll period to make sure recorders get it in time
+			bool wrap = triggerTimecode.samples > 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+			triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+			mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), wrap);
+			mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
+		}
+	}
+	else {
+		//stop chunking
+		mCountdownTimer->Stop();
+		mTimepos->SetTrigger(&InvalidMxfTimecode, (wxEvtHandler *) GetParent());
+	}
+}
+
+/// Responds to the countdown timer by updating the label on the chunking button.
+void ChunkingDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
+{
+	if (mCountdown) {
+		mCountdown--;
+	}
+	SetCountdownLabel();
+}
+
+/// Resets the countdown to the full chunk size.
+void ChunkingDlg::Reset()
+{
+	mChunkLength = (unsigned long) mChunkSizeCtrl->GetValue() * 60; //in seconds
+//mChunkLength = 10;
+	mCountdown = mChunkLength;
+	if (mCountdownTimer->IsRunning()) {
+		//nicer if it's accurate to the second
+		mCountdownTimer->Stop();
+		mCountdownTimer->Start();
+	}
+	SetCountdownLabel();
+}
+
+/// Updates the label on the chunking button to the current countdown value, or dashes if automatic chunking is not enabled.
+void ChunkingDlg::SetCountdownLabel()
+{
+	if (mEnableButton->GetValue()) {
+		mChunkButton->SetLabel(wxString::Format(wxT("Chunk %d:%02d"), mCountdown / 60, mCountdown % 60));
+		mChunkButton->SetToolTip(wxT("Automatic chunking is enabled"));
+	}
+	else {
+		mChunkButton->SetLabel(wxT("Chunk ---:--"));
+		mChunkButton->SetToolTip(wxT("Automatic chunking is disabled"));
+	}
 }

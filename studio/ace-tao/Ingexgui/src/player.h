@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.9 2009/02/27 12:19:16 john_f Exp $                *
+ *   $Id: player.h,v 1.10 2009/05/01 13:41:34 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -51,6 +51,9 @@ enum PlayerEventType {
 	PROGRESS_BAR_DRAG,
 	SPEED_CHANGE,
 	QUADRANT_CLICK,
+	LOAD_NEXT_CHUNK,
+	LOAD_PREV_CHUNK,
+	LOAD_FIRST_CHUNK
 };
 
 namespace PlayerMode { //this avoids clashes with different enums with the same member names
@@ -76,9 +79,6 @@ class Listener : public prodauto::IngexPlayerListener
 {
 	public:
 		Listener(Player *, prodauto::IngexPlayerListenerRegistry *);
-		void SetStartIndex(const int);
-		void ClearCuePoints();
-		void AddCuePoint(const int64_t);
 		virtual void frameDisplayedEvent(const FrameInfo* frameInfo);
 		virtual void frameDroppedEvent(const FrameInfo* lastFrameInfo);
 		virtual void stateChangeEvent(const MediaPlayerStateEvent* event);
@@ -92,10 +92,6 @@ class Listener : public prodauto::IngexPlayerListener
 		virtual void mouseClicked(int, int, int, int);
 	private:
 		Player * mPlayer; //never changed so doesn't need protecting by mutex
-		wxMutex mMutex;
-		unsigned int mStartIndex;
-		unsigned int mLastCuePointNotified;
-		std::vector<int64_t> mCuePoints;
 };
 
 /// Class representing the X11/SDI video/audio player.
@@ -106,7 +102,7 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		~Player();
 		bool IsOK();
 		void Enable(bool);
-		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		void Load(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0, bool = false, bool = false);
 		void SelectTrack(const int, const bool);
 		void SetOSD(const OSDtype);
 		void EnableSDIOSD(bool = true);
@@ -116,9 +112,9 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		void Pause();
 		void Step(bool);
 		void Reset();
-		void JumpToCue(unsigned int cuePoint);
+		void JumpToCue(int cuePoint);
 		bool Within();
-		bool AtEnd();
+		bool AtRecEnd();
 		bool LastPlayingBackwards();
 		bool ExtOutputIsAvailable();
 		bool AtMaxForwardSpeed();
@@ -126,7 +122,7 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		void MuteAudio(const bool);
 		void AudioFollowsVideo(const bool);
 	private:
-		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, int = 0, unsigned int = 0);
+		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, unsigned int = 0, unsigned int = 0, bool = false, bool = false);
 		void SetWindowName(const wxString & name = wxT(""));
 		void OnFrameDisplayed(wxCommandEvent&);
 		void OnFilePollTimer(wxTimerEvent&);
@@ -141,7 +137,6 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		bool mEnabled;
 		bool mOK;
 		PlayerMode::EnumType mMode;
-		int mStartIndex;
 		std::string mDesiredTrackName;
 		unsigned int mNFilesExisting;
 		std::vector<std::string> mFileNames;
@@ -149,8 +144,11 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		prodauto::PlayerInputType mInputType;
 		std::vector<bool> mOpened;
 		std::vector<int64_t> mCuePoints;
-		long mLastFrameDisplayed;
-		bool mAtEnd;
+		unsigned int mStartIndex;
+		unsigned int mLastCuePointNotified;
+		long mPreviousFrameDisplayed;
+		bool mAtStart;
+		bool mAtChunkEnd;
 		wxTimer * mFilePollTimer;
 		unsigned int mLastRequestedCuePoint;
 		int mSpeed;
@@ -160,6 +158,9 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		wxSocketClient * mSocket;
 		bool mTrafficControl;
 		bool mOpeningSocket;
+		bool mChunkBefore;
+		bool mChunkAfter;
+		PlayerEventType mChunkLinking;
 		DECLARE_EVENT_TABLE()
 };
 

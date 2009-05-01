@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.12 2009/02/27 12:19:16 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.13 2009/05/01 13:41:34 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -77,6 +77,7 @@ class HelpDlg;
 class RecorderGroupCtrl;
 class CuePointsDlg;
 class TestModeDlg;
+class ChunkingDlg;
 class wxToggleButton;
 class EventList;
 
@@ -134,6 +135,7 @@ class IngexguiFrame : public wxFrame
 		MENU_PlayerNoOSD,
 		MENU_PlayerMuteAudio,
 		MENU_PlayerAudioFollowsVideo,
+		MENU_Chunking,
 		MENU_TestMode,
 #ifndef DISABLE_SHARED_MEM_SOURCE
 		BUTTON_EtoE,
@@ -143,6 +145,7 @@ class IngexguiFrame : public wxFrame
 		BUTTON_Record,
 		BUTTON_Stop,
 		BUTTON_Cue,
+		BUTTON_Chunk,
 		TIMER_Refresh,
 		BUTTON_RecorderListRefresh,
 		BUTTON_TapeId,
@@ -172,12 +175,14 @@ class IngexguiFrame : public wxFrame
 		void OnAbout(wxCommandEvent&);
 		void OnSetRolls(wxCommandEvent&);
 		void OnSetCues(wxCommandEvent&);
+		void OnChunking(wxCommandEvent&);
 		void OnSetProjectName(wxCommandEvent&);
 		void OnRecord(wxCommandEvent&);
 		void OnRecorderListRefresh(wxCommandEvent&);
 		void OnSetTapeIds(wxCommandEvent&);
 		void OnStop(wxCommandEvent&);
 		void OnCue(wxCommandEvent&);
+		void OnChunk(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
 		void OnPlayerOSDChange(wxCommandEvent&);
 #ifdef HAVE_DVS
@@ -194,6 +199,7 @@ class IngexguiFrame : public wxFrame
 		void OnJumpToTimecode(wxCommandEvent&);
 		void OnPlayerEvent(wxCommandEvent&);
 		void OnRecorderGroupEvent(wxCommandEvent&);
+		void OnTimeposEvent(wxCommandEvent&);
 		void OnTestDlgEvent(wxCommandEvent&);
 		void OnTreeEvent(wxCommandEvent&);
 		void OnPlaybackTrackSelect(wxCommandEvent&);
@@ -220,7 +226,7 @@ class IngexguiFrame : public wxFrame
 		void Log(const wxString &);
 		void SetProjectName();
 		bool IsRecording();
-		void EnableButtonReliably(wxButton *, bool = true);
+		void EnableButtonReliably(wxControl *, bool = true);
 		void CanEditCues(const bool);
 		void EtoE();
 
@@ -228,7 +234,7 @@ class IngexguiFrame : public wxFrame
 		RecorderGroupCtrl * mRecorderGroup;
 		wxButton * mRecorderListRefreshButton;
 		wxButton * mTapeIdButton;
-		wxButton * mStopButton, * mCueButton;
+		wxButton * mStopButton, * mCueButton, * mChunkButton;
 		RecordButton * mRecordButton;
 		EventList * mEventList;
 		wxNotebook * mNotebook;
@@ -245,6 +251,7 @@ class IngexguiFrame : public wxFrame
 		HelpDlg * mHelpDlg;
 		CuePointsDlg * mCuePointsDlg;
 		TestModeDlg * mTestModeDlg;
+		ChunkingDlg * mChunkingDlg;
 		wxStaticBoxSizer * mTimecodeBox;
 		wxToggleButton * mPlayRecordingsButton;
 		wxToggleButton * mPlayFilesButton;

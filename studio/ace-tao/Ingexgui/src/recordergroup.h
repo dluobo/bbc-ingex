@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.5 2009/01/29 07:36:58 stuart_hc Exp $         *
+ *   $Id: recordergroup.h,v 1.6 2009/05/01 13:41:34 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -44,10 +44,12 @@ class RecorderGroupCtrl : public wxListBox
 		const ProdAuto::MxfDuration GetPostroll();
 		const ProdAuto::MxfDuration GetMaxPreroll();
 		const ProdAuto::MxfDuration GetMaxPostroll();
+		const ProdAuto::MxfDuration GetChunkingPostroll();
 		void SetTapeIds(const wxString &, const CORBA::StringSeq &, const CORBA::StringSeq &);
 		void RecordAll(const ProdAuto::MxfTimecode);
 		void Record(const wxString &, const CORBA::BooleanSeq &);
 		void Stop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
+		void ChunkStop(const ProdAuto::MxfTimecode &, const wxString &, const ProdAuto::LocatorSeq &);
 		void EnableForInput(const bool = true);
 		void SetProjectNames(const wxSortedArrayString &);
 		const wxSortedArrayString & GetProjectNames();
@@ -72,6 +74,8 @@ class RecorderGroupCtrl : public wxListBox
 			TIMECODE_STUCK,
 			TIMECODE_MISSING,
 			COMM_FAILURE,
+			SET_TRIGGER,
+			CHUNK_END,
 		};
 	private:
 		void OnListRefreshed(wxCommandEvent &);
@@ -79,6 +83,7 @@ class RecorderGroupCtrl : public wxListBox
 		void OnRightMouseDown(wxMouseEvent &);
 		void OnUnwantedMouseDown(wxMouseEvent &);
 		void OnControllerEvent(ControllerThreadEvent &);
+		void OnTimeposEvent(wxCommandEvent &);
 		void Insert(const wxString &, unsigned int);
 		const wxString GetName(unsigned int);
 		void Connect(unsigned int);
@@ -95,6 +100,13 @@ class RecorderGroupCtrl : public wxListBox
 		wxSortedArrayString mProjectNames;
 		wxString mCurrentProject;
 		wxString mCurrentDescription;
+		enum ChunkingMode {
+			NOT_CHUNKING,
+			STOPPING,
+			WAITING,
+			RECORDING_CHUNK,
+		};
+		ChunkingMode mChunking;
 		DECLARE_EVENT_TABLE()
 };
 

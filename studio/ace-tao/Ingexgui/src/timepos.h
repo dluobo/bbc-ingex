@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.h,v 1.5 2009/02/26 19:17:10 john_f Exp $           *
+ *   $Id: timepos.h,v 1.6 2009/05/01 13:41:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -32,13 +32,15 @@
 #define NO_POSITION wxT("   --:--")
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
 #define UNKNOWN_POSITION wxT("   ??:??")
-#define TC_DISPLAY_UPDATE_INTERVAL 100 //ms
+#define TC_DISPLAY_UPDATE_INTERVAL 50 //ms - must be short enough to allow timely triggers
+
+DECLARE_EVENT_TYPE(wxEVT_TIMEPOS_EVENT, -1)
 
 /// Controls timecode and position displays
 class Timepos : public wxEvtHandler
 {
 	public:
-		Timepos(wxStaticText *, wxStaticText *);
+		Timepos(wxEvtHandler *, wxStaticText *, wxStaticText *);
 		void Reset();
 		void SetTimecode(const ProdAuto::MxfTimecode, bool);
 		void SetPosition(unsigned long);
@@ -49,14 +51,15 @@ class Timepos : public wxEvtHandler
 		void DisableTimecode(const wxString & = NO_TIMECODE);
 		const wxString GetTimecode(ProdAuto::MxfTimecode * = 0);
 		const wxString GetStartTimecode(ProdAuto::MxfTimecode * = 0);
-		const wxString GetPosition();
 		const wxString GetStartPosition();
 		static const wxString FormatPosition(const ProdAuto::MxfDuration);
 		static const wxString FormatTimecode(const ProdAuto::MxfTimecode);
 		unsigned long GetFrameCount();
+		bool SetTrigger(const ProdAuto::MxfTimecode *, wxEvtHandler *, bool = false);
 	private:
 		void OnRefreshTimer(wxTimerEvent& WXUNUSED(event));
-		static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfDuration);
+		static const wxString FormatPosition(const wxTimeSpan, const ProdAuto::MxfTimecode);
+		wxDateTime TimeFromTimecode(const ProdAuto::MxfTimecode &, bool = false);
 
 		bool mTimecodeRunning;
 		bool mPositionRunning;
@@ -64,15 +67,16 @@ class Timepos : public wxEvtHandler
 		wxStaticText * mTimecodeDisplay;
 		wxStaticText * mPositionDisplay;
 		wxTimeSpan mTimecodeOffset;
-		wxDateTime mPositionOrigin;
 		wxDateTime mStopTime;
 		ProdAuto::MxfTimecode mStartTimecode;
 		ProdAuto::MxfDuration mDuration;
 		ProdAuto::MxfTimecode mLastTimecodeReceived;
 		ProdAuto::MxfTimecode mLastKnownTimecode;
+		ProdAuto::MxfTimecode mTriggerTimecode;
+		wxEvtHandler * mTriggerHandler;
+		bool mTriggerWrap;
 
 	DECLARE_EVENT_TABLE()
 };
-
 
 #endif

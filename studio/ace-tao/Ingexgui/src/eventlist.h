@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.2 2009/02/26 19:17:09 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.3 2009/05/01 13:41:34 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -31,14 +31,14 @@ WX_DECLARE_OBJARRAY(ProdAuto::TrackList_var, ArrayOfTrackList_var);
 WX_DECLARE_OBJARRAY(CORBA::StringSeq_var, ArrayOfStringSeq_var);
 DEFINE_EVENT_TYPE (wxEVT_RESTORE_LIST_LABEL);
 
-/// Class holding information about a take, for later replay.
-/// Holds the position of the take within the displayed list of events, the project name, an array of lists of files
+/// Class holding information about a chunk, for later replay.
+/// Holds the position of the chunk within the displayed list of events, the project name, an array of lists of files
 /// (one for each recorder) and an array of lists of track names (ditto).
 /// Also arrays of cue point colour indeces, timecodes and frame numbers.
-class TakeInfo
+class ChunkInfo
 {
 	public:
-		TakeInfo(const unsigned long startIndex, const wxString & projectName, ProdAuto::MxfTimecode startTimecode) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode) {};
+		ChunkInfo(const unsigned long startIndex, const wxString & projectName, ProdAuto::MxfTimecode startTimecode, const int64_t startPosition) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition) {};
 		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
 		void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
 		bool DeleteCuePoint(const unsigned long index) {
@@ -57,17 +57,19 @@ class TakeInfo
 		ArrayOfTrackList_var & GetTracks() {return mTracks;};
 		std::vector<int64_t> & GetCuePointFrames() {return mCuePointFrames;};
 		std::vector<size_t> & GetCueColourIndeces() {return mCueColourIndeces;};
+		int64_t GetStartPosition() {return mStartPosition;};
 	private:
-		const unsigned long mStartIndex; //the index in the event list for the start of this take
+		const unsigned long mStartIndex; //the index in the event list for the start of this chunk
 		ArrayOfStringSeq_var mFiles;
 		const wxString mProjectName;
 		ProdAuto::MxfTimecode mStartTimecode;
+		int64_t mStartPosition;
 		ArrayOfTrackList_var mTracks; //deletes itself
 		std::vector<int64_t> mCuePointFrames;
 		std::vector<size_t> mCueColourIndeces;
 };
 
-WX_DECLARE_OBJARRAY(TakeInfo, TakeInfoArray);
+WX_DECLARE_OBJARRAY(ChunkInfo, ChunkInfoArray);
 
 class RecorderData;
 
@@ -81,6 +83,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 			NONE = 0,
 			START,
 			CUE,
+			CHUNK,
 			STOP,
 			PROBLEM
 		};
@@ -89,20 +92,23 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		void DeleteCuePoint();
 		void Select(const long, const bool = false);
 		void SelectPrevTake(const bool);
-		void SelectAdjacentEvent(const bool);
+		void SelectAdjacentEvent(const bool, const bool = false);
 		void SelectNextTake();
 		void SelectLastTake();
 		void CanEdit(const bool);
-		bool LatestTakeCuePointIsSelected();
+		bool LatestChunkCuePointIsSelected();
 		bool AtTop();
 		bool AtStartOfTake();
 		bool InLastTake();
 		bool AtBottom();
-		bool SelectedTakeHasChanged();
+		bool SelectedChunkHasChanged();
 		bool SelectedEventHasChanged();
-		bool SetCurrentProjectName(const wxString &);
+		ProdAuto::MxfTimecode SetCurrentProjectName(const wxString &);
+		bool HasChunkBefore();
+		bool HasChunkAfter();
 		ProdAuto::LocatorSeq GetLocators();
-		TakeInfo * GetCurrentTakeInfo();
+		ChunkInfo * GetCurrentChunkInfo();
+		int64_t GetCurrentChunkStartPosition();
 		void Clear();
 	private:
 		ExitCode Entry();
@@ -111,16 +117,19 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		void OnRestoreListLabel(wxCommandEvent&);
 		void ClearSavedData();
 		const wxString GetCdata(wxXmlNode *);
-		void Load();
+		ProdAuto::MxfTimecode  Load();
+		void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t);
 
-		TakeInfoArray mTakeInfoArray;
+		ChunkInfoArray mChunkInfoArray;
 		bool mCanEdit;
-		long mCurrentTakeInfo;
+		long mCurrentChunkInfo;
 		long mCurrentSelectedEvent;
 		wxXmlNode * mRecordingNode;
+		wxXmlNode * mPrevRecordingNode;
 		wxMutex mMutex;
 		wxString mProjectName;
 		unsigned int mRecordingNodeCount;
+		bool mChunking;
 		//vbls used in both contexts while thread is running
 		wxCondition * mCondition;
 		wxXmlNode * mRootNode;

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.4 2009/02/26 19:17:10 john_f Exp $           *
+ *   $Id: timepos.cpp,v 1.5 2009/05/01 13:41:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -23,6 +23,8 @@
 
 #include "timepos.h"
 
+DEFINE_EVENT_TYPE(wxEVT_TIMEPOS_EVENT)
+
 BEGIN_EVENT_TABLE( Timepos, wxEvtHandler )
 	EVT_TIMER( -1, Timepos::OnRefreshTimer )
 END_EVENT_TABLE()
@@ -30,9 +32,10 @@ END_EVENT_TABLE()
 /// Sets displays to default, and starts update timer.
 /// @param timecodeDisplay The studio timecode display control.
 /// @param positionDisplay The position display control.
-Timepos::Timepos(wxStaticText * timecodeDisplay, wxStaticText * positionDisplay)
+Timepos::Timepos(wxEvtHandler * parent, wxStaticText * timecodeDisplay, wxStaticText * positionDisplay)
 : mTimecodeDisplay(timecodeDisplay), mPositionDisplay(positionDisplay)
 {
+	SetNextHandler(parent);
 	Reset();
 	wxTimer * refreshTimer = new wxTimer(this);
 	refreshTimer->Start(TC_DISPLAY_UPDATE_INTERVAL);
@@ -40,7 +43,7 @@ Timepos::Timepos(wxStaticText * timecodeDisplay, wxStaticText * positionDisplay)
 
 /// Responds to the update timer event.
 /// If timecode is running, updates the timecode display based the time since SetTimecode() was called.
-/// If the position display is running, updates it based on the time since Record() was called, or if the end of postroll has been reached, stops it and displays the exact recording length.
+/// If the position display is running, updates it based on the time since Record() was called, or if the end of postroll has been reached, stops it and displays the no position indication.
 /// @param event The timer event.
 void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 {
@@ -53,12 +56,37 @@ void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 			//display exact duration and stop
 			mPostrolling = false;
 			mPositionRunning = false;
-			mPositionDisplay->SetLabel(FormatPosition(mDuration));
+			SetPositionUnknown(true); //display "no position"
 		}
 		else {
 			//display position based on current time
-			mPositionDisplay->SetLabel(FormatPosition(wxDateTime::UNow() - mPositionOrigin, mDuration));
+			mPositionDisplay->SetLabel(FormatPosition(wxDateTime::UNow() - TimeFromTimecode(mStartTimecode), mLastKnownTimecode)); //use TimeFromTimecode every time to take into account system clock drift
 		}
+	}
+	if (!mTriggerTimecode.undefined && wxDateTime::UNow() >= TimeFromTimecode(mTriggerTimecode, mTriggerWrap)) { //use TimeFromTimecode every time to take into account system clock drift
+		wxCommandEvent event(wxEVT_TIMEPOS_EVENT);
+		ProdAuto::MxfTimecode * tc = new ProdAuto::MxfTimecode(mTriggerTimecode); //deleted by event handler
+		event.SetClientData(tc);
+		mTriggerHandler->AddPendingEvent(event);
+		mTriggerTimecode.undefined = true;
+	}
+}
+
+/// Sets the timecode for an event to be triggered.
+/// @param tc Timecode when trigger will happen.  Can have undefined flag set to stop a pending trigger.
+/// @param handler Event handler where event will be sent to.  If a trigger is already set, tc is defined and the handler is the same, the existing trigger will NOT be changed
+/// @param wrap True to indicate the timecode has wrapped around midnight
+/// @return True if trigger was set
+bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handler, bool wrap)
+{
+	if (!mTriggerTimecode.undefined && !tc->undefined && handler == mTriggerHandler) {
+		return false;
+	}
+	else {
+		mTriggerTimecode = *tc;
+		mTriggerHandler = handler;
+		mTriggerWrap = wrap;
+		return true;
 	}
 }
 
@@ -68,7 +96,7 @@ unsigned long Timepos::GetFrameCount()
 {
 	unsigned long frameCount = 0;
 	if (mPositionRunning) {
-		wxTimeSpan position = wxDateTime::UNow() - mPositionOrigin;
+		wxTimeSpan position = wxDateTime::UNow() - TimeFromTimecode(mStartTimecode);
 		frameCount = position.GetMilliseconds().GetLo() * mLastTimecodeReceived.edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000;
 	}
 	return frameCount;
@@ -80,29 +108,33 @@ unsigned long Timepos::GetFrameCount()
 const wxString Timepos::FormatPosition(const ProdAuto::MxfDuration duration)
 {
 	wxString msg = UNKNOWN_POSITION;
-	if (!duration.undefined) {
+	if (!duration.undefined && duration.edit_rate.numerator) { //latter a sanity check
 		wxTimeSpan timespan(0, 0, 0, (unsigned long) 1000 * duration.samples * duration.edit_rate.denominator / duration.edit_rate.numerator); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
-		msg = FormatPosition(timespan, duration);
+		ProdAuto::MxfTimecode editRate;
+		editRate.undefined = duration.undefined;
+		editRate.edit_rate.numerator = duration.edit_rate.numerator;
+		editRate.edit_rate.denominator = duration.edit_rate.denominator;
+		msg = FormatPosition(timespan, editRate);
 	}
 	return msg;
 }
 
 /// Converts a time span object into a string for display.
 /// @param timespan Contains the duration.
-/// @param duration Contains edit rate needed for conversion.
-const wxString Timepos::FormatPosition(const wxTimeSpan timespan, const ProdAuto::MxfDuration duration)
+/// @param editRate Contains edit rate needed for conversion.
+const wxString Timepos::FormatPosition(const wxTimeSpan timespan, const ProdAuto::MxfTimecode editRate)
 {
 	wxString msg;
-	if (duration.undefined) {
+	if (editRate.undefined || !editRate.edit_rate.denominator) {
 		msg = UNKNOWN_POSITION;
 	}
 	else {
 		//minutes
-		msg = timespan.GetMinutes() ? wxString::Format(wxT("%02d:"), timespan.GetMinutes()) : wxT("    "); //Minutes count to >59
+		msg = timespan.GetMinutes() ? wxString::Format(wxT(" %02d:"), timespan.GetMinutes()) : wxT("    "); //Minutes count to >59
 		//seconds
 		msg += wxString::Format(wxT("%02d:"), (int) (timespan.GetSeconds().GetLo() % 60));
 		//frames
-		msg += wxString::Format(wxT("%02d"), (int) (timespan.GetMilliseconds().GetLo() % 1000 * duration.edit_rate.numerator / duration.edit_rate.denominator / 1000));
+		msg += wxString::Format(wxT("%02d"), (int) (timespan.GetMilliseconds().GetLo() % 1000 * editRate.edit_rate.numerator / editRate.edit_rate.denominator / 1000));
 	}
 	return msg;
 }
@@ -118,14 +150,6 @@ const wxString Timepos::Record(const ProdAuto::MxfTimecode tc)
 		mStartTimecode = tc; //for calculating exact duration
 		mPositionRunning = true;
 		mPostrolling = false; //could still be postrolling a previous recording
-		//Work out the start time and date of the recording.  This allows recordings lasting >24 hours to display properly.
-		mPositionOrigin = wxDateTime::UNow();
-		mPositionOrigin.ResetTime(); //assume for the moment that recording started today
-		mPositionOrigin += wxTimeSpan(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //start timecode with today's date; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
-		mPositionOrigin -= mTimecodeOffset; //adjust to system clock
-		if (mPositionOrigin.Subtract(wxDateTime::UNow()).GetHours()) { //the recording appears to be at least an hour long already so must have started yesterday
-			mPositionOrigin.Subtract(wxDateSpan(0, 0, 0, 1));
-		}
 	}
 	else {
 		mStartTimecode.undefined = true;
@@ -143,23 +167,7 @@ void Timepos::Stop(const ProdAuto::MxfTimecode tc)
 	if (mPositionRunning) {
 		if (!tc.undefined && tc.edit_rate.numerator == mStartTimecode.edit_rate.numerator && tc.edit_rate.denominator == mStartTimecode.edit_rate.denominator) { //sensible values and can calculate exact duration (as edit rate is the same)
 			//Work out the stop time and date of the recording
-			mStopTime = wxDateTime::UNow();
-			mStopTime.ResetTime(); //assume for the moment that recording finishes today
-			mStopTime += wxTimeSpan(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //finish timecode with today's date; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
-			mStopTime -= mTimecodeOffset; //adjust to system clock
-			if (wxDateTime::UNow().Subtract(mStopTime).GetHours() > 0) { //the recording appears to have stopped more than an hour ago so must be stopping tomorrow
-				mStopTime.Add(wxDateSpan(0, 0, 0, 1));
-			}
-			mDuration.edit_rate.numerator = mStartTimecode.edit_rate.numerator;
-			mDuration.edit_rate.denominator = mStartTimecode.edit_rate.denominator;
-			mDuration.undefined = false;
-			if (tc.samples <= mStartTimecode.samples) { //have rolled over midnight
-				//add a day's worth of samples
-				mDuration.samples = tc.samples - mStartTimecode.samples + 3600 * 24 * tc.edit_rate.denominator / tc.edit_rate.numerator;
-			}
-			else {
-				mDuration.samples = tc.samples - mStartTimecode.samples;
-			}
+			mStopTime = TimeFromTimecode(tc);
 			mPostrolling = true; //start checking for stop time
 		}
 		else {
@@ -168,6 +176,28 @@ void Timepos::Stop(const ProdAuto::MxfTimecode tc)
 			mPositionDisplay->SetLabel(UNKNOWN_POSITION);
 		}
 	}
+}
+
+/// Converts a timecode into a wxDateTime object with today's date, adjusted for system time offset
+/// @param wrap Add an extra day.
+wxDateTime Timepos::TimeFromTimecode(const ProdAuto::MxfTimecode & tc, bool wrap)
+{
+	wxDateTime tm = wxDateTime::UNow();
+	if (wrap) { //next day
+		tm.Add(wxDateSpan(0, 0, 0, 1));
+	}
+	tm.ResetTime(); //assume for the moment that timecode is for today
+	if (tc.edit_rate.numerator) { //sanity check
+		tm += wxTimeSpan(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //start timecode with today's date; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
+	}
+	tm -= mTimecodeOffset; //adjust to system clock
+	if (tm.Subtract(wxDateTime::UNow()).GetHours()) { //seems to be at least an hour later than real time so must be yesterday
+		tm.Subtract(wxDateSpan(0, 0, 0, 1));
+	}
+	else if (wxDateTime::UNow().Subtract(tm).GetHours() > 0) { //seems to be at least an hour earlier than real time so must be tomorrow
+		tm.Add(wxDateSpan(0, 0, 0, 1));
+	}
+	return tm;
 }
 
 /// Supplies the timecode corresponding to now, both as a timecode structure and a formatted string.
@@ -215,22 +245,10 @@ const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
 	}
 }
 
-/// @return The formatted string displayed on the position control, or a similarly formatted string showing the recording duration, if postrolling.
-const wxString Timepos::GetPosition()
-{
-	if (mPostrolling) {
-		//we're really at the end of the recording, even though the display is still moving
-		return FormatPosition(mDuration);
-	}
-	else {
-		return mPositionDisplay->GetLabel();
-	}
-}
-
 /// @return The formatted string representing the very start of a recording.
 const wxString Timepos::GetStartPosition()
 {
-	return FormatPosition(wxTimeSpan(0, 0, 0, 0), mDuration);
+	return FormatPosition(wxTimeSpan(0, 0, 0, 0), mLastKnownTimecode);
 }
 
 /// Returns the system to its initial state.
@@ -238,17 +256,17 @@ void Timepos::Reset()
 {
 	DisableTimecode();
 	mLastKnownTimecode.undefined = true;
-	mDuration.undefined = true;
 	mPositionDisplay->SetLabel(NO_POSITION);
 	mPostrolling = false;
 	mPositionRunning = false;
+	mTriggerTimecode.undefined = true;
 }
 
 /// Manually sets the position display to a given position, based on the edit rate in use.
 /// @param samples The number of frames into the recording.
 void Timepos::SetPosition(unsigned long samples) {
-	if (!mLastKnownTimecode.undefined) {
-		mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (unsigned long) 1000 * samples * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator), mDuration)); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
+	if (!mLastKnownTimecode.undefined && mLastKnownTimecode.edit_rate.numerator) {
+		mPositionDisplay->SetLabel(FormatPosition(wxTimeSpan(0, 0, 0, (unsigned long) 1000 * samples * mLastKnownTimecode.edit_rate.denominator / mLastKnownTimecode.edit_rate.numerator), mLastKnownTimecode)); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
 	}
 }
 
@@ -286,9 +304,6 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 	else if (tc.edit_rate.numerator && tc.edit_rate.denominator) { //sensible values: no chance of divide by zero!
 		mLastTimecodeReceived = tc;
 		mLastKnownTimecode = tc;
-		mDuration.edit_rate.numerator = tc.edit_rate.numerator;
-		mDuration.edit_rate.denominator = tc.edit_rate.denominator;
-		mDuration.undefined = false;
 		if (stuck) {
 			mTimecodeRunning = false;
 			//show the stuck value
@@ -312,10 +327,8 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 	}
 }
 
-/// Sets the edit rate if it's not already set
+/// Sets the edit rate
 /// @param rate Edit rate - this is not checked for sensible values.
 void Timepos::SetDefaultEditRate(const ProdAuto::MxfTimecode rate) {
-	if (mLastKnownTimecode.undefined) {
-		mLastKnownTimecode = rate;
-	}
+	mLastKnownTimecode = rate;
 }

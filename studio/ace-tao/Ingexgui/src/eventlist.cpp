@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.3 2009/02/27 12:19:16 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.4 2009/05/01 13:41:34 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -40,11 +40,11 @@ BEGIN_EVENT_TABLE( EventList, wxListView )
 	EVT_COMMAND( wxID_ANY, wxEVT_RESTORE_LIST_LABEL, EventList::OnRestoreListLabel )
 END_EVENT_TABLE()
 
-const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Stop"), wxT("PROBLEM")}; //must match order of EventType enum
+const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCurrentTakeInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0), mRunThread(false), mSyncThread(false)
+mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0),  mChunking(false), mRunThread(false), mSyncThread(false)
 {
 	//set up the columns
 	wxListItem itemCol;
@@ -74,18 +74,64 @@ mCurrentTakeInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0), mRunThr
 	wxThread::Run();
 }
 
-/// Returns the take info of the currently selected take, if any
-TakeInfo * EventList::GetCurrentTakeInfo()
+/// Returns the chunk info of the currently selected chunk, if any
+ChunkInfo * EventList::GetCurrentChunkInfo()
 {
-	TakeInfo * currentTake = 0;
+	ChunkInfo * currentChunk = 0;
 	long selected = GetFirstSelected();
 	if (-1 < selected) { //something's selected
 		wxListItem item;
 		item.SetId(selected);
-		GetItem(item); //the take info index is in this item's data
-		currentTake = &mTakeInfoArray.Item(item.GetData());
+		GetItem(item); //the chunk info index is in this item's data
+		currentChunk = &mChunkInfoArray.Item(item.GetData());
 	}
-	return currentTake;
+	return currentChunk;
+}
+
+/// Returns the position in frames from the start of the selected recording of the start of the selected chunk
+int64_t EventList::GetCurrentChunkStartPosition()
+{
+	ChunkInfo * currentChunk = GetCurrentChunkInfo();
+	if (currentChunk) {
+		return currentChunk->GetStartPosition();
+	}
+	else {
+		return 0;
+	}
+}
+
+/// returns true if the currently selected chunk follows on from an earlier chunk in the same recording
+bool EventList::HasChunkBefore()
+{
+	bool hasChunkBefore = false;
+	long selected = GetFirstSelected();
+	if (-1 < selected) { //something's selected
+		wxListItem item;
+		item.SetId(selected);
+		GetItem(item); //the chunk info index is in this item's data
+		item.SetId(mChunkInfoArray.Item(item.GetData()).GetStartIndex()); //the position in the list of the start of this chunk
+		GetItem(item);
+		hasChunkBefore = item.GetText() == TypeLabels[CHUNK]; //if this event is labelled a chunk, it follows on from a previous chunk
+	}
+	return hasChunkBefore;
+}
+
+/// returns true if the currently selected chunk has a chunk following it in the same recording
+bool EventList::HasChunkAfter()
+{
+	bool hasChunkAfter = false;
+	long selected = GetFirstSelected();
+	if (-1 < selected) { //something's selected
+		wxListItem item;
+		item.SetId(selected);
+		GetItem(item); //the chunk info index is in this item's data
+		if (mChunkInfoArray.GetCount() - 1 != item.GetData()) { //not the last chunk
+			item.SetId(mChunkInfoArray.Item(item.GetData() + 1).GetStartIndex()); //the position in the list of the start of the next chunk
+			GetItem(item);
+			hasChunkAfter = item.GetText() == TypeLabels[CHUNK]; //if this event is labelled a chunk, it follows on from the current chunk
+		}
+	}
+	return hasChunkAfter;
 }
 
 /// Responds to an attempt to edit in the event list.
@@ -147,26 +193,26 @@ void EventList::OnRestoreListLabel(wxCommandEvent& event)
 	SetItem(item);
 }
 
-/// Clears the list and the take info.
+/// Clears the list and the chunk info array.
 void EventList::Clear()
 {
 	DeleteAllItems();
-	mTakeInfoArray.Empty();
-	mCurrentTakeInfo = -1;
+	mChunkInfoArray.Empty();
+	mCurrentChunkInfo = -1;
 	mCurrentSelectedEvent = -1;
 	ClearSavedData();
 }
 
-/// Returns true if the selected take has changed since the last time this function was called.
-bool EventList::SelectedTakeHasChanged()
+/// Returns true if the selected chunk has changed since the last time this function was called.
+bool EventList::SelectedChunkHasChanged()
 {
 	bool hasChanged = true; //err on the safe side
-	if (mTakeInfoArray.GetCount()) { //sanity check
+	if (mChunkInfoArray.GetCount()) { //sanity check
 		wxListItem item;
 		item.SetId(GetFirstSelected());
 		GetItem(item); //the take info index is in this item's data
-		hasChanged = (long) item.GetData() != mCurrentTakeInfo; //GetData() is supposed to return a long anyway...
-		mCurrentTakeInfo = item.GetData();
+		hasChanged = (long) item.GetData() != mCurrentChunkInfo; //GetData() is supposed to return a long anyway...
+		mCurrentChunkInfo = item.GetData();
 	}
 	return hasChanged;
 }
@@ -192,21 +238,24 @@ void EventList::Select(const long item, const bool doNotFlag)
 
 /// Moves to the start event of the current take or the start of the previous take.
 /// Generates a select event if new event selected.
-/// @param withinTake True to move to the start of the current take rather than the previous take.
+/// @param withinTake True to move to the start of the current take rather than the previous take; assumed to be at the start event of a take if this is false
 void EventList::SelectPrevTake(const bool withinTake) {
-	long selected = GetFirstSelected();
-	if (0 < selected) { //something's selected and it's not the first event
-		wxListItem item;
-		item.SetId(selected);
-		GetItem(item); //the take info index is in this item's data
-		if (withinTake || (long) mTakeInfoArray.Item(item.GetData()).GetStartIndex() != selected || 0 == item.GetData()) { //within a take or the first take
-			//move to the start of this take (if not already there)
-			Select(mTakeInfoArray.Item(item.GetData()).GetStartIndex());
+	wxListItem item;
+	if (withinTake) {
+		item.SetId(GetFirstSelected());
+	}
+	else {
+		item.SetId(GetFirstSelected() - 1);
+	}
+	while (item.GetId() > 0) {
+		GetItem(item);
+		if (item.GetText() == TypeLabels[START]) { //found the start of the recording
+			break;
 		}
-		else { //at the start of a take which is not the first
-			//move to the start of the previous take
-			Select(mTakeInfoArray.Item(item.GetData() - 1).GetStartIndex());
-		}
+		item.SetId(item.GetId() - 1);
+	}
+	if (item.GetId() > -1) {
+		Select(item.GetId());
 		EnsureVisible(GetFirstSelected());
 	}
 }
@@ -214,7 +263,8 @@ void EventList::SelectPrevTake(const bool withinTake) {
 /// Moves up or down the event list by one item, if possible.
 /// Generates a select event if new event selected.
 /// @param down True to move downwards; false to move upwards.
-void EventList::SelectAdjacentEvent(const bool down) {
+/// @param doNotFlag Do not flag the change for SelectedEventHasChanged() if not already changed
+void EventList::SelectAdjacentEvent(const bool down, const bool doNotFlag) {
 	long selected = GetFirstSelected();
 	if (-1 == selected) {
 		//nothing selected
@@ -228,6 +278,9 @@ void EventList::SelectAdjacentEvent(const bool down) {
 		//not the last item
 		Select(++selected); //select next item down
 	}
+	if (doNotFlag && selected != mCurrentSelectedEvent) {
+		mCurrentSelectedEvent = selected;
+	}
 	EnsureVisible(selected); //scroll if necessary
 }
 
@@ -235,27 +288,34 @@ void EventList::SelectAdjacentEvent(const bool down) {
 /// Generates a select event if new event selected.
 void EventList::SelectNextTake()
 {
-	long selected = GetFirstSelected();
-	if (mTakeInfoArray.GetCount() && -1 < selected) { //sanity check
-		wxListItem item;
-		item.SetId(selected);
-		GetItem(item); //the take info index is in this item's data
-		if (mTakeInfoArray.GetCount() - 1 == item.GetData()) { //last take is selected
-			//move to end of last take
-			Select(GetItemCount() - 1);
-		}
-		else {
-			//move to start of next take
-			Select(mTakeInfoArray.Item(item.GetData() + 1).GetStartIndex());
+	wxListItem item;
+	item.SetId(GetFirstSelected());
+	while (item.GetId() < GetItemCount() - 1) {
+		item.SetId(item.GetId() + 1);
+		GetItem(item);
+		if (item.GetText() == TypeLabels[START]) { //found the start of the next recording
+			break;
 		}
 	}
+	Select(item.GetId());
+	EnsureVisible(GetFirstSelected());
 }
 
 /// Moves to the start of the last take, if possible.
 /// Generates a select event if new event selected.
 void EventList::SelectLastTake() {
-	if (mTakeInfoArray.GetCount()) { //sanity check
-		Select(mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartIndex());
+	wxListItem item;
+	item.SetId(GetItemCount());
+	while (item.GetId()) {
+		item.SetId(item.GetId() - 1);
+		GetItem(item);
+		if (item.GetText() == TypeLabels[START]) { //found the start of the last recording
+			break;
+		}
+	}
+	if (GetItemCount()) {
+		Select(item.GetId());
+		EnsureVisible(GetFirstSelected());
 	}
 }
 
@@ -265,14 +325,14 @@ void EventList::CanEdit(const bool canEdit)
 	mCanEdit = canEdit;
 }
 
-/// Returns true if an event is selected and if it's a cue point in the latest take.
-bool EventList::LatestTakeCuePointIsSelected() {
+/// Returns true if an event is selected and if it's a cue point in the latest chunk.
+bool EventList::LatestChunkCuePointIsSelected() {
 	bool isCuePoint = false;
 	if (-1 < GetFirstSelected()) {
 		wxListItem item;
 		item.SetId(GetFirstSelected());
-		GetItem(item); //the take info index is in this item's data
-		isCuePoint = item.GetData() == mTakeInfoArray.GetCount() - 1 && item.GetText() == TypeLabels[CUE];
+		GetItem(item); //the chunk info index is in this item's data
+		isCuePoint = item.GetData() == mChunkInfoArray.GetCount() - 1 && item.GetText() == TypeLabels[CUE];
 	}
 	return isCuePoint;
 }
@@ -301,10 +361,17 @@ bool EventList::InLastTake()
 {
 	bool inLastTake = false;
 	if (-1 < GetFirstSelected()) {
+		inLastTake = true;
 		wxListItem item;
-		item.SetId(GetFirstSelected());
-		GetItem(item); //the take info index is in this item's data
-		inLastTake = item.GetData() == mTakeInfoArray.GetCount() - 1;
+		item.SetId(GetFirstSelected() + 1);
+		while (item.GetId() < GetItemCount()) {
+			GetItem(item);
+			if (item.GetText() == TypeLabels[START]) { //there's another take
+				inLastTake = false;
+				break;
+			}
+			item.SetId(item.GetId() + 1);
+		}
 	}
 	return inLastTake;
 }
@@ -315,13 +382,13 @@ bool EventList::AtBottom()
 	return GetFirstSelected() == GetItemCount() - 1 || -1 == GetFirstSelected();
 }
 
-/// Adds a stop/start/cue point event to the event list.
+/// Adds a stop/start/chunk/cue point event to the event list.
 /// Start and stop events are ignored if already started/stopped
-/// For start events, creates a new TakeInfo object.
+/// For start and chunk events, creates a new ChunkInfo object.
 /// Updates the other controls and the player.
-/// @param type The event type: START, CUE, STOP or [PROBLEM]-not fully implemented.
-/// @param timecode Timecode of the event, for START and optionally STOP events (for STOP events, assumed to be frame-accurate, unlike frameCount).
-/// @param frameCount The position in frames, for CUE and STOP events. (For STOP events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
+/// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
+/// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
+/// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
 /// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
 void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const int64_t frameCount, const wxString & description, const size_t colourIndex)
@@ -338,35 +405,20 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 			return;
 		}
 	}
-	//Reject adding non-start event as first event (sanity check) - prevents there being list entries with no associated take info object
+	//Reject adding non-start event as first event (sanity check) - prevents there being list entries with no associated chunk info object
 	else if (START != type) {
 		return;
 	}
-	//Try to add edit rate - can't guarantee that the first start event will have a valid timecode
 	wxString dummy;
-	mMutex.Lock();
-	if (!mRootNode->GetPropVal(wxT("EditRateNumerator"), &dummy) && timecode && !timecode->undefined) {
-		mRootNode->AddProperty(wxT("EditRateNumerator"), wxString::Format(wxT("%d"), timecode->edit_rate.numerator));
-		mRootNode->AddProperty(wxT("EditRateDenominator"), wxString::Format(wxT("%d"), timecode->edit_rate.denominator));
-	}
 	int64_t position = frameCount;
-	mMutex.Unlock();
+	ProdAuto::MxfTimecode tc = InvalidMxfTimecode;
 	wxFont font(EVENT_FONT_SIZE, wxFONTFAMILY_DEFAULT, wxFONTFLAG_UNDERLINED, wxFONTFLAG_UNDERLINED);
 	switch (type) {
 		case START :
-			mMutex.Lock();
-			mRecordingNode = new wxXmlNode(mRootNode, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mRecordingNodeCount++)));
-			mMutex.Unlock();
-			if (!timecode->undefined) {
-				mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
-			}
+			NewChunkInfo(timecode, 0);
 			item.SetText(TypeLabels[START]);
 			item.SetTextColour(wxColour(0xFF, 0x20, 0x00));
 			item.SetBackgroundColour(wxColour(wxT("WHITE")));
-			{
-				TakeInfo * info = new TakeInfo(GetItemCount(), mProjectName, *timecode); //this will be the index of the current event
-				mTakeInfoArray.Add(info); //deleted by array (object array)
-			}
 //			font.SetWeight(wxFONTWEIGHT_BOLD); breaks auto col width
 //			font.SetStyle(wxFONTSTYLE_ITALIC); breaks auto col width
 			break;
@@ -374,20 +426,34 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 			item.SetText(TypeLabels[CUE]);
 			item.SetTextColour(CuePointsDlg::GetLabelColour(colourIndex));
 			item.SetBackgroundColour(CuePointsDlg::GetColour(colourIndex));
-			mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).AddCuePoint(frameCount, colourIndex);
+			mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).AddCuePoint(frameCount, colourIndex);
 			break;
 		case STOP :
-			item.SetText(TypeLabels[STOP]);
-			item.SetTextColour(wxColour(wxT("BLACK"))); //needed with cygwin for text to appear
+		case CHUNK :
+			mChunking = CHUNK == type;
+			item.SetText(mChunking ? TypeLabels[CHUNK] : TypeLabels[STOP]);
+			item.SetTextColour(mChunking ? wxColour(wxT("GREY")) : wxColour(wxT("BLACK")));
 			item.SetBackgroundColour(wxColour(wxT("WHITE")));
+			mRecordingNode->AddProperty(wxT("Linking"), mChunking ? wxT("Continues") : wxT("Finishes"));
 			if (!description.IsEmpty()) {
 				new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
 			}
 			if (timecode && !timecode->undefined) {
-				position = timecode->samples - mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartTimecode().samples; //this is the correct number of samples, but mod one day as timecodes wrap at 24 hours
+				//find the recording's start timecode to work out the exact duration mod 1 day
+				wxListItem startItem;
+				startItem.SetId(GetItemCount());
+				while (startItem.GetId()) {
+					startItem.SetId(startItem.GetId() - 1);
+					GetItem(startItem);
+					if (startItem.GetText() == TypeLabels[START]) {
+						position = timecode->samples - mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode().samples;
+						break;
+					}
+				}
 				if (position < 0) { //rolled over midnight
 					position += 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator;
 				}
+				//use the approx. framecount to add whole days
 				int64_t totalMinutes = frameCount / timecode->edit_rate.numerator * timecode->edit_rate.denominator / 60; //this is an approx number of minutes in total
 				if (position < 3600 * 12 * timecode->edit_rate.numerator / timecode->edit_rate.denominator) { //fractional day is less than half
 					totalMinutes += 1; //nudge upwards to ensure all the days are added if frameCount is a bit low
@@ -396,38 +462,68 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 					totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
 				}
 				position += (totalMinutes / 60 / 24) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
-				mRecordingNode->AddProperty(wxT("StopSamples"), wxString::Format(wxT("%d"), position));
+				mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //first sample not recorded. Relative to start of chunk
 			}
 			else if (frameCount) {
-				mRecordingNode->AddProperty(wxT("StopSamples"), wxString::Format(wxT("%d"), frameCount));
+				mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //less accurate than the above. Relative to start of chunk
+				wxListItem startItem;
+				startItem.SetId(GetItemCount());
+				while (startItem.GetId()) {
+					startItem.SetId(startItem.GetId() - 1);
+					GetItem(startItem);
+					if (startItem.GetText() == TypeLabels[START]) {
+						tc = mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode();
+						break;
+					}
+				}
+				tc.samples += frameCount;
+				tc.samples %= 24LL * 3600 * tc.edit_rate.numerator / tc.edit_rate.denominator;
+				timecode = &tc;
+				position = frameCount;
 			}
-			//add cue points to XML doc now, because they could have been edited or deleted up to this point
+			else {
+				timecode = &tc; //invalid timecode
+			}
+			//add all cue points to XML doc now, because they could have been edited or deleted up to this point
 			{
-				TakeInfo latestTakeInfo = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1);
+				ChunkInfo latestChunkInfo = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1);
 				wxListItem item;
 				item.SetColumn(3); //description column
-				for (unsigned int i = 0; i < latestTakeInfo.GetCueColourIndeces().size(); i++) {
-					item.SetId(latestTakeInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
+				for (unsigned int i = 0; i < latestChunkInfo.GetCueColourIndeces().size(); i++) {
+					item.SetId(latestChunkInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
 					GetItem(item);
 					wxXmlNode * cuePointNode = new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("CuePoint"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), i)));
-					cuePointNode->AddProperty(wxT("Samples"), wxString::Format(wxT("%d"), latestTakeInfo.GetCuePointFrames()[i]));
-					cuePointNode->AddProperty(wxT("Colour"), wxString::Format(wxT("%d"), CuePointsDlg::GetColourCode(latestTakeInfo.GetCueColourIndeces()[i])));
+					cuePointNode->AddProperty(wxT("Sample"), wxString::Format(wxT("%d"), latestChunkInfo.GetCuePointFrames()[i]));
+					cuePointNode->AddProperty(wxT("Colour"), wxString::Format(wxT("%d"), CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i])));
 					if (item.GetText().length()) {
 						new wxXmlNode(cuePointNode, wxXML_CDATA_SECTION_NODE, wxT(""), item.GetText());
 					}
 				}
 			}
+			if (mChunking) {
+				//chunking is like stopping and then immediately starting again
+				NewChunkInfo(timecode, position);
+			}
 			break;
-		default : //FIXME: putting these in will break the creation of the list of locators in OnStop()
+		default : //FIXME: putting these in will break the creation of the list of locators
 			item.SetText(TypeLabels[PROBLEM]);
 			item.SetTextColour(wxColour(wxT("RED")));
 			item.SetBackgroundColour(wxColour(wxT("WHITE")));
 			break;
 	}
+	mMutex.Lock();
+	//Try to add edit rate - can't guarantee that the first start event will have a valid timecode
+	if (!mRootNode->GetPropVal(wxT("EditRateNumerator"), &dummy) && timecode && !timecode->undefined) {
+		mRootNode->AddProperty(wxT("EditRateNumerator"), wxString::Format(wxT("%d"), timecode->edit_rate.numerator));
+		mRootNode->AddProperty(wxT("EditRateDenominator"), wxString::Format(wxT("%d"), timecode->edit_rate.denominator));
+	}
+	mRunThread = true; //in case thread is busy so misses the signal
+	mCondition->Signal();
+	mMutex.Unlock();
 
-	item.SetColumn(0);
+	item.SetColumn(0); //event name column
 	item.SetId(GetItemCount()); //will insert at end
-	item.SetData(mTakeInfoArray.GetCount() - 1); //the index of the take info for this take
+	item.SetData(mChunkInfoArray.GetCount() - 1); //the index of the chunk info for this chunk
 	InsertItem(item); //insert (at end)
 	EnsureVisible(item.GetId()); //scroll down if necessary
 	if (START == type) {
@@ -440,15 +536,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
 	//timecode
 	item.SetColumn(1);
-	if (timecode) {
-		item.SetText(Timepos::FormatTimecode(*timecode));
+	if (STOP == type && !timecode->undefined) {
+		--(timecode->samples) %= 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //previous frame is the last recorded; wrap-around
 	}
-	else {
-		ProdAuto::MxfTimecode tc = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartTimecode();
-		tc.samples += frameCount; //will wrap automatically on display
-		tc.undefined |= 0 == frameCount;
-		item.SetText(Timepos::FormatTimecode(tc));
-	}
+	item.SetText(Timepos::FormatTimecode(*timecode));
 	font.SetFamily(wxFONTFAMILY_MODERN); //fixed pitch so fields don't move about
 	SetItem(item);
 #ifndef __WIN32__
@@ -457,10 +548,13 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
 	//position
 	ProdAuto::MxfDuration duration;
-	duration.edit_rate.numerator = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartTimecode().edit_rate.numerator;
-	duration.edit_rate.denominator = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartTimecode().edit_rate.denominator;
-	duration.undefined = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).GetStartTimecode().undefined;
+	duration.edit_rate.numerator = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartTimecode().edit_rate.numerator;
+	duration.edit_rate.denominator = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartTimecode().edit_rate.denominator;
+	duration.undefined = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartTimecode().undefined;
 	duration.samples = position;
+	if (STOP == type) {
+		duration.samples--; //previous frame is the last recorded
+	}
 	item.SetColumn(2);
 	item.SetText(Timepos::FormatPosition(duration));
 	SetItem(item); //additional to previous data
@@ -473,7 +567,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	if (START == type) {
 		item.SetText(mProjectName);
 	}
-	else if (STOP == type || CUE == type) {
+	else if (STOP == type || CUE == type || CHUNK == type) {
 		item.SetText(description);
 	}
 	if (item.GetText().Len()) { //kludge to stop desc field being squashed if all descriptions are empty
@@ -489,15 +583,31 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	}
 }
 
-/// Adds track and file list data to the latest take info.
+/// Generates a new ChunkInfo object and Recording XML node for a new recording or chunk
+/// @param timecode Start time (can be undefined)
+/// @param position Start position relative to start of recording
+void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
+{
+	mPrevRecordingNode = mRecordingNode; //so that in chunking mode, recorder data can be added to the previous recording
+	mMutex.Lock();
+	mRecordingNode = new wxXmlNode(mRootNode, wxXML_ELEMENT_NODE, wxT("Recording"), wxT(""), new wxXmlProperty(wxT("Index"), wxString::Format(wxT("%d"), mRecordingNodeCount++)));
+	mMutex.Unlock();
+	if (!timecode->undefined) {
+		mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
+	}
+	ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
+	mChunkInfoArray.Add(info);
+}
+
+/// Adds track and file list data to the latest chunk info.
 void EventList::AddRecorderData(RecorderData * data)
 {
-	if (mTakeInfoArray.GetCount()) { //sanity check
-		mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1).AddRecorder(data->GetTrackList(), data->GetFileList());
+	if (mChunkInfoArray.GetCount() > mChunking ? 1 : 0) { //sanity check
+		mChunkInfoArray.Item(mChunkInfoArray.GetCount() - (mChunking ? 2 : 1)).AddRecorder(data->GetTrackList(), data->GetFileList());
 		unsigned int index = 0;
 		for (size_t i = 0; i < data->GetTrackList()->length(); i++) {
 			if (data->GetTrackList()[i].has_source && strlen(data->GetFileList()[i].in())) { //tracks not enabled for record have blank filenames
-				wxXmlNode * fileNode = new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("Video") : wxT("Audio")));
+				wxXmlNode * fileNode = new wxXmlNode(mChunking ? mPrevRecordingNode : mRecordingNode, wxXML_ELEMENT_NODE, wxT("File"), wxT(""), new wxXmlProperty(wxT("Type"), ProdAuto::VIDEO == (data->GetTrackList())[i].type ? wxT("Video") : wxT("Audio")));
 				fileNode->AddProperty(wxT("Index"), wxString::Format(wxT("%d"), index++));
 				new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Label")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetTrackList())[i].src.package_name, *wxConvCurrent));
 				new wxXmlNode(new wxXmlNode(fileNode, wxXML_ELEMENT_NODE, wxT("Path")), wxXML_CDATA_SECTION_NODE, wxT(""), wxString((data->GetFileList())[i].in(), *wxConvCurrent));
@@ -514,10 +624,10 @@ void EventList::AddRecorderData(RecorderData * data)
 /// Does not check if recording is still in progress.
 void EventList::DeleteCuePoint()
 {
-	if (mTakeInfoArray.GetCount()) { //sanity check
-		//remove cue point from take info
+	if (mChunkInfoArray.GetCount()) { //sanity check
+		//remove cue point from chunk info
 		long selected = GetFirstSelected();
-		if (mTakeInfoArray[mTakeInfoArray.GetCount() - 1].DeleteCuePoint(selected - mTakeInfoArray[mTakeInfoArray.GetCount() - 1].GetStartIndex() - 1)) { //sanity check; the last 1 is to jump over the start event
+		if (mChunkInfoArray[mChunkInfoArray.GetCount() - 1].DeleteCuePoint(selected - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartIndex() - 1)) { //sanity check; the last 1 is to jump over the start event
 			//remove displayed cue point
 			wxListItem item;
 			item.SetId(selected);
@@ -528,22 +638,22 @@ void EventList::DeleteCuePoint()
 	}
 }
 
-/// Returns information about the locators (cue points) in the latest take.
+/// Returns information about the locators (cue points) in the latest chunk.
 ProdAuto::LocatorSeq EventList::GetLocators()
 {
 	ProdAuto::LocatorSeq locators;
-	if (mTakeInfoArray.GetCount()) { //sanity check
-		TakeInfo latestTakeInfo = mTakeInfoArray.Item(mTakeInfoArray.GetCount() - 1);
-		locators.length(latestTakeInfo.GetCueColourIndeces().size());
+	if (mChunkInfoArray.GetCount()) { //sanity check
+		ChunkInfo latestChunkInfo = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1);
+		locators.length(latestChunkInfo.GetCueColourIndeces().size());
 		wxListItem item;
 		item.SetColumn(3); //description column
 		for (unsigned int i = 0; i < locators.length(); i++) {
-			item.SetId(latestTakeInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
+			item.SetId(latestChunkInfo.GetStartIndex() + i + 1); //the 1 is to jump over the start event
 			GetItem(item);
 			locators[i].comment = item.GetText().mb_str(*wxConvCurrent);
-			locators[i].colour = CuePointsDlg::GetColourCode(latestTakeInfo.GetCueColourIndeces()[i]);
-			locators[i].timecode = latestTakeInfo.GetStartTimecode();
-			locators[i].timecode.samples = latestTakeInfo.GetCuePointFrames()[i] % (24 * 3600 * latestTakeInfo.GetStartTimecode().edit_rate.numerator / latestTakeInfo.GetStartTimecode().edit_rate.denominator);
+			locators[i].colour = CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i]);
+			locators[i].timecode = latestChunkInfo.GetStartTimecode();
+			locators[i].timecode.samples = latestChunkInfo.GetCuePointFrames()[i] % (24 * 3600 * latestChunkInfo.GetStartTimecode().edit_rate.numerator / latestChunkInfo.GetStartTimecode().edit_rate.denominator);
 		}
 	}
 	return locators;
@@ -552,8 +662,8 @@ ProdAuto::LocatorSeq EventList::GetLocators()
 /// Sets the project name, for use in start event description and the filename of the saved events.
 /// This will generate a new XML file when new recordings are made.
 /// Assumes that the current XML file is up to date.
-/// @return True if there are events in the list.
-bool EventList::SetCurrentProjectName(const wxString & name)
+/// @return timecode for edit rate info
+ProdAuto::MxfTimecode EventList::SetCurrentProjectName(const wxString & name)
 {
 	mProjectName = name;
 	wxString filename = name;
@@ -564,8 +674,7 @@ bool EventList::SetCurrentProjectName(const wxString & name)
 	filename += wxDateTime::Now().Format(wxT("-%y%m%d"));
 	ClearSavedData();
 	mFilename = filename; //safe to do this after calling ClearSavedData()
-	Load();
-	return GetItemCount();
+	return Load();
 }
 
 /// Populates the XML tree from a file, which will then be used to save to when new events are added.
@@ -573,16 +682,17 @@ bool EventList::SetCurrentProjectName(const wxString & name)
 /// Calls AddEvent() and AddRecorderData() in the same way a live recording would.
 /// Does not clear existing events from the event list.
 /// Assumes ClearSavedData() has been called since the last save.
-void EventList::Load()
+/// @return timecode for edit rate info
+ProdAuto::MxfTimecode EventList::Load()
 {
 	wxXmlDocument doc;
 	bool haveProjectNameNode = false;
+	ProdAuto::MxfTimecode timecode = InvalidMxfTimecode;
 	wxXmlNode * loadedRootNode = 0; //initialisation prevents compiler warning
 	if (wxFile::Exists(mFilename) && doc.Load(mFilename) && (loadedRootNode = doc.GetRoot())) {
- 		if (ROOT_NODE_NAME == loadedRootNode->GetName()) {
+		if (ROOT_NODE_NAME == loadedRootNode->GetName()) {
 			wxString str;
 			long long1, long2;
-			ProdAuto::MxfTimecode timecode;
 			//get edit rate (if present; if not, no timecodes will be valid)
 			if (loadedRootNode->GetPropVal(wxT("EditRateNumerator"), &str)
 			 && str.ToLong(&long1)
@@ -632,6 +742,7 @@ void EventList::Load()
 			}
 			if (loadedRootNode->GetChildren()) {
 				//iterate over the recording nodes
+				long lastPosition = 0;
 				for (size_t i = 0; i < recordingNodes.size(); i++) {
 					wxString description;
 					if (recordingNodes[i]) {
@@ -692,7 +803,7 @@ void EventList::Load()
 						//add cue points to the event list
 						for (size_t j = 0; j < cuePointNodes.size(); j++) {
 							if (cuePointNodes[j]
-							 && cuePointNodes[j]->GetPropVal(wxT("Samples"), &str)
+							 && cuePointNodes[j]->GetPropVal(wxT("Sample"), &str)
 							 && str.ToLong(&long1)
 							 && 0 <= long1
 							) {
@@ -706,16 +817,21 @@ void EventList::Load()
 								AddEvent(CUE, 0, long1, GetCdata(cuePointNodes[j]), (size_t) long2);
 							}
 						}
-						//add recording stop to the event list
+						//add chunk stop to the event list
 						long1 = 0; //indicates unknown
-						if (!recordingNodes[i]->GetPropVal(wxT("StopSamples"), &str)
+						if (!recordingNodes[i]->GetPropVal(wxT("OutSample"), &str)
 						 || !str.ToLong(&long1)
 						 || 0 > long1
 						) {
 							long1 = 0;
 						}
-						AddEvent(STOP, 0, long1, description);
-						//add tracks/files to the take info
+						lastPosition += long1; //OutSample is relative to start of chunk; make it relative to start of recording
+						str = recordingNodes[i]->GetPropVal(wxT("Linking"), wxT("Finishes"));
+						AddEvent(wxT("Continues") == str ? CHUNK : STOP, 0, lastPosition, description);
+						if (wxT("Continues") != str) {
+							lastPosition = 0;
+						}
+						//add tracks/files to the chunk info
 						ProdAuto::TrackList_var trackList = new ProdAuto::TrackList;
 						CORBA::StringSeq_var fileList = new CORBA::StringSeq;
 						trackList->length(fileNodes.size());
@@ -749,6 +865,7 @@ void EventList::Load()
 			} //root node has children
 		} //root node name correct
 	} //file is OK
+	return timecode;
 }
 
 /// If the given node has a CDATA node as a child, returns the value of this; empty string otherwise
@@ -792,31 +909,16 @@ wxThread::ExitCode EventList::Entry()
 		if (!mSyncThread) { //save asynchronously
 			//isolate the existing data from the main context
 			if (mRootNode->GetChildren()) { //there's something to save
-				wxXmlNode * oldRootNode = mRootNode;
-				mRootNode = new wxXmlNode(wxXML_ELEMENT_NODE, ROOT_NODE_NAME); //so that things can be added while saving
 				//save in the background
+				wxXmlNode * rootNodeCopy = new wxXmlNode(*mRootNode);
 				wxString fileName = mFilename;
 				mMutex.Unlock();
 				wxXmlDocument doc;
-				doc.SetRoot(oldRootNode);
+				doc.SetRoot(rootNodeCopy);
 				doc.Save(fileName); //zzz...
 				doc.DetachRoot();
+				delete rootNodeCopy;
 				mMutex.Lock();
-				//combine saved data with any new data that might have appeared while saving
-				//the wxXmlNode documentation is a little unclear about the best way of doing this, but making a list of all the nodes to be transferred rather than transferring them while iterating over the child nodes seems sensible and reliable
-				std::vector<wxXmlNode *> childNodes;
-				wxXmlNode * childNode = mRootNode->GetChildren();
-				while (childNode) {
-					childNodes.push_back(childNode);
-					childNode = childNode->GetNext();
-				}
-				while (childNodes.size()) {
-					mRootNode->RemoveChild(childNodes.back());
-					oldRootNode->InsertChild(childNodes.back(), NULL); //oldRootNode will have at least one child already so this is OK
-					childNodes.pop_back();
-				}
-				delete mRootNode;
-				mRootNode = oldRootNode;
 			}
 		}
 		else { //tell foreground we're not saving

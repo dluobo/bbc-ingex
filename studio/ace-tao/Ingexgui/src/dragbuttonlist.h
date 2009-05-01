@@ -26,14 +26,14 @@
 #include <string>
 #include "RecorderC.h"
 
-class TakeInfo;
+class ChunkInfo;
 
 /// Ignore the "drag" bit - this class represents a set of source selection buttons for playback.
 class DragButtonList : public wxScrolledWindow
 {
 	public:
 		DragButtonList(wxWindow *);
-		void SetTracks(TakeInfo &, std::vector<std::string> &, std::vector<std::string> &);
+		void SetTracks(ChunkInfo &, std::vector<std::string> &, std::vector<std::string> &);
 		const wxString SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
 		void SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);

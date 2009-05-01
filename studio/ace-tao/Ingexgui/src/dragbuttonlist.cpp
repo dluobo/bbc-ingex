@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.8 2009/02/27 12:19:16 john_f Exp $             *
+ *   $Id: dragbuttonlist.cpp,v 1.9 2009/05/01 13:41:34 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -39,10 +39,10 @@ DragButtonList::DragButtonList(wxWindow * parent)
 /// Returns information about the current state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
-/// @param takeInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet
+/// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
-void DragButtonList::SetTracks(TakeInfo & takeInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
+void DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
 {
 	mSizer->Clear(true); //delete all buttons
 	fileNames.clear();
@@ -52,19 +52,19 @@ void DragButtonList::SetTracks(TakeInfo & takeInfo, std::vector<std::string> & f
 	mSizer->Add(quadSplit, -1, wxEXPAND);
 	quadSplit->Enable(false); //enable later if any files successfully loaded
 	std::vector<std::string> audioFileNames;
-	if (takeInfo.GetFiles()->GetCount()) { //this take has files associated
-		for (size_t i = 0; i < takeInfo.GetFiles()->GetCount(); i++) { //recorder loop
-			for (size_t j = 0; j < (*takeInfo.GetFiles())[i]->length(); j++) { //file loop
-				if (ProdAuto::VIDEO == takeInfo.GetTracks()[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
-					fileNames.push_back((*takeInfo.GetFiles())[i][j].in());
-					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString(takeInfo.GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
+	if (chunkInfo.GetFiles()->GetCount()) { //this chunk has files associated
+		for (size_t i = 0; i < chunkInfo.GetFiles()->GetCount(); i++) { //recorder loop
+			for (size_t j = 0; j < (*chunkInfo.GetFiles())[i]->length(); j++) { //file loop
+				if (ProdAuto::VIDEO == chunkInfo.GetTracks()[i][j].type && strlen((*chunkInfo.GetFiles())[i][j])) {
+					fileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
+					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString(chunkInfo.GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
 					rb->Enable(false); //we don't know whether the player can open this file yet
-					rb->SetToolTip(wxString((*takeInfo.GetFiles())[i][j], *wxConvCurrent));
+					rb->SetToolTip(wxString((*chunkInfo.GetFiles())[i][j], *wxConvCurrent));
 					mSizer->Add(rb, -1, wxEXPAND);
-					trackNames.push_back(takeInfo.GetTracks()[i][j].src.package_name.in());
+					trackNames.push_back(chunkInfo.GetTracks()[i][j].src.package_name.in());
 				}
-				else if (ProdAuto::AUDIO == takeInfo.GetTracks()[i][j].type && strlen((*takeInfo.GetFiles())[i][j])) {
-					audioFileNames.push_back((*takeInfo.GetFiles())[i][j].in());
+				else if (ProdAuto::AUDIO == chunkInfo.GetTracks()[i][j].type && strlen((*chunkInfo.GetFiles())[i][j])) {
+					audioFileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
 				}
 			}
 		}
@@ -153,7 +153,7 @@ void DragButtonList::SetEtoE(std::vector<std::string> & sources, std::vector<std
 	quadSplit->Enable(false); //enable later if any sources successfully opened
 	char source[3];
 	wxString name;
-	for (size_t i = 0; i < 4; i++) {
+	for (unsigned int i = 0; i < 4; i++) {
 		sprintf(source, "%dp", i);
 		sources.push_back(source);
 		name.Printf(wxT("Live %d"), i + 1);

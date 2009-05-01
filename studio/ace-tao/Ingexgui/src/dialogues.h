@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.6 2009/02/26 19:17:09 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.7 2009/05/01 13:41:34 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -27,6 +27,7 @@
 #include <wx/grid.h>
 #include <vector>
 #include "ingexgui.h"
+#include "timepos.h"
 
 /// Set preroll and postroll
 class SetRollsDlg : public wxDialog
@@ -160,6 +161,7 @@ class SetTapeIdsDlg : public wxDialog
 	DECLARE_EVENT_TABLE()
 };
 
+/// Set a timecode to jump to
 class JumpToTimecodeDlg : public wxDialog
 {
 	public:
@@ -190,6 +192,7 @@ class wxSpinCtrl;
 class wxSpinEvent;
 class wxToggleButton;
 
+/// Enable and set parameters for test mode
 class TestModeDlg : public wxDialog
 {
 	public:
@@ -235,6 +238,7 @@ class TestModeDlg : public wxDialog
 
 #define N_CUE_POINT_COLOURS 9 //including default
 
+/// Set cue point descriptions
 class CuePointsDlg : public wxDialog
 {
 	public:
@@ -275,3 +279,30 @@ class CuePointsDlg : public wxDialog
 };
 
 #endif
+
+/// Controls automatic chunking.  Active when not visible.  Changes when visible take immediate effect (i.e. no possibility to cancel)
+class ChunkingDlg : public wxDialog
+{
+	public:
+		ChunkingDlg(wxWindow *, wxButton *, Timepos *, wxXmlDocument &);
+		int ShowModal();
+		void RunFrom(const ProdAuto::MxfTimecode & = InvalidMxfTimecode, const ProdAuto::MxfDuration & = InvalidMxfDuration);
+		void Reset();
+	private:
+		void OnChangeChunkSize(wxSpinEvent &);
+		void OnEnable(wxCommandEvent &);
+		void OnTimer(wxTimerEvent &);
+		void SetCountdownLabel();
+
+		wxSpinCtrl * mChunkSizeCtrl;
+		wxToggleButton * mEnableButton;
+		wxButton * mChunkButton;
+		wxTimer * mCountdownTimer;
+		Timepos * mTimepos;
+		wxXmlDocument & mSavedState;
+		unsigned int mCountdown;
+		unsigned long mChunkLength;
+		ProdAuto::MxfDuration mPostroll;
+		bool mRecording;
+	DECLARE_EVENT_TABLE()
+};

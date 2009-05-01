@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.11 2009/02/27 12:19:16 john_f Exp $              *
+ *   $Id: player.cpp,v 1.12 2009/05/01 13:41:34 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -144,11 +144,12 @@ void Player::Enable(bool state)
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
-void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+/// @param chunkBefore There is a chunk before this recording, which will be played next if playing backwards
+/// @param chunkAfter There is a chunk after this recording, which will be played next if playing forwards
+void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint, const bool chunkBefore, const bool chunkAfter)
 {
 //std::cerr << "Player Load" << std::endl;
 	std::vector<std::string> * fNames = fileNames ? fileNames : &mFileNames;
-	Reset(); //otherwise it keeps showing what was there before even if it can't open any files
 	if (fileNames) { //New paths
 		mLastPlayingBackwards = false; //no point continuing the default play direction of the previous set of files
 	}
@@ -168,11 +169,14 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 				//can't poll for shared memory sources
 				mNFilesExisting = mFileNames.size();
 			}
-			//load the player (this will merely store the parameters if the player is not enabled
-			if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint) && mFileNames.size() != mNFilesExisting) {
-				//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
-				mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
-			}
+		}
+		if (!mNFilesExisting) {
+			mOK = reset(); //otherwise it keeps showing what was there before even if it can't open any files
+		}
+		//load the player (this will merely store the parameters if the player is not enabled)
+		if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint, chunkBefore, chunkAfter) && mEnabled && mFileNames.size() != mNFilesExisting) {
+			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
+			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
 		}
 	}
 }
@@ -185,12 +189,14 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 /// @param trackNames Corresponding list of track names, for display as the player window title.
 /// @param inputType The type of the files
 /// The following are ignored if inputType is SHM_INPUT:
-/// @param offset Frame offset to jump to.
+/// @param offset Frame offset to jump to.  Ignored if player just requested a new chunk.
 /// @param cuePoints Frame numbers of cue points (not including start and end positions).
 /// @param startIndex Event list index for entry corresponding to start of file.
 /// @param cuePoint Index in cuePoints to jump to.
+/// @param chunkBefore There is a chunk before this recording, which will be played next if playing backwards
+/// @param chunkAfter There is a chunk after this recording, which will be played next if playing forwards
 /// @return True if all files were opened.
-bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, int startIndex, unsigned int cuePoint)
+bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string> * trackNames, PlayerInputType inputType, int64_t offset, std::vector<int64_t> * cuePoints, unsigned int startIndex, unsigned int cuePoint, bool chunkBefore, bool chunkAfter)
 {
 //std::cerr << "Player Start" << std::endl;
 	if (fileNames) {
@@ -204,24 +210,30 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			mTrackNames.push_back((*trackNames)[i]);
 		}
 		mInputType = inputType;
+		mPreviousFrameDisplayed = offset;
 		mCuePoints.clear();
-		mListener->ClearCuePoints();
-		mStartIndex = startIndex;
-		mLastFrameDisplayed = offset;
-		mListener->SetStartIndex(mStartIndex); //an offset for all the cue point event values
 		if (cuePoints) {
 			for (size_t i = 0; i < cuePoints->size(); i++) {
 				mCuePoints.push_back((*cuePoints)[i]); //so that we know where to jump to for a given cue point
-				mListener->AddCuePoint((*cuePoints)[i]); //so we can work out which cue point has been reached
 			}
 		}
+		mStartIndex = startIndex;
+		mLastCuePointNotified = startIndex;
 		mLastRequestedCuePoint = cuePoint;
-		mMode = SHM_INPUT == inputType ? PlayerMode::PLAY : PlayerMode::PAUSE;
+		mChunkBefore = chunkBefore;
+		mChunkAfter = chunkAfter;
+		if (SHM_INPUT == inputType) {
+			mMode = PlayerMode::PLAY;
+		}
+		else if (STATE_CHANGE == mChunkLinking) { //no chunk linking
+			mMode = PlayerMode::PAUSE;
+		}
 	}
 	bool allFilesOpen = false;
 	if (mEnabled) {
 		mOpened.clear();
-		mAtEnd = false;
+		mAtStart = false; //set when a frame is displayed
+		mAtChunkEnd = false; //set when a frame is displayed
 		std::vector<PlayerInput> inputs;
 		for (size_t i = 0; i < mFileNames.size(); i++) {
 			PlayerInput input;
@@ -229,19 +241,25 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			input.type = mInputType;
 			inputs.push_back(input);
 		}
-		mOK = start(inputs, mOpened, PlayerMode::PAUSE == mMode || PlayerMode::STOP == mMode, SHM_INPUT == mInputType ? 0 : mLastFrameDisplayed); //play forwards or paused
+		mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerMode::PAUSE == mMode || PlayerMode::STOP == mMode), SHM_INPUT == mInputType ? 0 : mPreviousFrameDisplayed); //play forwards or paused
 		int trackToSelect = 0; //display quad split by default
 		if (mOK) {
 			if (SHM_INPUT != mInputType) {
 				//(re)load stored cue points
 				for (size_t i = 0; i < mCuePoints.size(); i++) {
-					markPosition(mCuePoints[i], 0); //so that an event is generated at each cue point
+					markPosition(mCuePoints[i], 0); //so that the pointer changes colour at each cue point
 				}
-				if (PlayerMode::PLAY_BACKWARDS == mMode) {
+				if (STATE_CHANGE != mChunkLinking && mSpeed) { //latter a sanity check
+					playSpeed(mSpeed);
+				}
+				else if (PlayerMode::PLAY_BACKWARDS == mMode) {
 					playSpeed(-1);
 				}
 				SetOSD(mOSDtype);
-				if (!mLastFrameDisplayed) {
+				if (LOAD_PREV_CHUNK == mChunkLinking) {
+					JumpToCue(-1); //the end
+				}
+				else if (!mPreviousFrameDisplayed) {
 					//if mLastRequestedCuePoint isn't zero (start), player was requested to go to a cue point in this clip while no files were available
 					JumpToCue(mLastRequestedCuePoint);
 				}
@@ -258,6 +276,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 				event.SetInt(false); //invalid position
 				GetNextHandler()->AddPendingEvent(event); //don't add it to this handler or it will be blocked
 			}
+			mChunkLinking = STATE_CHANGE;
 			// work out which track to select
 			unsigned int nFilesOpen = 0;
 			int aWorkingTrack = 0; //initialisation prevents compiler warning
@@ -348,7 +367,7 @@ void Player::PlayAbsolute(const int rate)
 			//can only play forwards at normal speed from shared memory!
 			play();
 		}
-		else if (rate > 0 && !AtEnd()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled clockwise at the end of a file
+		else if (rate > 0 && !AtRecEnd()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled clockwise at the end of a recording
 			playSpeed(1 << (rate - 1));
 		}
 		else if (rate < 0 && Within()) { //latter check prevents brief displays of different speeds as shuttle wheel is twiddled anticlockwise at the beginning of a file
@@ -361,7 +380,7 @@ void Player::PlayAbsolute(const int rate)
 }
 
 /// Starts playing, or doubles in play speed (up to max. limit) if already playing.
-/// If starting to play forwards at the end of the file, jumps to the beginning.
+/// If starting to play forwards at the end of the recording, jumps to the beginning.
 /// @param setDirection True to play in the direction specified by the next param; false to play in the same direction as currently playing, or previously playing if paused.
 /// @param backwards True to play backwards if setDirection is true.
 void Player::Play(const bool setDirection, bool backwards)
@@ -371,11 +390,20 @@ void Player::Play(const bool setDirection, bool backwards)
 		if ((setDirection && !backwards && 0 >= mSpeed) //going backwards, or paused, and want to go forwards
 		 || (!setDirection && 0 == mSpeed && !mLastPlayingBackwards)) //paused after playing forwards
 		{
-			if (AtEnd()) {
-				JumpToCue(0); //the start - replay
+			if (AtRecEnd() && mChunkBefore) {
+				//replay from first chunk
+				mChunkLinking = LOAD_FIRST_CHUNK;
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, mChunkLinking);
+				AddPendingEvent(guiFrameEvent);
 			}
-			//play forwards at normal speed
-			play();
+			else if (AtRecEnd()) {
+				//replay this chunk
+				JumpToCue(0);
+				play();
+			}
+			else {
+				play();
+			}
 			mLastPlayingBackwards = false;
 		}
 		else if ((setDirection && backwards && 0 <= mSpeed) //going forwards, or paused and want to go backwards
@@ -436,12 +464,29 @@ void Player::Pause()
 }
 
 /// Steps by one frame.
-/// @param forwards True to step forwards.
-void Player::Step(bool forwards)
+/// @param direction True to step forwards.
+void Player::Step(bool direction)
 {
 //std::cerr << "Player Step" << std::endl;
 	if (mOK) {
-		step(forwards);
+		//change chunk if necessary - this code is needed because the player generates spurious frame displayed events so chunk changes as a result of frames displayed must be validated by the player not being paused
+		if (direction //forwards
+		&& mAtChunkEnd //already displayed the last frame
+		&& mChunkAfter) { //another chunk follows this one
+			mChunkLinking = LOAD_NEXT_CHUNK;
+			wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, mChunkLinking);
+			AddPendingEvent(guiFrameEvent);
+		}
+		else if (!direction //backwards!
+		&& mAtStart //already displayed the first frame
+		&& mChunkBefore) { //another chunk precedes this one
+			mChunkLinking = LOAD_PREV_CHUNK;
+			wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, mChunkLinking);
+			AddPendingEvent(guiFrameEvent);
+		}
+		else {
+			step(direction);
+		}
 	}
 }
 
@@ -460,15 +505,16 @@ void Player::Reset()
 		mSpeed = 0;
 		TrafficControl(false);
 	}
+	mChunkLinking = STATE_CHANGE; //a default value
 }
 
 /// Moves to the given cue point.
-/// @param cuePoint 0 for the start; 1+ for cue points supplied in Load(); the end for anything greater than the number of cue points supplied.
-void Player::JumpToCue(unsigned int cuePoint)
+/// @param cuePoint 0 for the start; 1+ for cue points supplied in Load(); the end for negative values or anything greater than the number of cue points supplied.
+void Player::JumpToCue(int cuePoint)
 {
 //std::cerr << "Player JumpToCue" << std::endl;
 	if (mOK) {
-		if (cuePoint > mCuePoints.size()) {
+		if (0 > cuePoint || cuePoint > (int) mCuePoints.size()) {
 			//the end
 			seek(0, SEEK_END, FRAME_PLAY_UNIT);
 		}
@@ -482,7 +528,7 @@ void Player::JumpToCue(unsigned int cuePoint)
 		}
 	}
 	else { //so as not to interfere with creating an event on the first frame
-		mLastFrameDisplayed = 0; //so that the cue point takes priority when the player is reloaded if it is currently disabled
+		mPreviousFrameDisplayed = 0; //so that the cue point takes priority when the player is reloaded if it is currently disabled
 	}
 	mLastRequestedCuePoint = cuePoint;
 }
@@ -532,38 +578,70 @@ void Player::SetOutputType(const PlayerOutputType outputType)
 }
 
 /// Responds to a frame displayed event from the listener. If not playing from shared memory:
-/// - Detects reaching the start, the end or leaving the start/end of a file and generates a player event accordingly.
-/// - Pauses if the player is playing and hits an end stop.
+/// - Detects reaching the start, the end, a chunk start/end while playing, or leaving the start/end of a file and generates a player event accordingly.
+/// - Detects reaching a cue point and generates a player event accordingly.
+/// - Pauses if the player is playing and hits a recording end stop.
 /// - Notes the frame number in case of reloading.
 /// - Skips the event so it passes to the parent handler for position display.
+/// NB a cue point is reached if the position is between it and the next cue point in the sense of playing forwards - regardless of the playing direction.
 /// @param event The command event.
 void Player::OnFrameDisplayed(wxCommandEvent& event) {
 	//remember the position to jump to if re-loading occurs
 	if (SHM_INPUT != mInputType) {
-		if (event.GetInt()) {
-			//a valid frame value (i,e, not the zero that's sent when the player is disabled)
-			if (!event.GetExtraLong()) { //at start
-				if (mLastFrameDisplayed) {
-					wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_START);
-					AddPendingEvent(guiFrameEvent);
-					if (0 > mSpeed) { //playing backwards (i.e. not a replay from the end)
-						Pause();
-					}
-				}
+		if (event.GetInt()) { //a valid frame value (i,e, not the zero that's sent when the player is disabled)
+			if (!event.GetExtraLong() && !mAtStart && 0 > mSpeed && mChunkBefore) { //just reached the start of a chunk, playing backwards (this may disrupt the first frame playing but academic as there will be a disturbance anyway as new files are loaded)
+				mChunkLinking = LOAD_PREV_CHUNK;
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, mChunkLinking);
+				AddPendingEvent(guiFrameEvent);
 			}
-			else if ((bool) event.GetClientData()) { //at end
-				if (!mAtEnd) {
-					wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_END);
-					AddPendingEvent(guiFrameEvent);
+			else if ((bool) event.GetClientData() && !mAtChunkEnd && 0 < mSpeed && mChunkAfter) { //just reached the end of a chunk, playing forwards (this may disrupt the first frame playing but academic as there will be a disturbance anyway as new files are loaded)
+				mChunkLinking = LOAD_NEXT_CHUNK;
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, mChunkLinking);
+				AddPendingEvent(guiFrameEvent);
+			}
+			else if (!event.GetExtraLong() && !mChunkBefore) { //at the start of a recording
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_START);
+				AddPendingEvent(guiFrameEvent);
+				if (0 > mSpeed) { //playing forwards
 					Pause();
 				}
 			}
-			else if (!mLastFrameDisplayed || mAtEnd) { //have just moved into a take
+			else if ((bool) event.GetClientData() && !mChunkAfter) { //at the end of a recording
+				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, AT_END);
+				AddPendingEvent(guiFrameEvent);
+				Pause();
+			}
+
+			if (!mPreviousFrameDisplayed || mAtChunkEnd) { //have just moved into a take
 				wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, WITHIN);
 				AddPendingEvent(guiFrameEvent);
 			}
-			mLastFrameDisplayed = event.GetExtraLong();
-			mAtEnd = (bool) event.GetClientData();
+			mAtStart = !event.GetExtraLong();
+			mAtChunkEnd = (bool) event.GetClientData();
+			mPreviousFrameDisplayed = event.GetExtraLong();
+			//work out which cue point area we're in
+			unsigned int mark = 0; //assume before first cue point/end of file
+			if (mAtChunkEnd) {
+				mark = mCuePoints.size() + 1;
+			}
+			else {
+				for (mark = 0; mark < mCuePoints.size(); mark++) {
+					if (mCuePoints[mark] > event.GetExtraLong()) { //not reached this mark yet
+						break;
+					}
+				}
+			}
+			mark += mStartIndex;
+			//Tell gui if we've moved into a new area
+			if (mLastCuePointNotified != mark) {
+				if (!mAtChunkEnd || !mChunkAfter) { //not at the last frame with a chunk following, where there is no stop event
+//std::cerr << "cue point event" << std::endl;
+					wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
+					guiEvent.SetInt(mark);
+					AddPendingEvent(guiEvent);
+				}
+				mLastCuePointNotified = mark;
+			}
 		}
 		//tell the gui so it can update the position display
 		event.Skip();
@@ -649,18 +727,18 @@ void Player::OnSocketEvent(wxSocketEvent& WXUNUSED(event))
 	mOpeningSocket = false;
 }
 
-/// Indicates whether player is at the very start of the file or not.
+/// Indicates whether player is at the very start of the recording or not.
 /// @return True if within the file.
 bool Player::Within()
 {
-	return mOK && mLastFrameDisplayed;
+	return mOK && (!mAtStart || mChunkBefore);
 }
 
-/// Indicates whether player is at the end of the file or not.
+/// Indicates whether player is at the end of the recording or not.
 /// @return True if at the end.
-bool Player::AtEnd()
+bool Player::AtRecEnd()
 {
-	return mOK && mAtEnd;
+	return mOK && mAtChunkEnd && !mChunkAfter;
 }
 
 /// Mutes or unmutes audio
@@ -732,70 +810,22 @@ void Player::TrafficControl(const bool state, const bool synchronous)
  ***************************************************************************/
 
 /// @param player The player associated with this listener.
-Listener::Listener(Player * player, prodauto::IngexPlayerListenerRegistry * registry) : prodauto::IngexPlayerListener(registry), mPlayer(player), mStartIndex(0)
+Listener::Listener(Player * player, prodauto::IngexPlayerListenerRegistry * registry) : prodauto::IngexPlayerListener(registry), mPlayer(player)
 {
-}
-
-/// Sets the offset added to cue point events returned from the player.
-/// @param startIndex The offset.
-void Listener::SetStartIndex(const int startIndex)
-{
-	wxMutexLocker lock(mMutex);
-	mStartIndex = startIndex;
-	mLastCuePointNotified = startIndex;
-}
-
-/// Erases all cue points previously set.
-void Listener::ClearCuePoints()
-{
-	wxMutexLocker lock(mMutex);
-	mCuePoints.clear();
-}
-
-/// Adds a cue point to detect a position within the file.
-/// @param frameNo The frame number of the cue point - expected to be greater than all previous frame numbers
-void Listener::AddCuePoint(const int64_t frameNo)
-{
-	wxMutexLocker lock(mMutex);
-	mCuePoints.push_back(frameNo);
 }
 
 /// Callback for each frame displayed.
-/// Sends a Cue Point event to the player if a cue point (including start or finish) has been reached.
 /// Sends a Frame Displayed event to the player (after the Cue Point event so that the gui stops the player at the end of the file).
-/// NB a cue point is reached if the position is between it and the next cue point in the sense of playing forwards - regardless of the playing direction
 /// @param frameInfo Structure with information about the frame being displayed.
 /// NB Called in another thread context.
 void Listener::frameDisplayedEvent(const FrameInfo* frameInfo)
 {
-	//work out which cue point area we're in
-	unsigned int mark = 0; //assume before first cue point/end of file
-	wxMutexLocker lock(mMutex);
 	wxCommandEvent guiFrameEvent(wxEVT_PLAYER_MESSAGE, FRAME_DISPLAYED);
+	guiFrameEvent.SetExtraLong(frameInfo->position);
+	guiFrameEvent.SetInt(true); //valid position
 	if (frameInfo->position == frameInfo->sourceLength - 1) { //at the end of the file
-		mark = mCuePoints.size() + 1;
 		guiFrameEvent.SetClientData((void *) 1);
 	}
-	else { //somewhere within the file
-		for (mark = 0; mark < mCuePoints.size(); mark++) {
-			if (mCuePoints[mark] > frameInfo->position) { //not reached this mark yet
-				break;
-			}
-		}
-	}
-	//Tell gui if we've moved into a new area
-	mark += mStartIndex;
-	if (mLastCuePointNotified != mark) {
-//std::cerr << "cue point event" << std::endl;
-		wxCommandEvent guiEvent(wxEVT_PLAYER_MESSAGE, CUE_POINT);
-		guiEvent.SetExtraLong(frameInfo->position);
-		guiEvent.SetInt(mark);
-		mPlayer->AddPendingEvent(guiEvent);
-		mLastCuePointNotified = mark;
-	}
-	//tell gui the frame number
-	guiFrameEvent.SetInt(true); //valid position
-	guiFrameEvent.SetExtraLong(frameInfo->position);
 	mPlayer->AddPendingEvent(guiFrameEvent);
 }
 

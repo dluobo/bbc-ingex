@@ -124,7 +124,7 @@ bool TickTreeCtrl::AddRecorder(const wxString & name, ProdAuto::TrackList_var tr
 	//sort recorder nodes
 	SortChildren(GetRootItem());
 	//report all track state up the tree
-	SetTrackStatus(name, someRecording, trackStatusList);
+	SetTrackStatus(name, someRecording, false, trackStatusList);
 	//tape IDs
 	if (!routerRecorder && packageNameTreeNodes.size()) {
 		//tell the frame to tell the recorder the tape IDs
@@ -582,9 +582,10 @@ void TickTreeCtrl::SetRecorderState(const wxString & recorderName, bool problem,
 /// Sets state of tracks for given recorder.
 /// Reports to the root, and generates a notification event.
 /// @param recorderName The recorder.
-/// @param recording True if the recorder is recording.
+/// @param recording True if the recorder is supposed to be recording.
+/// @param ignoreIntendedState True to not care about recording parameter.
 /// @param trackStatus enabled/recording or disabled for each of the recorder's tracks.
-void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording, ProdAuto::TrackStatusList_var trackStatus)
+void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording, bool ignoreIntendedState, ProdAuto::TrackStatusList_var trackStatus)
 {
 	wxTreeItemId recorder = FindRecorder(recorderName);
 	wxTreeItemIdValue packageCookie, trackCookie;
@@ -601,7 +602,7 @@ void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording,
 				}
 				if (found) { //have found the track node corresponding to the current track status index
 					//set the state
-					if (!recording && !trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
+					if ((!recording || ignoreIntendedState) && !trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
 						//not recording and not supposed to be, but enabled
 						SetNodeState(track, ENABLED);
 					}
@@ -609,7 +610,7 @@ void TickTreeCtrl::SetTrackStatus(const wxString & recorderName, bool recording,
 						//not recording and not supposed to be (via being disabled - overall record state irrelavant)
 						SetNodeState(track, DISABLED);
 					}
-					else if (recording && trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
+					else if ((recording || ignoreIntendedState) && trackStatus[index].rec && ((ItemData *) GetItemData(track))->GetBool()) {
 						//recording and supposed to be
 						SetNodeState(track, RECORDING);
 					}
