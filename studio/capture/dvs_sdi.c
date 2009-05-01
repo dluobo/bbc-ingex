@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.20 2009/04/16 18:03:58 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.21 2009/05/01 13:48:06 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -703,6 +703,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// Use the hw-clock time the putbuffer'd frame was recorded,
 	// to calculate the time-of-day the frame was recorded.
 	// (pbuffer->control.clock_high/low appears identical to bufferinfo.clock_high/low)
+    // Comment from Jim:
+    // I found that as well, except for the 10th or 11th frame (when the FIFO
+    // first wraps round?), when it jumps back in time a lot. Using pbuffer
+    // means I don't have to pass a sv_fifo_bufferinfo to putbuffer.
 	int64_t cur_clock = (int64_t)h_clock * 0x100000000LL + l_clock;
 	int64_t rec_clock = (int64_t)bufferinfo.clock_high * 0x100000000LL + bufferinfo.clock_low;
 	int64_t clock_diff = cur_clock - rec_clock;
