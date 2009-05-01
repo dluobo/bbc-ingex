@@ -1,7 +1,7 @@
 General
 -------
 
-Install SUSE 10.3 32-bit version with default user "ingex"
+Install SUSE 10.3 64-bit version with default user "ingex"
 
 
 Structure
@@ -19,6 +19,33 @@ following files:
   WEBSERVER.txt
   CORBA_Naming_Service.txt
 
+
+NVIDIA graphics card driver
+---------------------------
+
+See instructions at http://en.opensuse.org/NVIDIA
+
+To add the repository use:
+  root# zypper ar http://download.nvidia.com/opensuse/10.3/ NVIDEA
+
+(If you try to add the repository in the normal way with YaST, it
+doesn't work.)
+
+Then in YaST, software management, install:
+  x11-video-nvidiaG01, nvidia-gfxG01-kmp-default
+
+Note that the instructions imply you want the G02 driver but if you look
+at the 1-click-install you will see it actually installs G01 for 10.3
+
+If the install process updates the kernel (e.g. if you use 1-click-install),
+you should update kernel sources (in yast) and do the make oldconfig,
+make scripts/mod/ and driver_create stuff to rebuild the DVS card driver.
+
+You can check that graphics card driver is working correctly by doing:
+
+> player --balls 8
+
+while running top.  You shouldn't see significant CPU usage by Xorg or X.
 
 
 Old instructions which should now be found elsewhere
@@ -210,10 +237,8 @@ ffmpeg
 
   tsocks svn checkout svn://svn.mplayerhq.hu/ffmpeg/trunk ffmpeg
 
-  ./configure --enable-mp3lame --enable-pthreads --enable-shared
+  ./configure --enable-gpl --enable-swscale --enable-pthreads --enable-shared
   make
   sudo make install
 
-NB. additional install
-  cp -p ./libavcodec/mpegaudio.h /usr/local/include/ffmpeg/
 
