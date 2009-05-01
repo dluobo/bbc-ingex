@@ -26,5 +26,8 @@ fi
 # normal quad view
 $PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p
 
+# SD quad view 2 channels from secondary buffer
+#$PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s
+
 # quad view with director's cut logging
 #$PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --split-select --vswitch-tc LTC.0 --vswitch-db /video/aaf/directors_cut.db --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p
