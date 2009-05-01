@@ -1,5 +1,5 @@
 /*
- * $Id: StatusObserver.h,v 1.1 2008/09/03 13:43:35 john_f Exp $
+ * $Id: StatusObserver.h,v 1.2 2009/05/01 13:51:01 john_f Exp $
  *
  * Interface to which StatusClient can pass on received messages.
  *
@@ -24,6 +24,8 @@
 
 #ifndef StatusObserver_h
 #define StatusObserver_h
+
+#include <string>
 
 class StatusObserver
 {
