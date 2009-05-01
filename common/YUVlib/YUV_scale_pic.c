@@ -461,7 +461,8 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
                int intlc, int hfil, int vfil, void* workSpace)
 {
-    int		ssx, ssy;
+    int		ssx_in, ssx_out;
+    int		ssy_in, ssy_out;
     YUV_frame	sub_frame;
     uint32_t*	work[3];
 
@@ -471,32 +472,35 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     yup = yup * 2;
     ydown = ydown * 2;
     // get UV subsampling ratios
-    ssx = in_frame->Y.w / in_frame->U.w;
-    ssy = in_frame->Y.h / in_frame->U.h;
-    if (ssx != out_frame->Y.w / out_frame->U.w ||
-        ssy != out_frame->Y.h / out_frame->U.h)
-        return YUV_format_error;
+    ssx_in = in_frame->Y.w / in_frame->U.w;
+    ssy_in = in_frame->Y.h / in_frame->U.h;
+    ssx_out = out_frame->Y.w / out_frame->U.w;
+    ssy_out = out_frame->Y.h / out_frame->U.h;
     // adjust position, if required
     x = max(x, 0);
     y = max(y, 0);
-    x -= x % ssx;
-    y -= y % ssy;
+    x -= x % ssx_out;
+    y -= y % ssy_out;
     if (intlc)
         y -= y % 2;
     // create a sub frame representing the portion of out_frame to be written
     sub_frame = *out_frame;
     sub_frame.Y.buff += (y * sub_frame.Y.lineStride) +
                         (x * sub_frame.Y.pixelStride);
-    sub_frame.U.buff += ((y/ssy) * sub_frame.U.lineStride) +
-                        ((x/ssx) * sub_frame.U.pixelStride);
-    sub_frame.V.buff += ((y/ssy) * sub_frame.V.lineStride) +
-                        ((x/ssx) * sub_frame.V.pixelStride);
+    sub_frame.U.buff += ((y/ssy_out) * sub_frame.U.lineStride) +
+                        ((x/ssx_out) * sub_frame.U.pixelStride);
+    sub_frame.V.buff += ((y/ssy_out) * sub_frame.V.lineStride) +
+                        ((x/ssx_out) * sub_frame.V.pixelStride);
     sub_frame.Y.w = min(in_frame->Y.w * xup / xdown, out_frame->Y.w - x);
     sub_frame.Y.h = min(in_frame->Y.h * yup / ydown, out_frame->Y.h - y);
-    sub_frame.U.w = min(in_frame->U.w * xup / xdown, out_frame->U.w - (x/ssx));
-    sub_frame.U.h = min(in_frame->U.h * yup / ydown, out_frame->U.h - (y/ssy));
-    sub_frame.V.w = min(in_frame->V.w * xup / xdown, out_frame->V.w - (x/ssx));
-    sub_frame.V.h = min(in_frame->V.h * yup / ydown, out_frame->V.h - (y/ssy));
+    sub_frame.U.w = min(in_frame->U.w * ssx_in * xup / (xdown * ssx_out),
+                        out_frame->U.w - (x/ssx_out));
+    sub_frame.U.h = min(in_frame->U.h * ssy_in * yup / (ydown * ssy_out),
+                        out_frame->U.h - (y/ssy_out));
+    sub_frame.V.w = min(in_frame->V.w * ssx_in * xup / (xdown * ssx_out),
+                        out_frame->V.w - (x/ssx_out));
+    sub_frame.V.h = min(in_frame->V.h * ssy_in * yup / (ydown * ssy_out),
+                        out_frame->V.h - (y/ssy_out));
     work[0] = workSpace;
     work[1] = work[0] + sub_frame.Y.w;
     work[2] = work[1] + sub_frame.Y.w;
@@ -504,41 +508,35 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     {
         component	in_field;
         component	out_field;
-        // "first" field i.e. "even" lines"
-        extract_field(&in_frame->Y, &in_field, 0);
-        extract_field(&sub_frame.Y, &out_field, 0);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
-        extract_field(&in_frame->U, &in_field, 0);
-        extract_field(&sub_frame.U, &out_field, 0);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
-        extract_field(&in_frame->V, &in_field, 0);
-        extract_field(&sub_frame.V, &out_field, 0);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
-        // "second" field i.e. "odd" lines"
-        extract_field(&in_frame->Y, &in_field, 1);
-        extract_field(&sub_frame.Y, &out_field, 1);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 50, work);
-        extract_field(&in_frame->U, &in_field, 1);
-        extract_field(&sub_frame.U, &out_field, 1);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 50, work);
-        extract_field(&in_frame->V, &in_field, 1);
-        extract_field(&sub_frame.V, &out_field, 1);
-        scale_comp(&in_field, &out_field, hfil, vfil,
-                   xup, xdown, yup, ydown, 50, work);
+        int		f;
+        for (f = 0; f < 2; f++)
+        {
+            extract_field(&in_frame->Y, &in_field, f);
+            extract_field(&sub_frame.Y, &out_field, f);
+            scale_comp(&in_field, &out_field, hfil, vfil,
+                       xup, xdown, yup, ydown, f * 50, work);
+            extract_field(&in_frame->U, &in_field, f);
+            extract_field(&sub_frame.U, &out_field, f);
+            scale_comp(&in_field, &out_field, hfil, vfil,
+                       ssx_in * xup, xdown * ssx_out,
+                       ssy_in * yup, ydown * ssy_out, f * 50, work);
+            extract_field(&in_frame->V, &in_field, f);
+            extract_field(&sub_frame.V, &out_field, f);
+            scale_comp(&in_field, &out_field, hfil, vfil,
+                       ssx_in * xup, xdown * ssx_out,
+                       ssy_in * yup, ydown * ssy_out, f * 50, work);
+        }
     }
     else // not interlaced
     {
         scale_comp(&in_frame->Y, &sub_frame.Y, hfil, vfil,
                    xup, xdown, yup, ydown, 0, work);
         scale_comp(&in_frame->U, &sub_frame.U, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
+                   ssx_in * xup, xdown * ssx_out,
+                   ssy_in * yup, ydown * ssy_out, 0, work);
         scale_comp(&in_frame->V, &sub_frame.V, hfil, vfil,
-                   xup, xdown, yup, ydown, 0, work);
+                   ssx_in * xup, xdown * ssx_out,
+                   ssy_in * yup, ydown * ssy_out, 0, work);
     }
     return YUV_OK;
 }
