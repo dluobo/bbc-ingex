@@ -17,14 +17,39 @@ static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
                           const int hsub, const int w)
 {
     int		i;
+    int		hsub_int, hsub_res;
     int		inSkip;
 
-    inSkip = inStride * hsub / 100;
-    for (i = 0; i < w; i++)
+    hsub_int = hsub / 100;
+    hsub_res = hsub - (hsub_int * 100);
+    inSkip = inStride * hsub_int;
+    if (hsub_res == 0)
     {
-        *dstLine = *srcLine;
-        dstLine += outStride;
-        srcLine += inSkip;
+        // sub-sample exactly
+        for (i = 0; i < w; i++)
+        {
+            *dstLine = *srcLine;
+            dstLine += outStride;
+            srcLine += inSkip;
+        }
+    }
+    else
+    {
+        // use nearest sample
+        int	pos;
+        pos = 50;
+        for (i = 0; i < w; i++)
+        {
+            *dstLine = *srcLine;
+            dstLine += outStride;
+            srcLine += inSkip;
+            pos += hsub_res;
+            if (pos >= 100)
+            {
+                pos -= 100;
+                srcLine += inStride;
+            }
+        }
     }
 }
 
@@ -347,46 +372,44 @@ int small_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     sub_frame.V.h = min(in_frame->V.h * 100 / vsub_UV,
                         out_frame->V.h - (y/ssy_out));
     // select horizontal sub sampling routines
-    switch (hsub_Y)
+    if (hfil <= 0)
     {
-        case 200:
-            if (hfil <= 0)
-                sub_line_Y = &h_sub_alias;
-            else if ((ssx_in == 2) && (ssx_out == 2))
-                sub_line_Y = &h_sub_2_121_s;
-            else
-                sub_line_Y = &h_sub_2_121;
-            break;
-        case 300:
-            if (hfil <= 0)
-                sub_line_Y = &h_sub_alias;
-            else
-                sub_line_Y = &h_sub_3_111;
-            break;
-        default:
-            return -1;
+        sub_line_Y = &h_sub_alias;
+        sub_line_UV = &h_sub_alias;
     }
-    switch (hsub_UV)
+    else
     {
-        case 100:
-            sub_line_UV = &h_sub_alias;
-            break;
-        case 200:
-            if (hfil <= 0)
+        switch (hsub_Y)
+        {
+            case 200:
+                if ((ssx_in == 2) && (ssx_out == 2))
+                    sub_line_Y = &h_sub_2_121_s;
+                else
+                    sub_line_Y = &h_sub_2_121;
+                break;
+            case 300:
+                sub_line_Y = &h_sub_3_111;
+                break;
+            default:
+                return -1;
+        }
+        switch (hsub_UV)
+        {
+            case 100:
                 sub_line_UV = &h_sub_alias;
-            else if ((ssx_in == 2) && (ssx_out == 2))
-                sub_line_UV = &h_sub_2_11_s;
-            else
-                sub_line_UV = &h_sub_2_121;
-            break;
-        case 300:
-            if (hfil <= 0)
-                sub_line_UV = &h_sub_alias;
-            else
+                break;
+            case 200:
+                if ((ssx_in == 2) && (ssx_out == 2))
+                    sub_line_UV = &h_sub_2_11_s;
+                else
+                    sub_line_UV = &h_sub_2_121;
+                break;
+            case 300:
                 sub_line_UV = &h_sub_3_111;
-            break;
-        default:
-            return -1;
+                break;
+            default:
+                return -1;
+        }
     }
     work[0] = workSpace;
     work[1] = work[0] + in_frame->Y.w;
