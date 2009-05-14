@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: cpfs.c,v 1.7 2009/04/16 18:19:50 john_f Exp $                  *
+ *   $Id: cpfs.c,v 1.8 2009/05/14 10:50:35 john_f Exp $                  *
  *                                                                         *
  *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -143,12 +143,12 @@ int main(int argc, char ** argv) {
 			}
 		}
 	} while ((bytes_read = read(src, &buffer, BUFSIZE)));
-	printf(".  Closing files...");
+	printf(".  Flushing buffers...");
 	fflush(stdout);
 	close(src);
 	close(dest);
 	update(1);
-	printf("                                           \n");
+	printf("                                              \n");
 	/* conserve modification time */
 	struct utimbuf dest_times;
 	dest_times.modtime = src_st.st_mtime;
