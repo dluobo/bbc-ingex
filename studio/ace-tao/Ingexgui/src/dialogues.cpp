@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.9 2009/05/01 13:41:34 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.10 2009/05/14 11:00:10 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1254,7 +1254,7 @@ void TestModeDlg::Record(bool rec)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAuto::LocatorColour::EnumType code;} colours[N_CUE_POINT_COLOURS] = {
+static const struct {char colour[8]; char labelColour[8]; char label[8]; ProdAuto::LocatorColour::EnumType code;} Colours[N_CUE_POINT_COLOURS] = {
 	{ "#FF0000", "#000000", "DEFAULT", ProdAuto::LocatorColour::DEFAULT_COLOUR }, //this must come first
 	{ "#FFFFFF", "#000000", "White", ProdAuto::LocatorColour::WHITE },
 	{ "#FF0000", "#000000", "Red", ProdAuto::LocatorColour::RED },
@@ -1556,7 +1556,7 @@ void CuePointsDlg::OnCellLeftClick(wxGridEvent & event)
 	if (1 == event.GetCol()) { //clicked in the colour column
 		wxMenu colourMenu(wxT("Choose colour"));
 		for (unsigned int i = 0; i < N_CUE_POINT_COLOURS; i++) {
-			colourMenu.Append(wxID_HIGHEST + 1 + i, wxString(colours[i].label, *wxConvCurrent));
+			colourMenu.Append(wxID_HIGHEST + 1 + i, wxString(Colours[i].label, *wxConvCurrent));
 		}
 		PopupMenu(&colourMenu);
 	}
@@ -1578,9 +1578,9 @@ void CuePointsDlg::OnLabelLeftClick(wxGridEvent & event)
 /// @param colour The colour index to be used
 void CuePointsDlg::SetColour(const int row, const int colour)
 {
-	mGrid->SetCellValue(row, 1, wxString(colours[colour].label, *wxConvCurrent));
-	mGrid->SetCellBackgroundColour(row, 1, wxString(colours[colour].colour, *wxConvCurrent));
-	mGrid->SetCellTextColour(row, 1, wxString(colours[colour].labelColour, *wxConvCurrent));
+	mGrid->SetCellValue(row, 1, wxString(Colours[colour].label, *wxConvCurrent));
+	mGrid->SetCellBackgroundColour(row, 1, wxString(Colours[colour].colour, *wxConvCurrent));
+	mGrid->SetCellTextColour(row, 1, wxString(Colours[colour].labelColour, *wxConvCurrent));
 	mDescrColours[row] = colour;
 }
 
@@ -1599,30 +1599,45 @@ size_t CuePointsDlg::GetColourIndex()
 /// Returns the locator colour code corresponding to an index
 ProdAuto::LocatorColour::EnumType CuePointsDlg::GetColourCode(const size_t index)
 {
-	return colours[index].code;
+	return Colours[index].code;
 }
 
 /// Returns the displayed colour corresponding to an index
 const wxColour CuePointsDlg::GetColour(const size_t index)
 {
-	return wxColour(wxString(colours[index].colour, *wxConvCurrent));
+	return wxColour(wxString(Colours[index].colour, *wxConvCurrent));
 }
 
 /// Returns the label colour corresponding to an index
 const wxColour CuePointsDlg::GetLabelColour(const size_t index)
 {
-	return wxColour(wxString(colours[index].labelColour, *wxConvCurrent));
+	return wxColour(wxString(Colours[index].labelColour, *wxConvCurrent));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE(ChunkingDlg, wxDialog)
 	EVT_SPINCTRL(wxID_ANY, ChunkingDlg::OnChangeChunkSize)
+	EVT_CHOICE(wxID_ANY, ChunkingDlg::OnChangeChunkAlignment)
 	EVT_TOGGLEBUTTON(wxID_ANY, ChunkingDlg::OnEnable)
 	EVT_TIMER(wxID_ANY, ChunkingDlg::OnTimer)
 END_EVENT_TABLE()
 
 #define MAX_CHUNK_SIZE 120 //minutes
+#define N_ALIGNMENTS 10
+
+static const int Alignments[N_ALIGNMENTS] = {
+	0,
+	1,
+	2,
+	5,
+	10,
+	15,
+	20,
+	30,
+	40,
+	60,
+};
 
 /// Sets up dialogue.
 /// @param parent Parent window.
@@ -1630,6 +1645,18 @@ END_EVENT_TABLE()
 /// @param savedState The XML document for retrieving and saving settings.
 ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mChunkButton(chunkButton), mTimepos(timepos), mSavedState(savedState), mRecording(false)
 {
+	const wxChar* alignmentLabels[N_ALIGNMENTS] = {
+		wxT("None"),
+		wxT("minute"),
+		wxT("even minutes"),
+		wxT("5 minutes"),
+		wxT("10 minutes"),
+		wxT("15 minutes"),
+		wxT("20 minutes"),
+		wxT("30 minutes"),
+		wxT("40 minutes"),
+		wxT("60 minutes"),
+	};
 	//controls
 	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(mainSizer);
@@ -1638,6 +1665,10 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * ti
 	mChunkSizeCtrl = new wxSpinCtrl(this, wxID_ANY, wxT(""), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, MAX_CHUNK_SIZE, 10);
 	sizeBox->Add(mChunkSizeCtrl, 0, wxALIGN_CENTRE);
 	sizeBox->Add(new wxStaticText(this, wxID_ANY, wxT(" min")), 0, wxALIGN_CENTRE);
+	wxStaticBoxSizer * alignBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Chunk Alignment"));
+	mainSizer->Add(alignBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mChunkAlignCtrl = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxArrayString(N_ALIGNMENTS, alignmentLabels));
+	alignBox->Add(mChunkAlignCtrl, 0, wxALIGN_CENTRE);
 	mEnableButton = new wxToggleButton(this, wxID_ANY, wxT("Enable"));
 	mainSizer->Add(mEnableButton, 0, wxALIGN_CENTRE);
 	mainSizer->Add(new wxButton(this, wxID_OK, wxT("OK")), 1, wxEXPAND | wxALL, CONTROL_BORDER);
@@ -1650,12 +1681,18 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * ti
 		chunkingNode = chunkingNode->GetNext();
 	}
 	if (chunkingNode) {
-		long size;
-		if (chunkingNode->GetNodeContent().ToLong(&size) && 0 < size && MAX_CHUNK_SIZE >= size) {
-			mChunkSizeCtrl->SetValue(size);
+		long value;
+		if (chunkingNode->GetNodeContent().ToLong(&value) && 0 < value && MAX_CHUNK_SIZE >= value) {
+			mChunkSizeCtrl->SetValue(value);
 		}
 		mEnableButton->SetValue(wxT("Yes") == chunkingNode->GetPropVal(wxT("Enabled"), wxT("No")));
+		wxString str;
+		mChunkAlignCtrl->SetSelection(0);
+		if (chunkingNode->GetPropVal(wxT("Alignment"), &str) && str.ToLong(&value) && 0 < value && N_ALIGNMENTS > value) {
+			mChunkAlignCtrl->SetSelection(value);
+		}
 	}
+
 	SetNextHandler(parent);
 	Reset();
 }
@@ -1677,8 +1714,10 @@ int ChunkingDlg::ShowModal()
 			node = node->GetNext();
 		}
 	}
-	//Create new node (element node with one attribute, containing text node)
-	new wxXmlNode(new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableButton->GetValue() ? wxT("Yes") : wxT("No"))), wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
+	//Create new node (element node with two attributes, containing text node)
+	node = new wxXmlNode(mSavedState.GetRoot(), wxXML_ELEMENT_NODE, wxT("Chunking"), wxT(""), new wxXmlProperty(wxT("Enabled"), mEnableButton->GetValue() ? wxT("Yes") : wxT("No")));
+	node->AddProperty(new wxXmlProperty(wxT("Alignment"), wxString::Format(wxT("%d"), mChunkAlignCtrl->GetSelection())));
+	new wxXmlNode(node, wxXML_TEXT_NODE, wxT(""), wxString::Format(wxT("%d"), mChunkSizeCtrl->GetValue()));
 	return wxID_OK;
 }
 
@@ -1709,10 +1748,19 @@ void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 	}
 }
 
+/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down
+void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
+{
+	if (!mCountdownTimer->IsRunning()) {
+		Reset();
+	}
+}
+
 /// Starts or stops the countdown.
 /// @param startTimecode Timecode from which to calculate when to trigger a chunk.  Stops the countdown if undefined flag set.
 /// @param postroll Subtracted from the time to trigger a chunk.  If undefined flag set, previous stored value is used.
-void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll)
+/// @param align True to start next chunk at the next alignment point (or the one after, if the next one is too soon).
+void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll, const bool align)
 {
 	Reset();
 	mRecording = !startTimecode.undefined && startTimecode.edit_rate.denominator; //latter a sanity check
@@ -1721,13 +1769,29 @@ void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const Pro
 	}
 	if (mRecording) {
 		if (mEnableButton->GetValue()) {
-			//start chunking
+			//calculate when to chunk to frame accuracy
 			ProdAuto::MxfTimecode triggerTimecode = startTimecode;
-			triggerTimecode.samples += (int64_t) mChunkLength * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator - mPostroll.samples; //trigger the stop command before a postroll period to make sure recorders get it in time
+			if (align && mChunkAlignment) {
+				triggerTimecode.samples /= mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //number of alignment points passed since midnight
+				triggerTimecode.samples = ++triggerTimecode.samples * mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator; //the next alignment point
+				if (triggerTimecode.samples - startTimecode.samples < 30 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator) { //less than half a minute to the next alignment point, so producing a very small chunk
+					//don't chunk until the alignment point after this
+					triggerTimecode.samples += mChunkAlignment * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+				}
+				//we now know the time to the next chunk
+				mCountdown = (triggerTimecode.samples - startTimecode.samples) / (triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator);
+				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
+				SetCountdownLabel();
+			}
+			else {
+				mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
+				triggerTimecode.samples += (int64_t) mChunkLength * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
+			}
+			triggerTimecode.samples -= mPostroll.samples; //trigger the stop command before a postroll period to make sure recorders get it in time
 			bool wrap = triggerTimecode.samples > 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
 			triggerTimecode.samples %= 24LL * 3600 * triggerTimecode.edit_rate.numerator / triggerTimecode.edit_rate.denominator;
-			mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), wrap);
-			mCountdownTimer->Start(1000); //countdown in seconds - this is only for the button label
+			//set the trigger to chunk
+			mTimepos->SetTrigger(&triggerTimecode, (wxEvtHandler *) GetParent(), wrap); //will inform main frame when trigger occurs
 		}
 	}
 	else {
@@ -1750,7 +1814,7 @@ void ChunkingDlg::OnTimer(wxTimerEvent & WXUNUSED(event))
 void ChunkingDlg::Reset()
 {
 	mChunkLength = (unsigned long) mChunkSizeCtrl->GetValue() * 60; //in seconds
-//mChunkLength = 10;
+	mChunkAlignment = Alignments[mChunkAlignCtrl->GetSelection()] * 60; //in seconds
 	mCountdown = mChunkLength;
 	if (mCountdownTimer->IsRunning()) {
 		//nicer if it's accurate to the second
@@ -1764,8 +1828,14 @@ void ChunkingDlg::Reset()
 void ChunkingDlg::SetCountdownLabel()
 {
 	if (mEnableButton->GetValue()) {
-		mChunkButton->SetLabel(wxString::Format(wxT("Chunk %d:%02d"), mCountdown / 60, mCountdown % 60));
-		mChunkButton->SetToolTip(wxT("Automatic chunking is enabled"));
+		if (mChunkAlignment && !mCountdownTimer->IsRunning()) { //don't know when the next chunk is going to be because that can only be determined when we start recording
+			mChunkButton->SetLabel(wxT("Chunk ???:??"));
+			mChunkButton->SetToolTip(wxT("Automatic chunking is enabled, aligned with timecode"));
+		}
+		else {
+			mChunkButton->SetLabel(wxString::Format(wxT("Chunk %d:%02d"), mCountdown / 60, mCountdown % 60));
+			mChunkButton->SetToolTip(wxT("Automatic chunking is enabled"));
+		}
 	}
 	else {
 		mChunkButton->SetLabel(wxT("Chunk ---:--"));

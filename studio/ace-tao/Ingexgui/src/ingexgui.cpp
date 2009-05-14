@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.14 2009/05/01 13:41:34 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.15 2009/05/14 11:00:11 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1400,8 +1400,8 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 						mEventList->AddEvent(EventList::START, &startTimecode); //don't automatically do this or if the first recorder to record is a router recorder we'll get an unknown start timecode
 					}
 					else {
-						//start chunking timer (if enabled)
-						mChunkingDlg->RunFrom(startTimecode, mRecorderGroup->GetChunkingPostroll());
+						//start chunking timer (if enabled), on chunk length from now (no alignment)
+						mChunkingDlg->RunFrom(startTimecode, mRecorderGroup->GetChunkingPostroll(), false);
 						//mChunkButton->Enable(); //was disabled at the beginning of the chunking process
 						EnableButtonReliably(mChunkButton); //was disabled at the beginning of the chunking process
 					}
