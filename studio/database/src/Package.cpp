@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.4 2008/09/03 14:27:23 john_f Exp $
+ * $Id: Package.cpp,v 1.5 2009/05/14 10:48:25 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -24,10 +24,8 @@
 #include <sstream>
 
 #include "Package.h"
-#include "Database.h"
 #include "Utilities.h"
 #include "Logging.h"
-#include "DBException.h"
 
 
 using namespace std;

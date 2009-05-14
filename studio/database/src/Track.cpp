@@ -1,5 +1,5 @@
 /*
- * $Id: Track.cpp,v 1.2 2009/04/16 18:16:25 john_f Exp $
+ * $Id: Track.cpp,v 1.3 2009/05/14 10:48:25 john_f Exp $
  *
  * A Track in a Package
  *
@@ -24,10 +24,10 @@
 #include <sstream>
 
 #include "Track.h"
-#include "Database.h"
+#include "DatabaseEnums.h"
 #include "Utilities.h"
-#include "DBException.h"
 #include "Logging.h"
+#include "DBException.h"
 
 
 using namespace std;

@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.2 2009/04/16 18:13:02 john_f Exp $
+ * $Id: SourceConfig.cpp,v 1.3 2009/05/14 10:48:25 john_f Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -92,6 +92,8 @@ void SourceConfig::setSourcePackage(string name)
         delete _sourcePackage;
         _sourcePackage = 0;
     }
+
+    // NB. This code should really be in the Database class.
 
     // use a transaction to get exclusive access to the source packages, preventing
     // other threads or processes interferring

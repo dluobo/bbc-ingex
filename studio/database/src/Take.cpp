@@ -1,5 +1,5 @@
 /*
- * $Id: Take.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Take.cpp,v 1.2 2009/05/14 10:48:25 john_f Exp $
  *
  * An Item take
  *
@@ -24,11 +24,9 @@
 
 #include "Take.h"
 #include "Item.h"
-#include "Database.h"
 #include "Utilities.h"
-#include "DBException.h"
-
 #include "Logging.h"
+#include "DBException.h"
 
 
 using namespace std;
