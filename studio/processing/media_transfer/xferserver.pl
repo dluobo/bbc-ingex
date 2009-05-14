@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.8 2009/04/16 18:21:27 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.9 2009/05/14 10:52:43 john_f Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -890,7 +890,7 @@ sub childLoop {
 				next;
 			}
 			# move the file from the incoming directory to the live directory
-			$childMsgs =~ s/ +$//; #remove the trailing spaces put in by cpfs to hide the "Closing files..." message
+			$childMsgs =~ s/ +$//; #remove the trailing spaces put in by cpfs to hide the "Flushing buffers..." message
 			Report("\r$childMsgs. Moving...", 0, $share, 1);
 			if (!rename "$incomingPath/$essenceFile->{name}", "$essenceFile->{destDir}/$essenceFile->{name}") {
 				$share->lock(LOCK_EX);
