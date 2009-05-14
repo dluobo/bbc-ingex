@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.21 2009/05/01 13:40:22 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.22 2009/05/14 10:54:49 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -209,9 +209,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     int start_tc = p_rec->mStartTimecode;
     int64_t start_position = start_tc;
 
+#if 0
     // What if we add some days to start_position?
-    //int day_offset = 2;
-    //start_position += day_offset * 24 * 60 * 60 * FRAME_RATE.numerator / FRAME_RATE.denominator;
+    const int day_offset = 2;
+    const int frame_offset = day_offset * 24 * 60 * 60 * FRAME_RATE.numerator / FRAME_RATE.denominator;
+    start_position += frame_offset;
+#endif
 
     // Settings pointer
     RecorderSettings * settings = RecorderSettings::Instance();
@@ -650,7 +653,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     mp->name = p_opt->file_ident; // long-winded name
 #elif 0
     mp->name = rsp->name; // tape name
-#elif 0
+#elif 1
     // tape name plus timecode
     mp->name = rsp->name;
     mp->name += '.';
@@ -679,10 +682,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Go through the tracks.
     for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
     {
+        prodauto::Track * rsp_trk = rsp->tracks[i];
         if (track_enables[i])
         {
-            prodauto::Track * rsp_trk = rsp->tracks[i];
-
             // Get HardwareTrack based on SourceTrackConfig database id;
             prodauto::SourceTrackConfig * stc = sc->trackConfigs[i];
             mp_stc_dbids.push_back(stc->getDatabaseID());
@@ -703,7 +705,6 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 mp_trk->editRate = FRAME_RATE;
             }
-            //mp_trk->editRate = rsp_trk->editRate;
             //ACE_DEBUG((LM_INFO, ACE_TEXT("Track %d, edit rate %d/%d\n"), i, mp_trk->editRate.numerator, mp_trk->editRate.denominator));
             mp_trk->number = rsp_trk->number;
             mp_trk->name = rsp_trk->name;
@@ -1062,12 +1063,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Initialise last_tc which will be used to check for timecode discontinuities.
-    //framecount_t last_tc = IngexShm::Instance()->Timecode(channel_i, lastsaved[channel_i]);
     // Timecode value from first track (usually video).
-    //HardwareTrack tc_hw = mp_hw_trks[0];
     HardwareTrack tc_hw = p_impl->TrackHwMap(mp_stc_dbids[0]);
     framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastsaved[tc_hw.channel]);
-
+    framecount_t initial_tc = last_tc + 1;
 
     // Update Record info
     IngexShm::Instance()->InfoSetRecording(channel_i, p_opt->index, quad_video, true);
@@ -1517,10 +1516,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             framecount_t total = written + dropped;
             if (target > 0 && total >= target)
             {
-                Timecode out_tc(last_tc + 1, fps, df);
-                ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d) out frame %C\n"),
-                    src_name.c_str(), p_opt->index, target, total, written, dropped, out_tc.Text()));
                 finished_record = true;
+                Timecode out_tc(last_tc + 1, fps, df);
+                framecount_t expected_out_tc = initial_tc + written;
+                framecount_t actual_out_tc = last_tc + 1;
+                int tc_diff = actual_out_tc - expected_out_tc;
+                if (tc_diff)
+                {
+                    ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d) out frame %C wrong by %d\n"),
+                        src_name.c_str(), p_opt->index, target, total, written, dropped, out_tc.Text(), tc_diff));
+                }
+                else
+                {
+                    ACE_DEBUG((LM_INFO, ACE_TEXT("  %C index %d duration %d reached (total=%d written=%d dropped=%d) out frame %C\n"),
+                        src_name.c_str(), p_opt->index, target, total, written, dropped, out_tc.Text()));
+                }
             }
 
         } // Save all frames which have not been saved
