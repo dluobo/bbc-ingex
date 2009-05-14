@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.9 2009/03/24 19:26:37 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.10 2009/05/14 10:47:42 john_f Exp $
  *
  * Writes essence data to MXF files
  *
@@ -583,7 +583,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->tapeSourcePackage, track->id,
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID,
-                    track->sourceClip->position, track->sourceClip->length,
+                    track->sourceClip->position, track->sourceClip->length, 0,
                     &mxfTrack));
             }
 
@@ -608,7 +608,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 CHECK_SUCCESS(create_track(outputPackage->packageDefinitions->materialPackage, track->id,
                     track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, track->sourceClip->sourceTrackID,
-                    track->sourceClip->position, track->sourceClip->length,
+                    track->sourceClip->position, track->sourceClip->length, 0,
                     &mxfTrack));
             }
 
@@ -859,7 +859,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                     0 /* number is ignored */, fileTrack->name.c_str(),
                     fileTrack->dataDef == PICTURE_DATA_DEFINITION,
                     &editRate, &umid, fileTrack->sourceClip->sourceTrackID,
-                    fileTrack->sourceClip->position, fileTrack->sourceClip->length,
+                    fileTrack->sourceClip->position, fileTrack->sourceClip->length, 0,
                     &mxfTrack));
             }
 
