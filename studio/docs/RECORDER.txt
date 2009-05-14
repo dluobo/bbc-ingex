@@ -110,9 +110,16 @@ ingex> cd $workspace/ingex/studio/processing/media_transfer
 ingex> make
 
 You will also need to install the following perl modules:
-  IPC-ShareLite
-  Filesys-DfPortable
+  IPC:ShareLite
+  Filesys:DfPortable
 
+For example:
+
+ingex> wget http://search.cpan.org/CPAN/authors/id/A/AN/ANDYA/IPC-ShareLite-0.17.tar.gz
+ingex> tar xf IPC-ShareLite-0.17.tar.gz
+ingex> cd IPC-ShareLite-0.17
+ingex> perl Makefile.PL
+ingex> sudo make install
 
 
 Samba shares
