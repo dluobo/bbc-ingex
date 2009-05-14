@@ -98,29 +98,30 @@ int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
     return 1;
 }
 
-int alloc_YUV_frame(YUV_frame* frame,
-                    const int w, const int h,
-                    const formats format)
+int frame_size(const int w, const int h, const formats format)
 {
-    int		size;
-
     switch (format)
     {
     case UYVY: case YUY2: case YVYU: case HDYC: case Y42B: case YV16:
-        size = (w * h) * 2;
-        break;
+        return (w * h) * 2;
     case YV12: case IYUV: case I420:
-        size = (w * h) * 3 / 2;
-        break;
+        return (w * h) * 3 / 2;
     case IF09: case YVU9:
-        size = (w * h) * 9 / 8;
-        break;
+        return (w * h) * 9 / 8;
     case YV24:
-        size = (w * h) * 3;
-        break;
-    default:
-        return 0;
+        return (w * h) * 3;
     }
+    return -1;
+}
+
+int alloc_YUV_frame(YUV_frame* frame,
+                    const int w, const int h, const formats format)
+{
+    int		size;
+
+    size = frame_size(w, h, format);
+    if (size < 0)
+        return 0;
     return YUV_frame_from_buffer(frame, malloc(size), w, h, format);
 }
 

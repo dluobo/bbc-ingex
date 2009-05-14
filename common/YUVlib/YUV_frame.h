@@ -47,10 +47,12 @@ extern int YUV_frame_from_buffer(YUV_frame* frame, void* buffer,
                                  const int w, const int h,
                                  const formats format);
 
+// Get minimum size of a YUV frame
+extern int frame_size(const int w, const int h, const formats format);
+
 // Allocate and free (using malloc & free) a YUV_frame.
 extern int alloc_YUV_frame(YUV_frame* frame,
-                           const int w, const int h,
-                           const formats format);
+                           const int w, const int h, const formats format);
 
 extern void free_YUV_frame(YUV_frame* frame);
 
