@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.2 2009/03/25 13:46:37 john_f Exp $
+ * $Id: nexus_control.h,v 1.3 2009/05/21 10:16:57 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -54,7 +54,8 @@ typedef enum {
 typedef enum {
 	NexusTC_None,		// no timecode distribution
 	NexusTC_LTC,		// use LTC as master
-	NexusTC_VITC		// use VITC as master
+	NexusTC_VITC,		// use VITC as master
+	NexusTC_System		// system timecode using OS's time-of-day clock
 } NexusTimecode;
 
 // Each channel's ring buffer is described by the NexusBufCtl structure
@@ -146,6 +147,7 @@ typedef struct {
 	int				num_aud_samp_offset;// offset to count of audio samples (varies for NTSC)
 	int				signal_ok_offset;	// offset to flag for good input status
 	int				tick_offset;		// offset to "frame" tick (dvs field tick / 2)
+	int				sys_time_offset;	// offset to start of system time timecode data (int)
 	int				ltc_offset;			// offset to start of LTC timecode data (int)
 	int				vitc_offset;		// offset to start of VITC timecode data (int)
 	int				sec_video_offset;	// offset to secondary video buffer
