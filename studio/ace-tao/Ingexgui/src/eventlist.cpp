@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.4 2009/05/01 13:41:34 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.5 2009/05/21 10:22:36 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -387,7 +387,7 @@ bool EventList::AtBottom()
 /// For start and chunk events, creates a new ChunkInfo object.
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
-/// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
+/// @param timecode Timecode of the event, for START, CUE and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
 /// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
 /// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
