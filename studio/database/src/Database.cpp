@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.10 2009/05/01 13:37:00 john_f Exp $
+ * $Id: Database.cpp,v 1.11 2009/05/21 10:50:05 john_f Exp $
  *
  * Provides access to the data in the database
  *
@@ -19,7 +19,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
- 
+
 #include <cassert>
 #include <cstring>
 
@@ -48,7 +48,7 @@ static const int g_compatibilityVersion = 8;
 
 #define START_QUERY_BLOCK \
     try
-    
+
 #define END_QUERY_BLOCK(message) \
     catch (odbc::SQLException& ex) \
     { \
@@ -65,7 +65,7 @@ static const int g_compatibilityVersion = 8;
 
 #define START_UPDATE_BLOCK \
     try
-    
+
 #define END_UPDATE_BLOCK(message) \
     catch (odbc::SQLException& ex) \
     { \
@@ -97,12 +97,12 @@ static const int g_compatibilityVersion = 8;
 
 #define START_CHILD_UPDATE_BLOCK \
     try
-    
+
 #define END_CHILD_UPDATE_BLOCK(message) \
     END_QUERY_BLOCK(message)
 
 
-    
+
 #define SET_OPTIONAL_VARCHAR(prepStatement, paramIndex, value)  \
     { \
         string val = value; \
@@ -115,7 +115,7 @@ static const int g_compatibilityVersion = 8;
             prepStatement->setNull(paramIndex, SQL_VARCHAR); \
         } \
     } \
-    
+
 #define SET_OPTIONAL_INT(condition, prepStatement, paramIndex, value)  \
     if (condition) \
     { \
@@ -135,20 +135,20 @@ void Database::initialise(string dsn, string username, string password,
     unsigned int initialConnections, unsigned int maxConnections)
 {
     LOCK_SECTION(_databaseMutex);
-    
+
     if (_instance != 0)
     {
         delete _instance;
         _instance = 0;
     }
-    
+
     _instance = new Database(dsn, username, password, initialConnections, maxConnections);
 }
 
 void Database::close()
 {
     LOCK_SECTION(_databaseMutex);
-    
+
     delete _instance;
     _instance = 0;
 }
@@ -156,25 +156,25 @@ void Database::close()
 Database* Database::getInstance()
 {
     LOCK_SECTION(_databaseMutex);
-    
+
     if (_instance == 0)
     {
         PA_LOGTHROW(DBException, ("Database has not been initialised"));
     }
-    
+
     return _instance;
 }
 
 
-Database::Database(string dsn, string username, string password, unsigned int initialConnections, 
+Database::Database(string dsn, string username, string password, unsigned int initialConnections,
     unsigned int maxConnections)
-: _getConnectionMutex(), _dsn(dsn), _username(username), _password(password), _numConnections(0), 
+: _getConnectionMutex(), _dsn(dsn), _username(username), _password(password), _numConnections(0),
 _maxConnections(maxConnections)
 {
     unsigned int i;
-    
+
     assert(initialConnections > 0 && maxConnections >= initialConnections);
-    
+
     try
     {
         // fill odbc connection pool
@@ -182,7 +182,7 @@ _maxConnections(maxConnections)
         {
             _connectionPool.push_back(odbc::DriverManager::getConnection(dsn, username, password));
         }
-        
+
         // check compatibility with database version
         checkVersion();
     }
@@ -198,9 +198,9 @@ _maxConnections(maxConnections)
             }
             catch (...) {}
         }
-        
+
         odbc::DriverManager::shutdown();
-        
+
         PA_LOGTHROW(DBException, ("Failed to create database object:\n%s", ex.getMessage().c_str()));
     }
     catch (DBException& ex)
@@ -215,9 +215,9 @@ _maxConnections(maxConnections)
             }
             catch (...) {}
         }
-        
+
         odbc::DriverManager::shutdown();
-        
+
         throw;
     }
     catch (...)
@@ -232,9 +232,9 @@ _maxConnections(maxConnections)
             }
             catch (...) {}
         }
-        
+
         odbc::DriverManager::shutdown();
-        
+
         PA_LOGTHROW(DBException, ("Failed to create database object"));
     }
 }
@@ -243,7 +243,7 @@ Database::~Database()
 {
     while (_connectionsInUse.begin() != _connectionsInUse.end())
     {
-        // this will return the connection to _connectionPool and delete the 
+        // this will return the connection to _connectionPool and delete the
         // connection from _connectionsInUse
         try
         {
@@ -251,7 +251,7 @@ Database::~Database()
         }
         catch (...) {}
     }
-    
+
     vector<odbc::Connection*>::iterator odbcIter;
     for (odbcIter = _connectionPool.begin(); odbcIter != _connectionPool.end(); odbcIter++)
     {
@@ -261,7 +261,7 @@ Database::~Database()
         }
         catch (...) {}
     }
-    
+
     odbc::DriverManager::shutdown();
 }
 
@@ -281,7 +281,7 @@ Connection* Database::getConnection(bool isTransaction)
     try
     {
         iter = _connectionPool.begin();
-        
+
         // add a new connection to the pool if needed
         if (iter == _connectionPool.end())
         {
@@ -289,7 +289,7 @@ Connection* Database::getConnection(bool isTransaction)
             {
                 PA_LOGTHROW(DBException, ("No connections available in pool"));
             }
-            
+
             try
             {
                 _connectionPool.push_back(odbc::DriverManager::getConnection(_dsn, _username, _password));
@@ -302,15 +302,15 @@ Connection* Database::getConnection(bool isTransaction)
             {
                 PA_LOGTHROW(DBException, ("Failed to get new database connection"));
             }
-    
+
             iter = _connectionPool.begin();
         }
-    
+
         // transfer odbc connection from pool to connections in use
-        
+
         odbcConnection = *iter;
         _connectionPool.erase(iter);
-    
+
         if (isTransaction)
         {
             connection = new Transaction(this, odbcConnection);
@@ -320,8 +320,8 @@ Connection* Database::getConnection(bool isTransaction)
             connection = new Connection(this, odbcConnection);
         }
         _connectionsInUse.push_back(connection);
-        
-        
+
+
         return connection;
     }
     catch (odbc::SQLException& ex)
@@ -336,14 +336,14 @@ Connection* Database::getConnection(bool isTransaction)
     {
         PA_LOGTHROW(DBException, ("Failed to get database connection"));
     }
-    
+
 }
 
 void Database::returnConnection(Connection* connection)
 {
     vector<Connection*>::iterator iter;
     Connection* knownConnection = 0;
-    
+
     LOCK_SECTION(_getConnectionMutex);
 
     // find the connection
@@ -355,10 +355,10 @@ void Database::returnConnection(Connection* connection)
             break;
         }
     }
-    
+
     // it should be in there
     assert(knownConnection == connection);
-    
+
     // return odbc connection to pool
     if (connection->_odbcConnection != 0)
     {
@@ -374,7 +374,7 @@ void Database::returnConnection(Connection* connection)
                 Logging::warning("Failed to end (rollback) transaction in Database::returnConnection");
             }
         }
-    
+
         _connectionPool.push_back(connection->_odbcConnection);
         connection->_odbcConnection = 0;
     }
@@ -396,7 +396,7 @@ map<long, string> Database::loadLiveRecordingLocations()
 {
     auto_ptr<Connection> connection(getConnection());
     map<long, string> recordingLocations;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
@@ -406,7 +406,7 @@ map<long, string> Database::loadLiveRecordingLocations()
         {
             recordingLocations.insert(pair<long, string>(result->getInt(1), result->getString(2)));
         }
-        
+
         return recordingLocations;
     }
     END_QUERY_BLOCK("Failed to load recording locations")
@@ -479,20 +479,20 @@ Recorder* Database::loadRecorder(string name)
     RecorderConfig* recorderConfig;
     RecorderInputConfig* recorderInputConfig;
     RecorderInputTrackConfig* recorderInputTrackConfig;
-    
+
     START_QUERY_BLOCK
     {
         // load recorder
 
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_RECORDER));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Recorder with name '%s' does not exist", name.c_str()));
         }
-        
+
         recorder->wasLoaded(result->getInt(1));
         recorder->name = result->getString(2);
         connectedRecorderConfigId = result->getInt(3);
@@ -500,13 +500,13 @@ Recorder* Database::loadRecorder(string name)
         {
             connectedRecorderConfigId = 0;
         }
-        
-        
+
+
         // load recorder configurations
 
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_RECORDER_CONFIG));
         prepStatement->setInt(1, recorder->getDatabaseID());
-        
+
         result = prepStatement->executeQuery();
         while (result->next())
         {
@@ -514,7 +514,7 @@ Recorder* Database::loadRecorder(string name)
             recorder->setAlternateConfig(recorderConfig);
             recorderConfig->wasLoaded(result->getInt(1));
             recorderConfig->name = result->getString(2);
-            
+
             if (recorderConfig->getDatabaseID() == connectedRecorderConfigId)
             {
                 recorder->setConfig(recorderConfig);
@@ -522,10 +522,10 @@ Recorder* Database::loadRecorder(string name)
 
 
             // load recorder parameters
-    
+
             auto_ptr<odbc::PreparedStatement> prepStatement5 = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_RECORDER_PARAMS));
             prepStatement5->setInt(1, recorderConfig->getDatabaseID());
-            
+
             odbc::ResultSet* result5 = prepStatement5->executeQuery();
             while (result5->next())
             {
@@ -536,12 +536,12 @@ Recorder* Database::loadRecorder(string name)
                 recParam.type = result5->getInt(4);
                 recorderConfig->parameters.insert(pair<string, RecorderParameter>(recParam.name, recParam));
             }
-            
+
             // load input configurations
-    
+
             auto_ptr<odbc::PreparedStatement> prepStatement2 = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_RECORDER_INPUT_CONFIG));
             prepStatement2->setInt(1, recorderConfig->getDatabaseID());
-            
+
             odbc::ResultSet* result2 = prepStatement2->executeQuery();
             while (result2->next())
             {
@@ -550,12 +550,12 @@ Recorder* Database::loadRecorder(string name)
                 recorderInputConfig->wasLoaded(result2->getInt(1));
                 recorderInputConfig->index = result2->getInt(2);
                 recorderInputConfig->name = result2->getString(3);
-                
+
                 // load track configurations
-                
+
                 auto_ptr<odbc::PreparedStatement> prepStatement3(connection->prepareStatement(SQL_GET_RECORDER_INPUT_TRACK_CONFIG));
                 prepStatement3->setInt(1, recorderInputConfig->getDatabaseID());
-                
+
                 odbc::ResultSet* result3 = prepStatement3->executeQuery();
                 while (result3->next())
                 {
@@ -568,10 +568,10 @@ Recorder* Database::loadRecorder(string name)
                     if (!result3->wasNull() && sourceConfigID != 0)
                     {
                         recorderInputTrackConfig->sourceTrackID = result3->getInt(5);
-                        
-                        recorderInputTrackConfig->sourceConfig = 
+
+                        recorderInputTrackConfig->sourceConfig =
                             recorderConfig->getSourceConfig(sourceConfigID, recorderInputTrackConfig->sourceTrackID);
-                            
+
                         if (recorderInputTrackConfig->sourceConfig == 0)
                         {
                             // load source config
@@ -586,7 +586,7 @@ Recorder* Database::loadRecorder(string name)
                 }
             }
         }
-        
+
         if (connectedRecorderConfigId != 0 && !recorder->hasConfig())
         {
             PA_LOGTHROW(DBException, ("Recorder config with id '%ld' has incorrect link back "
@@ -594,7 +594,7 @@ Recorder* Database::loadRecorder(string name)
         }
     }
     END_QUERY_BLOCK("Failed to load recorder")
-    
+
     return recorder.release();
 }
 
@@ -732,13 +732,13 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextRecorderDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!recorder->isPersistent())
         {
@@ -753,9 +753,9 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
             nextRecorderDatabaseID = recorder->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER));
         }
-        
+
         prepStatement->setString(paramIndex++, recorder->name);
-        SET_OPTIONAL_INT(recorder->hasConfig() && recorder->getConfig()->isPersistent(), 
+        SET_OPTIONAL_INT(recorder->hasConfig() && recorder->getConfig()->isPersistent(),
             prepStatement, paramIndex++, recorder->getConfig()->getDatabaseID());
 
         // update
@@ -763,7 +763,7 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, recorder->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving recorder"));
@@ -775,10 +775,10 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
         for (iter1 = recorder->getAllConfigs().begin(); iter1 != recorder->getAllConfigs().end(); iter1++)
         {
             RecorderConfig* recorderConfig = *iter1;
-            
+
             long nextRecorderConfigDatabaseID = 0;
             paramIndex = 1;
-            
+
             // insert
             if (!recorderConfig->isPersistent())
             {
@@ -793,46 +793,46 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
                 nextRecorderConfigDatabaseID = recorderConfig->getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER_CONFIG));
             }
-            
+
             prepStatement->setString(paramIndex++, recorderConfig->name);
             prepStatement->setInt(paramIndex++, nextRecorderDatabaseID);
-    
+
             // update
             if (recorderConfig->isPersistent())
             {
                 prepStatement->setInt(paramIndex++, recorderConfig->getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving recorder config"));
             }
-    
-            
+
+
             // update the recorder if the recorder config is connected and is new
             if (recorder->hasConfig() && recorderConfig == recorder->getConfig())
             {
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER_CONNECTED_CONFIG));
                 prepStatement->setInt(1, nextRecorderConfigDatabaseID);
                 prepStatement->setInt(2, nextRecorderDatabaseID);
-                
+
                 if (prepStatement->executeUpdate() != 1)
                 {
                     PA_LOGTHROW(DBException, ("No updates when updating recorder with connected config"));
                 }
             }
-           
-            
+
+
             // save the recorder parameters
-            
+
             map<string, RecorderParameter>::iterator iter5;
             for (iter5 = recorderConfig->parameters.begin(); iter5 != recorderConfig->parameters.end(); iter5++)
             {
                 RecorderParameter& recParameter = (*iter5).second; // using ref so that object in map is updated
-                
+
                 long nextParameterDatabaseID = 0;
                 paramIndex = 1;
-                
+
                 // insert
                 if (!recParameter.isPersistent())
                 {
@@ -847,35 +847,35 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
                     nextParameterDatabaseID = recParameter.getDatabaseID();
                     prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER_PARAM));
                 }
-                
+
                 prepStatement->setString(paramIndex++, recParameter.name);
                 prepStatement->setString(paramIndex++, recParameter.value);
                 prepStatement->setInt(paramIndex++, recParameter.type);
                 prepStatement->setInt(paramIndex++, nextRecorderConfigDatabaseID);
-        
+
                 // update
                 if (recParameter.isPersistent())
                 {
                     prepStatement->setInt(paramIndex++, recParameter.getDatabaseID());
                 }
-                
+
                 if (prepStatement->executeUpdate() != 1)
                 {
                     PA_LOGTHROW(DBException, ("No inserts/updates when saving recorder parameter"));
                 }
             }
-           
-            
-            
+
+
+
             // save recorder input configs
             vector<RecorderInputConfig*>::const_iterator iter2;
             for (iter2 = recorderConfig->recorderInputConfigs.begin(); iter2 != recorderConfig->recorderInputConfigs.end(); iter2++)
             {
                 RecorderInputConfig* inputConfig = *iter2;
-                
+
                 long nextInputConfigDatabaseID = 0;
                 paramIndex = 1;
-                
+
                 // insert
                 if (!inputConfig->isPersistent())
                 {
@@ -890,31 +890,31 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
                     nextInputConfigDatabaseID = inputConfig->getDatabaseID();
                     prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER_INPUT_CONFIG));
                 }
-                
+
                 prepStatement->setInt(paramIndex++, inputConfig->index);
                 SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, inputConfig->name);
                 prepStatement->setInt(paramIndex++, nextRecorderConfigDatabaseID);
-        
+
                 // update
                 if (inputConfig->isPersistent())
                 {
                     prepStatement->setInt(paramIndex++, inputConfig->getDatabaseID());
                 }
-                
+
                 if (prepStatement->executeUpdate() != 1)
                 {
                     PA_LOGTHROW(DBException, ("No inserts/updates when saving recorder input config"));
                 }
-        
+
                 // save recorder input track configs
                 vector<RecorderInputTrackConfig*>::const_iterator iter3;
                 for (iter3 = inputConfig->trackConfigs.begin(); iter3 != inputConfig->trackConfigs.end(); iter3++)
                 {
                     RecorderInputTrackConfig* inputTrackConfig = *iter3;
-                    
+
                     long nextInputTrackConfigDatabaseID = 0;
                     paramIndex = 1;
-                    
+
                     // insert
                     if (!inputTrackConfig->isPersistent())
                     {
@@ -929,21 +929,21 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
                         nextInputTrackConfigDatabaseID = inputTrackConfig->getDatabaseID();
                         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_RECORDER_INPUT_TRACK_CONFIG));
                     }
-                    
+
                     prepStatement->setInt(paramIndex++, inputTrackConfig->index);
                     prepStatement->setInt(paramIndex++, inputTrackConfig->number);
-                    SET_OPTIONAL_INT(inputTrackConfig->sourceConfig != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(inputTrackConfig->sourceConfig != 0, prepStatement, paramIndex++,
                         inputTrackConfig->sourceConfig->getID());
-                    SET_OPTIONAL_INT(inputTrackConfig->sourceConfig != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(inputTrackConfig->sourceConfig != 0, prepStatement, paramIndex++,
                         inputTrackConfig->sourceTrackID);
                     prepStatement->setInt(paramIndex++, nextInputConfigDatabaseID);
-            
+
                     // update
                     if (inputTrackConfig->isPersistent())
                     {
                         prepStatement->setInt(paramIndex++, inputTrackConfig->getDatabaseID());
                     }
-                    
+
                     if (prepStatement->executeUpdate() != 1)
                     {
                         PA_LOGTHROW(DBException, ("No inserts/updates when saving recorder input track config"));
@@ -951,7 +951,7 @@ void Database::saveRecorder(Recorder* recorder, Transaction* transaction)
                 }
             }
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save recorder")
@@ -972,14 +972,14 @@ void Database::deleteRecorder(Recorder* recorder, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_RECORDER));
         prepStatement->setInt(1, recorder->getDatabaseID());
-        
+
         connection->registerCommitListener(0, recorder);
 
         // the database will cascade the delete down to the recorder input track configs
@@ -989,35 +989,35 @@ void Database::deleteRecorder(Recorder* recorder, Transaction* transaction)
         {
             RecorderConfig* recorderConfig = *iter1;
             connection->registerCommitListener(0, recorderConfig);
-            
+
             map<string, RecorderParameter>::iterator iter5;
             for (iter5 = recorderConfig->parameters.begin(); iter5 != recorderConfig->parameters.end(); iter5++)
             {
                 RecorderParameter& recParam = (*iter5).second; // using ref so that object in map is updated
                 connection->registerCommitListener(0, &recParam);
             }
-            
+
             vector<RecorderInputConfig*>::const_iterator iter2;
             for (iter2 = recorderConfig->recorderInputConfigs.begin(); iter2 != recorderConfig->recorderInputConfigs.end(); iter2++)
             {
                 RecorderInputConfig* inputConfig = *iter2;
                 connection->registerCommitListener(0, inputConfig);
-                
+
                 vector<RecorderInputTrackConfig*>::const_iterator iter3;
                 for (iter3 = inputConfig->trackConfigs.begin(); iter3 != inputConfig->trackConfigs.end(); iter3++)
                 {
                     RecorderInputTrackConfig* trackConfig = *iter3;
                     connection->registerCommitListener(0, trackConfig);
-                    
+
                 }
             }
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when delete recorder"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete recorder")
@@ -1060,18 +1060,18 @@ SourceConfig* Database::loadSourceConfig(long databaseID)
     auto_ptr<SourceConfig> sourceConfig(new SourceConfig());
     auto_ptr<Connection> connection(getConnection());
     SourceTrackConfig* sourceTrackConfig;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_SOURCE_CONFIG));
         prepStatement->setInt(1, databaseID);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Source config %ld does not exist in database", databaseID));
         }
-        
+
         sourceConfig->wasLoaded(result->getInt(1));
         sourceConfig->name = result->getString(2);
         sourceConfig->type = result->getInt(3);
@@ -1083,13 +1083,13 @@ SourceConfig* Database::loadSourceConfig(long databaseID)
         {
             sourceConfig->recordingLocation = result->getInt(5);
         }
-        
+
 
         // load track configurations
 
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_SOURCE_TRACK_CONFIG));
         prepStatement->setInt(1, sourceConfig->getDatabaseID());
-        
+
         result = prepStatement->executeQuery();
         while (result->next())
         {
@@ -1106,7 +1106,7 @@ SourceConfig* Database::loadSourceConfig(long databaseID)
         }
     }
     END_QUERY_BLOCK("Failed to load source config")
-    
+
     return sourceConfig.release();
 }
 
@@ -1176,13 +1176,13 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextConfigDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!config->isPersistent())
         {
@@ -1197,7 +1197,7 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
             nextConfigDatabaseID = config->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_SOURCE_CONFIG));
         }
-        
+
         prepStatement->setString(paramIndex++, config->name);
         prepStatement->setInt(paramIndex++, config->type);
         if (config->type == TAPE_SOURCE_CONFIG_TYPE)
@@ -1216,7 +1216,7 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, config->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving source config"));
@@ -1228,10 +1228,10 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
         for (iter1 = config->trackConfigs.begin(); iter1 != config->trackConfigs.end(); iter1++)
         {
             SourceTrackConfig* trackConfig = *iter1;
-            
+
             long nextTrackConfigDatabaseID = 0;
             paramIndex = 1;
-            
+
             // insert
             if (!trackConfig->isPersistent())
             {
@@ -1246,7 +1246,7 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
                 nextTrackConfigDatabaseID = trackConfig->getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_SOURCE_TRACK_CONFIG));
             }
-            
+
             prepStatement->setInt(paramIndex++, trackConfig->id);
             prepStatement->setInt(paramIndex++, trackConfig->number);
             prepStatement->setString(paramIndex++, trackConfig->name);
@@ -1255,20 +1255,20 @@ void Database::saveSourceConfig(SourceConfig* config, Transaction* transaction)
             prepStatement->setInt(paramIndex++, trackConfig->editRate.denominator);
             prepStatement->setLong(paramIndex++, trackConfig->length);
             prepStatement->setInt(paramIndex++, nextConfigDatabaseID);
-    
+
             // update
             if (trackConfig->isPersistent())
             {
                 prepStatement->setInt(paramIndex++, trackConfig->getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving source track config"));
             }
-    
+
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save source config")
@@ -1289,14 +1289,14 @@ void Database::deleteSourceConfig(SourceConfig* config, Transaction* transaction
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_SOURCE_CONFIG));
         prepStatement->setInt(1, config->getDatabaseID());
-        
+
         connection->registerCommitListener(0, config);
 
         // the database will cascade the delete down to the source track configs
@@ -1307,12 +1307,12 @@ void Database::deleteSourceConfig(SourceConfig* config, Transaction* transaction
             SourceTrackConfig* trackConfig = *iter;
             connection->registerCommitListener(0, trackConfig);
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when delete source config"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete source config")
@@ -1331,11 +1331,11 @@ vector<RouterConfig*> Database::loadAllRouterConfigs()
 {
     auto_ptr<Connection> connection(getConnection());
     VectorGuard<RouterConfig> allRouterConfigs;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_ROUTER_CONFIGS);
         while (result->next())
         {
@@ -1347,7 +1347,7 @@ vector<RouterConfig*> Database::loadAllRouterConfigs()
         }
     }
     END_QUERY_BLOCK("Failed to load all router configs")
-    
+
     return allRouterConfigs.release();
 }
 
@@ -1393,29 +1393,29 @@ RouterConfig* Database::loadRouterConfig(string name)
     RouterInputConfig* routerInputConfig;
     RouterOutputConfig* routerOutputConfig;
     long sourceConfigID;
-    
+
     START_QUERY_BLOCK
     {
         // load router config
 
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_ROUTER_CONFIG));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Router config with name '%s' does not exist", name.c_str()));
         }
-        
+
         routerConfig->wasLoaded(result->getInt(1));
         routerConfig->name = result->getString(2);
-        
-        
+
+
         // load input configurations
 
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_ROUTER_INPUT_CONFIG));
         prepStatement->setInt(1, routerConfig->getDatabaseID());
-        
+
         result = prepStatement->executeQuery();
         while (result->next())
         {
@@ -1428,10 +1428,10 @@ RouterConfig* Database::loadRouterConfig(string name)
             if (!result->wasNull() && sourceConfigID != 0)
             {
                 routerInputConfig->sourceTrackID = result->getInt(5);
-                
-                routerInputConfig->sourceConfig = 
+
+                routerInputConfig->sourceConfig =
                     routerConfig->getSourceConfig(sourceConfigID, routerInputConfig->sourceTrackID);
-                    
+
                 if (routerInputConfig->sourceConfig == 0)
                 {
                     // load source config
@@ -1445,12 +1445,12 @@ RouterConfig* Database::loadRouterConfig(string name)
             }
         }
 
-        
+
         // load output configurations
 
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_ROUTER_OUTPUT_CONFIG));
         prepStatement->setInt(1, routerConfig->getDatabaseID());
-        
+
         result = prepStatement->executeQuery();
         while (result->next())
         {
@@ -1459,10 +1459,10 @@ RouterConfig* Database::loadRouterConfig(string name)
             routerOutputConfig->wasLoaded(result->getInt(1));
             routerOutputConfig->index = result->getInt(2);
             routerOutputConfig->name = result->getString(3);
-        }        
+        }
     }
     END_QUERY_BLOCK("Failed to load router config")
-    
+
     return routerConfig.release();
 }
 
@@ -1517,26 +1517,26 @@ vector<MCClipDef*> Database::loadAllMultiCameraClipDefs()
     MCTrackDef* mcTrackDef;
     MCSelectorDef* mcSelectorDef;
     uint32_t index;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_MC_CLIP_DEFS);
         while (result->next())
         {
             MCClipDef* mcClipDef = new MCClipDef();
             allMCClipDefs.get().push_back(mcClipDef);
-            
+
             mcClipDef->wasLoaded(result->getInt(1));
             mcClipDef->name = result->getString(2);
 
-            
+
             // load track defs
-    
+
             auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MC_TRACK_DEFS));
             prepStatement->setInt(1, mcClipDef->getDatabaseID());
-            
+
             odbc::ResultSet* result2 = prepStatement->executeQuery();
             while (result2->next())
             {
@@ -1546,12 +1546,12 @@ vector<MCClipDef*> Database::loadAllMultiCameraClipDefs()
                 mcTrackDef->wasLoaded(result2->getInt(1));
                 mcTrackDef->index = index;
                 mcTrackDef->number = result2->getInt(3);
-                
+
                 // load selector defs
-                
+
                 auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_MC_SELECTOR_DEFS));
                 prepStatement2->setInt(1, mcTrackDef->getDatabaseID());
-                
+
                 odbc::ResultSet* result3 = prepStatement2->executeQuery();
                 while (result3->next())
                 {
@@ -1564,10 +1564,10 @@ vector<MCClipDef*> Database::loadAllMultiCameraClipDefs()
                     if (!result3->wasNull() && sourceConfigID != 0)
                     {
                         mcSelectorDef->sourceTrackID = result3->getInt(4);
-                        
-                        mcSelectorDef->sourceConfig = 
+
+                        mcSelectorDef->sourceConfig =
                             mcClipDef->getSourceConfig(sourceConfigID, mcSelectorDef->sourceTrackID);
-                            
+
                         if (mcSelectorDef->sourceConfig == 0)
                         {
                             // load source config
@@ -1584,7 +1584,7 @@ vector<MCClipDef*> Database::loadAllMultiCameraClipDefs()
         }
     }
     END_QUERY_BLOCK("Failed to load multi-camera clip defs")
-    
+
     return allMCClipDefs.release();
 }
 
@@ -1592,20 +1592,20 @@ MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
 {
     auto_ptr<MCClipDef> mcClipDef(new MCClipDef());
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         // load multi-camera clip
 
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MC_CLIP_DEF));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Multi-camera clip with name '%s' does not exist", name.c_str()));
         }
-        
+
         mcClipDef->wasLoaded(result->getInt(1));
         mcClipDef->name = result->getString(2);
 
@@ -1613,7 +1613,7 @@ MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
 
         auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_MC_TRACK_DEFS));
         prepStatement2->setInt(1, mcClipDef->getDatabaseID());
-        
+
         odbc::ResultSet* result2 = prepStatement2->executeQuery();
         while (result2->next())
         {
@@ -1623,12 +1623,12 @@ MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
             mcTrackDef->wasLoaded(result2->getInt(1));
             mcTrackDef->index = index;
             mcTrackDef->number = result2->getInt(3);
-            
+
             // load selector defs
-            
+
             auto_ptr<odbc::PreparedStatement> prepStatement3(connection->prepareStatement(SQL_GET_MC_SELECTOR_DEFS));
             prepStatement3->setInt(1, mcTrackDef->getDatabaseID());
-            
+
             odbc::ResultSet* result3 = prepStatement3->executeQuery();
             while (result3->next())
             {
@@ -1641,10 +1641,10 @@ MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
                 if (!result3->wasNull() && sourceConfigID != 0)
                 {
                     mcSelectorDef->sourceTrackID = result3->getInt(4);
-                    
-                    mcSelectorDef->sourceConfig = 
+
+                    mcSelectorDef->sourceConfig =
                         mcClipDef->getSourceConfig(sourceConfigID, mcSelectorDef->sourceTrackID);
-                        
+
                     if (mcSelectorDef->sourceConfig == 0)
                     {
                         // load source config
@@ -1660,7 +1660,7 @@ MCClipDef * Database::loadMultiCameraClipDef(const std::string & name)
         }
     }
     END_QUERY_BLOCK("Failed to load multi-camera clip defs")
-    
+
     return mcClipDef.release();
 }
 
@@ -1716,17 +1716,17 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
 {
     VectorGuard<MCCut> allMCCuts;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet * result = statement->executeQuery(SQL_GET_ALL_MC_CUTS);
         while (result->next())
         {
             MCCut * mcCut = new MCCut();
             allMCCuts.get().push_back(mcCut);
-            
+
             mcCut->wasLoaded(result->getInt(1));
             mcCut->mcTrackId = result->getInt(2);
             mcCut->mcSelectorIndex = result->getInt(3);
@@ -1734,13 +1734,13 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
             mcCut->position = result->getLong(5);
             mcCut->editRate.numerator = result->getInt(6);
             mcCut->editRate.denominator = result->getInt(7);
-            
-#if 0    
+
+#if 0
             // load track def
             int track_id = result->getInt(2);
             auto_ptr<odbc::PreparedStatement> prepStatement1(connection->prepareStatement(SQL_GET_MC_TRACK_DEF));
             prepStatement1->setInt(1, track_id);
-            
+
             odbc::ResultSet * result1 = prepStatement1->executeQuery();
             if (result1->next())
             {
@@ -1755,7 +1755,7 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
             int selector_id = result->getInt(3);
             auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_MC_SELECTOR_DEF));
             prepStatement2->setInt(1, selector_id);
-            
+
             odbc::ResultSet * result2 = prepStatement2->executeQuery();
             if (result2->next())
             {
@@ -1777,11 +1777,11 @@ vector<MCCut *> Database::loadAllMultiCameraCuts()
                     }
                 }
             }
-#endif                
+#endif
         }
     }
     END_QUERY_BLOCK("Failed to load multi-camera cuts")
-    
+
     return allMCCuts.release();
 }
 
@@ -1813,19 +1813,19 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCTrackDef * mcTrackDef,
 
     VectorGuard<MCCut> theMCCuts;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MC_CUTS));
         prepStatement->setString(1, getDateString(startDate));
         prepStatement->setString(2, getDateString(endDate));
         prepStatement->setInt(3, mc_track_def_id);
-        
+
         odbc::ResultSet * result = prepStatement->executeQuery();
         while (result->next())
         {
             MCCut * mcCut = new MCCut();
-            
+
             mcCut->wasLoaded(result->getInt(1));
             mcCut->mcTrackId = result->getInt(2);
             mcCut->mcSelectorIndex = result->getInt(3);
@@ -1847,7 +1847,7 @@ vector<MCCut *> Database::loadMultiCameraCuts(MCTrackDef * mcTrackDef,
         }
     }
     END_QUERY_BLOCK("Failed to load multi-camera cuts")
-    
+
     return theMCCuts.release();
 }
 
@@ -1887,13 +1887,13 @@ void Database::saveMultiCameraCut(MCCut * mcCut, Transaction * transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!mcCut->isPersistent())
         {
@@ -1908,7 +1908,7 @@ void Database::saveMultiCameraCut(MCCut * mcCut, Transaction * transaction)
             nextDatabaseID = mcCut->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_MCCUT));
         }
-        
+
         prepStatement->setInt(paramIndex++, mcCut->mcTrackId);
         prepStatement->setInt(paramIndex++, mcCut->mcSelectorIndex);
         prepStatement->setString(paramIndex++, getDateString(mcCut->cutDate));
@@ -1921,12 +1921,12 @@ void Database::saveMultiCameraCut(MCCut * mcCut, Transaction * transaction)
         {
             prepStatement->setInt(paramIndex++, mcCut->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving multi-camera cut"));
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save series")
@@ -1946,23 +1946,23 @@ vector<Series*> Database::loadAllSeries()
 {
     auto_ptr<Connection> connection(getConnection());
     VectorGuard<Series> allSeries;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_SERIES);
         while (result->next())
         {
             Series* series = new Series();
             allSeries.get().push_back(series);
-            
+
             series->wasLoaded(result->getInt(1));
             series->name = result->getString(2);
         }
     }
     END_QUERY_BLOCK("Failed to load all series")
-    
+
     return allSeries.release();
 }
 
@@ -1982,23 +1982,23 @@ vector<Series*> Database::loadAllSeries()
 void Database::loadProgrammesInSeries(Series* series)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     // remove existing in-memory programmes first
     series->removeAllProgrammes();
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PROGRAMMES_IN_SERIES));
         prepStatement->setInt(1, series->getDatabaseID());
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         while (result->next())
         {
             auto_ptr<Programme> programme(series->createProgramme());
-            
+
             programme->wasLoaded(result->getInt(1));
             programme->name = result->getString(2);
-            
+
             programme.release();
         }
     }
@@ -2034,18 +2034,18 @@ void Database::saveSeries(Series* series, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     if (series->name.length() == 0)
     {
         PA_LOGTHROW(DBException, ("Series has empty name"));
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!series->isPersistent())
         {
@@ -2060,7 +2060,7 @@ void Database::saveSeries(Series* series, Transaction* transaction)
             nextDatabaseID = series->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_SERIES));
         }
-        
+
         prepStatement->setString(paramIndex++, series->name);
 
         // update
@@ -2068,12 +2068,12 @@ void Database::saveSeries(Series* series, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, series->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving series"));
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save series")
@@ -2093,14 +2093,14 @@ void Database::deleteSeries(Series* series, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_SERIES));
         prepStatement->setInt(1, series->getDatabaseID());
-        
+
         connection->registerCommitListener(0, series);
 
         // the database will cascade the delete down to the take
@@ -2110,13 +2110,13 @@ void Database::deleteSeries(Series* series, Transaction* transaction)
         {
             Programme* programme = *iter1;
             connection->registerCommitListener(0, programme);
-            
+
             vector<Item*>::const_iterator iter2;
             for (iter2 = programme->getItems().begin(); iter2 != programme->getItems().end(); iter2++)
             {
                 Item* item = *iter2;
                 connection->registerCommitListener(0, item);
-                
+
                 vector<Take*>::const_iterator iter3;
                 for (iter3 = item->getTakes().begin(); iter3 != item->getTakes().end(); iter3++)
                 {
@@ -2126,12 +2126,12 @@ void Database::deleteSeries(Series* series, Transaction* transaction)
                 }
             }
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting series"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete series")
@@ -2156,25 +2156,25 @@ void Database::deleteSeries(Series* series, Transaction* transaction)
 void Database::loadItemsInProgramme(Programme* programme)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     // remove existing in-memory items first
     programme->removeAllItems();
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_ITEMS_IN_PROGRAMME));
         prepStatement->setInt(1, programme->getDatabaseID());
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         while (result->next())
         {
             auto_ptr<Item> item(programme->appendNewItem());
-            
+
             item->wasLoaded(result->getInt(1));
             item->description = result->getString(2);
             item->scriptSectionRefs = getScriptReferences(result->getString(3));
             item->setDBOrderIndex(result->getInt(4));
-            
+
             item.release();
         }
     }
@@ -2212,18 +2212,18 @@ void Database::saveProgramme(Programme* programme, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     if (programme->name.length() == 0)
     {
         PA_LOGTHROW(DBException, ("Programme has empty name"));
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!programme->isPersistent())
         {
@@ -2238,7 +2238,7 @@ void Database::saveProgramme(Programme* programme, Transaction* transaction)
             nextDatabaseID = programme->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_PROGRAMME));
         }
-        
+
         prepStatement->setString(paramIndex++, programme->name);
         prepStatement->setInt(paramIndex++, programme->getSeriesID());
 
@@ -2247,12 +2247,12 @@ void Database::saveProgramme(Programme* programme, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, programme->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving programme"));
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save programme")
@@ -2273,14 +2273,14 @@ void Database::deleteProgramme(Programme* programme, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_PROGRAMME));
         prepStatement->setInt(1, programme->getDatabaseID());
-        
+
         connection->registerCommitListener(0, programme);
 
         // the database will cascade the delete down to take
@@ -2290,7 +2290,7 @@ void Database::deleteProgramme(Programme* programme, Transaction* transaction)
         {
             Item* item = *iter2;
             connection->registerCommitListener(0, item);
-            
+
             vector<Take*>::const_iterator iter3;
             for (iter3 = item->getTakes().begin(); iter3 != item->getTakes().end(); iter3++)
             {
@@ -2299,12 +2299,12 @@ void Database::deleteProgramme(Programme* programme, Transaction* transaction)
                 connection->registerCommitListener(0, take);
             }
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting programme"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete programme")
@@ -2327,7 +2327,7 @@ void Database::updateItemsOrder(Programme* programme, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
@@ -2340,26 +2340,26 @@ void Database::updateItemsOrder(Programme* programme, Transaction* transaction)
             {
                 PA_LOGTHROW(DBException, ("Item has invalid order index 0"));
             }
-            
+
             // only items that are persistent and have a new order index are updated
             if (!item->isPersistent() || item->_orderIndex == item->_prevOrderIndex)
             {
                 continue;
             }
-            
+
             // this will allow the Item to update it's _prevOrderIndex
             connection->registerCommitListener(item->getDatabaseID(), item);
 
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_ITEM_ORDER_INDEX));
             prepStatement->setInt(1, item->_orderIndex);
             prepStatement->setInt(2, item->getDatabaseID());
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when updating item order index"));
             }
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to update items order indexes")
@@ -2390,20 +2390,20 @@ void Database::updateItemsOrder(Programme* programme, Transaction* transaction)
 void Database::loadTakesInItem(Item* item)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     // remove existing in-memory takes first
     item->removeAllTakes();
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_TAKES_IN_ITEM));
         prepStatement->setInt(1, item->getDatabaseID());
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         while (result->next())
         {
             auto_ptr<Take> take(item->createTake());
-            
+
             take->wasLoaded(result->getInt(1));
             take->number = result->getInt(2);
             take->comment = result->getString(3);
@@ -2414,7 +2414,7 @@ void Database::loadTakesInItem(Item* item)
             take->startPosition = result->getLong(8);
             take->startDate = getDateFromODBC(result->getString(9));
             take->recordingLocation = result->getInt(10);
-            
+
             take.release();
         }
     }
@@ -2456,13 +2456,13 @@ void Database::saveItem(Item* item, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!item->isPersistent())
         {
@@ -2477,7 +2477,7 @@ void Database::saveItem(Item* item, Transaction* transaction)
             nextDatabaseID = item->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_ITEM));
         }
-        
+
         SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, item->description);
         SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, getScriptReferencesString(item->scriptSectionRefs));
         prepStatement->setInt(paramIndex++, item->_orderIndex);
@@ -2488,12 +2488,12 @@ void Database::saveItem(Item* item, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, item->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving item"));
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save item")
@@ -2514,14 +2514,14 @@ void Database::deleteItem(Item* item, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_ITEM));
         prepStatement->setInt(1, item->getDatabaseID());
-        
+
         connection->registerCommitListener(0, item);
 
         // the database will cascade the delete down to the take's material package
@@ -2533,12 +2533,12 @@ void Database::deleteItem(Item* item, Transaction* transaction)
 
             connection->registerCommitListener(0, take);
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting item"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete item")
@@ -2598,7 +2598,7 @@ void Database::saveTake(Take* take, Transaction* transaction)
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!take->isPersistent())
         {
@@ -2613,7 +2613,7 @@ void Database::saveTake(Take* take, Transaction* transaction)
             nextDatabaseID = take->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_TAKE));
         }
-        
+
         prepStatement->setInt(paramIndex++, take->number);
         SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, take->comment);
         prepStatement->setInt(paramIndex++, take->result);
@@ -2630,12 +2630,12 @@ void Database::saveTake(Take* take, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, take->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving take"));
         }
-        
+
         // commit transaction if no transaction was passed into this function
         if (transaction == 0)
         {
@@ -2664,21 +2664,21 @@ void Database::deleteTake(Take* take, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_TAKE));
         prepStatement->setInt(1, take->getDatabaseID());
-        
+
         connection->registerCommitListener(0, take);
 
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting take"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete take")
@@ -2713,7 +2713,7 @@ vector<Transcode*> Database::loadTranscodes(vector<int>& statuses)
     vector<int>::const_iterator iter;
     int paramIndex;
     string query;
-    
+
     START_QUERY_BLOCK
     {
         // complete the query string
@@ -2731,19 +2731,19 @@ vector<Transcode*> Database::loadTranscodes(vector<int>& statuses)
         }
         query.append(") ").append(SQL_GET_TRANSCODES_WITH_STATUSES_SUFFIX);
 
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(query));
         for (iter = statuses.begin(), paramIndex = 1; iter != statuses.end(); iter++, paramIndex++)
         {
             prepStatement->setInt(paramIndex, *iter);
         }
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         while (result->next())
         {
             Transcode* transcode = new Transcode();
             transcodes.get().push_back(transcode);
-            
+
             transcode->wasLoaded(result->getInt(1));
             transcode->sourceMaterialPackageDbId = result->getInt(2);
             transcode->destMaterialPackageDbId = result->getInt(3);
@@ -2753,7 +2753,7 @@ vector<Transcode*> Database::loadTranscodes(vector<int>& statuses)
         }
     }
     END_QUERY_BLOCK("Failed to load transcodes")
-    
+
     return transcodes.release();
 }
 
@@ -2776,18 +2776,18 @@ vector<Transcode*> Database::loadTranscodes(int status)
 {
     auto_ptr<Connection> connection(getConnection());
     VectorGuard<Transcode> transcodes;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_TRANSCODES_WITH_STATUS));
         prepStatement->setInt(1, status);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         while (result->next())
         {
             Transcode* transcode = new Transcode();
             transcodes.get().push_back(transcode);
-            
+
             transcode->wasLoaded(result->getInt(1));
             transcode->sourceMaterialPackageDbId = result->getInt(2);
             transcode->destMaterialPackageDbId = result->getInt(3);
@@ -2797,7 +2797,7 @@ vector<Transcode*> Database::loadTranscodes(int status)
         }
     }
     END_QUERY_BLOCK("Failed to load transcodes")
-    
+
     return transcodes.release();
 }
 
@@ -2835,13 +2835,13 @@ void Database::saveTranscode(Transcode* transcode, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
         long nextDatabaseID = 0;
         int paramIndex = 1;
-        
+
         // insert
         if (!transcode->isPersistent())
         {
@@ -2856,9 +2856,9 @@ void Database::saveTranscode(Transcode* transcode, Transaction* transaction)
             nextDatabaseID = transcode->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_TRANSCODE));
         }
-        
+
         prepStatement->setInt(paramIndex++, transcode->sourceMaterialPackageDbId);
-        SET_OPTIONAL_INT(transcode->destMaterialPackageDbId != 0, prepStatement, paramIndex++, 
+        SET_OPTIONAL_INT(transcode->destMaterialPackageDbId != 0, prepStatement, paramIndex++,
             transcode->destMaterialPackageDbId);
         SET_OPTIONAL_INT(transcode->targetVideoResolution != 0, prepStatement, paramIndex++,
             transcode->targetVideoResolution);
@@ -2869,12 +2869,12 @@ void Database::saveTranscode(Transcode* transcode, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, transcode->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving transcode"));
         }
-        
+
 		connection->commit();
     }
     END_UPDATE_BLOCK("Failed to save transcode")
@@ -2894,26 +2894,26 @@ void Database::deleteTranscode(Transcode* transcode, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_TRANSCODE));
         prepStatement->setInt(1, transcode->getDatabaseID());
-        
+
         connection->registerCommitListener(0, transcode);
 
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting transcode"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete transcode")
 }
-    
+
 #define SQL_RESET_TRANSCODES \
 " \
     UPDATE Transcode \
@@ -2933,24 +2933,24 @@ int Database::resetTranscodeStatus(int fromStatus, int toStatus, Transaction* tr
         connection = mConnection.get();
     }
     int numUpdates = 0;
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_RESET_TRANSCODES));
         prepStatement->setInt(1, toStatus);
         prepStatement->setInt(2, fromStatus);
-        
+
         numUpdates = prepStatement->executeUpdate();
-            
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to reset transcode statuses")
-    
+
     return numUpdates;
 }
-    
+
 
 #define SQL_DELETE_TRANSCODES \
 " \
@@ -2972,11 +2972,11 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
         connection = mConnection.get();
     }
     int numDeletes = 0;
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         // complete the query string
         string query = SQL_DELETE_TRANSCODES;
         for (iter = statuses.begin(); iter != statuses.end(); iter++)
@@ -2993,20 +2993,20 @@ int Database::deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNo
         query.append(")");
 
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(query));
-        
+
         paramIndex = 1;
         prepStatement->setString(paramIndex++, getODBCInterval(timeBeforeNow));
         for (iter = statuses.begin(); iter != statuses.end(); iter++)
         {
             prepStatement->setInt(paramIndex++, *iter);
         }
-        
+
         numDeletes = prepStatement->executeUpdate();
-            
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete transcodes")
-    
+
     return numDeletes;
 }
 
@@ -3037,10 +3037,10 @@ ProjectName Database::loadOrCreateProjectName(string name)
     {
         PA_LOGTHROW(DBException, ("Project name is empty"));
     }
-    
+
     auto_ptr<Connection> mConnection(getConnection());
     Connection* connection = mConnection.get();
-    
+
     ProjectName projectName;
     projectName.name = name;
 
@@ -3049,7 +3049,7 @@ ProjectName Database::loadOrCreateProjectName(string name)
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_LOAD_OR_CREATE_PROJECT_NAME));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
@@ -3061,7 +3061,7 @@ ProjectName Database::loadOrCreateProjectName(string name)
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to load or create project name")
-    
+
     return projectName;
 }
 
@@ -3069,16 +3069,16 @@ vector<ProjectName> Database::loadProjectNames()
 {
     auto_ptr<Connection> connection(getConnection());
     vector<ProjectName> allProjectNames;
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_PROJECT_NAMES);
         while (result->next())
         {
             ProjectName projectName;
-            
+
             projectName.wasLoaded(result->getInt(1));
             projectName.name = result->getString(2);
 
@@ -3086,7 +3086,7 @@ vector<ProjectName> Database::loadProjectNames()
         }
     }
     END_QUERY_BLOCK("Failed to load all project names")
-    
+
     return allProjectNames;
 }
 
@@ -3097,24 +3097,24 @@ void Database::deleteProjectName(ProjectName* projectName)
         // project name is not persisted in the database
         return;
     }
-    
+
     auto_ptr<Connection> mConnection(getConnection());
     Connection* connection = mConnection.get();
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_PROJECT_NAME));
         prepStatement->setInt(1, projectName->getDatabaseID());
-        
+
         connection->registerCommitListener(0, projectName);
 
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when deleting project name"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete project name")
@@ -3250,20 +3250,20 @@ SourcePackage* Database::loadSourcePackage(string name)
 {
     SourcePackage* sourcePackage = 0;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         // load the source package
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_SOURCE_PACKAGE));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             return 0; // no exception if not found
         }
-        
+
         Package* package;
         loadPackage(connection.get(), result, &package);
         if ((sourcePackage = dynamic_cast<SourcePackage*>(package)) == 0)
@@ -3273,7 +3273,7 @@ SourcePackage* Database::loadSourcePackage(string name)
         }
     }
     END_QUERY_BLOCK("Failed to load source package")
-    
+
     return sourcePackage;
 }
 
@@ -3287,21 +3287,21 @@ SourcePackage* Database::loadSourcePackage(string name, Transaction* transaction
         connection = mConnection.get();
     }
     SourcePackage* sourcePackage = 0;
-    
-    
+
+
     START_QUERY_BLOCK
     {
         // load the source package
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_SOURCE_PACKAGE));
         prepStatement->setString(1, name);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             return 0; // no exception if not found
         }
-        
+
         Package* package;
         loadPackage(connection, result, &package);
         if ((sourcePackage = dynamic_cast<SourcePackage*>(package)) == 0)
@@ -3311,7 +3311,7 @@ SourcePackage* Database::loadSourcePackage(string name, Transaction* transaction
         }
     }
     END_QUERY_BLOCK("Failed to load source package")
-    
+
     return sourcePackage;
 }
 
@@ -3330,20 +3330,20 @@ Package* Database::loadPackage(long databaseID)
 {
     Package* package = 0;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         // load the package
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PACKAGE));
         prepStatement->setLong(1, databaseID);
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
             PA_LOGTHROW(DBException, ("Package %ld does not exist in database", databaseID));
         }
-        
+
         loadPackage(connection.get(), result, &package);
     }
     END_QUERY_BLOCK("Failed to load package")
@@ -3355,14 +3355,14 @@ Package* Database::loadPackage(UMID packageUID, bool assumeExists)
 {
     Package* package = 0;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         // load the package
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_PACKAGE_WITH_UMID));
         prepStatement->setString(1, getUMIDString(packageUID));
-        
+
         odbc::ResultSet* result = prepStatement->executeQuery();
         if (!result->next())
         {
@@ -3375,7 +3375,7 @@ Package* Database::loadPackage(UMID packageUID, bool assumeExists)
                 return 0;
             }
         }
-        
+
         loadPackage(connection.get(), result, &package);
     }
     END_QUERY_BLOCK("Failed to load package")
@@ -3397,18 +3397,18 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     if (result->wasNull())
     {
         // material package
-        
+
         materialPackage = new MaterialPackage();
         newPackage = auto_ptr<Package>(materialPackage);
     }
     else
     {
         // source package
-        
+
         sourcePackage = new SourcePackage();
         newPackage = auto_ptr<Package>(sourcePackage);
     }
-    
+
     newPackage->wasLoaded(result->getInt(1));
     newPackage->uid = getUMID(result->getString(2));
     newPackage->name = result->getString(3);
@@ -3418,21 +3418,21 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
     {
         newPackage->projectName.wasLoaded(result->getInt(5));
     }
-    
+
     if (sourcePackage != 0)
     {
         sourcePackage->sourceConfigName = result->getString(8);
 
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_ESSENCE_DESCRIPTOR));
         prepStatement->setLong(1, essenceDescDatabaseID);
-        
+
         odbc::ResultSet* result2 = prepStatement->executeQuery();
         if (!result2->next())
         {
             // should never be here
             PA_LOGTHROW(DBException, ("Essence descriptor %ld does not exist in database", essenceDescDatabaseID));
         }
-        
+
         switch (result2->getInt(2))
         {
             case FILE_ESSENCE_DESC_TYPE:
@@ -3458,19 +3458,19 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
                     fileEssDescriptor->audioQuantizationBits = 0;
                 }
                 break;
-                
+
             case TAPE_ESSENCE_DESC_TYPE:
                 tapeEssDescriptor = new TapeEssenceDescriptor();
                 sourcePackage->descriptor = tapeEssDescriptor;
                 tapeEssDescriptor->spoolNumber = result2->getString(9);
                 break;
-                
+
             case LIVE_ESSENCE_DESC_TYPE:
                 liveEssDescriptor = new LiveEssenceDescriptor();
                 sourcePackage->descriptor = liveEssDescriptor;
                 liveEssDescriptor->recordingLocation = result2->getInt(10);
                 break;
-                
+
             default:
                 assert(false);
                 PA_LOGTHROW(DBException, ("Unknown essence descriptor type"));
@@ -3481,10 +3481,10 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
 
 
     // load the tracks
-    
+
     auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_TRACKS));
     prepStatement->setLong(1, newPackage->getDatabaseID());
-    
+
     odbc::ResultSet* result2 = prepStatement->executeQuery();
     while (result2->next())
     {
@@ -3497,18 +3497,18 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         track->dataDef = result2->getInt(5);
         track->editRate.numerator = result2->getInt(6);
         track->editRate.denominator = result2->getInt(7);
-        
+
         // load source clip
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement2(connection->prepareStatement(SQL_GET_SOURCE_CLIP));
         prepStatement2->setLong(1, track->getDatabaseID());
-        
+
         odbc::ResultSet* result3 = prepStatement2->executeQuery();
         if (!result3->next())
         {
             PA_LOGTHROW(DBException, ("Track (db id %d) is missing a SourceClip", track->getDatabaseID()));
         }
-        
+
         track->sourceClip = new SourceClip();
         track->sourceClip->wasLoaded(result3->getInt(1));
         track->sourceClip->sourcePackageUID = getUMID(result3->getString(2));
@@ -3517,10 +3517,10 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         track->sourceClip->position = result3->getLong(5);
     }
 
-    // get the user comments    
+    // get the user comments
     prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_GET_PACKAGE_USER_COMMENTS));
     prepStatement->setLong(1, newPackage->getDatabaseID());
-    
+
     odbc::ResultSet* result3 = prepStatement->executeQuery();
     while (result3->next())
     {
@@ -3540,8 +3540,8 @@ void Database::loadPackage(Connection* connection, odbc::ResultSet* result, Pack
         }
         newPackage->_userComments.push_back(userComment);
     }
-    
-    
+
+
     *package = newPackage.release();
 }
 
@@ -3702,7 +3702,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
     }
     // connection is actually a transaction, but we call it connection so that
     // the END_UPDATE_BLOCK is happy
-    
+
     if (package == 0)
     {
         PA_LOGTHROW(DBException, ("Can't save null Package"));
@@ -3712,7 +3712,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
         PA_LOGTHROW(DBException, ("Project name referenced by package is not persistent"));
     }
 
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
@@ -3720,16 +3720,16 @@ void Database::savePackage(Package* package, Transaction* transaction)
         long nextDescriptorDatabaseID = 0;
         int paramIndex = 1;
 
-        
+
         // save the source package essence descriptor
-            
+
         if (package->getType() == SOURCE_PACKAGE)
         {
             SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
             FileEssenceDescriptor* fileEssDescriptor;
             TapeEssenceDescriptor* tapeEssDescriptor;
             LiveEssenceDescriptor* liveEssDescriptor;
-            
+
             // insert
             if (!sourcePackage->descriptor->isPersistent())
             {
@@ -3744,8 +3744,8 @@ void Database::savePackage(Package* package, Transaction* transaction)
                 nextDescriptorDatabaseID = sourcePackage->descriptor->getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_ESSENCE_DESCRIPTOR));
             }
-            
-            
+
+
             prepStatement->setInt(paramIndex++, sourcePackage->descriptor->getType());
             switch (sourcePackage->descriptor->getType())
             {
@@ -3754,19 +3754,19 @@ void Database::savePackage(Package* package, Transaction* transaction)
                         sourcePackage->descriptor);
                     prepStatement->setString(paramIndex++, fileEssDescriptor->fileLocation);
                     prepStatement->setInt(paramIndex++, fileEssDescriptor->fileFormat);
-                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++,
                         fileEssDescriptor->videoResolutionID);
-                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++,
                         fileEssDescriptor->imageAspectRatio.numerator);
-                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(fileEssDescriptor->videoResolutionID != 0, prepStatement, paramIndex++,
                         fileEssDescriptor->imageAspectRatio.denominator);
-                    SET_OPTIONAL_INT(fileEssDescriptor->audioQuantizationBits != 0, prepStatement, paramIndex++, 
+                    SET_OPTIONAL_INT(fileEssDescriptor->audioQuantizationBits != 0, prepStatement, paramIndex++,
                         fileEssDescriptor->audioQuantizationBits);
-                        
+
                     prepStatement->setNull(paramIndex++, SQL_VARCHAR);
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     break;
-                    
+
                 case TAPE_ESSENCE_DESC_TYPE:
                     tapeEssDescriptor = dynamic_cast<TapeEssenceDescriptor*>(
                         sourcePackage->descriptor);
@@ -3776,12 +3776,12 @@ void Database::savePackage(Package* package, Transaction* transaction)
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
-                    
+
                     prepStatement->setString(paramIndex++, tapeEssDescriptor->spoolNumber);
-                    
+
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     break;
-                    
+
                 case LIVE_ESSENCE_DESC_TYPE:
                     liveEssDescriptor = dynamic_cast<LiveEssenceDescriptor*>(
                         sourcePackage->descriptor);
@@ -3792,10 +3792,10 @@ void Database::savePackage(Package* package, Transaction* transaction)
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     prepStatement->setNull(paramIndex++, SQL_INTEGER);
                     prepStatement->setNull(paramIndex++, SQL_VARCHAR);
-                    
+
                     prepStatement->setInt(paramIndex++, liveEssDescriptor->recordingLocation);
                     break;
-                    
+
                 default:
                     assert(false);
                     PA_LOGTHROW(DBException, ("Unknown essence descriptor type"));
@@ -3806,18 +3806,18 @@ void Database::savePackage(Package* package, Transaction* transaction)
             {
                 prepStatement->setInt(paramIndex++, sourcePackage->descriptor->getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving EssenceDescriptor"));
             }
-    
+
         }
 
         // save the package
 
         paramIndex = 1;
-        
+
         // insert
         if (!package->isPersistent())
         {
@@ -3832,7 +3832,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
             nextPackageDatabaseID = package->getDatabaseID();
             prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_PACKAGE));
         }
-        
+
         prepStatement->setString(paramIndex++, getUMIDString(package->uid));
         SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, package->name);
         prepStatement->setString(paramIndex++, getODBCTimestamp(package->creationDate));
@@ -3860,16 +3860,16 @@ void Database::savePackage(Package* package, Transaction* transaction)
         {
             prepStatement->setInt(paramIndex++, package->getDatabaseID());
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No inserts/updates when saving Package"));
         }
 
-        
-        
+
+
         // save the tracks
-        
+
         vector<Track*>::const_iterator iter;
         for (iter = package->tracks.begin(); iter != package->tracks.end(); iter++)
         {
@@ -3877,7 +3877,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
 
             long nextTrackDatabaseID = 0;
             paramIndex = 1;
-            
+
             // insert
             if (!track->isPersistent())
             {
@@ -3892,7 +3892,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
                 nextTrackDatabaseID = track->getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_TRACK));
             }
-            
+
             prepStatement->setInt(paramIndex++, track->id);
             prepStatement->setInt(paramIndex++, track->number);
             SET_OPTIONAL_VARCHAR(prepStatement, paramIndex++, track->name);
@@ -3900,19 +3900,19 @@ void Database::savePackage(Package* package, Transaction* transaction)
             prepStatement->setInt(paramIndex++, track->editRate.numerator);
             prepStatement->setInt(paramIndex++, track->editRate.denominator);
             prepStatement->setInt(paramIndex++, nextPackageDatabaseID);
-            
+
             // update
             if (track->isPersistent())
             {
                 prepStatement->setInt(paramIndex++, track->getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving Track"));
             }
-            
-            
+
+
             // save the source clip
 
             long nextSourceClipDatabaseID = 0;
@@ -3922,7 +3922,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
             {
                 PA_LOGTHROW(DBException, ("Cannot save track that is missing a source clip"));
             }
-            
+
             // insert
             if (!sourceClip->isPersistent())
             {
@@ -3937,24 +3937,24 @@ void Database::savePackage(Package* package, Transaction* transaction)
                 nextSourceClipDatabaseID = sourceClip->getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_SOURCE_CLIP));
             }
-            
+
             prepStatement->setString(paramIndex++, getUMIDString(sourceClip->sourcePackageUID));
             prepStatement->setInt(paramIndex++, sourceClip->sourceTrackID);
             prepStatement->setLong(paramIndex++, sourceClip->length);
             prepStatement->setLong(paramIndex++, sourceClip->position);
             prepStatement->setInt(paramIndex++, nextTrackDatabaseID);
-            
+
             // update
             if (sourceClip->isPersistent())
             {
                 prepStatement->setInt(paramIndex++, sourceClip->getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving SourceClip"));
             }
-            
+
         }
 
 
@@ -3964,10 +3964,10 @@ void Database::savePackage(Package* package, Transaction* transaction)
         for (uctIter = package->_userComments.begin(); uctIter != package->_userComments.end(); uctIter++)
         {
             UserComment& userComment = *uctIter;  // using ref so that object in vector is updated
-            
+
             long nextUserCommentDatabaseID = 0;
             paramIndex = 1;
-            
+
             // insert
             if (!userComment.isPersistent())
             {
@@ -3982,7 +3982,7 @@ void Database::savePackage(Package* package, Transaction* transaction)
                 nextUserCommentDatabaseID = userComment.getDatabaseID();
                 prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_UPDATE_PACKAGE_USER_COMMENT));
             }
-        
+
             prepStatement->setInt(paramIndex++, nextPackageDatabaseID);
             prepStatement->setString(paramIndex++, userComment.name);
             prepStatement->setString(paramIndex++, userComment.value);
@@ -4002,25 +4002,84 @@ void Database::savePackage(Package* package, Transaction* transaction)
             {
                 prepStatement->setInt(paramIndex++, userComment.colour);
             }
-            
+
             // update
             if (userComment.isPersistent())
             {
                 prepStatement->setInt(paramIndex++, userComment.getDatabaseID());
             }
-            
+
             if (prepStatement->executeUpdate() != 1)
             {
                 PA_LOGTHROW(DBException, ("No inserts/updates when saving tagged value"));
             }
         }
-        
+
         if (transaction == 0)
         {
             connection->commitTransaction();
         }
     }
     END_UPDATE_BLOCK("Failed to save package")
+}
+
+
+// delete multiple packages from ids in supplied array
+void Database::deletePackageChain(Package* topPackage, Transaction* transaction)
+{
+	PackageSet packages;
+
+	if(!packageRefsExist(topPackage,transaction))
+	{
+		// safe to delete
+		deletePackage(topPackage, transaction);
+
+		loadPackageChain(topPackage, &packages);
+
+		prodauto::PackageSet::iterator iter;
+
+		for (iter = packages.begin(); iter != packages.end(); iter++)
+		{
+
+			prodauto::Package* package = *iter;
+
+			// next package in chain
+			deletePackageChain(package, transaction);
+		}
+	}
+
+	else{
+		// refs still exist
+
+	}
+}
+
+
+#define SQL_SOURCE_UID \
+	"\
+		SELECT * FROM SourceClip WHERE scp_source_package_uid = ? \
+	"
+
+// are there any references from source package to this package?
+bool Database::packageRefsExist(Package* package, Transaction* transaction)
+{
+
+    Connection* connection = transaction;
+    auto_ptr<odbc::PreparedStatement> prepStatement;
+    prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_SOURCE_UID));
+
+
+    UMID sourcePackageUID = package->uid;
+
+    prepStatement->setString(1, getUMIDString(sourcePackageUID));
+
+    odbc::ResultSet* result = prepStatement->executeQuery();
+            if (result->next())
+            {
+                return true;
+            }
+
+    return false;
 }
 
 
@@ -4038,14 +4097,14 @@ void Database::deletePackage(Package* package, Transaction* transaction)
         mConnection = auto_ptr<Connection>(getConnection());
         connection = mConnection.get();
     }
-    
+
     START_UPDATE_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement;
-        
+
         prepStatement = auto_ptr<odbc::PreparedStatement>(connection->prepareStatement(SQL_DELETE_PACKAGE));
         prepStatement->setInt(1, package->getDatabaseID());
-        
+
         connection->registerCommitListener(0, package);
 
         // the database will cascade the delete down to the source clips
@@ -4055,14 +4114,14 @@ void Database::deletePackage(Package* package, Transaction* transaction)
         {
             Track* track = *iter;
             connection->registerCommitListener(0, track);
-            
+
             if (track->sourceClip != 0)
             {
                 connection->registerCommitListener(0, track->sourceClip);
             }
         }
 
-        // the database delete will cascade to the tagged value so we register 
+        // the database delete will cascade to the tagged value so we register
         // additional listeners for those objects
         vector<UserComment>::iterator iter2;
         for (iter2 = package->_userComments.begin(); iter2 != package->_userComments.end(); iter2++)
@@ -4070,12 +4129,12 @@ void Database::deletePackage(Package* package, Transaction* transaction)
             UserComment& userComment = *iter2;  // using ref so that object in vector is updated
             connection->registerCommitListener(0, &userComment);
         }
-        
+
         if (prepStatement->executeUpdate() != 1)
         {
             PA_LOGTHROW(DBException, ("No updates when delete package"));
         }
-        
+
         connection->commit();
     }
     END_UPDATE_BLOCK("Failed to delete package")
@@ -4094,15 +4153,15 @@ void Database::deletePackage(Package* package, Transaction* transaction)
         pkg_uid = ? \
 "
 
-int Database::loadSourceReference(UMID sourcePackageUID, uint32_t sourceTrackID, 
+int Database::loadSourceReference(UMID sourcePackageUID, uint32_t sourceTrackID,
     Package** referencedPackage, Track** referencedTrack)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         // get the referenced Package database id
-        
+
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_REFERENCED_PACKAGE_ID));
         prepStatement->setString(1, getUMIDString(sourcePackageUID));
 
@@ -4113,20 +4172,20 @@ int Database::loadSourceReference(UMID sourcePackageUID, uint32_t sourceTrackID,
         }
 
         // load the package and get the track
-        
+
         auto_ptr<Package> package(loadPackage(result->getInt(1)));
         Track* track = package->getTrack(sourceTrackID);
         if (track == 0)
         {
             return -2;
         }
-        
+
         *referencedPackage = package.release();
         *referencedTrack = track;
     }
     END_QUERY_BLOCK("Failed to load source reference")
 
-    return 1;    
+    return 1;
 }
 
 
@@ -4136,7 +4195,7 @@ void Database::loadPackageChain(Package* topPackage, PackageSet* packages)
     for (iter = topPackage->tracks.begin(); iter != topPackage->tracks.end(); iter++)
     {
         Track* track = *iter;
-        
+
         if (track->sourceClip->sourcePackageUID != g_nullUMID)
         {
             Package* referencedPackage;
@@ -4149,7 +4208,7 @@ void Database::loadPackageChain(Package* topPackage, PackageSet* packages)
             for (iter2 = packages->begin(); iter2 != packages->end(); iter2++)
             {
                 Package* package = *iter2;
-                
+
                 if (track->sourceClip->sourcePackageUID == package->uid)
                 {
                     havePackage = true;
@@ -4161,7 +4220,7 @@ void Database::loadPackageChain(Package* topPackage, PackageSet* packages)
                 // have package so skip to next track
                 continue;
             }
-            
+
             // load referenced package
             if (loadSourceReference(track->sourceClip->sourcePackageUID, track->sourceClip->sourceTrackID,
                 &referencedPackage, &referencedTrack) == 1)
@@ -4172,7 +4231,7 @@ void Database::loadPackageChain(Package* topPackage, PackageSet* packages)
                     delete referencedPackage;
                     referencedPackage = *result.first;
                 }
-                
+
                 // load recursively (depth first)
                 loadPackageChain(referencedPackage, packages);
             }
@@ -4190,7 +4249,7 @@ void Database::loadPackageChain(long databaseID, Package** topPackage, PackageSe
         delete *topPackage;
         *topPackage = *result.first;
     }
-    
+
     // load referenced packages recursively
     loadPackageChain(*topPackage, packages);
 }
@@ -4208,11 +4267,11 @@ void Database::loadPackageChain(long databaseID, Package** topPackage, PackageSe
         pkg_descriptor_id IS NULL \
 "
 
-void Database::loadMaterial(Timestamp& after, Timestamp& before, MaterialPackageSet* topPackages, 
+void Database::loadMaterial(Timestamp& after, Timestamp& before, MaterialPackageSet* topPackages,
     PackageSet* packages)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MATERIAL_1));
@@ -4254,7 +4313,7 @@ void Database::loadMaterial(Timestamp& after, Timestamp& before, MaterialPackage
 void Database::loadMaterial(string ucName, string ucValue, MaterialPackageSet* topPackages, PackageSet* packages)
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_MATERIAL_2));
@@ -4330,7 +4389,7 @@ long Database::getNextDatabaseID(Connection* connection, string sequenceName)
 void Database::checkVersion()
 {
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
@@ -4340,9 +4399,9 @@ void Database::checkVersion()
         {
             PA_LOGTHROW(DBException, ("Database is missing a version in the Version table"));
         }
-        
+
         int version = result->getInt(1);
-        
+
         if (version != g_compatibilityVersion)
         {
             PA_LOGTHROW(DBException, ("Database version %d not equal to required version %d",
@@ -4368,7 +4427,7 @@ void Database::loadResolutionNames(std::map<int, std::string> & resolution_names
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_RESOLUTION_NAMES);
         while (result->next())
         {
@@ -4394,7 +4453,7 @@ void Database::loadFileFormatNames(std::map<int, std::string> & file_format_name
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::Statement> statement(connection->createStatement());
-        
+
         odbc::ResultSet* result = statement->executeQuery(SQL_GET_ALL_FILE_FORMAT_NAMES);
         while (result->next())
         {
@@ -4417,12 +4476,12 @@ std::string Database::loadLocationName(long databaseID)
 {
     std::string name;
     auto_ptr<Connection> connection(getConnection());
-    
+
     START_QUERY_BLOCK
     {
         auto_ptr<odbc::PreparedStatement> prepStatement(connection->prepareStatement(SQL_GET_LOCATION_NAME));
         prepStatement->setLong(1, databaseID);
-        
+
         odbc::ResultSet * result = prepStatement->executeQuery();
         if (!result->next())
         {
