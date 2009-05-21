@@ -110,8 +110,8 @@ ingex> cd $workspace/ingex/studio/processing/media_transfer
 ingex> make
 
 You will also need to install the following perl modules:
-  IPC:ShareLite
-  Filesys:DfPortable
+  IPC::ShareLite
+  Filesys::DfPortable
 
 For example:
 
