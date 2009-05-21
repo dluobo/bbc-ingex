@@ -223,11 +223,20 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
         int		vis_width;	// width to vis_last
 
         use_kerning = FT_HAS_KERNING(info->face);
-        // compute initial pen position using font metrics
-        n = info->face->ascender - info->face->descender;
-        pen_x = ((-info->face->bbox.xMin * size) + (n / 2)) / n;
-        pen_y = ((info->face->bbox.yMax * size) + (n / 2)) / n;
+        // font metrics are unreliable, so use actual rendered characters
+        // set left margin using a capital M character
+        glyph_idx = FT_Get_Char_Index(info->face, 'M');
+        FT_Load_Glyph(info->face, glyph_idx, FT_LOAD_DEFAULT);
+        FT_Get_Glyph(info->face->glyph, &glyphs[0]);
+        pen_x = slot->metrics.horiBearingX;
         margin = pen_x;
+        FT_Done_Glyph(glyphs[0]);
+        // set baseline using a capital A character
+        glyph_idx = FT_Get_Char_Index(info->face, 'A');
+        FT_Load_Glyph(info->face, glyph_idx, FT_LOAD_DEFAULT);
+        FT_Get_Glyph(info->face->glyph, &glyphs[0]);
+        pen_y = slot->metrics.horiBearingY;
+        FT_Done_Glyph(glyphs[0]);
         // convert each character to a glyph and set its position
         num_glyphs = 0;
         vis_last = -1;
@@ -244,7 +253,7 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
             {
                 FT_Get_Kerning(info->face, last_glyph, glyph_idx,
                                FT_KERNING_DEFAULT, &delta);
-                pen_x += delta.x / 64;
+                pen_x += delta.x;
             }
             error = FT_Load_Glyph(info->face, glyph_idx, FT_LOAD_DEFAULT);
             if (error)
@@ -252,24 +261,25 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
             error = FT_Get_Glyph(info->face->glyph, &glyphs[num_glyphs]);
             if (error)
                 continue;  /* ignore errors */
-            if (pen_y - slot->bitmap_top < 0)
+            if (pen_y - slot->metrics.horiBearingY < 0)
             {
                 fprintf(stderr, "Character '%c' ascends too high\n", text[n]);
-                pen_y = slot->bitmap_top;
+                pen_y = slot->metrics.horiBearingY;
             }
-            if (pen_y - slot->bitmap_top + slot->bitmap.rows > size)
+            if (pen_y - slot->metrics.horiBearingY +
+                        slot->metrics.height > size * 64)
             {
                 fprintf(stderr, "Character '%c' descends too low\n", text[n]);
                 exit(1);
             }
             pos[num_glyphs].x = pen_x;
-            pos[num_glyphs].y = pen_y;
+            pos[num_glyphs].y = -pen_y;
 
-            pen_x += slot->advance.x / 64;
+            pen_x += slot->advance.x;
             last_glyph = glyph_idx;
             num_glyphs++;
 
-            if (pen_x + (margin * 2) > max_width)
+            if (pen_x + (margin * 2) > max_width * 64)
                 break;
 
             if (text[n] != ' ' &&
@@ -291,7 +301,7 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
         while (text[result] == ' ' || text[result] == '\n')
             result++;
         // set overlay dimensions
-        ovly->w = vis_width + (margin * 2);
+        ovly->w = (vis_width + (margin * 2)) / 64;
         ovly->h = size;
 //        fprintf(stderr, "Area of '%s' = (%d x %d)\n", text, ovly->w, ovly->h);
         ovly->ssx = -1;
@@ -302,17 +312,16 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
             return YUV_no_memory;
         memset(ovly->buff, 0, ovly->w * ovly->h * 2);
         ovly->Cbuff = NULL;
-        // render glyphs
+        // render glyphs in pre-calculated positions
         for (n = 0; n < (int)num_glyphs; n++)
         {
             error = FT_Glyph_To_Bitmap(&glyphs[n], FT_RENDER_MODE_NORMAL,
-                                       &pos[n], 0);
+                                       &pos[n], 1);
             if (!error)
             {
                 FT_BitmapGlyph	bit = (FT_BitmapGlyph)glyphs[n];
                 srcLine = bit->bitmap.buffer;
-                dstLine = ovly->buff + ((pos[n].y - bit->top) * ovly->w) +
-                                        pos[n].x + bit->left;
+                dstLine = ovly->buff - (bit->top * ovly->w) + bit->left;
                 for (j = 0; j < bit->bitmap.rows; j++)
                 {
                     memcpy(dstLine, srcLine, bit->bitmap.width);
@@ -320,6 +329,7 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
                     dstLine += ovly->w;
                 }
             }
+            FT_Done_Glyph(glyphs[n]);
         }
     }
     return result;	// length of string actually rendered
