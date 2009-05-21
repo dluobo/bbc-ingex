@@ -40,8 +40,8 @@ static void usage_exit(void)
 {
 	fprintf(stderr, "Usage: nexus_stats [options]\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "    -t <ltc|vitc>    type of timecode to read [default ltc]\n");
-	fprintf(stderr, "    -v               increase verbosity\n");
+	fprintf(stderr, "    -t <ltc|vitc|sys>   type of timecode to read [default ltc]\n");
+	fprintf(stderr, "    -v                  increase verbosity\n");
 	fprintf(stderr, "\n");
 	exit(1);
 }
@@ -83,6 +83,9 @@ extern int main(int argc, char *argv[])
 		{
 			if (strcmp(argv[n+1], "vitc") == 0) {
 				tc_type = NexusTC_VITC;
+			}
+			if (strcmp(argv[n+1], "sys") == 0) {
+				tc_type = NexusTC_System;
 			}
 			n++;
 		}
@@ -136,11 +139,13 @@ extern int main(int argc, char *argv[])
 				pctl->audio12_offset,
 				pctl->audio34_offset,
 				pctl->audio_size);
-		printf("  signal_ok_offset=%d tick_offset=%d ltc_offset=%d vitc_offset=%d sec_video_offset=%d\n",
+		printf("  signal_ok_offset=%d tick_offset=%d sys_time_offset=%d ltc_offset=%d vitc_offset=%d\n",
 				pctl->signal_ok_offset,
 				pctl->tick_offset,
+				pctl->sys_time_offset,
 				pctl->ltc_offset,
-				pctl->vitc_offset,
+				pctl->vitc_offset);
+		printf("  sec_video_offset=%d\n",
 				pctl->sec_video_offset);
 	}
 

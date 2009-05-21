@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.21 2009/05/01 13:48:06 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.22 2009/05/21 10:23:22 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -66,7 +66,7 @@ extern "C"
 #include "video_test_signals.h"
 #include "avsync_analysis.h"
 
-// Use macros from inttypes.h instead
+// Use macros from inttypes.h instead e.g. PRIi64
 //#if defined(__x86_64__)
 //#define PFi64 "ld"
 //#define PFu64 "lu"
@@ -100,7 +100,8 @@ int				sec_width = 0, sec_height = 0;
 int				frame_rate_numer = 0, frame_rate_denom = 0;
 int				element_size = 0, dma_video_size = 0, dma_total_size = 0;
 static int		audio_offset = 0, audio_size = 0, audio_pair_size = 0;
-int				ltc_offset = 0, vitc_offset = 0, tick_offset = 0, signal_ok_offset = 0;
+int				ltc_offset = 0, vitc_offset = 0;
+int				sys_time_offset = 0, tick_offset = 0, signal_ok_offset = 0;
 int				num_aud_samp_offset = 0;
 CaptureFormat	video_format = Format422PlanarYUV;
 CaptureFormat	video_secondary_format = FormatNone;
@@ -517,6 +518,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 
 	p_control->vitc_offset = vitc_offset;
 	p_control->ltc_offset = ltc_offset;
+	p_control->sys_time_offset = sys_time_offset;
+	p_control->tick_offset = tick_offset;
 	p_control->signal_ok_offset = signal_ok_offset;
 	p_control->num_aud_samp_offset = num_aud_samp_offset;
 	p_control->sec_video_offset = dma_video_size + audio_size;
@@ -574,6 +577,20 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 	}
 
 	return 1;
+}
+
+// Return number of seconds between 1 Jan 1970 and last midnight
+// where midnight is localtime not GMT.
+static time_t today_midnight_time(void)
+{
+	struct tm now_tm;
+
+	time_t now = time(NULL);
+	localtime_r(&now, &now_tm);
+	now_tm.tm_sec = 0;
+	now_tm.tm_min = 0;
+	now_tm.tm_hour = 0;
+	return mktime(&now_tm);
 }
 
 // Given a 64bit time-of-day corresponding to when a frame was captured,
@@ -776,7 +793,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 							out_pixfmt,
 							sec_width, sec_height);
 			sws_scale(td[chan].scale_context,
-					        td[chan].inFrame->data, td[chan].inFrame->linesize,
+							td[chan].inFrame->data, td[chan].inFrame->linesize,
 							0, height,
 							td[chan].outFrame->data, td[chan].outFrame->linesize);
 		}
@@ -899,6 +916,12 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 	// Get info structure for statistics
 	sv_fifo_info info;
 	SV_CHECK(sv_fifo_status(sv, poutput, &info));
+
+	// sys_time uses system clock as timecode source (tod_rec is in microsecs since 1970)
+	int64_t sys_time_microsec = tod_rec - (today_midnight_time() * 1000000LL);
+	// compute sys_time timecode as int number of frames since midnight
+	int sys_time = (int)(sys_time_microsec * frame_rate_numer / (1000000LL * frame_rate_denom));
+	memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + sys_time_offset, &sys_time, sizeof(int));
 
 	// Timecode error occurs when difference is not exactly 1
 	// or (around midnight) not exactly -2159999
@@ -1799,9 +1822,10 @@ int main (int argc, char ** argv)
 	// so we use the spare bytes at end for timecode
 	vitc_offset         = audio_offset + audio_size - 1 * sizeof(int);
 	ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
-	tick_offset         = audio_offset + audio_size - 3 * sizeof(int);
-	signal_ok_offset    = audio_offset + audio_size - 4 * sizeof(int);
-	num_aud_samp_offset = audio_offset + audio_size - 5 * sizeof(int);
+	sys_time_offset     = audio_offset + audio_size - 3 * sizeof(int);
+	tick_offset         = audio_offset + audio_size - 4 * sizeof(int);
+	signal_ok_offset    = audio_offset + audio_size - 5 * sizeof(int);
+	num_aud_samp_offset = audio_offset + audio_size - 6 * sizeof(int);
 
 	// An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
 	dma_total_size = dma_video_size		// video frame as captured by dma transfer
