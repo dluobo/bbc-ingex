@@ -220,6 +220,11 @@ CREATE TABLE UserComment
     CONSTRAINT uct_pkey PRIMARY KEY (uct_identifier)
 ) WITHOUT OIDS;
 
+-- [INDEX]
+CREATE INDEX index_uct_package_id
+	ON UserComment (uct_package_id);
+	
+
 -- this table is used to lock the Package table when creating a new SourcePackage
 -- or loading an existing one
 CREATE TABLE SourcePackageLock
@@ -255,6 +260,10 @@ CREATE TABLE Track
     CONSTRAINT trk_pkey PRIMARY KEY (trk_identifier)
 ) WITHOUT OIDS;
 
+-- [INDEX]
+CREATE INDEX index_trk_package_id
+	ON Track (trk_package_id);
+
 
 
 -- SOURCE CLIP
@@ -272,6 +281,10 @@ CREATE TABLE SourceClip
         ON DELETE CASCADE,
     CONSTRAINT scp_pkey PRIMARY KEY (scp_identifier)
 ) WITHOUT OIDS;
+
+-- [INDEX]
+CREATE INDEX index_scp_track_id
+	ON SourceClip (scp_track_id);
 
 
 
