@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.16 2009/05/21 10:22:36 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.17 2009/06/03 09:18:18 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -1226,7 +1226,7 @@ void IngexguiFrame::OnCue( wxCommandEvent& WXUNUSED( event ) )
 				const int64_t frameCount = mTimepos->GetFrameCount();
 				timecode.samples += frameCount; //will wrap automatically on display
 				if (wxID_OK == mCuePointsDlg->ShowModal(Timepos::FormatTimecode(timecode))) {
-					mEventList->AddEvent(EventList::CUE, &timecode, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
+					mEventList->AddEvent(EventList::CUE, 0, frameCount, mCuePointsDlg->GetDescription(), mCuePointsDlg->GetColourIndex());
 					UpdatePlayerAndEventControls();
 					mSavedState.Save(mSavedStateFilename);
 				}

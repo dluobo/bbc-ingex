@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.5 2009/05/21 10:22:36 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.6 2009/06/03 09:18:18 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -387,7 +387,7 @@ bool EventList::AtBottom()
 /// For start and chunk events, creates a new ChunkInfo object.
 /// Updates the other controls and the player.
 /// @param type The event type: START, CUE, CHUNK, STOP or [PROBLEM]-not fully implemented.
-/// @param timecode Timecode of the event, for START, CUE and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
+/// @param timecode Timecode of the event, for START and optionally STOP and CHUNK events (for STOP and CHUNK events, assumed to be frame-accurate, unlike frameCount).
 /// @param frameCount The position in frames, for CUE, STOP and CHUNK events. (For STOP and CHUNK events, if timecode supplied, used to work out the number of days; otherwise, used as the frame-accurate length unless zero, which indicates unknown).
 /// @param description A description to display for events other than START (which uses the project name).
 /// @param colourIndex The colour of a CUE event.
@@ -427,6 +427,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 			item.SetTextColour(CuePointsDlg::GetLabelColour(colourIndex));
 			item.SetBackgroundColour(CuePointsDlg::GetColour(colourIndex));
 			mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).AddCuePoint(frameCount, colourIndex);
+			tc = GetStartTimecode();
+			tc.samples += frameCount; //wrap is done by FormatTimecode()
+			timecode = &tc;
+
 			break;
 		case STOP :
 		case CHUNK :
@@ -439,17 +443,8 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 				new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
 			}
 			if (timecode && !timecode->undefined) {
-				//find the recording's start timecode to work out the exact duration mod 1 day
-				wxListItem startItem;
-				startItem.SetId(GetItemCount());
-				while (startItem.GetId()) {
-					startItem.SetId(startItem.GetId() - 1);
-					GetItem(startItem);
-					if (startItem.GetText() == TypeLabels[START]) {
-						position = timecode->samples - mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode().samples;
-						break;
-					}
-				}
+				//work out the exact duration mod 1 day
+				position = timecode->samples - GetStartTimecode().samples;
 				if (position < 0) { //rolled over midnight
 					position += 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator;
 				}
@@ -597,6 +592,23 @@ void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
 	}
 	ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
 	mChunkInfoArray.Add(info);
+}
+
+
+ProdAuto::MxfTimecode EventList::GetStartTimecode()
+{
+	ProdAuto::MxfTimecode startTimecode = InvalidMxfTimecode;
+	wxListItem startItem;
+	startItem.SetId(GetItemCount());
+	while (startItem.GetId()) {
+		startItem.SetId(startItem.GetId() - 1);
+		GetItem(startItem);
+		if (startItem.GetText() == TypeLabels[START]) {
+			startTimecode = mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode();
+			break;
+		}
+	}
+	return startTimecode;
 }
 
 /// Adds track and file list data to the latest chunk info.

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.3 2009/05/01 13:41:34 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.4 2009/06/03 09:18:18 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -117,8 +117,9 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		void OnRestoreListLabel(wxCommandEvent&);
 		void ClearSavedData();
 		const wxString GetCdata(wxXmlNode *);
-		ProdAuto::MxfTimecode  Load();
+		ProdAuto::MxfTimecode Load();
 		void NewChunkInfo(ProdAuto::MxfTimecode *, int64_t);
+		ProdAuto::MxfTimecode GetStartTimecode();
 
 		ChunkInfoArray mChunkInfoArray;
 		bool mCanEdit;
