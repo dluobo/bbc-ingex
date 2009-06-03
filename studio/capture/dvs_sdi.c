@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.22 2009/05/21 10:23:22 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.23 2009/06/03 09:23:36 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -808,10 +808,18 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 			}
 			else {
 				// Downconvert to 4:2:0 YUV buffer located just after audio
-				uyvy_to_yuv420(	width, height,
-								video_secondary_format == Format420PlanarYUVShifted,	// do DV25 line shift?
+				if (video_secondary_format == Format420PlanarYUVShifted) {	// do DV25 style subsampling?
+					uyvy_to_yuv420_DV_sampling(	width, height,
+								1,											// do DV25 line shift?
 								dma_dest,									// input
 								vid_dest + (audio_offset + audio_size));	// output
+				}
+				else {
+					uyvy_to_yuv420(	width, height,
+								0,											// do DV25 line shift?
+								dma_dest,									// input
+								vid_dest + (audio_offset + audio_size));	// output
+				}
 			}
 		}
 	}
