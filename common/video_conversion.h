@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.3 2008/07/08 14:59:20 philipn Exp $
+ * $Id: video_conversion.h,v 1.4 2009/06/03 09:25:47 john_f Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -20,14 +20,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
- 
+
 #ifndef __VIDEO_CONVERSION_H__
 #define __VIDEO_CONVERSION_H__
 
 #include <inttypes.h>
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -44,6 +44,8 @@ void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t
 
 void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output);
 
+void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
+void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
 
 #ifdef __cplusplus
 }

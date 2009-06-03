@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.4 2008/07/08 14:59:20 philipn Exp $
+ * $Id: video_conversion.c,v 1.5 2009/06/03 09:25:46 john_f Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -359,5 +359,175 @@ void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output)
 				v++;
 			}
 		}
+	}
+}
+
+/*
+* Downcovert the Chroma component in 422 format to 420 DV-PAL.
+* C_in       - Input 4:2:2 chroma component
+* width      - C_in width
+* height     - C_in height
+* width2     - C_out width
+* height2    - C_out height
+* is_V       - Flag to indicate if the Chroma component is U or V.
+*            - 0 if chroma is U component, 1 if chroma is V component
+*
+* Colour downsampling for 4:2:0 DV is co-sited (different to MPEG-1, MPEG-2 and H.264).
+* Vertical subsampling proceeds by filtering using a 1,2,1 vertical filter applied to
+* each interlaced field separately.
+*
+* References:
+* Page 92, Digital video and HDTV: algorithms and interfaces, by Charles A. Poynton, 2003.
+* Page 24, Video demystified: a handbook for the digital engineer, by Keith Jack, 2005.
+*/
+static void downconvert_chroma_component(uint8_t *C_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
+{
+	int start_line;
+	int i_y;
+	int o_y, o_x;
+	if (is_V)
+		start_line = 2;
+	else
+		start_line = 0;
+	
+	for (i_y = start_line, o_y = 0; o_y < height2; o_y += 2, i_y += 4)
+	{
+		for (o_x = 0; o_x < width2; ++o_x)
+		{
+			/* top field line */
+			int l2 = i_y;
+			int l1 = l2 - 2;
+			int l3 = l2 + 2;
+			l1 = l1 > 0 ? l1 : 0;
+			l3 = l3 < height-2 ? l3 : height - 2;
+			C_out[o_y*width2 + o_x] = (C_in[l1*width2 + o_x] + 2*C_in[l2*width2 + o_x] + C_in[l3 * width2 + o_x]) / 4; 
+
+			/* bottom field line */
+			l2 = i_y+1;
+			l1 = (l2 - 2);
+			l3 = l2 + 2;
+			l1 = l1 > 1 ? l1 : 1;
+			l3 = l3 < height-1 ? l3 : height - 1;
+			C_out[(o_y+1)*width2 + o_x] = (C_in[l1*width2 + o_x] + 2*C_in[l2*width2 + o_x] + C_in[l3 * width2 + o_x]) / 4; 
+		}
+	}
+}
+
+void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+{
+	int i;
+
+	// Copy Y plane as is
+	for (i = 0; i < width*height; i++)
+	{
+		output[i] = input[i];
+	}
+
+	uint8_t *U_in = input + width * height;
+	uint8_t *V_in = U_in + width * height / 2;
+
+	uint8_t *U_out = output + width * height;
+	uint8_t *V_out = U_out + width * height / 4;
+
+	int width2 = width / 2;
+	int height2 = height / 2;
+
+	/* Downconvert the U component */
+	downconvert_chroma_component(U_in, height, U_out, width2, height2, 0);
+
+	/* Downconvert the V component */
+	downconvert_chroma_component(V_in, height, V_out, width2, height2, 1);
+}
+
+/*
+* Downcovert the Chroma component in 422 format to 420 DV-PAL.
+* C_in       - Input 4:2:2 chroma component
+* width      - C_in width
+* height     - C_in height
+* width2     - C_out width
+* height2    - C_out height
+* is_V       - Flag to indicate if the Chroma component is U or V.
+*            - 0 if chroma is U component, 1 if chroma is V component
+*/
+static void downconvert_chroma_component_uyvy(uint8_t *fr_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
+{
+	int start_line;
+	int i_y;
+	int o_y, o_x;
+	int width = width2 * 2;
+	int coff;
+	if (is_V) {
+		start_line = 2;
+		coff = 2;
+	}
+	else {
+		start_line = 0;
+		coff = 0;
+	}
+	
+	for (i_y = start_line, o_y = 0; o_y < height2; o_y += 2, i_y +=4 )
+	{
+		for (o_x = 0; o_x < width2; o_x++)
+		{
+			// top field line
+			int l2 = i_y;
+			int l1 = l2 - 2;
+			int l3 = l2 + 2;
+			l1 = l1 > 0 ? l1 : 0;
+			l3 = l3 < height-2 ? l3 : height - 2;
+			C_out[o_y*width2 + o_x] = (fr_in[l1*width*2 + o_x*4+coff] + 2*fr_in[l2*width*2 + o_x*4+coff] + fr_in[l3*width*2 + o_x*4+coff]) / 4; 
+
+			// guard against case where height2 is odd
+			if (o_y + 1 == height2)
+				continue;
+
+			// bottom field line
+			l2 = i_y+1;
+			l1 = (l2 - 2);
+			l3 = l2 + 2;
+			l1 = l1 > 1 ? l1 : 1;
+			l3 = l3 < height-1 ? l3 : height - 1;
+			C_out[(o_y+1)*width2 + o_x] = (fr_in[l1*width*2 + o_x*4+coff] + 2*fr_in[l2*width*2 + o_x*4+coff] + fr_in[l3*width*2 + o_x*4+coff]) / 4; 
+		}
+	}
+}
+
+void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+{
+	int i;
+	uint8_t *U_out = output + width * height;
+	uint8_t *V_out = U_out + width * height / 4;
+	uint8_t *orig_output = output;
+	uint8_t *orig_U_out = U_out;
+	uint8_t *orig_V_out = V_out;
+
+	int start_line = 0;
+	if (shift_picture_down) {
+		output += width;					// adjust output pointers to skip first line
+		U_out += width/2;
+		V_out += width/2;
+		height--;							// height is now 1 line less
+		start_line = 1;
+	}
+
+	// Copy Y plane as is
+	for (i = 0; i < width*height; i++)
+	{
+		output[i] = input[ i*2 + 1 ];		// input is U.Y.V.Y
+	}
+
+	// Downconvert the U component
+	// For the case where height is 1 line less, compensate using height+1
+	downconvert_chroma_component_uyvy(input, height, U_out, width / 2, (height+1) / 2, 0);
+
+	// Downconvert the V component
+	downconvert_chroma_component_uyvy(input, height, V_out, width / 2, height / 2, 1);
+
+	if (shift_picture_down) {
+		// Duplicate second line up so it fills in otherwise blank top line
+		// to avoid nasty compression artifacts later on.
+		memcpy(orig_output, output, width);		// write one line of copied Y
+		memcpy(orig_U_out, U_out, width/2);		// copy one line of subsampled U
+		memcpy(orig_V_out, V_out, width/2);		// copy one line of subsampled V
 	}
 }
