@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.22 2009/05/14 10:54:49 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.23 2009/06/08 10:47:35 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -682,7 +682,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Go through the tracks.
     for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
     {
-        prodauto::Track * rsp_trk = rsp->tracks[i];
+        //prodauto::Track * rsp_trk = rsp->tracks[i];
+        prodauto::Track * rsp_trk = rsp->getTrack(i + 1);
         if (track_enables[i])
         {
             // Get HardwareTrack based on SourceTrackConfig database id;
