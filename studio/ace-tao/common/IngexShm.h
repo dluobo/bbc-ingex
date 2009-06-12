@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.8 2009/03/19 17:52:38 john_f Exp $
+ * $Id: IngexShm.h,v 1.1 2009/06/12 17:38:57 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -118,6 +118,16 @@ public:
     unsigned int SecondaryWidth() { return mpControl->sec_width; }
     unsigned int SecondaryHeight() { return mpControl->sec_height; }
     bool Interlace() { return true; } // not yet supported
+
+    int FrameNumber(unsigned int channel, unsigned int frame)
+    {
+        void * p_framenumber = mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
+            + mpControl->frame_number_offset;
+        return * (int *) p_framenumber;
+    }
+
+    int FrameNumberOffset() { return mpControl->frame_number_offset; }
+    int SecondaryVideoOffset() { return mpControl->sec_video_offset; }
 
     uint8_t * pVideoPri(int channel, int frame)
     {
