@@ -20,7 +20,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libs += uuid
   libs += odbc++
   libs += common
-  libs += common2
+  libs += acetaocommon
   libs += YUVlib
   libs += studiocommon
   libs += MXF
@@ -41,7 +41,7 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   libpaths += /usr/local/lib
   libpaths += /usr/local/lib64
   libpaths += /usr/lib64
-  after += common2Lib
+  after += acetaocommonLib
 }
 
 

@@ -13,7 +13,7 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
   libs += odbc++
   libs += prodautodb
   libs += common
-  libs += common2
+  libs += acetaocommon
   libs += idl
 
   libpaths += ../../../common
@@ -25,7 +25,7 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
     Release::libpaths += $(LIBODBCPP)/win32/prod-dll
   }
 
-  after += common2Lib
+  after += acetaocommonLib
 }
 
 
