@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.3 2009/04/16 17:50:30 john_f Exp $
+ * $Id: Timecode.cpp,v 1.4 2009/06/12 17:50:01 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -120,7 +120,7 @@ Timecode::Timecode(const Timecode & tc)
 
 Timecode & Timecode::operator=(const Timecode & tc)
 {
-    if(this != &tc)
+    if (this != &tc)
     {
         mFramesPerSecond = tc.mFramesPerSecond;
         mDropFrame = tc.mDropFrame;
@@ -346,5 +346,14 @@ Duration operator-(const Timecode & lhs, const Timecode & rhs)
     // NB. Should check for mode compatibility
     return Duration(lhs.FramesSinceMidnight() - rhs.FramesSinceMidnight(), lhs.mFramesPerSecond, lhs.mDropFrame);
 }
+
+/**
+Add a number of frames to a timecode.
+*/
+Timecode operator+(const Timecode & lhs, const int & frames)
+{
+    return Timecode(lhs.mFramesSinceMidnight + frames);
+}
+
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.h,v 1.2 2009/04/16 17:50:30 john_f Exp $
+ * $Id: Timecode.h,v 1.3 2009/06/12 17:50:00 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -78,7 +78,7 @@ public:
     int EditRateDenominator() const;
 
 // operator overload
-    //friend Timecode operator+(const Timecode & lhs, const Timecode & rhs);
+    friend Timecode operator+(const Timecode & lhs, const int & frames);
     friend Duration operator-(const Timecode & lhs, const Timecode & rhs);
     //friend void operator+=(Timecode & lhs, const Timecode & rhs);
     //friend void operator-=(Timecode & lhs, const Timecode & rhs);
