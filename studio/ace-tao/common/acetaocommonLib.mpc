@@ -1,8 +1,9 @@
-project(common2Lib) {
-  staticname = common2
+project(acetaocommonLib) {
+  staticname = acetaocommon
   sharedname = 
   includes += $(ACE_ROOT) $(TAO_ROOT) $(TAO_ROOT)/orbsvcs
   includes += ../../common
+  includes += ../../../common
   includes += ../../database/src
   includes += ../IDL/Generated
   specific(vc71,vc8,vc9) {
