@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: Package.cpp,v 1.2 2009/06/15 11:30:17 john_f Exp $
  *
  * Container for arbitrary data.
  *
@@ -67,3 +67,21 @@ const ProdAuto::StatusItem & StatusPackage::status(void) const
     ACE_TRACE(ACE_TEXT ("StatusPackage::status()"));
     return status_;
 }
+
+// FramePackage
+// default constructor makes empty package
+FramePackage::FramePackage()
+: Package(true)
+{
+}
+
+// constuctor makes package containing frame data
+FramePackage::FramePackage(void * p_video, int index)
+: Package(), mFrameData(p_video), mIndex(index)
+{
+}
+
+FramePackage::~FramePackage()
+{
+}
+

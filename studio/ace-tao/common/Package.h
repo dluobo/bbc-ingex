@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.1 2007/09/11 14:08:33 stuart_hc Exp $
+ * $Id: Package.h,v 1.2 2009/06/15 11:30:17 john_f Exp $
  *
  * Container for arbitrary data.
  *
@@ -58,6 +58,23 @@ class StatusPackage : public Package
 
     private:
         ProdAuto::StatusItem status_;
+};
+
+/**
+Video frame data for encoding.
+*/
+class FramePackage : public Package
+{
+    public:
+        FramePackage();
+        FramePackage(void * p_video, int index);
+        virtual ~FramePackage();
+        void * FrameData() { return mFrameData; }
+        int Index() { return mIndex; }
+
+    private:
+        void * mFrameData;
+        int mIndex;
 };
 
         
