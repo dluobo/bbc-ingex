@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_control.h,v 1.3 2009/05/21 10:16:57 john_f Exp $
+ * $Id: nexus_control.h,v 1.4 2009/06/15 10:17:01 john_f Exp $
  *
  * Shared memory interface between SDI capture threads and reader threads.
  *
@@ -144,6 +144,7 @@ typedef struct {
 	int				audio78_offset;		// offset to start of audio ch 7,8 samples (if used)
 	int				audio_size;			// size in bytes of all audio data (4/8 chans)
 										// including internal padding for DMA transfer
+	int				frame_number_offset;// offset to frame number
 	int				num_aud_samp_offset;// offset to count of audio samples (varies for NTSC)
 	int				signal_ok_offset;	// offset to flag for good input status
 	int				tick_offset;		// offset to "frame" tick (dvs field tick / 2)
