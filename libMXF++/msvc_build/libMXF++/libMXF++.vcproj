@@ -188,6 +188,9 @@
 					RelativePath="..\..\libMXF++\metadata\MaterialPackage.cpp">
 				</File>
 				<File
+					RelativePath="..\..\libMXF++\metadata\MPEGVideoDescriptor.cpp">
+				</File>
+				<File
 					RelativePath="..\..\libMXF++\metadata\MultipleDescriptor.cpp">
 				</File>
 				<File
@@ -288,6 +291,9 @@
 					</File>
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\MaterialPackageBase.cpp">
+					</File>
+					<File
+						RelativePath="..\..\libMXF++\metadata\base\MPEGVideoDescriptorBase.cpp">
 					</File>
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\MultipleDescriptorBase.cpp">
@@ -429,6 +435,9 @@
 					RelativePath="..\..\libMXF++\metadata\Metadata.h">
 				</File>
 				<File
+					RelativePath="..\..\libMXF++\metadata\MPEGVideoDescriptor.h">
+				</File>
+				<File
 					RelativePath="..\..\libMXF++\metadata\MultipleDescriptor.h">
 				</File>
 				<File
@@ -529,6 +538,9 @@
 					</File>
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\MaterialPackageBase.h">
+					</File>
+					<File
+						RelativePath="..\..\libMXF++\metadata\base\MPEGVideoDescriptorBase.h">
 					</File>
 					<File
 						RelativePath="..\..\libMXF++\metadata\base\MultipleDescriptorBase.h">

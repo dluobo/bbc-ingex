@@ -1,5 +1,5 @@
 /*
- * $Id: gen_metadata_classes.c,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $
+ * $Id: gen_metadata_classes.c,v 1.2 2009/06/18 11:58:09 philipn Exp $
  *
  * Generate base and user editable metadata classes from the libMXF data model
  *
@@ -190,6 +190,10 @@ static const char* get_type_name(MXFDataModel* dataModel, MXFItemDef* itemDef,
                 CHECK((interpretTtemType = mxf_get_item_def_type(dataModel, itemType->info.interpret.typeId)) != NULL);
                 get_type_name(dataModel, itemDef, interpretTtemType, typeName);
                 break;
+            case MXF_CODED_CONTENT_TYPE_TYPE:
+                CHECK((interpretTtemType = mxf_get_item_def_type(dataModel, itemType->info.interpret.typeId)) != NULL);
+                get_type_name(dataModel, itemDef, interpretTtemType, typeName);
+                break;
             default:
                 fprintf(stderr, "Warning: unknown interpret type %d\n", itemType->typeId);
                 strcpy(typeName, "XXX");
@@ -324,7 +328,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
 
     fprintf(baseHeaderFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.2 2009/06/18 11:58:09 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -380,7 +384,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(headerFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.2 2009/06/18 11:58:09 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -436,7 +440,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(baseSourceFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.2 2009/06/18 11:58:09 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -492,7 +496,7 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
     
     fprintf(sourceFile,
         "/*\n"
-        " * $Id: gen_metadata_classes.c,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $\n"
+        " * $Id: gen_metadata_classes.c,v 1.2 2009/06/18 11:58:09 philipn Exp $\n"
         " *\n"
         " *\n"
         " *\n"
@@ -749,6 +753,10 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
                     fprintf(baseSourceFile, "    return getUInt8Item(&MXF_ITEM_K(%s, %s));\n",
                         className, itemName);
                     break;
+                case MXF_CODED_CONTENT_TYPE_TYPE:
+                    fprintf(baseSourceFile, "    return getUInt8Item(&MXF_ITEM_K(%s, %s));\n",
+                        className, itemName);
+                    break;
                 default:
                     fprintf(stderr, "Warning: unknown interpret type %d\n", itemType->typeId);
                     fprintf(baseSourceFile, "    XXX;\n");
@@ -935,6 +943,10 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
                             elementTypeName[strlen(elementTypeName) - 1] = c;
                             break;
                         case MXF_ORIENTATION_TYPE:
+                            fprintf(baseSourceFile, "    return getUInt8ArrayItem(&MXF_ITEM_K(%s, %s));\n",
+                                className, itemName);
+                            break;
+                        case MXF_CODED_CONTENT_TYPE_TYPE:
                             fprintf(baseSourceFile, "    return getUInt8ArrayItem(&MXF_ITEM_K(%s, %s));\n",
                                 className, itemName);
                             break;
@@ -1160,6 +1172,10 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
                     fprintf(baseSourceFile, "    setUInt8Item(&MXF_ITEM_K(%s, %s), value);\n",
                         className, itemName);
                     break;
+                case MXF_CODED_CONTENT_TYPE_TYPE:
+                    fprintf(baseSourceFile, "    setUInt8Item(&MXF_ITEM_K(%s, %s), value);\n",
+                        className, itemName);
+                    break;
                 default:
                     fprintf(stderr, "Warning: unknown interpret type %d\n", itemType->typeId);
                     fprintf(baseSourceFile, "    XXX;\n");
@@ -1333,6 +1349,10 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
                             elementTypeName[strlen(elementTypeName) - 1] = c;
                             break;
                         case MXF_ORIENTATION_TYPE:
+                            fprintf(baseSourceFile, "    setUInt8ArrayItem(&MXF_ITEM_K(%s, %s), value);\n",
+                                className, itemName);
+                            break;
+                        case MXF_CODED_CONTENT_TYPE_TYPE:
                             fprintf(baseSourceFile, "    setUInt8ArrayItem(&MXF_ITEM_K(%s, %s), value);\n",
                                 className, itemName);
                             break;
@@ -1715,6 +1735,20 @@ static void gen_class(const char* directory, MXFDataModel* dataModel, MXFSetDef*
                                 "\n");
                             break;
                         case MXF_ORIENTATION_TYPE:
+                            fprintf(baseHeaderFile,
+                                "   void append%s(%s value);\n",
+                                itemName, elementTypeName);
+                            fprintf(baseSourceFile,
+                                "void %s::append%s(%s value)\n"
+                                "{\n",
+                                baseClassName, itemName, elementTypeName);
+                            fprintf(baseSourceFile, "    appendUInt8ArrayItem(&MXF_ITEM_K(%s, %s), value);\n",
+                                className, itemName);
+                            fprintf(baseSourceFile,
+                                "}\n"
+                                "\n");
+                            break;
+                        case MXF_CODED_CONTENT_TYPE_TYPE:
                             fprintf(baseHeaderFile,
                                 "   void append%s(%s value);\n",
                                 itemName, elementTypeName);

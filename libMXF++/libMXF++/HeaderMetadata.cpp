@@ -1,5 +1,5 @@
 /*
- * $Id: HeaderMetadata.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
+ * $Id: HeaderMetadata.cpp,v 1.3 2009/06/18 11:58:08 philipn Exp $
  *
  * 
  *
@@ -232,6 +232,7 @@ void HeaderMetadata::initialiseObjectFactory()
     REGISTER_CLASS(FileDescriptor);
     REGISTER_CLASS(GenericPictureEssenceDescriptor);
     REGISTER_CLASS(CDCIEssenceDescriptor);
+    REGISTER_CLASS(MPEGVideoDescriptor);
     REGISTER_CLASS(RGBAEssenceDescriptor);
     REGISTER_CLASS(GenericSoundEssenceDescriptor);
     REGISTER_CLASS(GenericDataEssenceDescriptor);

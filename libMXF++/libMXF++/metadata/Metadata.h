@@ -28,6 +28,7 @@
 #include <libMXF++/metadata/FileDescriptor.h>
 #include <libMXF++/metadata/GenericPictureEssenceDescriptor.h>
 #include <libMXF++/metadata/CDCIEssenceDescriptor.h>
+#include <libMXF++/metadata/MPEGVideoDescriptor.h>
 #include <libMXF++/metadata/RGBAEssenceDescriptor.h>
 #include <libMXF++/metadata/GenericSoundEssenceDescriptor.h>
 #include <libMXF++/metadata/GenericDataEssenceDescriptor.h>

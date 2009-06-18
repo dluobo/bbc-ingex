@@ -1,5 +1,5 @@
 /*
- * $Id: Metadata.h,v 1.1 2009/02/02 05:14:36 stuart_hc Exp $
+ * $Id: Metadata.h,v 1.2 2009/06/18 11:58:09 philipn Exp $
  *
  * Includes all the metadata header files
  *
@@ -50,6 +50,7 @@
 #include <libMXF++/metadata/FileDescriptor.h>
 #include <libMXF++/metadata/GenericPictureEssenceDescriptor.h>
 #include <libMXF++/metadata/CDCIEssenceDescriptor.h>
+#include <libMXF++/metadata/MPEGVideoDescriptor.h>
 #include <libMXF++/metadata/RGBAEssenceDescriptor.h>
 #include <libMXF++/metadata/GenericSoundEssenceDescriptor.h>
 #include <libMXF++/metadata/GenericDataEssenceDescriptor.h>
