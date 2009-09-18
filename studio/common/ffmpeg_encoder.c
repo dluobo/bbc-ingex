@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.6 2009/03/19 18:05:35 john_f Exp $
+ * $Id: ffmpeg_encoder.c,v 1.7 2009/09/18 16:25:20 philipn Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -34,6 +34,9 @@
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #endif
+
+#define MPA_FRAME_SIZE              1152 // taken from ffmpeg's private mpegaudio.h
+#define PAL_VIDEO_FRAME_AUDIO_SIZE  1920
 
 #include "ffmpeg_encoder.h"
 
@@ -88,6 +91,16 @@ typedef struct
 {
     AVCodec * codec;
     AVCodecContext * codec_context;
+    // audio
+    int num_audio_channels;
+    int audio_samples_per_input_frame;
+    int audio_samples_per_output_frame;
+    short * audio_inbuf;
+    int audio_inbuf_size;
+    int audio_inbuf_offset;
+    uint8_t * audio_outbuf;
+    int audio_outbuf_size;
+    // video
     AVFrame * inputFrame;
     uint8_t * outputBuffer;
     unsigned int bufferSize;
@@ -142,6 +155,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
 
     /* Setup encoder */
     int codec_id;
+    int codec_type;
     int imx = 0;
     switch (res)
     {
@@ -150,11 +164,13 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     case FF_ENCODER_RESOLUTION_DV100_1080i50:
     case FF_ENCODER_RESOLUTION_DV100_720p50:
         codec_id = CODEC_ID_DVVIDEO;
+        codec_type = CODEC_TYPE_VIDEO;
         break;
     case FF_ENCODER_RESOLUTION_IMX30:
     case FF_ENCODER_RESOLUTION_IMX40:
     case FF_ENCODER_RESOLUTION_IMX50:
         codec_id = CODEC_ID_MPEG2VIDEO;
+        codec_type = CODEC_TYPE_VIDEO;
         imx = 1;
         break;
     case FF_ENCODER_RESOLUTION_DNX36p:
@@ -163,12 +179,19 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     case FF_ENCODER_RESOLUTION_DNX120i:
     case FF_ENCODER_RESOLUTION_DNX185i:
         codec_id = CODEC_ID_DNXHD;
+        codec_type = CODEC_TYPE_VIDEO;
         break;
     case FF_ENCODER_RESOLUTION_DMIH264:
         codec_id = CODEC_ID_H264;
+        codec_type = CODEC_TYPE_VIDEO;
         break;
     case FF_ENCODER_RESOLUTION_JPEG:
         codec_id = CODEC_ID_MJPEG;
+        codec_type = CODEC_TYPE_VIDEO;
+        break;
+    case FF_ENCODER_RESOLUTION_MP3:
+        codec_id = CODEC_ID_MP3;
+        codec_type = CODEC_TYPE_AUDIO;
         break;
     default:
         codec_id = 0;
@@ -193,237 +216,268 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
     }
 
     // Set fields in AVCodecContext
-    encoder->codec_context->codec_type = CODEC_TYPE_VIDEO;
-    encoder->codec_context->time_base.num = 1;
-    encoder->codec_context->time_base.den = 25;
-    encoder->codec_context->pix_fmt = PIX_FMT_YUV422P;
-    switch (res)
+    encoder->codec_context->codec_type = codec_type;
+    if (CODEC_TYPE_VIDEO == codec_type)
     {
-    case FF_ENCODER_RESOLUTION_DV25:
-    case FF_ENCODER_RESOLUTION_DMIH264:
-        encoder->codec_context->pix_fmt = PIX_FMT_YUV420P;
-        break;
-    case FF_ENCODER_RESOLUTION_JPEG:
-        encoder->codec_context->pix_fmt = PIX_FMT_YUVJ422P;
-        break;
-    case FF_ENCODER_RESOLUTION_DV100_720p50:
         encoder->codec_context->time_base.num = 1;
-        encoder->codec_context->time_base.den = 50;
-        break;
-    default:
-        break;
-    }
-
-    int width = 720;
-    int height = 576;
-    int bit_rate = 0;
-    int buffer_size = 0;
-    int encoded_frame_size = 0;
-    const uint16_t * intra_matrix = 0;
-    int top_field_first = 1;
-    switch (res)
-    {
-    case FF_ENCODER_RESOLUTION_JPEG:
-        encoder->codec_context->bit_rate = 65 * 1000000;
-        encoded_frame_size = 800000;        // guess
-        encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
-        memcpy(encoder->codec_context->intra_matrix, jpeg2to1_intra_matrix, sizeof(uint16_t) * 64);
-        break;
-    case FF_ENCODER_RESOLUTION_DV25:
-        encoded_frame_size = 144000;
-        top_field_first = 0;
-        break;
-    case FF_ENCODER_RESOLUTION_DV50:
-        encoded_frame_size = 288000;
-        top_field_first = 0;
-        break;
-    case FF_ENCODER_RESOLUTION_IMX30:
-        bit_rate = 30 * 1000000;
-        buffer_size = 30 * 40000;
-        encoded_frame_size = bit_rate / 200;
-        intra_matrix = imx30_intra_matrix;
-        break;
-    case FF_ENCODER_RESOLUTION_IMX40:
-        bit_rate = 40 * 1000000;
-        buffer_size = 40 * 40000;
-        encoded_frame_size = bit_rate / 200;
-        intra_matrix = imx4050_intra_matrix;
-        break;
-    case FF_ENCODER_RESOLUTION_IMX50:
-        bit_rate = 50 * 1000000;
-        buffer_size = 50 * 40000;
-        encoded_frame_size = bit_rate / 200;
-        intra_matrix = imx4050_intra_matrix;
-        break;
-    case FF_ENCODER_RESOLUTION_DNX36p:
-        width = 1920;
-        height = 1080;
-        encoder->codec_context->bit_rate = 36 * 1000000;
-        encoder->codec_context->qmax = 1024;
-        encoded_frame_size = 188416;        // from VC-3 spec
-        break;
-    case FF_ENCODER_RESOLUTION_DNX120p:
-    case FF_ENCODER_RESOLUTION_DNX120i:
-        width = 1920;
-        height = 1080;
-        encoder->codec_context->bit_rate = 120 * 1000000;
-        encoder->codec_context->qmax = 1024;
-        if (res == FF_ENCODER_RESOLUTION_DNX120i)
-            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
-        encoded_frame_size = 606208;        // from VC-3 spec
-        break;
-    case FF_ENCODER_RESOLUTION_DNX185p:
-    case FF_ENCODER_RESOLUTION_DNX185i:
-        width = 1920;
-        height = 1080;
-        encoder->codec_context->bit_rate = 185 * 1000000;
-        encoder->codec_context->qmax = 1024;
-        if (res == FF_ENCODER_RESOLUTION_DNX185i)
-            encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
-        encoded_frame_size = 917504;        // from VC-3 spec
-        break;
-    case FF_ENCODER_RESOLUTION_DV100_1080i50:
-        width = 1440;                       // coded width (input scaled horizontally from 1920)
-        height = 1080;
-        encoder->input_width = 1920;
-        encoder->input_height = 1080;
-        encoder->scale_image = 1;
-        encoded_frame_size = 576000;        // SMPTE 370M spec
-        break;
-    case FF_ENCODER_RESOLUTION_DV100_720p50:
-        width = 960;                        // coded width (input scaled horizontally from 1280)
-        height = 720;
-        encoder->input_width = 1280;
-        encoder->input_height = 720;
-        encoder->scale_image = 1;
-        encoded_frame_size = 576000;        // SMPTE 370M spec
-        break;
-    case FF_ENCODER_RESOLUTION_DMIH264:
-        encoded_frame_size = 200000;            // guess at maximum encoded size
-        encoder->codec_context->bit_rate = 15 * 1000000;    // a guess
-        encoder->codec_context->gop_size = 1;   // I-frame only
-        break;
-    default:
-        break;
-    }
-
-    // setup ffmpeg threads if specified
-    if (num_threads != 0) {
-        int threads = 0;
-        if (num_threads == THREADS_USE_BUILTIN_TUNING)
+        encoder->codec_context->time_base.den = 25;
+        encoder->codec_context->pix_fmt = PIX_FMT_YUV422P;
+        switch (res)
         {
-            // select number of threaded based on picture size
-            if (width > 720)
-                threads = 4;
+        case FF_ENCODER_RESOLUTION_DV25:
+        case FF_ENCODER_RESOLUTION_DMIH264:
+            encoder->codec_context->pix_fmt = PIX_FMT_YUV420P;
+            break;
+        case FF_ENCODER_RESOLUTION_JPEG:
+            encoder->codec_context->pix_fmt = PIX_FMT_YUVJ422P;
+            break;
+        case FF_ENCODER_RESOLUTION_DV100_720p50:
+            encoder->codec_context->time_base.num = 1;
+            encoder->codec_context->time_base.den = 50;
+            break;
+        default:
+            break;
         }
-        else
+
+        int width = 720;
+        int height = 576;
+        int bit_rate = 0;
+        int buffer_size = 0;
+        int encoded_frame_size = 0;
+        const uint16_t * intra_matrix = 0;
+        int top_field_first = 1;
+        switch (res)
         {
-            // use number of threads specified by function arg
-            threads = num_threads;
+        case FF_ENCODER_RESOLUTION_JPEG:
+            encoder->codec_context->bit_rate = 65 * 1000000;
+            encoded_frame_size = 800000;        // guess
+            encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
+            memcpy(encoder->codec_context->intra_matrix, jpeg2to1_intra_matrix, sizeof(uint16_t) * 64);
+            break;
+        case FF_ENCODER_RESOLUTION_DV25:
+            encoded_frame_size = 144000;
+            top_field_first = 0;
+            break;
+        case FF_ENCODER_RESOLUTION_DV50:
+            encoded_frame_size = 288000;
+            top_field_first = 0;
+            break;
+        case FF_ENCODER_RESOLUTION_IMX30:
+            bit_rate = 30 * 1000000;
+            buffer_size = 30 * 40000;
+            encoded_frame_size = bit_rate / 200;
+            intra_matrix = imx30_intra_matrix;
+            break;
+        case FF_ENCODER_RESOLUTION_IMX40:
+            bit_rate = 40 * 1000000;
+            buffer_size = 40 * 40000;
+            encoded_frame_size = bit_rate / 200;
+            intra_matrix = imx4050_intra_matrix;
+            break;
+        case FF_ENCODER_RESOLUTION_IMX50:
+            bit_rate = 50 * 1000000;
+            buffer_size = 50 * 40000;
+            encoded_frame_size = bit_rate / 200;
+            intra_matrix = imx4050_intra_matrix;
+            break;
+        case FF_ENCODER_RESOLUTION_DNX36p:
+            width = 1920;
+            height = 1080;
+            encoder->codec_context->bit_rate = 36 * 1000000;
+            encoder->codec_context->qmax = 1024;
+            encoded_frame_size = 188416;        // from VC-3 spec
+            break;
+        case FF_ENCODER_RESOLUTION_DNX120p:
+        case FF_ENCODER_RESOLUTION_DNX120i:
+            width = 1920;
+            height = 1080;
+            encoder->codec_context->bit_rate = 120 * 1000000;
+            encoder->codec_context->qmax = 1024;
+            if (res == FF_ENCODER_RESOLUTION_DNX120i)
+                encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+            encoded_frame_size = 606208;        // from VC-3 spec
+            break;
+        case FF_ENCODER_RESOLUTION_DNX185p:
+        case FF_ENCODER_RESOLUTION_DNX185i:
+            width = 1920;
+            height = 1080;
+            encoder->codec_context->bit_rate = 185 * 1000000;
+            encoder->codec_context->qmax = 1024;
+            if (res == FF_ENCODER_RESOLUTION_DNX185i)
+                encoder->codec_context->flags |= CODEC_FLAG_INTERLACED_DCT;
+            encoded_frame_size = 917504;        // from VC-3 spec
+            break;
+        case FF_ENCODER_RESOLUTION_DV100_1080i50:
+            width = 1440;                       // coded width (input scaled horizontally from 1920)
+            height = 1080;
+            encoder->input_width = 1920;
+            encoder->input_height = 1080;
+            encoder->scale_image = 1;
+            encoded_frame_size = 576000;        // SMPTE 370M spec
+            break;
+        case FF_ENCODER_RESOLUTION_DV100_720p50:
+            width = 960;                        // coded width (input scaled horizontally from 1280)
+            height = 720;
+            encoder->input_width = 1280;
+            encoder->input_height = 720;
+            encoder->scale_image = 1;
+            encoded_frame_size = 576000;        // SMPTE 370M spec
+            break;
+        case FF_ENCODER_RESOLUTION_DMIH264:
+            encoded_frame_size = 200000;            // guess at maximum encoded size
+            encoder->codec_context->bit_rate = 15 * 1000000;    // a guess
+            encoder->codec_context->gop_size = 1;   // I-frame only
+            break;
+        default:
+            break;
         }
-        if (threads > 0)
+
+        // setup ffmpeg threads if specified
+        if (num_threads != 0) {
+            int threads = 0;
+            if (num_threads == THREADS_USE_BUILTIN_TUNING)
+            {
+                // select number of threaded based on picture size
+                if (width > 720)
+                    threads = 4;
+            }
+            else
+            {
+                // use number of threads specified by function arg
+                threads = num_threads;
+            }
+            if (threads > 0)
+            {
+                avcodec_thread_init(encoder->codec_context, threads);
+                encoder->codec_context->thread_count= threads;
+            }
+        }
+
+        if (imx)
         {
-            avcodec_thread_init(encoder->codec_context, threads);
-            encoder->codec_context->thread_count= threads;
+            encoder->padtop = 32;
+
+            encoder->codec_context->rc_min_rate = bit_rate;
+            encoder->codec_context->rc_max_rate = bit_rate;
+            encoder->codec_context->bit_rate = bit_rate;
+            encoder->codec_context->rc_buffer_size = buffer_size;
+            encoder->codec_context->rc_initial_buffer_occupancy = buffer_size;
+
+            // -ps 1
+            encoder->codec_context->rtp_payload_size = 1;
+
+            // -qscale 1
+            encoder->codec_context->global_quality = 1 * FF_QP2LAMBDA;
+
+            // -intra
+            encoder->codec_context->gop_size = 0;
+
+            encoder->codec_context->qmin = 1;
+            encoder->codec_context->qmax = 3;
+
+            encoder->codec_context->lmin = 1 * FF_QP2LAMBDA;
+            encoder->codec_context->lmax = 3 * FF_QP2LAMBDA;
+
+            encoder->codec_context->flags |=
+                CODEC_FLAG_INTERLACED_DCT | CODEC_FLAG_LOW_DELAY;
+
+            // See SMPTE 356M Type D-10 Stream Specifications
+
+            // intra_dc_precision = 2
+            // -dc 10  (8 gets subtracted)
+            encoder->codec_context->intra_dc_precision = 2;
+
+            // frame_pred_frame_dct = 0 (field/frame adaptive)
+            // We get this by default
+
+            // q_scale_type = 1 (nonlinear quantiser)
+            encoder->codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
+
+            // intra_vlc_format = 1 (use intra-VLC table)
+            encoder->codec_context->flags2 |= CODEC_FLAG2_INTRA_VLC;
+
+            // Avid uses special intra quantiser matrix
+            encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
+            memcpy(encoder->codec_context->intra_matrix, intra_matrix, sizeof(uint16_t) * 64);
+
+            /* alloc input buffer */
+            encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
+            encoder->inputBuffer = av_mallocz(width * (height + encoder->padtop) * 2);
+            encoder->padColour[0] = 16;
+            encoder->padColour[1] = 128;
+            encoder->padColour[2] = 128;
+        }
+
+        if (encoder->scale_image)
+        {
+            encoder->scale_image = 1;
+            // alloc buffers for scaling input video
+            encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
+            encoder->inputBuffer = av_mallocz(width * height * 2);
+        }
+
+        avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
+
+        //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
+        // Actually the active picture is less than 720 wide, the correct numbers appear below
+    #if 0
+        // 4:3
+        encoder->codec_context->sample_aspect_ratio.num = 59;
+        encoder->codec_context->sample_aspect_ratio.den = 54;
+    #else
+        // 16:9
+        encoder->codec_context->sample_aspect_ratio.num = 118;
+        encoder->codec_context->sample_aspect_ratio.den = 81;
+    #endif
+
+        /* prepare codec */
+        if (avcodec_open(encoder->codec_context, encoder->codec) < 0)
+        {
+            fprintf(stderr, "Could not open encoder\n");
+            return 0;
+        }
+
+        /* allocate input frame */
+        encoder->inputFrame = avcodec_alloc_frame();
+        if (!encoder->inputFrame)
+        {
+            fprintf(stderr, "Could not allocate input frame\n");
+            return 0;
+        }
+        encoder->inputFrame->top_field_first = top_field_first;
+
+        /* allocate output buffer */
+        encoder->bufferSize = encoded_frame_size + 50000; // not sure why extra is needed
+        encoder->outputBuffer = av_mallocz(encoder->bufferSize);
+    }
+    else
+    {
+    // audio
+        /* set parameters */
+        const int kbit_rate = 128;
+        encoder->codec_context->bit_rate = kbit_rate * 1000;
+        encoder->codec_context->sample_rate = 48000;
+        const int nch = 2;
+        encoder->num_audio_channels = nch;
+        encoder->codec_context->channels = nch;
+
+        /* Set up audio buffer parameters */
+        encoder->audio_samples_per_input_frame = PAL_VIDEO_FRAME_AUDIO_SIZE;
+        /* We have to do some buffering of input, hence the * 2 on the end */
+        encoder->audio_inbuf_size = encoder->audio_samples_per_input_frame * nch * sizeof(short) * 2;
+
+        /* samples per coded frame */
+        encoder->audio_samples_per_output_frame = MPA_FRAME_SIZE;
+        /* coded frame size */
+        encoder->audio_outbuf_size = 2 * 960; // enough for 2 audio frames at 320 kbit/s
+
+        /* prepare codec */
+        if (avcodec_open(encoder->codec_context, encoder->codec) < 0)
+        {
+            fprintf(stderr, "Could not open encoder\n");
+            return 0;
         }
     }
-
-    if (imx)
-    {
-        encoder->padtop = 32;
-
-        encoder->codec_context->rc_min_rate = bit_rate;
-        encoder->codec_context->rc_max_rate = bit_rate;
-        encoder->codec_context->bit_rate = bit_rate;
-        encoder->codec_context->rc_buffer_size = buffer_size;
-        encoder->codec_context->rc_initial_buffer_occupancy = buffer_size;
-
-        // -ps 1
-        encoder->codec_context->rtp_payload_size = 1;
-
-        // -qscale 1
-        encoder->codec_context->global_quality = 1 * FF_QP2LAMBDA;
-
-        // -intra
-        encoder->codec_context->gop_size = 0;
-
-        encoder->codec_context->qmin = 1;
-        encoder->codec_context->qmax = 3;
-
-        encoder->codec_context->lmin = 1 * FF_QP2LAMBDA;
-        encoder->codec_context->lmax = 3 * FF_QP2LAMBDA;
-
-        encoder->codec_context->flags |=
-            CODEC_FLAG_INTERLACED_DCT | CODEC_FLAG_LOW_DELAY;
-
-        // See SMPTE 356M Type D-10 Stream Specifications
-
-        // intra_dc_precision = 2
-        // -dc 10  (8 gets subtracted)
-        encoder->codec_context->intra_dc_precision = 2;
-
-        // frame_pred_frame_dct = 0 (field/frame adaptive)
-        // We get this by default
-
-        // q_scale_type = 1 (nonlinear quantiser)
-        encoder->codec_context->flags2 |= CODEC_FLAG2_NON_LINEAR_QUANT;
-
-        // intra_vlc_format = 1 (use intra-VLC table)
-        encoder->codec_context->flags2 |= CODEC_FLAG2_INTRA_VLC;
-
-        // Avid uses special intra quantiser matrix
-        encoder->codec_context->intra_matrix = av_mallocz(sizeof(uint16_t) * 64);
-        memcpy(encoder->codec_context->intra_matrix, intra_matrix, sizeof(uint16_t) * 64);
-
-        /* alloc input buffer */
-        encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
-        encoder->inputBuffer = av_mallocz(width * (height + encoder->padtop) * 2);
-        encoder->padColour[0] = 16;
-        encoder->padColour[1] = 128;
-        encoder->padColour[2] = 128;
-    }
-
-    if (encoder->scale_image)
-    {
-        encoder->scale_image = 1;
-        // alloc buffers for scaling input video
-        encoder->tmpFrame = av_mallocz(sizeof(AVPicture));
-        encoder->inputBuffer = av_mallocz(width * height * 2);
-    }
-
-    avcodec_set_dimensions(encoder->codec_context, width, height + encoder->padtop);
-
-    //encoder->codec_context->sample_aspect_ratio = av_d2q(16.0/9*576/720, 255); // {64, 45}
-    // Actually the active picture is less than 720 wide, the correct numbers appear below
-#if 0
-    // 4:3
-    encoder->codec_context->sample_aspect_ratio.num = 59;
-    encoder->codec_context->sample_aspect_ratio.den = 54;
-#else
-    // 16:9
-    encoder->codec_context->sample_aspect_ratio.num = 118;
-    encoder->codec_context->sample_aspect_ratio.den = 81;
-#endif
-
-    /* prepare codec */
-    if (avcodec_open(encoder->codec_context, encoder->codec) < 0)
-    {
-        fprintf(stderr, "Could not open encoder\n");
-        return 0;
-    }
-
-    /* allocate input frame */
-    encoder->inputFrame = avcodec_alloc_frame();
-    if (!encoder->inputFrame)
-    {
-        fprintf(stderr, "Could not allocate input frame\n");
-        return 0;
-    }
-    encoder->inputFrame->top_field_first = top_field_first;
-
-    /* allocate output buffer */
-    encoder->bufferSize = encoded_frame_size + 50000; // not sure why extra is needed
-    encoder->outputBuffer = av_mallocz(encoder->bufferSize);
 
     return (ffmpeg_encoder_t *) encoder;
 }
@@ -507,6 +561,50 @@ extern int ffmpeg_encoder_encode(ffmpeg_encoder_t * in_encoder, uint8_t * p_vide
 
     /* set pointer to encoded video */
     *pp_enc_video = encoder->outputBuffer;
+
+    return size;
+}
+
+extern int ffmpeg_encoder_encode_audio (ffmpeg_encoder_t * in_encoder, int num_samples, short * p_audio, uint8_t * * pp_enc_audio)
+{
+    internal_ffmpeg_encoder_t * aenc = (internal_ffmpeg_encoder_t *)in_encoder;
+    if (!aenc)
+    {
+        return -1;
+    }
+
+    int size = 0;
+    *pp_enc_audio = aenc->audio_outbuf;
+    int nch = aenc->num_audio_channels;
+
+    /* encode and write audio */
+    if (p_audio)
+    {
+        /*
+        Audio comes in in video frames (num_samples e.g. 1920) but may be encoded
+        as MPEG frames (1152 samples) so we need to buffer.
+        NB. audio_inbuf_offset is in terms of 16-bit samples, hence the
+        rather confusing pointer arithmetic.
+        */
+        //fprintf (stderr, "audio_inbuf_offset = %d, num_samples = %d, num_channels = %d\n", aenc->audio_inbuf_offset, num_samples, nch);
+        memcpy (aenc->audio_inbuf + aenc->audio_inbuf_offset, p_audio, num_samples * 2 * nch);
+        aenc->audio_inbuf_offset += (num_samples * nch);
+        int diff;
+        while ((diff = aenc->audio_inbuf_offset - (aenc->audio_samples_per_output_frame * nch)) >= 0)
+        {
+            int s = avcodec_encode_audio(aenc->codec_context, aenc->audio_outbuf + size, aenc->audio_outbuf_size - size, p_audio);
+            if (s < 0)
+            {
+                fprintf(stderr, "error compressing audio!\n");
+                return -1;
+            }
+            size += s;
+
+            /* shift samples in input buffer */
+            memmove (aenc->audio_inbuf, aenc->audio_inbuf + (aenc->audio_samples_per_output_frame * nch), diff * 2);
+            aenc->audio_inbuf_offset -= (aenc->audio_samples_per_output_frame * nch);
+        }
+    }
 
     return size;
 }

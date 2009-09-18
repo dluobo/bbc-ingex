@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.h,v 1.5 2009/03/26 18:50:09 john_f Exp $
+ * $Id: ffmpeg_encoder.h,v 1.6 2009/09/18 16:25:20 philipn Exp $
  *
  * Encode uncompressed video to DV frames using libavcodec
  *
@@ -47,7 +47,8 @@ typedef enum {
     FF_ENCODER_RESOLUTION_DNX120i,
     FF_ENCODER_RESOLUTION_DNX185i,
     FF_ENCODER_RESOLUTION_DMIH264,
-    FF_ENCODER_RESOLUTION_JPEG
+    FF_ENCODER_RESOLUTION_JPEG,
+    FF_ENCODER_RESOLUTION_MP3
 } ffmpeg_encoder_resolution_t;
 
 
@@ -69,6 +70,11 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
 *                   NOTE: expects an SD VIDEO frames in planar 4:2:2 format
 */
 extern int ffmpeg_encoder_encode (ffmpeg_encoder_t * in_encoder, uint8_t * p_video, uint8_t * * pp_enc_video);
+
+/*
+* encode audio
+*/
+extern int ffmpeg_encoder_encode_audio (ffmpeg_encoder_t * in_encoder, int num_samples, short * p_audio, uint8_t * * pp_enc_audio);
 
 /*
 * ffmpeg_encoder_close : Releases resources allocated by the ffmpeg_encoder_init
