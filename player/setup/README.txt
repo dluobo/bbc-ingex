@@ -2,13 +2,23 @@ The jog-shuttle controller can be used to control the player. Events from the jo
 
 The player needs to have read permission for the event device and by default a non-root user does not have read permission.
 
-Edit the udev configuration file, /etc/udev/rules.d/50-udev-default.rules, as root user and change the mode in the line
+Edit the udev configuration file, /lib/udev/rules.d/50-udev-default.rules, as root user and change the mode in the line
  KERNEL=="mouse*|mice|event*", NAME="input/%k", MODE="0640" 
 to 0644 
  KERNEL=="mouse*|mice|event*", NAME="input/%k", MODE="0644" 
 
+It might be worth doing a cp /lib/udev/rules.d/50-udev-default.rules /etc/udev/rules.d/
+
+(In SuSe 10.3, you should already have a file in /etc/udev/rules.d to edit- 
+so use a little low cunning as appropriate)
+
+It might be worth doing a 
+
+>sudo cp /lib/udev/rules.d/50-udev-default.rules /etc/udev/rules.d/
+
 Unplug the jog-shuttle controller and restart the udev system 
- > sudo /sbin/service boot.udev restart 
+ > sudo /sbin/service boot.udev stop 
+ > sudo /sbin/service boot.udev start 
 Plug the controller back in and check that there is at least one device (which is probably the jog-shuttle) can be read by non-root users 
  > ls -l /dev/input/event* 
 
