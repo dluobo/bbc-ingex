@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.7 2009/04/16 17:44:52 john_f Exp $
+ * $Id: dvsoem_dummy.c,v 1.8 2009/09/18 15:06:26 philipn Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -487,12 +487,14 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 				fprintf(stderr, "Could not read frame %d from video file\n", i);
 				return SV_ERROR_SVOPENSTRING;
 			}
-			uint8_t tmp[audio_size];
-			if (fread(tmp, audio_size, 1, fp_audio) != 1) {
-				fprintf(stderr, "Could not read frame %d from audio file\n", i);
-				return SV_ERROR_SVOPENSTRING;
+			if (fp_audio) {
+				uint8_t tmp[audio_size];
+				if (fread(tmp, audio_size, 1, fp_audio) != 1) {
+					fprintf(stderr, "Could not read frame %d from audio file\n", i);
+					return SV_ERROR_SVOPENSTRING;
+				}
+				pair16bit_to_dvsaudio32(1920, tmp, video + video_size);
 			}
-			pair16bit_to_dvsaudio32(1920, tmp, video + video_size);
 			video += dvs->frame_size;
 		}
 	}
