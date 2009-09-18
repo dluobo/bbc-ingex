@@ -21,9 +21,11 @@ typedef int int32_t;
 typedef unsigned __int64 uint64_t;
 typedef __int64 int64_t;
 
+#define PRId64 "I64d"
 
 #else
 
+#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
 #endif
