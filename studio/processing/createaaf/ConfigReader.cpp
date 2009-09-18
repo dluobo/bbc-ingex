@@ -1,5 +1,5 @@
 /*
- * $Id: ConfigReader.cpp,v 1.2 2009/05/01 13:34:05 john_f Exp $
+ * $Id: ConfigReader.cpp,v 1.3 2009/09/18 17:07:47 philipn Exp $
  *
  * Class to read XML options for create_aaf
  *
@@ -78,7 +78,8 @@ ConfigReader::ConfigReader()
     ATTR_Group                  = XMLString::transcode("Group");
     ATTR_MultiCam               = XMLString::transcode("MultiCam");
     ATTR_NTSC                   = XMLString::transcode("NTSC");
-    ATTR_DNS                    = XMLString::transcode("DNS");
+    ATTR_DBHostName             = XMLString::transcode("DBHostName");
+    ATTR_DBName                 = XMLString::transcode("DBName");
     ATTR_User                   = XMLString::transcode("User");
     ATTR_Password               = XMLString::transcode("Password");
     
@@ -89,6 +90,7 @@ ConfigReader::ConfigReader()
     ATTR_EditPath               = XMLString::transcode("EditPath");
     ATTR_DirCut                 = XMLString::transcode("DirCut");
     ATTR_DirSource              = XMLString::transcode("DirSource");
+    ATTR_DirDB              	= XMLString::transcode("DirDB");
     ATTR_AudioEdit              = XMLString::transcode("AudioEdit");
     
     
@@ -177,6 +179,9 @@ void ConfigReader::readConfigFile(const std::string & configFile)
                     
                     const XMLCh* xmlch_DirSource = currentElement->getAttribute(ATTR_DirSource);
                     m_DirSource = XMLString::transcode(xmlch_DirSource);
+		    
+		    const XMLCh* xmlch_DirDB = currentElement->getAttribute(ATTR_DirDB);
+                    m_DirDB = XMLString::transcode(xmlch_DirDB);
                     
                     const XMLCh* xmlch_AudioEdit = currentElement->getAttribute(ATTR_AudioEdit);
                     m_AudioEdit = XMLString::transcode(xmlch_AudioEdit);
@@ -212,8 +217,11 @@ void ConfigReader::readConfigFile(const std::string & configFile)
                     const XMLCh* xmlch_NTSC = currentElement->getAttribute(ATTR_NTSC);
                     m_NTSC = XMLString::transcode(xmlch_NTSC);
                     
-                    const XMLCh* xmlch_DNS = currentElement->getAttribute(ATTR_DNS);
-                    m_DNS = XMLString::transcode(xmlch_DNS);
+                    const XMLCh* xmlch_DBHostName = currentElement->getAttribute(ATTR_DBHostName);
+                    m_DBHostName = XMLString::transcode(xmlch_DBHostName);
+                    
+                    const XMLCh* xmlch_DBName = currentElement->getAttribute(ATTR_DBName);
+                    m_DBName = XMLString::transcode(xmlch_DBName);
                     
                     const XMLCh* xmlch_User = currentElement->getAttribute(ATTR_User);
                     m_User = XMLString::transcode(xmlch_User);
