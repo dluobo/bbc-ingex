@@ -1,5 +1,5 @@
 /*
- * $Id: AvidClipWriter.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
+ * $Id: AvidClipWriter.cpp,v 1.3 2009/09/18 14:46:28 philipn Exp $
  *
  * 
  *
@@ -586,11 +586,11 @@ void AvidClipWriter::prepareToWrite()
     uint32_t tapeTrackId;
     
     mxf_get_timestamp_now(&now);
-    mxf_generate_old_aafsdk_umid(&materialPackageUID);
-    mxf_generate_old_aafsdk_umid(&tapeSourcePackageUID);
+    mxf_generate_aafsdk_umid(&materialPackageUID);
+    mxf_generate_aafsdk_umid(&tapeSourcePackageUID);
     for (trackIter = _tracks.begin(); trackIter != _tracks.end(); trackIter++)
     {
-        mxf_generate_old_aafsdk_umid(&(*trackIter).second->fileSourcePackageUID);
+        mxf_generate_aafsdk_umid(&(*trackIter).second->fileSourcePackageUID);
     }
 
     
