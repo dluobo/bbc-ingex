@@ -15,7 +15,7 @@ public:
     SourceReader();
     virtual ~SourceReader();
 
-    bool Init(const std::string & name, const std::string & dbname, const std::string & dbuser, const std::string & dbpw);
+    bool Init(const std::string & name, const std::string & dbhost, const std::string & dbname, const std::string & dbuser, const std::string & dbpw);
     std::string SourceName(int value);
     bool GetSource(int index, std::string & name, uint32_t & track);
     bool GetDestination(int index, std::string & name);

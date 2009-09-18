@@ -19,12 +19,12 @@ SourceReader::~SourceReader()
 {
 }
 
-bool SourceReader::Init(const std::string & name, const std::string & dbname, const std::string & dbuser, const std::string & dbpw)
+bool SourceReader::Init(const std::string & name, const std::string & dbhost, const std::string & dbname, const std::string & dbuser, const std::string & dbpw)
 {
     // Init database
     try
     {
-        prodauto::Database::initialise(dbname.c_str(), dbuser.c_str(), dbpw.c_str(), 2, 8);
+        prodauto::Database::initialise(dbhost.c_str(), dbname.c_str(), dbuser.c_str(), dbpw.c_str(), 2, 8);
         mpDb = prodauto::Database::getInstance();
     }
     catch (...)
