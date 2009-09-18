@@ -5,6 +5,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#define TESTING_FLAG		0
+
 // Define DUMP_STATS to print out stats
 //#define DUMP_STATS  1
 
@@ -16,12 +18,19 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+
 extern int connect_to_multicast_address(const char *address, int port __attribute__ ((unused)))
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: connect_to_multicast_address with DEBUG_UDP_SEND_RECV; return\n)"
+#endif
 	return open(address, O_RDONLY);
 }
 extern int open_socket_for_streaming(const char *remote, int port __attribute__ ((unused)))
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: open_socket_for_streaming with DEBUG_UDP_SEND_RECV; return\n)"
+#endif
 	return open(remote, O_CREAT|O_TRUNC|O_RDWR, 0664);
 }
 
@@ -29,12 +38,31 @@ extern int open_socket_for_streaming(const char *remote, int port __attribute__ 
 
 extern int connect_to_multicast_address(const char *address, int port)
 {
-	int fd;
+#if TESTING_FLAG
+	printf("Inside multicast_video: connect_to_multicast_address\n");
+#endif
+int FLAG_V6 = 1;
+if (strchr(address, ':')==NULL)
+	FLAG_V6 = 0;
+#if TESTING_FLAG
+	printf("FLAG_V6 = %d \n",FLAG_V6);
+#endif
+int fd;
+if (FLAG_V6 == 1)
+{
+	if ((fd = socket( AF_INET6, SOCK_DGRAM, 0 )) == -1) {	// SOCK_DGRAM means UDP socket
+		perror("cannot create socket");
+		return -1;
+	}
+}
+else
+{
 
 	if ((fd = socket( AF_INET, SOCK_DGRAM, 0 )) == -1) {	// SOCK_DGRAM means UDP socket
 		perror("cannot create socket");
 		return -1;
 	}
+}//end of FLAG_V6
 
 	/* Make sure bind will work if socket already in use */
 	int i_opt = 1;
@@ -53,65 +81,118 @@ extern int connect_to_multicast_address(const char *address, int port)
 	unsigned i_opt_size = sizeof(i_opt);
 	getsockopt(fd, 1, 8, (void*) &i_opt, &i_opt_size);
 	//printf("socket buffer set to 0x%x (%d)\n", i_opt, i_opt);
-
-	/* setup address for bind */
-	struct sockaddr_in sock;
-	memset(&sock, 0, sizeof(struct sockaddr_in));
-	sock.sin_family = AF_INET;
-	sock.sin_port = htons(port);
-	sock.sin_addr.s_addr = inet_addr(address);		// convert e.g. "224.1.0.20" string
-
-	if (bind(fd, (struct sockaddr *)&sock, sizeof( sock )) < 0) {
-		perror("cannot bind socket");
-		return -1;
-	}
-
-	/* Join multicast group if multicast address */
-	if ( ((((in_addr_t)(ntohl(sock.sin_addr.s_addr))) & 0xf0000000) == 0xe0000000) ) {
-		struct ip_mreq imr;
-
-		imr.imr_multiaddr.s_addr = sock.sin_addr.s_addr;
-		imr.imr_interface.s_addr = INADDR_ANY;
-
-		if (setsockopt( fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-						(char*)&imr, sizeof(struct ip_mreq) ) == -1) {
-			perror("failed to join IP multicast group");
+	if (FLAG_V6 ==1)
+	{
+		/* setup address for bind */
+		struct sockaddr_in6 sock;
+		memset(&sock, 0, sizeof(struct sockaddr_in6));
+		sock.sin6_family = AF_INET6;
+		sock.sin6_port = htons(port);
+		inet_pton( AF_INET6, address,sock.sin6_addr.s6_addr );
+		if (bind(fd, (struct sockaddr *)&sock, sizeof( sock )) < 0) {
+			perror("cannot bind socket");
 			return -1;
 		}
-	}
-	printf("Joined multicast group for %s:%d\n", address, port);
-	return fd;
+		/* Join multicast group if multicast address */
+		if ( ((((in_addr_t)(ntohl(sock.sin6_addr.s6_addr))) & 0xf0000000) == 0xe0000000) ) {
+			struct ip_mreq imr;
+	
+			imr.imr_multiaddr.s_addr = sock.sin6_addr.s6_addr;
+			imr.imr_interface.s_addr = INADDR_ANY;
+	
+			if (setsockopt( fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+							(char*)&imr, sizeof(struct ip_mreq) ) == -1) {
+				perror("failed to join IP multicast group");
+				return -1;
+			}
+		}
+		printf("Joined multicast group for %s:%d\n", address, port);
+		return fd;
+	}					
+	else
+	{
+		/* setup address for bind */
+		struct sockaddr_in sock;
+		memset(&sock, 0, sizeof(struct sockaddr_in));
+		sock.sin_family = AF_INET;
+		sock.sin_port = htons(port);
+		sock.sin_addr.s_addr = inet_addr(address);		// convert e.g. "224.1.0.20" string
+		
+		if (bind(fd, (struct sockaddr *)&sock, sizeof( sock )) < 0) {
+			perror("cannot bind socket");
+			return -1;
+		}
+		/* Join multicast group if multicast address */
+		if ( ((((in_addr_t)(ntohl(sock.sin_addr.s_addr))) & 0xf0000000) == 0xe0000000) ) {
+			struct ip_mreq imr;
+	
+			imr.imr_multiaddr.s_addr = sock.sin_addr.s_addr;
+			imr.imr_interface.s_addr = INADDR_ANY;
+	
+			if (setsockopt( fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+							(char*)&imr, sizeof(struct ip_mreq) ) == -1) {
+				perror("failed to join IP multicast group");
+				return -1;
+			}
+		}
+		printf("Joined multicast group for %s port %d\n", address, port);
+		return fd;
+	}//end of FLAG_V6
 }
 
 extern int open_socket_for_streaming(const char *remote, int port)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: open_socket_for_streaming\n");
+#endif
 	int fd, i_opt;
 	unsigned			i_opt_size;
-	struct sockaddr_in	sock;
-
-	if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-		perror("cannot create socket");
-		return -1;
+	int FLAG_V6 = 1;
+	if (strchr(remote, ':')==NULL)
+		FLAG_V6 = 0;
+#if TESTING_FLAG
+	printf("FLAG_V6 = %d \n",FLAG_V6);
+#endif
+	if (FLAG_V6 == 1)
+	{
+		if ((fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+			perror("cannot create socket");
+			return -1;
+		}
 	}
-
+	else
+	{
+		if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+			perror("cannot create socket");
+			return -1;
+		}
+	}
 	/* Make sure bind will work if socket already in use */
 	i_opt = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void *) &i_opt, sizeof(i_opt)) == -1) {
-		perror("cannot configure socket (SO_REUSEADDR)");
+		perror("cannot configure setsockopt1 for socket (SO_REUSEADDR)");
 		return -1;
 	}
-
+#if TESTING_FLAG
+	printf("setsockopt1 \n");
+#endif
 	/* TODO: do we need to make this non blocking? */
 	/* TODO: fcntl64(8, F_SETFL, O_RDWR|O_NONBLOCK) */
 
 	/* Attempt to increase buffer size */
 	i_opt = 0x80000;
 	if (setsockopt( fd, SOL_SOCKET, SO_RCVBUF, (void *) &i_opt, sizeof(i_opt)) == -1) {
-		perror("cannot configure socket (SO_RCVBUF)");
+		perror("cannot configure setsockopt2 for socket (SO_RCVBUF)");
 	}
+#if TESTING_FLAG
+	printf("setsockopt2 \n");
+#endif
 	if (setsockopt( fd, SOL_SOCKET, SO_SNDBUF, (void *) &i_opt, sizeof(i_opt)) == -1) {
-		perror("cannot configure socket (SO_SNDBUF)");
+		perror("cannot configure setsockopt3 for socket (SO_SNDBUF)");
 	}
+#if TESTING_FLAG
+	printf("setsockopt3 \n");
+#endif
 	i_opt = 0;
 	i_opt_size = sizeof( i_opt );
 	getsockopt( fd, 1, 8, (void*) &i_opt, &i_opt_size );
@@ -124,21 +205,43 @@ extern int open_socket_for_streaming(const char *remote, int port)
 	if (setsockopt(fd, SOL_IP, IP_MULTICAST_TTL, &i_opt, sizeof(i_opt)) == -1) {
 		perror("cannot set multicast hop limit");
 	}
-
-	/* setup address for connect */
-	memset(&sock, 0, sizeof( struct sockaddr_in ) );
-	sock.sin_family = AF_INET;
-	sock.sin_port = htons( port );
-	sock.sin_addr.s_addr = inet_addr( remote );		// convert "224.1.0.20" string
-
-	if (connect(fd, (struct sockaddr *)&sock, sizeof(sock)) < 0) {
-		perror("cannot connect socket");
-		return -1;
+#if TESTING_FLAG
+	printf("setsockopt4 \n");
+#endif
+	
+	if (FLAG_V6 ==1)
+	{
+		/* setup address for connect */
+		struct sockaddr_in6 sock;
+		memset(&sock, 0, sizeof( struct sockaddr_in6 ) );
+		sock.sin6_family = AF_INET6;
+		sock.sin6_port = htons( port );
+		inet_pton( AF_INET6, remote,sock.sin6_addr.s6_addr );		// convert "224.1.0.20" string
+		if (connect(fd, (struct sockaddr *)&sock, sizeof(sock)) < 0) {
+			perror("cannot connect socket");
+			return -1;
+		}
+}
+	else
+	{
+		/* setup address for bind */
+		struct sockaddr_in sock;
+		memset(&sock, 0, sizeof(struct sockaddr_in));
+		sock.sin_family = AF_INET;
+		sock.sin_port = htons(port);
+		sock.sin_addr.s_addr = inet_addr( remote );		// convert "224.1.0.20" string
+		if (connect(fd, (struct sockaddr *)&sock, sizeof(sock)) < 0) {
+			perror("cannot connect socket");
+			return -1;
+		}
 	}
-
+#if TESTING_FLAG
+	printf("connected to socket. Fingers crossed everthing should work \n");
+#endif
 	return fd;
 }
-#endif
+#endif 
+// END of #ifdef DEBUG_UDP_SEND_RECV
 
 // Packet structure for uncompressed video and audio with timecode transmission:
 //  packet-header       [4] ('I'[1], flags,frame_num[1], packet_num[2] (little-endian))
@@ -162,6 +265,9 @@ static void *udp_reader_thread(void *arg);
 
 extern int udp_init_reader(int width, int height, udp_reader_thread_t *p_udp_reader)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_init_reader\n");
+#endif
 	int res;
 
 	// setup element size and offsets
@@ -207,6 +313,9 @@ extern int udp_init_reader(int width, int height, udp_reader_thread_t *p_udp_rea
 
 extern int udp_shutdown_reader(udp_reader_thread_t *p_udp_reader)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_shutdown_reader\n");
+#endif
 	int res;
 	if ((res = pthread_cancel(p_udp_reader->udp_reader_thread_id)) != 0) {
 		fprintf(stderr, "Failed to cancel udp reader thread: %s\n", strerror(res));
@@ -228,6 +337,9 @@ extern int udp_shutdown_reader(udp_reader_thread_t *p_udp_reader)
 
 static int64_t gettimeofday64(void)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: gettimeofday64\n");
+#endif
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
@@ -236,6 +348,9 @@ static int64_t gettimeofday64(void)
 
 static void *udp_reader_thread(void *arg)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_reader_thread\n");
+#endif
 	udp_reader_thread_t *p_udp_reader = (udp_reader_thread_t*)arg;
 	int fd = p_udp_reader->fd;
 
@@ -354,6 +469,9 @@ static void *udp_reader_thread(void *arg)
 #if defined(DUMP_STATS)
 static void dump_stats(udp_reader_thread_t *p_udp_reader)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: dump_stats\n");
+#endif
 	int i;
 	for (i = 0; i < UDP_FRAME_BUFFER_MAX; i++) {
 		printf("%2d:%s packets=%2d frame_number=%6d %s\n", i, p_udp_reader->next_frame == i ? "*":"-",
@@ -367,6 +485,11 @@ static void dump_stats(udp_reader_thread_t *p_udp_reader)
 
 extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout, IngexNetworkHeader *p_header_out, uint8_t *video_out, uint8_t *audio_out, int *p_total)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_read_next_frame\n");
+#endif
+
+
 #if defined(DUMP_STATS)
 	printf("\nBefore timed wait (last_header_frame_read=%d)\n", p_udp_reader->last_header_frame_read);
 	dump_stats(p_udp_reader);
@@ -428,6 +551,10 @@ extern int udp_read_next_frame(udp_reader_thread_t *p_udp_reader, double timeout
 
 extern int udp_read_frame_audio_video(int fd, double timeout, IngexNetworkHeader *p_header, uint8_t *video, uint8_t *audio, int *p_total)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_read_frame_audio_video\n");
+#endif
+
 	long sec_val = (int)timeout; 
 	long microsec_val = (timeout - sec_val) * 1000000; 
 	struct timeval timeout_val = {sec_val, microsec_val};
@@ -572,6 +699,9 @@ extern int udp_read_frame_audio_video(int fd, double timeout, IngexNetworkHeader
 
 extern int udp_read_frame_header(int fd, IngexNetworkHeader *p_header)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: udp_read_frame_header\n");
+#endif
 	uint8_t buf[PACKET_SIZE];
 
 	printf("Reading video parameters from multicast stream...");
@@ -627,6 +757,10 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 						const uint8_t *video, const uint8_t *audio,
 						int frame_number, int vitc, int ltc, const char *source_name)
 {
+
+#if TESTING_FLAG
+	printf("HERE !!!! Inside multicast_video: send_audio_video\n");
+#endif
 	// FIXME: change this to a stack variable after testing with valgrind
 	unsigned char *buf = malloc(PACKET_SIZE);
 	int total_bytes_written = 0;
@@ -731,6 +865,9 @@ extern int send_audio_video(int fd, int width, int height, int audio_channels,
 
 extern void scale_video420_for_multicast(int in_width, int in_height, int out_width, int out_height, const uint8_t *video_frame, uint8_t *scaled_frame)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: scale_video420_for_multicast\n");
+#endif
 	YUV_frame input_frame;
 	YUV_frame output_frame;
 	uint8_t workspace[2*in_width*4];
@@ -776,6 +913,9 @@ extern void scale_video420_for_multicast(int in_width, int in_height, int out_wi
 
 extern void scale_video422_for_multicast(int in_width, int in_height, int out_width, int out_height, const uint8_t *video_frame, uint8_t *scaled_frame)
 {
+#if TESTING_FLAG
+	printf("Inside multicast_video: scale_video422_for_multicast\n");
+#endif
 	YUV_frame input_frame;
 	YUV_frame output_frame;
 	uint8_t workspace[2*in_width*4];
