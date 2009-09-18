@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.1 2009/06/12 17:38:57 john_f Exp $
+ * $Id: IngexShm.h,v 1.2 2009/09/18 15:50:18 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -25,6 +25,7 @@
 #ifndef IngexShm_h
 #define IngexShm_h
 
+#include <ace/Thread.h>
 #include <string>
 #include <sys/types.h>
 #include <signal.h>
@@ -54,8 +55,9 @@ public:
   // Singleton destroy
     static void Destroy() { delete mInstance; mInstance = 0; }
 
-    ~IngexShm(void);
-    int Init();
+    ~IngexShm();
+
+    void Attach();
     unsigned int Channels() { return mChannels; }
     unsigned int AudioTracksPerChannel() { return mAudioTracksPerChannel; }
     int RingLength() { if (mpControl) return mpControl->ringlen; else return 0; }
@@ -88,6 +90,8 @@ public:
 
     int FrameRateNumerator() { if (mpControl) return mpControl->frame_rate_numer; else return 0; }
     int FrameRateDenominator() { if (mpControl) return mpControl->frame_rate_denom; else return 0; }
+    void GetFrameRate(int & numerator, int & denominator);
+    void GetFrameRate(int & fps, bool & df);
 
     // In funtions below, you could check (channel < mChannels) first.
 
@@ -194,7 +198,18 @@ public:
         }
     }
 
-    void GetFrameRate(int & numerator, int & denominator);
+    void GetHeartbeat(struct timeval * tv)
+    {
+        if (mpControl)
+        {
+            *tv = mpControl->owner_heartbeat;
+        }
+        else
+        {
+            tv->tv_sec = 0;
+            tv->tv_usec = 0;
+        }
+    }
 
     // Informational updates from Recorder to shared memory
     void InfoSetup(std::string name);
@@ -222,8 +237,14 @@ private:
     uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
     TcEnum mTcMode;
-// static instance pointer
+    // static instance pointer
     static IngexShm * mInstance;
+    // thread management
+    bool mActivated;
+    ACE_thread_t mThreadId;
+
+// friends
+    friend ACE_THR_FUNC_RETURN monitor_shm(void * p);
 };
 
 #endif //#ifndef IngexShm_h

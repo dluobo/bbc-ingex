@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.11 2009/02/13 10:20:23 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.12 2009/09/18 15:51:16 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -53,39 +53,14 @@ public:
   void Destroy();
 
   // Initialisation
-  bool Init(const std::string & name,
-      unsigned int max_inputs, unsigned int max_tracks_per_input);
+  void Init(const std::string & name);
 
   // Identity
   const char * Name() const { return mName.c_str(); }
 
 // IDL operations
   virtual
-  ::ProdAuto::MxfDuration MaxPreRoll (
-      
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
-  ::ProdAuto::MxfDuration MaxPostRoll (
-      
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
   char * RecordingFormat (
-      
-    )
-    throw (
-      ::CORBA::SystemException
-    );
-  
-  virtual
-  ::ProdAuto::Rational EditRate (
       
     )
     throw (
@@ -149,6 +124,7 @@ public:
       ::CORBA::SystemException
     );
   
+  /*
   virtual
   void UpdateConfig (
       
@@ -156,12 +132,10 @@ public:
     throw (
       ::CORBA::SystemException
     );
+  */
 
   prodauto::Recorder * Recorder() { return mRecorder.get(); }
 
-    int Fps() { return mFps; }
-    bool Df() { return mDf; }
-  
 public:
 // thread safe accessors for maps
     HardwareTrack TrackHwMap(long id);
@@ -187,17 +161,12 @@ public:
 
 protected:
 // data
-    ProdAuto::MxfDuration mMaxPreRoll;
-    ProdAuto::MxfDuration mMaxPostRoll;
-    unsigned int mMaxInputs;
-    unsigned int mMaxTracksPerInput;
-    unsigned int mVideoTrackCount;
+    //unsigned int mMaxInputs;
+    //unsigned int mMaxTracksPerInput;
+    //unsigned int mVideoTrackCount;
     ProdAuto::TrackStatusList_var mTracksStatus;
     std::string mName;
     std::string mFormat;
-    ProdAuto::Rational mEditRate;
-    int mFps;
-    bool mDf;
     std::auto_ptr<prodauto::Recorder> mRecorder;
 
     // map with SourceConfig database id as key
@@ -205,7 +174,7 @@ protected:
 
     std::map<std::string, std::string> mTapeMap;
 // methods
-    bool UpdateFromDatabase();
+    bool UpdateFromDatabase(unsigned int max_inputs, unsigned int max_tracks_per_input);
 
 private:
 // methods

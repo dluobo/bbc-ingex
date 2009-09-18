@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.1 2009/06/12 17:38:57 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.2 2009/09/18 15:50:18 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -22,32 +22,87 @@
  * 02110-1301, USA.
  */
 
-#include <ace/OS_NS_unistd.h>
 #include <ace/Time_Value.h>
-#include <ace/OS_NS_sys_shm.h>
+#include <ace/Thread.h>
 #include <ace/Log_Msg.h>
+#include <ace/OS_NS_sys_shm.h>
+#include <ace/OS_NS_unistd.h>
 #include <ace/OS_NS_stdio.h>
 #include <ace/OS_NS_signal.h>
+
 
 #include "IngexShm.h"
 
 // static instance pointer
 IngexShm * IngexShm::mInstance = 0;
 
-IngexShm::IngexShm(void)
-: mChannels(0), mAudioTracksPerChannel(0), mpControl(0), mTcMode(VITC)
+// Local context only
+namespace
 {
+int64_t tv_diff_microsecs(const struct timeval * a, const struct timeval * b)
+{
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("a->tv_sec = %d, a->tv_usec = %d\n"), a->tv_sec, a->tv_usec));
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("b->tv_sec = %d, b->tv_usec = %d\n"), b->tv_sec, b->tv_usec));
+
+    //int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
+    int64_t diff = b->tv_sec - a->tv_sec;
+    diff *= 1000000;
+    diff += (b->tv_usec - a->tv_usec);
+
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("diff = %d\n"), diff));
+    return diff;
+}
 }
 
-IngexShm::~IngexShm(void)
+ACE_THR_FUNC_RETURN monitor_shm(void * p)
 {
+    IngexShm * p_ingex_shm = (IngexShm *) p;
+    const ACE_Time_Value MONITOR_INTERVAL(1, 0);
+
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Shared memory monitor thread starting.\n")));
+    while (p_ingex_shm->mActivated)
+    {
+        // Check heartbeat
+        struct timeval now = ACE_OS::gettimeofday();
+        struct timeval heartbeat;
+        p_ingex_shm->GetHeartbeat(&heartbeat);
+        int64_t diff = tv_diff_microsecs(&heartbeat, &now);
+        if (diff > 1000 * 1000)
+        {
+            p_ingex_shm->Attach();
+        }
+        ACE_OS::sleep(MONITOR_INTERVAL);
+    }
+
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Shared memory monitor thread exiting.\n")));
+    return 0;
 }
+
+IngexShm::IngexShm()
+: mChannels(0), mAudioTracksPerChannel(0), mpControl(0), mTcMode(VITC), mActivated(false), mThreadId(0)
+{
+    // Start thread to monitor and (re-)connect to shared memory
+    mActivated = true;
+    ACE_Thread::spawn( monitor_shm, this, THR_NEW_LWP|THR_JOINABLE, &mThreadId );
+}
+
+IngexShm::~IngexShm()
+{
+    // Terminate the monitor thread
+    mActivated = false;
+    if (mThreadId)
+    {
+        ACE_Thread::join(mThreadId, 0, 0);
+        mThreadId = 0;
+    }
+}
+
+
 
 /**
 Attach to shared memory.
-@return The number of buffers (channels) attached to.
 */
-int IngexShm::Init()
+void IngexShm::Attach()
 {
 // The kind of shared memory used by Ingex recorder daemon is not available on Windows
 // but with the settings below the code will still compile.
@@ -61,7 +116,8 @@ int IngexShm::Init()
     const int shm_flags = SHM_RDONLY;
 #endif
 
-    int control_id;
+    int control_id = ACE_OS::shmget(control_shm_key, sizeof(NexusControl), 0666);
+    /*
     for (int attempt = 0; attempt < 5; ++attempt)
     {
         control_id = ACE_OS::shmget(control_shm_key, sizeof(NexusControl), 0666);
@@ -72,44 +128,59 @@ int IngexShm::Init()
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for shared memory...\n")));
         ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
     }
+    */
 
     if (control_id == -1)
     {
-        ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to connect to shared memory!\n")));
-        return 0;
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to connect to shared memory control buffer!\n")));
     }
-
-    // Shared memory found for control data, attach to it
-    mpControl = (NexusControl *)ACE_OS::shmat(control_id, NULL, 0);
-    mChannels = mpControl->channels;
-    mAudioTracksPerChannel = (mpControl->audio78_offset ? 8 : 4);
-
-    ACE_DEBUG((LM_DEBUG,
-        ACE_TEXT("Connected to p_control %@\n  channels=%d elementsize=%d ringlen=%d\n"),
-        mpControl,
-        mpControl->channels,
-        mpControl->elementsize,
-        mpControl->ringlen));
-
-    // Attach to each video ring buffer
-    for (int i = 0; i < mpControl->channels; i++)
+    else
     {
-        int shm_id;
-        for (int attempt = 0; attempt < 5; ++attempt)
-        {
-            shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
-            if (shm_id != -1)
-            {
-                break;
-            }
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for channel[%d] shared memory...\n"), i));
-            ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
-        }
-        mRing[i] = (unsigned char *)ACE_OS::shmat(shm_id, NULL, shm_flags);
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Connected to channel[%d] %@\n"), i, mRing[i]));
-    }
+        // Shared memory found for control data, attach to it
+        mpControl = (NexusControl *)ACE_OS::shmat(control_id, NULL, 0);
+        mChannels = mpControl->channels;
+        mAudioTracksPerChannel = (mpControl->audio78_offset ? 8 : 4);
 
-    return mChannels;
+        ACE_DEBUG((LM_DEBUG,
+            ACE_TEXT("Connected to p_control %@\n  channels=%d elementsize=%d ringlen=%d\n"),
+            mpControl,
+            mpControl->channels,
+            mpControl->elementsize,
+            mpControl->ringlen));
+
+        // Get and attach to each video ring buffer
+        bool ok = true;
+        for (int i = 0; i < mpControl->channels; i++)
+        {
+            int shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
+            /*
+            for (int attempt = 0; attempt < 5; ++attempt)
+            {
+                shm_id = ACE_OS::shmget(channel_shm_key[i], mpControl->elementsize, 0444);
+                if (shm_id != -1)
+                {
+                    break;
+                }
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Waiting for channel[%d] shared memory...\n"), i));
+                ACE_OS::sleep(ACE_Time_Value(0, 50 * 1000));
+            }
+            */
+            if (shm_id == -1)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to connect to shared memory channel[%d]!\n"), i));
+                ok = false;
+            }
+            else
+            {
+                mRing[i] = (unsigned char *)ACE_OS::shmat(shm_id, NULL, shm_flags);
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Connected to shared memory channel[%d] at %@\n"), i, mRing[i]));
+            }
+        }
+        if (ok)
+        {
+            ACE_DEBUG((LM_INFO, ACE_TEXT("Connected to shared memory.\n")));
+        }
+    }
 }
 
 std::string IngexShm::SourceName(unsigned int channel_i)
@@ -146,6 +217,26 @@ void IngexShm::GetFrameRate(int & numerator, int & denominator)
 {
     numerator = mpControl->frame_rate_numer;
     denominator = mpControl->frame_rate_denom;
+}
+
+void IngexShm::GetFrameRate(int & fps, bool & df)
+{
+    fps = 0;
+    df = false;
+    if (mpControl)
+    {
+        int numerator = mpControl->frame_rate_numer;
+        int denominator = mpControl->frame_rate_denom;
+        if (denominator > 0)
+        {
+            fps = numerator / denominator;
+            if (numerator % denominator > 0)
+            {
+                df = true;
+                ++fps;
+            }
+        }
+    }
 }
 
 // Informational updates from Recorder to shared memory

@@ -1,5 +1,5 @@
 /*
- * $Id: ShmTimecodeReader.cpp,v 1.1 2009/06/12 17:55:49 john_f Exp $
+ * $Id: ShmTimecodeReader.cpp,v 1.2 2009/09/18 15:55:27 john_f Exp $
  *
  * Timecode reader using Ingex shared memory as source.
  *
@@ -29,10 +29,14 @@
 
 ShmTimecodeReader::ShmTimecodeReader()
 {
+    // Instantiate IngexShm class
+    IngexShm::Instance();
+    /*
     if (0 == IngexShm::Instance()->Channels())
     {
         IngexShm::Instance()->Init();
     }
+    */
 }
 
 void ShmTimecodeReader::TcMode(TcEnum tc_mode)

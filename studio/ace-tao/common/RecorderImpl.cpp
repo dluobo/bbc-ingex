@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.11 2009/02/13 10:20:23 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.12 2009/09/18 15:51:16 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -40,16 +40,14 @@
 
 // Implementation skeleton constructor
 RecorderImpl::RecorderImpl (void)
-: mMaxInputs(0), mMaxTracksPerInput(0), mVideoTrackCount(0), mFormat("Ingex recorder"),
-  mDf(false)
+: mFormat("Ingex recorder")
 {
     mTracks = new ProdAuto::TrackList;
     mTracksStatus = new ProdAuto::TrackStatusList;
 }
 
 // Initialise the recorder
-bool RecorderImpl::Init(const std::string & name,
-                        unsigned int max_inputs, unsigned int max_tracks_per_input)
+void RecorderImpl::Init(const std::string & name)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("RecorderImpl::Init(%C)\n"), name.c_str()));
 
@@ -58,44 +56,21 @@ bool RecorderImpl::Init(const std::string & name,
 
     // Set maximum number of tracks for this particular implementation,
     // e.g. as determined from capture cards installed in the machine.
-    mMaxInputs = max_inputs;
-    mMaxTracksPerInput = max_tracks_per_input;
+    //mMaxInputs = max_inputs;
+    //mMaxTracksPerInput = max_tracks_per_input;
 
     // Read enumeration names from database.
     // Do it now to avoid any delay when first used.
     DatabaseEnums::Instance();
 
     // Update tracks and settings from database
-    bool ok = UpdateFromDatabase();
-
-
-    return ok;
+    //bool ok = UpdateFromDatabase(max_inputs, max_tracks_per_input);
 }
 
 // Implementation skeleton destructor
 RecorderImpl::~RecorderImpl (void)
 {
     prodauto::Database::close();
-}
-
-::ProdAuto::MxfDuration RecorderImpl::MaxPreRoll (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-    return mMaxPreRoll;
-}
-
-::ProdAuto::MxfDuration RecorderImpl::MaxPostRoll (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-    return mMaxPostRoll;
 }
 
 char * RecorderImpl::RecordingFormat (
@@ -109,17 +84,6 @@ char * RecorderImpl::RecordingFormat (
     return CORBA::string_dup(mFormat.c_str());
 }
 
-::ProdAuto::Rational RecorderImpl::EditRate (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
-{
-  // Add your implementation here
-    return mEditRate;
-}
-
 ::ProdAuto::TrackList * RecorderImpl::Tracks (
     
   )
@@ -131,7 +95,7 @@ char * RecorderImpl::RecordingFormat (
     // when it connects to a recorder.)
 
     // Update from database
-    UpdateFromDatabase();
+    //UpdateFromDatabase();
 
     // Make a copy of tracks to return
     ProdAuto::TrackList_var tracks = mTracks;
@@ -461,6 +425,7 @@ bool RecorderImpl::SetSourcePackages()
 /**
 Means of externally forcing a re-reading of config from database.
 */
+/*
 void RecorderImpl::UpdateConfig (
     
   )
@@ -468,13 +433,14 @@ void RecorderImpl::UpdateConfig (
     ::CORBA::SystemException
   )
 {
-    UpdateFromDatabase();
+    //UpdateFromDatabase();  Needs to be done in derived class
 }
+*/
 
 /**
 Update tracks and settings from database.
 */
-bool RecorderImpl::UpdateFromDatabase()
+bool RecorderImpl::UpdateFromDatabase(unsigned int max_inputs, unsigned int max_tracks_per_input)
 {
     bool ok = true;
 
@@ -502,6 +468,13 @@ bool RecorderImpl::UpdateFromDatabase()
         // Store the Recorder object
         mRecorder.reset(rec);
 
+        // Update RecorderSettings
+        RecorderSettings * settings = RecorderSettings::Instance();
+        if (settings)
+        {
+            settings->Update(rec);
+        }
+
 
         // Clear the set of SourceConfigs
         // and the various maps
@@ -522,7 +495,7 @@ bool RecorderImpl::UpdateFromDatabase()
             ACE_DEBUG((LM_INFO, ACE_TEXT("UpdateSources() loaded config \"%C\" of recorder \"%C\".\n"),
                 rc->name.c_str(), mRecorder->name.c_str()));
 
-            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
+            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), max_inputs);
             unsigned int track_i = 0;
             unsigned int n_video_tracks = 0;
             for (unsigned int i = 0; i < n_inputs; ++i)
@@ -532,7 +505,7 @@ bool RecorderImpl::UpdateFromDatabase()
                 // this makes it easier to map to hardware parameters when filling out
                 // tracks status with "signal present" etc.
                 //const unsigned int n_tracks = ACE_MIN(ric->trackConfigs.size(), mMaxTracksPerInput);
-                const unsigned int n_tracks = mMaxTracksPerInput;
+                const unsigned int n_tracks = max_tracks_per_input;
                 for (unsigned int j = 0; j < n_tracks; ++j)
                 {
                     prodauto::RecorderInputTrackConfig * ritc = 0;
@@ -691,7 +664,7 @@ bool RecorderImpl::UpdateFromDatabase()
                     ++track_i;
                 } // tracks
             } // inputs
-            mVideoTrackCount = n_video_tracks;
+            //mVideoTrackCount = n_video_tracks;
         }
         else
         {
@@ -709,7 +682,7 @@ bool RecorderImpl::UpdateFromDatabase()
                 ts.rec = 0;
                 ts.signal_present = 0;
                 ts.timecode.undefined = true;
-                ts.timecode.edit_rate = mEditRate;
+                //ts.timecode.edit_rate = mEditRate;
             }
         }
     }
