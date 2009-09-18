@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.9 2009/02/13 10:17:44 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.10 2009/09/18 16:16:25 philipn Exp $
  *
  *
  *
@@ -469,7 +469,9 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
 
     /* Check that we have access to an XVideo port providing this chroma    */
     /* Commonly supported chromas: YV12, I420, YUY2, YUY2                   */
+    XLockDisplay(sink->x11Common.windowInfo.display);
     sink->xvport = XVideoGetPort(sink->x11Common.windowInfo.display, sink->frameFormat, -1);
+    XUnlockDisplay(sink->x11Common.windowInfo.display);
     if (sink->xvport < 0)
     {
         ml_log_error("Cannot find an xv port for requested video format\n");
@@ -602,6 +604,7 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
         sink->x11Common.displayHeight = sink->initialDisplayHeight * scaleFactor;
 
 
+        XLockDisplay(sink->x11Common.windowInfo.display);
         if (sink->useSharedMemory)
         {
             XvShmPutImage(sink->x11Common.windowInfo.display, sink->xvport, sink->x11Common.windowInfo.window,
@@ -617,8 +620,9 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
                 0, 0, frame->yuv_image->width, frame->yuv_image->height,
                 0, 0, sink->x11Common.displayWidth, sink->x11Common.displayHeight);
         }
+        XUnlockDisplay(sink->x11Common.windowInfo.display);
 
-        x11c_process_events(&sink->x11Common, 1);
+        x11c_process_events(&sink->x11Common);
 
 
         /* report that a new frame has been displayed */
@@ -709,6 +713,7 @@ static int init_frame(X11DisplayFrame* frame)
     /* else frame->inputBuffer = (unsigned char*)frame->yuv_image->data;
     delayed until after creating yuv_image */
 
+    XLockDisplay(sink->x11Common.windowInfo.display);
     if (sink->useSharedMemory)
     {
         frame->yuv_image = XvShmCreateImage(sink->x11Common.windowInfo.display, sink->xvport,
@@ -756,6 +761,7 @@ static int init_frame(X11DisplayFrame* frame)
         }
 
     }
+    XUnlockDisplay(sink->x11Common.windowInfo.display);
 
     /* input buffer == output if no scaling and no conversion */
     if (sink->inputVideoFormat != YUV444_FORMAT &&
@@ -941,7 +947,10 @@ static void xvskf_free(void* data)
 
             if (frame->sink->useSharedMemory)
             {
+                XLockDisplay(frame->sink->x11Common.windowInfo.display);
                 XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->yuv_shminfo);
+                XUnlockDisplay(frame->sink->x11Common.windowInfo.display);
+                
                 shmdt(frame->yuv_shminfo.shmaddr);
             }
             else
@@ -1135,7 +1144,9 @@ static void xvsk_close(void* data)
 
     if (sink->xvport >= 0 && sink->x11Common.windowInfo.display != NULL)
     {
+        XLockDisplay(sink->x11Common.windowInfo.display);
         XVideoReleasePort(sink->x11Common.windowInfo.display, sink->xvport);
+        XUnlockDisplay(sink->x11Common.windowInfo.display);
     }
     x11c_clear(&sink->x11Common);
 

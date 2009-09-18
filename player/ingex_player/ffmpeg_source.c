@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: ffmpeg_source.c,v 1.6 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -34,7 +34,7 @@
 
 #include "ffmpeg_source.h"
 
-int fms_open(const char* filename, int threadCount, MediaSource** source)
+int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSource** source)
 {
     return 0;
 }
@@ -157,6 +157,7 @@ typedef struct
 typedef struct
 {
     int threadCount;
+    int forceUYVYFormat;
 
     MediaSource mediaSource;
 
@@ -600,61 +601,77 @@ static int open_video_stream(FFMPEGSource* source, int sourceId, int avStreamInd
             }
         }
     }
-
-    switch (codecContext->pix_fmt)
+    
+    if (source->forceUYVYFormat)
     {
-        case PIX_FMT_YUV420P:
-        case PIX_FMT_YUVJ420P:
-            videoStream->outputStream.streamInfo.format = YUV420_FORMAT;
-            videoStream->dataOffset[0] = 0;
-            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
-            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
-            videoStream->lineSize[0] = codecContext->width;
-            videoStream->lineSize[1] = codecContext->width / 2;
-            videoStream->lineSize[2] = codecContext->width / 2;
-            videoStream->outputPixelFormat = PIX_FMT_YUV420P;
-            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
-            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
-            break;
-#if 0 /* TODO: add support for YUV411 to the sinks */
-        case PIX_FMT_YUV411P:
-            videoStream->outputStream.streamInfo.format = YUV411_FORMAT;
-            videoStream->dataOffset[0] = 0;
-            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
-            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
-            videoStream->lineSize[0] = codecContext->width;
-            videoStream->lineSize[1] = codecContext->width / 4;
-            videoStream->lineSize[2] = codecContext->width / 4;
-            videoStream->outputPixelFormat = PIX_FMT_YUV411P;
-            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
-            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
-            break;
-#endif
-        case PIX_FMT_YUV422P:
-        case PIX_FMT_YUVJ422P:
-            videoStream->outputStream.streamInfo.format = YUV422_FORMAT;
-            videoStream->dataOffset[0] = 0;
-            videoStream->dataOffset[1] = codecContext->width * codecContext->height;
-            videoStream->dataOffset[2] = codecContext->width * codecContext->height * 3 / 2;
-            videoStream->lineSize[0] = codecContext->width;
-            videoStream->lineSize[1] = codecContext->width / 2;
-            videoStream->lineSize[2] = codecContext->width / 2;
-            videoStream->outputPixelFormat = PIX_FMT_YUV422P;
-            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
-            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
-            break;
-        default:
-            videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
-            videoStream->dataOffset[0] = 0;
-            videoStream->dataOffset[1] = 0;
-            videoStream->dataOffset[2] = 0;
-            videoStream->lineSize[0] = codecContext->width * 2;
-            videoStream->lineSize[1] = 0;
-            videoStream->lineSize[2] = 0;
-            videoStream->outputPixelFormat = PIX_FMT_UYVY422;
-            videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
-            videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
-            break;
+        videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
+        videoStream->dataOffset[0] = 0;
+        videoStream->dataOffset[1] = 0;
+        videoStream->dataOffset[2] = 0;
+        videoStream->lineSize[0] = codecContext->width * 2;
+        videoStream->lineSize[1] = 0;
+        videoStream->lineSize[2] = 0;
+        videoStream->outputPixelFormat = PIX_FMT_UYVY422;
+        videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
+        videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+    }
+    else
+    {
+        switch (codecContext->pix_fmt)
+        {
+            case PIX_FMT_YUV420P:
+            case PIX_FMT_YUVJ420P:
+                videoStream->outputStream.streamInfo.format = YUV420_FORMAT;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 2;
+                videoStream->lineSize[2] = codecContext->width / 2;
+                videoStream->outputPixelFormat = PIX_FMT_YUV420P;
+                videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
+                videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                break;
+    #if 0 /* TODO: add support for YUV411 to the sinks */
+            case PIX_FMT_YUV411P:
+                videoStream->outputStream.streamInfo.format = YUV411_FORMAT;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 5 / 4;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 4;
+                videoStream->lineSize[2] = codecContext->width / 4;
+                videoStream->outputPixelFormat = PIX_FMT_YUV411P;
+                videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 3 / 2;
+                videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                break;
+    #endif
+            case PIX_FMT_YUV422P:
+            case PIX_FMT_YUVJ422P:
+                videoStream->outputStream.streamInfo.format = YUV422_FORMAT;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = codecContext->width * codecContext->height;
+                videoStream->dataOffset[2] = codecContext->width * codecContext->height * 3 / 2;
+                videoStream->lineSize[0] = codecContext->width;
+                videoStream->lineSize[1] = codecContext->width / 2;
+                videoStream->lineSize[2] = codecContext->width / 2;
+                videoStream->outputPixelFormat = PIX_FMT_YUV422P;
+                videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
+                videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                break;
+            default:
+                videoStream->outputStream.streamInfo.format = UYVY_FORMAT;
+                videoStream->dataOffset[0] = 0;
+                videoStream->dataOffset[1] = 0;
+                videoStream->dataOffset[2] = 0;
+                videoStream->lineSize[0] = codecContext->width * 2;
+                videoStream->lineSize[1] = 0;
+                videoStream->lineSize[2] = 0;
+                videoStream->outputPixelFormat = PIX_FMT_UYVY422;
+                videoStream->outputStream.bufferSize = codecContext->width * codecContext->height * 2;
+                videoStream->outputStream.dataSize = videoStream->outputStream.bufferSize;
+                break;
+        }
     }
 
     videoStream->outputStream.buffer = av_malloc(videoStream->outputStream.bufferSize);
@@ -1975,7 +1992,7 @@ static void fms_close(void* data)
 
 
 
-int fms_open(const char* filename, int threadCount, MediaSource** source)
+int fms_open(const char* filename, int threadCount, int forceUYVYFormat, MediaSource** source)
 {
     FFMPEGSource* newSource = NULL;
     AVFormatParameters formatParams;
@@ -1994,6 +2011,7 @@ int fms_open(const char* filename, int threadCount, MediaSource** source)
 
     CALLOC_ORET(newSource, FFMPEGSource, 1);
     newSource->threadCount = threadCount;
+    newSource->forceUYVYFormat = forceUYVYFormat;
     newSource->frameRate = g_palFrameRate;
     newSource->isHardFrameRate = 0;
     newSource->isPAL = 1;

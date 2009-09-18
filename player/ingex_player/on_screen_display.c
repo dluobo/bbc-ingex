@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.9 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: on_screen_display.c,v 1.10 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -304,7 +304,7 @@ static int init_yuv_frame(DefaultOnScreenDisplay* osdd, YUV_frame* yuvFrame, uns
     }
     else if (osdd->videoFormat == YUV422_FORMAT)
     {
-        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, YUV422) == 1);
+        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, YV16) == 1);
     }
     else /* YUV420_FORMAT */
     {
@@ -394,7 +394,7 @@ static void complete_labels(DefaultOnScreenDisplay* osdd)
                 strncpy(osdd->cachedLabels[j].label.text, osdd->state->labels[i].text, sizeof(osdd->cachedLabels[j].label.text) - 1);
                 osdd->cachedLabels[j].label.text[sizeof(osdd->cachedLabels[j].label.text) - 1] = '\0';
 
-                if (text_to_overlay(&osdd->p_info, &osdd->cachedLabels[j].labelOverlay,
+                if (text_to_overlay_player(&osdd->p_info, &osdd->cachedLabels[j].labelOverlay,
                     osdd->cachedLabels[j].label.text,
                     osdd->imageWidth - 20, 0,
                     0, 0,
@@ -447,7 +447,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         osdd->audioLevelOverlay.w * osdd->audioLevelOverlay.h * 2);
 
    /* level indicators */
-    if (text_to_overlay(&osdd->p_info, &osdd->audioLevelM0Overlay,
+    if (text_to_overlay_player(&osdd->p_info, &osdd->audioLevelM0Overlay,
         "0dBFS",
         width - 10 - osdd->audioLevelOverlay.w, 15,
         0, 4,
@@ -463,7 +463,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
 
     char buf[16];
     snprintf(buf, 16, "%.0f", osdd->state->audioLineupLevel);
-    if (text_to_overlay(&osdd->p_info, &osdd->audioLevelLineupOverlay,
+    if (text_to_overlay_player(&osdd->p_info, &osdd->audioLevelLineupOverlay,
         buf,
         width - 10 - osdd->audioLevelOverlay.w, 15,
         0, 4,
@@ -477,7 +477,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
     }
     memset(&osdd->audioLevelLineupOverlay.buff[0], 255, 15);
 
-    if (text_to_overlay(&osdd->p_info, &osdd->audioLevelM40Overlay,
+    if (text_to_overlay_player(&osdd->p_info, &osdd->audioLevelM40Overlay,
         "-40",
         width - 10 - osdd->audioLevelOverlay.w, 15,
         0, 4,
@@ -491,7 +491,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
     }
     memset(&osdd->audioLevelM40Overlay.buff[0], 255, 15);
 
-    if (text_to_overlay(&osdd->p_info, &osdd->audioLevelM60Overlay,
+    if (text_to_overlay_player(&osdd->p_info, &osdd->audioLevelM60Overlay,
         "-60",
         width - 10 - osdd->audioLevelOverlay.w, 15,
         0, 4,
@@ -505,7 +505,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
     }
     memset(&osdd->audioLevelM60Overlay.buff[0], 255, 15);
 
-    if (text_to_overlay(&osdd->p_info, &osdd->audioLevelM96Overlay,
+    if (text_to_overlay_player(&osdd->p_info, &osdd->audioLevelM96Overlay,
         "-96",
         width - 10 - osdd->audioLevelOverlay.w, 15,
         0, 4,
@@ -854,7 +854,7 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         /* timecode */
         xPos = timecodeXPos + osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3;
-        CHK_ORET(add_timecode(&osdd->timecodeTextData, hour, min, sec, frame, is_pal_frame_rate(&frameInfo->frameRate),
+        CHK_ORET(add_timecode_player(&osdd->timecodeTextData, hour, min, sec, frame, is_pal_frame_rate(&frameInfo->frameRate),
             &yuvFrame, xPos, timecodeYPos, txtY, txtU, txtV, box) == YUV_OK);
     }
 
@@ -1304,7 +1304,7 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
 
         /* source info OSD screen (default) */
         CALLOC_ORET(osdd->sourceInfoOverlay, overlay, 1);
-        if (text_to_overlay(&osdd->p_info, osdd->sourceInfoOverlay,
+        if (text_to_overlay_player(&osdd->p_info, osdd->sourceInfoOverlay,
             "No source information avaliable",
             width - 20, 0,
             0, 0,
@@ -1394,7 +1394,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
 
     if (menuInt->titleOverlay.buff == NULL)
     {
-        if (text_to_overlay(&osdd->p_info, &menuInt->titleOverlay,
+        if (text_to_overlay_player(&osdd->p_info, &menuInt->titleOverlay,
             (osdd->menu->title == NULL) ? "" : osdd->menu->title,
             width - 20, width - 20,
             0, 8,
@@ -1434,7 +1434,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
 
     if (menuInt->statusOverlay.buff == NULL)
     {
-        if (text_to_overlay(&osdd->p_info, &menuInt->statusOverlay,
+        if (text_to_overlay_player(&osdd->p_info, &menuInt->statusOverlay,
             (osdd->menu->status == NULL) ? "" : osdd->menu->status,
             width - 20, width - 20,
             10, 2,
@@ -1475,7 +1475,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
     {
         if (menuInt->commentOverlay.buff == NULL)
         {
-            if (text_to_overlay(&osdd->p_info, &menuInt->commentOverlay,
+            if (text_to_overlay_player(&osdd->p_info, &menuInt->commentOverlay,
                 osdd->menu->comment,
                 width - 20, width - 20,
                 10, 2,
@@ -1570,7 +1570,7 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
 
             if (itemInt->textOverlay.buff == NULL)
             {
-                if (text_to_overlay(&osdd->p_info, &itemInt->textOverlay,
+                if (text_to_overlay_player(&osdd->p_info, &itemInt->textOverlay,
                     (item->text == NULL) ? "" : item->text,
                     width - MENU_OUTER_MARGIN * 2, width - MENU_OUTER_MARGIN * 2,
                     10, 2,
@@ -1779,7 +1779,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
 
     /* the message if "FRAME REPEAT" instead of "FRAME DROPPED" because the DVS card repeats the last frame
     if the next frame misses the time slot for output */
-    CHK_ORET(text_to_overlay(&osdd->p_info, &osdd->droppedFrameOverlay, "FRAME REPEAT!",
+    CHK_ORET(text_to_overlay_player(&osdd->p_info, &osdd->droppedFrameOverlay, "FRAME REPEAT!",
         osdd->imageWidth, 0, 0, 0, 0, 0, 0,
         "Ariel", 32 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
 
@@ -1859,7 +1859,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     }
 
     CALLOC_ORET(osdd->sourceInfoOverlay, overlay, 1);
-    if (ml_text_to_ovly(&osdd->p_info, osdd->sourceInfoOverlay, text,
+    if (ml_text_to_ovly_player(&osdd->p_info, osdd->sourceInfoOverlay, text,
         streamInfo->width - (2 * 24), "Ariel", 28 * fontScale, 10, aspectRatio->num, aspectRatio->den) < 0)
     {
         ml_log_error("Failed to create OSD source info screen overlay\n");

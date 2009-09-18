@@ -1,5 +1,5 @@
 /*
- * $Id: udp_source.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: udp_source.c,v 1.6 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -394,16 +394,43 @@ int udp_open(const char *address, MediaSource** source)
     strncpy(remote, address, sizeof(remote)-1);
     char *p;
     int port;
-    if ((p = strchr(remote, ':')) == NULL) {    /* couldn't find ':' */
-        port = MULTICAST_DEFAULT_PORT;        /* default port to 2000 (channel 0) */
-    }
-    else {
-        port = atol(p+1);    // extract port
-        *p = '\0';          // terminate remote string
-    }
+//     if ((p = strchr(remote, ':')) == NULL) {    /* couldn't find ':' */
+//         port = MULTICAST_DEFAULT_PORT;        /* default port to 2000 (channel 0) */
+//     }
+//     else {
+//         port = atol(p+1);    // extract port
+//         *p = '\0';          // terminate remote string
+//     }
+	if ((p = strchr(remote, ']')) == NULL)
+	{			/* search for [ipv6] end */
+		if ((p = strchr(remote, ':')) == NULL) //v4 version
+		{	/* get the port number */
+			port =MULTICAST_DEFAULT_PORT;				/* default port to 1234 */
+		}
+	
+		else 
+		{
+			port = atol(p+1);
+			*(p) = '\0';
+		}
+	}
+	else//v6 version
+	{
+		p = strchr(address, '[');
+		strcpy(remote, p+1);
+		if ((strchr(remote, ']'))-strrchr(remote,':')<= 0) 
+		{	/* get the port number */
+			port =1234;				/* default port to 1234 */
+		}
 
+		p=strrchr(remote,':');
+		port =atol(p+1);
+		*(p-1) = '\0';
+	}
     // setup network socket
     int fd;
+    printf("The UDP Address is: %s and the port is: %d \n",remote,port); // show address and port
+
     if ((fd = connect_to_multicast_address(remote, port)) == -1)
     {
         ml_log_error("Failed to connect to UDP address %s:%d\n", remote, port);

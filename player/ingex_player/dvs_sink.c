@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.12 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dvs_sink.c,v 1.13 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -825,15 +825,31 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
 
     /* video, 25 fps, UYVY/YUV422 */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
-        (streamInfo->format == UYVY_FORMAT ||
-            streamInfo->format == YUV422_FORMAT) &&
-        memcmp(&streamInfo->frameRate, &g_palFrameRate, sizeof(Rational)) == 0 &&
-        (sink->fitVideo ||
-            ((unsigned int)streamInfo->width == sink->rasterWidth &&
-                ((unsigned int)streamInfo->height == sink->rasterHeight ||
-                    (streamInfo->height == 576 && sink->rasterHeight == 592)))))
+        (streamInfo->format == UYVY_FORMAT || streamInfo->format == YUV422_FORMAT) &&
+        memcmp(&streamInfo->frameRate, &g_palFrameRate, sizeof(Rational)) == 0)
     {
-        return 1;
+        if ((unsigned int)streamInfo->width == sink->rasterWidth &&
+            ((unsigned int)streamInfo->height == sink->rasterHeight ||
+                (streamInfo->height == 576 && sink->rasterHeight == 592 /* PALFF mode */)))
+        {
+            return 1;
+        }
+        else if (sink->fitVideo && streamInfo->format == UYVY_FORMAT)
+        {
+            return 1;
+        }
+        else if (sink->fitVideo && streamInfo->format == YUV422_FORMAT)
+        {
+            /* if the format is YUV422_FORMAT then a conversion must take place and the conversion uses a buffer
+            with memory sufficient for the output image size. That is why the input image dimensions must be such that
+            it doesn't overflow the buffer */
+            int requiredSize = streamInfo->width * streamInfo->height * 2;
+            int availableSize = sink->rasterWidth * sink->rasterHeight * 2;
+            if (requiredSize <= availableSize)
+            {
+                return 1;
+            }
+        }
     }
     /* audio, 48kHz, mono, PCM */
     else if (streamInfo->type == SOUND_STREAM_TYPE &&

@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.9 2009/03/25 13:50:40 john_f Exp $
+ * $Id: shared_mem_source.c,v 1.10 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -72,6 +72,7 @@ typedef struct
 
     TrackInfo tracks[MAX_TRACKS];
     int numTracks;
+    int numAudioTracks;
 
     Rational frameRate;
     int64_t position;
@@ -186,7 +187,17 @@ static uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame
                 conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
 
     // tracks 2 and 3 are mixed together at audio34_offset
-    return conn.ring[channel] + conn.pctl->audio34_offset +
+    if (track == 2 || track == 3)
+        return conn.ring[channel] + conn.pctl->audio34_offset +
+                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+
+    // tracks 4 and 5 are mixed together at audio56_offset
+    if (track == 4 || track == 5)
+        return conn.ring[channel] + conn.pctl->audio56_offset +
+                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+
+    // tracks 6 and 7 are mixed together at audio78_offset
+    return conn.ring[channel] + conn.pctl->audio78_offset +
                 conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
 }
 
@@ -293,14 +304,8 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     PTHREAD_MUTEX_UNLOCK(&conn.pctl->m_source_name_update);
 
     // Track numbers are hard-coded by setup code in shared_mem_open()
-    // 0 - video
-    // 1 - audio 1
-    // 2 - audio 2
-    // 3 - audio 3
-    // 4 - audio 4
-    // 5 - timecode
-    // 6 - timecode
-    //
+    // 1 x video, numAudioTracks x audio, 2 x timecode
+
     for (i = 0; i < source->numTracks; i++)
     {
         track = &source->tracks[i];
@@ -410,7 +415,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
             int tc_as_int;
-            memcpy(&tc_as_int, rec_ring_timecode(source, i - 5, lastFrame), sizeof(int));
+            memcpy(&tc_as_int, rec_ring_timecode(source, i - (source->numAudioTracks + 1), lastFrame), sizeof(int));
             // convert ts-as-int to Timecode
             Timecode tc;
             tc.isDropFrame = 0;
@@ -531,6 +536,7 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
     CaptureFormat captureFormat;
     int disable = 0;
     int i;
+    char nameBuf[32];
 
     /* check channel number is within range */
     channelNum = atol(channel_name);
@@ -624,6 +630,16 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
         width = conn.pctl->sec_width;
         height = conn.pctl->sec_height;
     }
+    
+    newSource->numAudioTracks = 4;
+    if (conn.pctl->audio56_offset > 0)
+    {
+        newSource->numAudioTracks += 2;
+        if (conn.pctl->audio78_offset > 0)
+        {
+            newSource->numAudioTracks += 2;
+        }
+    }
 
     newSource->frameRate.num = conn.pctl->frame_rate_numer;
     newSource->frameRate.den = conn.pctl->frame_rate_denom;
@@ -693,61 +709,24 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
     CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, title));
     newSource->numTracks++;
 
-    /* audio track 1 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
-    newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 1"));
-    newSource->tracks[newSource->numTracks].frameSize = 0;  /* zero indicates variable size */
-    newSource->numTracks++;
-
-    /* audio track 2 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
-    newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 2"));
-    newSource->tracks[newSource->numTracks].frameSize = 0;
-    newSource->numTracks++;
-
-    /* audio track 3 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
-    newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 3"));
-    newSource->tracks[newSource->numTracks].frameSize = 0;
-    newSource->numTracks++;
-
-    /* audio track 4 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
-    newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Audio 4"));
-    newSource->tracks[newSource->numTracks].frameSize = 0;
-    newSource->numTracks++;
+    /* audio tracks */
+    for (i = 0; i < newSource->numAudioTracks; i++)
+    {
+        sprintf(nameBuf, "Shared Memory Audio %d\n", i);
+        
+        CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
+        newSource->tracks[newSource->numTracks].streamInfo.type = SOUND_STREAM_TYPE;
+        newSource->tracks[newSource->numTracks].streamInfo.format = PCM_FORMAT;
+        newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+        newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+        newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
+        newSource->tracks[newSource->numTracks].streamInfo.samplingRate = g_profAudioSamplingRate;
+        newSource->tracks[newSource->numTracks].streamInfo.numChannels = 1;
+        newSource->tracks[newSource->numTracks].streamInfo.bitsPerSample = 16;
+        CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, nameBuf));
+        newSource->tracks[newSource->numTracks].frameSize = 0;  /* zero indicates variable size */
+        newSource->numTracks++;
+    }
 
     /* timecode track 1 */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));

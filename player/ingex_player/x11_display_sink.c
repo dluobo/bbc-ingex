@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: x11_display_sink.c,v 1.9 2009/09/18 16:16:25 philipn Exp $
  *
  *
  *
@@ -380,7 +380,7 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
     }
     else if (streamInfo->format == YUV422_FORMAT)
     {
-        sink->yuvFormat = YUV422;
+        sink->yuvFormat = YV16;
     }
     else /* streamInfo->format == YUV420_FORMAT */
     {
@@ -471,6 +471,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         }
 
 
+        XLockDisplay(sink->x11Common.windowInfo.display);
         if (sink->useSharedMemory)
         {
             XShmPutImage(sink->x11Common.windowInfo.display, sink->x11Common.windowInfo.window, sink->x11Common.windowInfo.gc,
@@ -486,8 +487,9 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
                 0, 0, 0, 0,
                 sink->width, sink->height);
         }
-
-        x11c_process_events(&sink->x11Common, 1);
+        XUnlockDisplay(sink->x11Common.windowInfo.display);
+        
+        x11c_process_events(&sink->x11Common);
 
 
         /* report that a new frame has been displayed */
@@ -531,8 +533,10 @@ static int init_frame(X11DisplayFrame* frame)
 {
     X11DisplaySink* sink = (X11DisplaySink*)frame->sink;
 
+    XLockDisplay(sink->x11Common.windowInfo.display);
     sink->depth = DefaultDepth(sink->x11Common.windowInfo.display, DefaultScreen(sink->x11Common.windowInfo.display));
     sink->visual = DefaultVisual(sink->x11Common.windowInfo.display, DefaultScreen(sink->x11Common.windowInfo.display));
+    XUnlockDisplay(sink->x11Common.windowInfo.display);
 
     if (sink->depth < 15)
     {
@@ -570,7 +574,8 @@ static int init_frame(X11DisplayFrame* frame)
     }
 
     PTHREAD_MUTEX_LOCK(&sink->x11Common.eventMutex)
-
+    XLockDisplay(sink->x11Common.windowInfo.display);
+    
     if (sink->useSharedMemory)
     {
         CHK_OFAIL((frame->xImage =
@@ -673,6 +678,7 @@ static int init_frame(X11DisplayFrame* frame)
     frame->xImage->bitmap_bit_order = MSBFirst;
 
 
+    XUnlockDisplay(sink->x11Common.windowInfo.display);
     PTHREAD_MUTEX_UNLOCK(&sink->x11Common.eventMutex)
 
 
@@ -683,6 +689,7 @@ fail:
     {
         SAFE_FREE(&frame->rgbBuffer);
     }
+    XUnlockDisplay(sink->x11Common.windowInfo.display);
     PTHREAD_MUTEX_UNLOCK(&sink->x11Common.eventMutex)
     return 0;
 }
@@ -835,7 +842,10 @@ static void xskf_free(void* data)
     {
         if (frame->xImage)
         {
+            XLockDisplay(frame->sink->x11Common.windowInfo.display);
             XShmDetach(frame->sink->x11Common.windowInfo.display, &frame->shminfo);
+            XUnlockDisplay(frame->sink->x11Common.windowInfo.display);
+            
             shmdt(frame->shminfo.shmaddr);
             XFree(frame->xImage);
         }

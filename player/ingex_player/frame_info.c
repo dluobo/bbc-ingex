@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: frame_info.c,v 1.7 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -52,6 +52,7 @@ static const char* g_streamFormatStrings[] =
     "dv25_420",
     "dv25_411",
     "dv50",
+    "dv100",
     "d10_picture",
     "avid_mjpeg",
     "avid_dnxhd",

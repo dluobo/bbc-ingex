@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.18 2009/03/19 17:43:40 john_f Exp $
+ * $Id: player.c,v 1.19 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -973,6 +973,7 @@ int main(int argc, const char **argv)
     int disableStream[MAX_INPUTS * 3];
     int numDisabledStreams = 0;
     int disableShuttle = 0;
+    int forceUYVYFormat;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -2308,7 +2309,8 @@ int main(int argc, const char **argv)
                 break;
 
             case FFMPEG_INPUT:
-                if (!fms_open(inputs[i].filename, numFFMPEGThreads, &mediaSource))
+                forceUYVYFormat = (outputType == DVS_OUTPUT || outputType == DUAL_OUTPUT);
+                if (!fms_open(inputs[i].filename, numFFMPEGThreads, forceUYVYFormat, &mediaSource))
                 {
                     ml_log_error("Failed to open FFmpeg file source\n");
                     goto fail;

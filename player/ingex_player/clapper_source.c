@@ -1,5 +1,5 @@
 /*
- * $Id: clapper_source.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: clapper_source.c,v 1.7 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -262,7 +262,7 @@ static int add_static_image_uyvy(ClapperSource* source)
         }
 
         sprintf(buf, "%d", i < 0 ? -i : i);
-        if (text_to_overlay(&p_info, &textOverlay,
+        if (text_to_overlay_player(&p_info, &textOverlay,
             buf,
             source->videoStreamInfo.width, 0,
             0, 0,
@@ -284,7 +284,7 @@ static int add_static_image_uyvy(ClapperSource* source)
 
     /* frames label */
 
-    if (text_to_overlay(&p_info, &textOverlay,
+    if (text_to_overlay_player(&p_info, &textOverlay,
         "frames",
         source->videoStreamInfo.width, 0,
         0, 0,
@@ -305,7 +305,7 @@ static int add_static_image_uyvy(ClapperSource* source)
 
     /* video/audio late */
 
-    if (text_to_overlay(&p_info, &textOverlay,
+    if (text_to_overlay_player(&p_info, &textOverlay,
         "VIDEO LATE",
         source->videoStreamInfo.width, 0,
         0, 0,
@@ -323,7 +323,7 @@ static int add_static_image_uyvy(ClapperSource* source)
     CHK_ORET(add_overlay(&textOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == YUV_OK);
     free_overlay(&textOverlay);
 
-    if (text_to_overlay(&p_info, &textOverlay,
+    if (text_to_overlay_player(&p_info, &textOverlay,
         "AUDIO LATE",
         source->videoStreamInfo.width, 0,
         0, 0,
@@ -759,7 +759,7 @@ int clp_create(const StreamInfo* videoStreamInfo, const StreamInfo* audioStreamI
     else if (videoStreamInfo->format == YUV422_FORMAT)
     {
         newSource->imageSize = videoStreamInfo->width * videoStreamInfo->height * 2;
-        newSource->yuvFormat = YUV422;
+        newSource->yuvFormat = YV16;
     }
     else /* videoStreamInfo->format == YUV420_FORMAT */
     {

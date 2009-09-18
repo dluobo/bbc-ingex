@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.c,v 1.8 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: x11_common.c,v 1.9 2009/09/18 16:16:25 philipn Exp $
  *
  *
  *
@@ -59,7 +59,7 @@ static void* process_event_thread(void* arg)
 
         if (diff_usec > MIN_PROCESS_EVENT_INTERVAL)
         {
-            x11c_process_events(x11Common, 0);
+            x11c_process_events(x11Common);
         }
         else if (diff_usec > 0)
         {
@@ -188,6 +188,8 @@ int x11c_initialise(X11Common* x11Common, int reviewDuration, OnScreenDisplay* o
         x11Common->windowInfo = *windowInfo;
     }
 
+    CHK_ORET(XInitThreads() != 0);
+    
     CHK_ORET(init_mutex(&x11Common->eventMutex));
 
     CHK_ORET(create_joinable_thread(&x11Common->processEventThreadId, process_event_thread, x11Common));
@@ -324,8 +326,10 @@ int x11c_get_screen_dimensions(X11Common* x11Common, int* width, int* height)
         return 0;
     }
 
+    XLockDisplay(x11Common->windowInfo.display);
     *width = XWidthOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
     *height = XHeightOfScreen(XDefaultScreenOfDisplay(x11Common->windowInfo.display));
+    XUnlockDisplay(x11Common->windowInfo.display);
 
     return 1;
 }
@@ -364,10 +368,12 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
         x11c_update_window(&x11Common->windowInfo, displayWidth, displayHeight, x11Common->windowName);
     }
 
+    XLockDisplay(x11Common->windowInfo.display);
     XWindowAttributes attrs;
     XGetWindowAttributes(x11Common->windowInfo.display, x11Common->windowInfo.window, &attrs);
     x11Common->windowWidth = attrs.width;
     x11Common->windowHeight = attrs.height;
+    XUnlockDisplay(x11Common->windowInfo.display);
 
     x11Common->haveWindow = 1;
     return 1;
@@ -413,7 +419,7 @@ void x11c_unset_media_control(X11Common* x11Common)
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 }
 
-int x11c_process_events(X11Common* x11Common, int sync)
+int x11c_process_events(X11Common* x11Common)
 {
     XEvent event;
     int processedEvent = 0;
@@ -433,14 +439,10 @@ int x11c_process_events(X11Common* x11Common, int sync)
 
     gettimeofday(&x11Common->processEventTime, NULL);
 
+    XLockDisplay(x11Common->windowInfo.display);
+    
     if (!XPending(x11Common->windowInfo.display))
     {
-        if (sync)
-        {
-            /* wait until image has been processed by the X server */
-            XSync(x11Common->windowInfo.display, False);
-        }
-
         processedEvent = 0;
     }
     else
@@ -541,15 +543,11 @@ int x11c_process_events(X11Common* x11Common, int sync)
         }
         while (XPending(x11Common->windowInfo.display));
 
-        if (sync)
-        {
-            /* wait until image has been processed by the X server */
-            XSync(x11Common->windowInfo.display, False);
-        }
-
         processedEvent = 1;
     }
 
+    XUnlockDisplay(x11Common->windowInfo.display);
+    
     PTHREAD_MUTEX_UNLOCK(&x11Common->eventMutex)
 
     return processedEvent;
@@ -587,7 +585,9 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
     /* set name if we have a window */
     if (x11Common->windowInfo.display != NULL && x11Common->haveWindow)
     {
+        XLockDisplay(x11Common->windowInfo.display);
         XStoreName(x11Common->windowInfo.display, x11Common->windowInfo.window, x11Common->windowName);
+        XUnlockDisplay(x11Common->windowInfo.display);
     }
 
     return 1;
@@ -596,13 +596,18 @@ int x11c_set_window_name(X11Common* x11Common, const char* name)
 int x11c_shared_memory_available(X11Common* common)
 {
     char* displayName;
+    Bool result;
 
     if (common == NULL || common->windowInfo.display == NULL)
     {
         return 0;
     }
 
-    if (!XShmQueryExtension(common->windowInfo.display))
+    XLockDisplay(common->windowInfo.display);
+    result = XShmQueryExtension(common->windowInfo.display);
+    XUnlockDisplay(common->windowInfo.display);
+    
+    if (!result)
     {
         return 0;
     }

@@ -77,6 +77,12 @@ LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a 
 
 ifdef DISABLE_QC_LTO_ACCESS
 	CFLAGS += -DDISABLE_QC_LTO_ACCESS
+else
+	INOTIFY_INCLUDE_PATH := $(shell for f in /usr/local/include /usr/include; do test -e $$f/sys/inotify.h && echo $$f && break; done)
+	ifeq "$(INOTIFY_INCLUDE_PATH)" ""
+$(warning sys/inotify.h not found - building QC player without LTO access)
+	CFLAGS += -DDISABLE_QC_LTO_ACCESS
+	endif
 endif
 
 ifdef DVS_HARDWARE_INCLUDE
@@ -144,7 +150,7 @@ endif
 ifndef TEST_UDP_PATH
 	CFLAGS += -DDISABLE_UDP_SOURCE
 else
-	INCLUDEDIRS += -I$(COMMON_DIR)
+	INCLUDEDIRS += -I$(COMMON_DIR) -I$(COMMON_DIR)/YUVlib
 	LIBDIRS += -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib
 	LIBS += -lcommon -lYUVlib
 	LIB_DEPS += $(COMMON_DIR)/libcommon.a $(COMMON_DIR)/YUVlib/libYUVlib.a
@@ -169,7 +175,6 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	media_player.c term_keyboard_input.c mxf_source.c on_screen_display.c \
 	shuttle_input.c emulate_key.c media_control.c shuttle_input_connect.c media_source.c \
 	raw_file_source.c media_sink.c x11_xv_display_sink.c raw_file_sink.c console_monitor.c \
-	YUV_frame.c YUV_text_overlay.c YUV_small_pic.c \
 	video_switch_sink.c qc_session.c dv_stream_connect.c logging.c buffered_media_sink.c media_sink_frame.c \
 	dual_sink.c null_sink.c frame_info.c buffered_media_source.c osd_symbols.c \
 	x11_display_sink.c keyboard_input.c keyboard_input_connect.c x11_common.c \

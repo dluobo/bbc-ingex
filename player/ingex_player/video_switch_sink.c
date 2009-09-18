@@ -1,5 +1,5 @@
 /*
- * $Id: video_switch_sink.c,v 1.9 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: video_switch_sink.c,v 1.10 2009/09/18 16:16:24 philipn Exp $
  *
  *
  *
@@ -578,7 +578,7 @@ static int add_stream(DefaultVideoSwitch* swtch, int streamId, const StreamInfo*
         }
         else if (streamInfo->format == YUV422_FORMAT)
         {
-            swtch->yuvFormat = YUV422;
+            swtch->yuvFormat = YV16;
             swtch->splitInputBufferSize = streamInfo->width * streamInfo->height * 2;
         }
         else if (streamInfo->format == YUV420_FORMAT)

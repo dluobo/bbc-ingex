@@ -1,5 +1,5 @@
 /*
- * $Id: x11_common.h,v 1.7 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: x11_common.h,v 1.8 2009/09/18 16:16:25 philipn Exp $
  *
  *
  *
@@ -131,7 +131,7 @@ int x11c_init_window(X11Common* x11Common, unsigned int displayWidth, unsigned i
 
 void x11c_set_media_control(X11Common* x11Common, ConnectMapping mapping, VideoSwitchSink* videoSwitch, MediaControl* control);
 void x11c_unset_media_control(X11Common* x11Common);
-int x11c_process_events(X11Common* common, int sync);
+int x11c_process_events(X11Common* common);
 
 int x11c_set_window_name(X11Common* common, const char* name);
 
