@@ -1,5 +1,5 @@
 /*
- * $Id: MXFWriter.cpp,v 1.10 2009/05/14 10:47:42 john_f Exp $
+ * $Id: MXFWriter.cpp,v 1.11 2009/09/18 16:55:55 philipn Exp $
  *
  * Writes essence data to MXF files
  *
@@ -55,19 +55,44 @@ typedef struct
 
 
 
-static void convertUMID(prodauto::UMID& in, mxfUMID& out)
+static void convertUMID(const prodauto::UMID& in, mxfUMID& out)
 {
     memcpy(&out, &in, 32);
 }
 
-static void convertTimestamp(prodauto::Timestamp& in, mxfTimestamp& out)
+static void convertTimestamp(const prodauto::Timestamp& in, mxfTimestamp& out)
 {
     memcpy(&out, &in, 8);
 }
 
-static void convertRational(prodauto::Rational& in, mxfRational& out)
+static void convertRational(const prodauto::Rational& in, mxfRational& out)
 {
     memcpy(&out, &in, 8);
+}
+
+static AvidRGBColor convertCommentColor(int dbColour)
+{
+    switch (dbColour)
+    {
+        case USER_COMMENT_WHITE_COLOUR:
+            return AVID_WHITE;
+        case USER_COMMENT_RED_COLOUR:
+            return AVID_RED;
+        case USER_COMMENT_YELLOW_COLOUR:
+            return AVID_YELLOW;
+        case USER_COMMENT_GREEN_COLOUR:
+            return AVID_GREEN;
+        case USER_COMMENT_CYAN_COLOUR:
+            return AVID_CYAN;
+        case USER_COMMENT_BLUE_COLOUR:
+            return AVID_BLUE;
+        case USER_COMMENT_MAGENTA_COLOUR:
+            return AVID_MAGENTA;
+        case USER_COMMENT_BLACK_COLOUR:
+            return AVID_BLACK;
+        default:
+            return AVID_RED;
+    }
 }
 
 static string createFilename(string filenamePrefix, bool isPicture, uint32_t inputTrackID, uint32_t trackNumber)
@@ -235,8 +260,12 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
     string filenamePrefix,
     vector<UserComment> userComments,
     ProjectName projectName)
-: _isComplete(false), _creatingFilePath(creatingFilePath), _destinationFilePath(destinationFilePath),
-  _failuresFilePath(failuresFilePath), _filenamePrefix(filenamePrefix)
+: _isComplete(false),
+  _creatingFilePath(creatingFilePath),
+  _destinationFilePath(destinationFilePath),
+  _failuresFilePath(failuresFilePath),
+  _filenamePrefix(filenamePrefix),
+  _isPALProject(isPALProject)
 {
     map<MaterialPackage*, TrackCount> trackCounts;
     std::string filename;
@@ -323,7 +352,7 @@ MXFWriter::MXFWriter(MaterialPackage* materialPackage,
         }
     }
 
-    construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
+    construct(resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
 
 
@@ -337,7 +366,7 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
     vector<UserComment> userComments,
     ProjectName projectName)
 : _isComplete(false), _creatingFilePath(creatingFilePath), _destinationFilePath(destinationFilePath),
-  _failuresFilePath(failuresFilePath), _filenamePrefix(filenamePrefix)
+  _failuresFilePath(failuresFilePath), _filenamePrefix(filenamePrefix), _isPALProject(isPALProject)
 {
     const TrackCount startTrackCount = {0, 0};
     map<MaterialPackage*, TrackCount> trackCounts;
@@ -536,10 +565,10 @@ MXFWriter::MXFWriter(RecorderInputConfig* inputConfig,
         }
     }
 
-    construct(isPALProject, resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
+    construct(resolutionID, imageAspectRatio, audioQuantizationBits, userComments, projectName);
 }
 
-void MXFWriter::construct(bool isPALProject, int resolutionID,
+void MXFWriter::construct(int resolutionID,
         Rational imageAspectRatio, uint8_t audioQuantizationBits,
         const std::vector<UserComment> & userComments,
         const ProjectName & projectName)
@@ -560,7 +589,8 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
             // map to MXF package definitions
 
-            CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions));
+            convertRational((_isPALProject ? g_palEditRate : g_ntscEditRate), editRate);
+            CHECK_SUCCESS(create_package_definitions(&outputPackage->packageDefinitions, &editRate));
 
             // map the tape source package
             convertUMID(outputPackage->sourcePackage->uid, umid);
@@ -625,7 +655,13 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 if (userComment.position < 0) // static comment
                 {
                     // add comment to material package destined for the mxf file
-                    CHECK_SUCCESS(set_user_comment(outputPackage->packageDefinitions, userComment.name.c_str(), userComment.value.c_str()));
+                    CHECK_SUCCESS(set_user_comment(outputPackage->packageDefinitions, userComment.name.c_str(),
+                        userComment.value.c_str()));
+                }
+                else
+                {
+                    CHECK_SUCCESS(add_locator(outputPackage->packageDefinitions, userComment.position,
+                        userComment.value.c_str(), convertCommentColor(userComment.colour)));
                 }
 
                 // add comment to material package destined for the database
@@ -658,6 +694,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case UNC_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -668,6 +705,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DV25_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -678,6 +716,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DV50_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -688,6 +727,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG21_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res21;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -699,6 +739,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG31_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res31;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -710,6 +751,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG101_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res101;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -721,6 +763,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG151S_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res151s;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -732,6 +775,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG201_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res201;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -743,6 +787,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case MJPEG101M_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.mjpegResolution = Res101m;
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -753,8 +798,9 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
                         case IMX30_MATERIAL_RESOLUTION:
                         {
-                            assert(isPALProject); // NTSC not yet supported
+                            assert(_isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.imxFrameSize = 150000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -765,8 +811,9 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
                         case IMX40_MATERIAL_RESOLUTION:
                         {
-                            assert(isPALProject); // NTSC not yet supported
+                            assert(_isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.imxFrameSize = 200000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -777,8 +824,9 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
 
                         case IMX50_MATERIAL_RESOLUTION:
                         {
-                            assert(isPALProject); // NTSC not yet supported
+                            assert(_isPALProject); // NTSC not yet supported
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             essenceInfo.imxFrameSize = 250000; // max PAL frame size
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
@@ -790,6 +838,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DNX36p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -800,6 +849,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DNX120p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -810,6 +860,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DNX185p_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -820,6 +871,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DNX120i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -830,6 +882,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                         case DNX185i_MATERIAL_RESOLUTION:
                         {
                             EssenceInfo essenceInfo;
+                            init_essence_info(&essenceInfo);
                             CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid,
                                 filePackage->name.c_str(),
                                 &timestamp, fileDesc->fileLocation.c_str(),
@@ -845,7 +898,9 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 else
                 {
                     EssenceInfo essenceInfo;
+                    init_essence_info(&essenceInfo);
                     essenceInfo.pcmBitsPerSample = audioQuantizationBits;
+                    essenceInfo.locked = 1;
                     CHECK_SUCCESS(create_file_source_package(outputPackage->packageDefinitions, &umid, filePackage->name.c_str(),
                         &timestamp, fileDesc->fileLocation.c_str(),
                         PCM, &essenceInfo, &mxfFilePackage));
@@ -868,7 +923,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
             mxfRational mxfAspectRatio;
             convertRational(imageAspectRatio, mxfAspectRatio);
             mxfRational mxfProjectEditRate;
-            if (isPALProject)
+            if (_isPALProject)
             {
                 mxfProjectEditRate.numerator = 25;
                 mxfProjectEditRate.denominator = 1;
@@ -879,7 +934,7 @@ void MXFWriter::construct(bool isPALProject, int resolutionID,
                 mxfProjectEditRate.denominator = 1001;
             }
             if (!create_clip_writer((projectName.name.empty() ? 0 : projectName.name.c_str()),
-                (isPALProject ? PAL_25i : NTSC_30i), mxfAspectRatio, mxfProjectEditRate, 0 , 1,
+                (_isPALProject ? PAL_25i : NTSC_30i), mxfAspectRatio, mxfProjectEditRate, 0 , 1,
                 outputPackage->packageDefinitions, &outputPackage->clipWriter))
             {
                 PA_LOGTHROW(MXFWriterException, ("Failed to create clip writer"));
@@ -1139,6 +1194,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
 
             packageDefinitions = outputPackage->packageDefinitions;
             clear_user_comments(packageDefinitions);
+            clear_locators(packageDefinitions);
             outputPackage->materialPackage->clearUserComments();
 
             vector<UserComment>::const_iterator iterUC;
@@ -1154,6 +1210,11 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
                 {
                     // add comment to material package destined for the mxf file
                     CHECK_SUCCESS(set_user_comment(packageDefinitions, userComment.name.c_str(), userComment.value.c_str()));
+                }
+                else
+                {
+                    CHECK_SUCCESS(add_locator(packageDefinitions, userComment.position, userComment.value.c_str(),
+                        convertCommentColor(userComment.colour)));
                 }
 
                 // add comment to material package destined for the database
@@ -1295,7 +1356,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
             // save the packages to the database
             try
             {
-                auto_ptr<Transaction> transaction(database->getTransaction());
+                auto_ptr<Transaction> transaction(database->getTransaction("MXFWriter_SavePackages"));
 
                 // save the file source packages first because material package has foreign key referencing it
                 for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
@@ -1307,7 +1368,7 @@ void MXFWriter::internalCompleteAndSaveToDatabase(bool update, vector<UserCommen
 
                 database->savePackage(outputPackage->materialPackage, transaction.get());
 
-                transaction->commitTransaction();
+                transaction->commit();
 
                 // record the successes
                 for (iter2 = outputPackage->filePackages.begin(); iter2 != outputPackage->filePackages.end(); iter2++)
