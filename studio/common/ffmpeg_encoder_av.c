@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.7 2009/04/16 18:00:17 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.8 2009/09/18 16:28:33 philipn Exp $
  *
  * Encode AV and write to file.
  *
@@ -249,7 +249,7 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_reso
     int width = 720;
     int height = 576;
 
-    switch(res)
+    switch (res)
     {
     case FF_ENCODER_RESOLUTION_DV25_MOV:
         codec_context->pix_fmt = PIX_FMT_YUV420P;
@@ -271,6 +271,7 @@ static int init_video_dv(internal_ffmpeg_encoder_t * enc, ffmpeg_encoder_av_reso
         enc->tmpFrame = av_mallocz(sizeof(AVPicture));
         enc->inputBuffer = av_mallocz(width * height * 2);
         encoded_frame_size = 576000;        // SMPTE 370M spec
+        top_field_first = 1;
         break;
     default:
         break;
@@ -707,15 +708,20 @@ extern ffmpeg_encoder_av_t * ffmpeg_encoder_av_init (const char * filename, ffmp
 
     /* Set aspect ratio for video stream */
     AVRational sar;
-    if (wide_aspect)
+    if (FF_ENCODER_RESOLUTION_DV100_MOV == res)
     {
-    // 16:9
+        sar.num = 4;
+        sar.den = 3;
+    }
+    else if (wide_aspect)
+    {
+    // SD 16:9
         sar.num = 118;
         sar.den = 81;
     }
     else
     {
-    // 4:3
+    // SD 4:3
         sar.num = 59;
         sar.den = 54;
     }
