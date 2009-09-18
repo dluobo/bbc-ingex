@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.cpp,v 1.1 2008/10/08 10:16:06 john_f Exp $
+ * $Id: XmlTools.cpp,v 1.2 2009/09/18 16:25:48 philipn Exp $
  *
  * Utility class for handling XML.
  *
@@ -149,7 +149,7 @@ void XmlTools::DomToFile(DOMDocument * doc, const char * filename, bool pretty_p
     {
         //XERCES_STD_QUALIFIER cerr << "An error occurred during creation of output transcoder. Msg is:"
             //<< XERCES_STD_QUALIFIER endl
-            //<< StrX(e.getMessage()) << XERCES_STD_QUALIFIER endl;
+            //<< StrXml(e.getMessage()) << XERCES_STD_QUALIFIER endl;
             ;
         //retval = 4;
     }
@@ -210,7 +210,7 @@ void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocume
     {
         std::cerr << "\nError during parsing: '" << filename << "'\n"
              << "Exception message is:  \n"
-             << StrX(toCatch.getMessage()) << "\n" << std::endl;
+             << StrXml(toCatch.getMessage()) << "\n" << std::endl;
     }
     catch (const DOMException& toCatch)
     {
@@ -221,7 +221,7 @@ void XmlTools::FileToDom(const char * filename, DOMBuilder * & parser, DOMDocume
             << "DOMException code is:  " << toCatch.code << std::endl;
 
         if (DOMImplementation::loadDOMExceptionMsg(toCatch.code, errText, maxChars))
-            std::cerr << "Message is: " << StrX(errText) << std::endl;
+            std::cerr << "Message is: " << StrXml(errText) << std::endl;
 
     }
     catch (...)

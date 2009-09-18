@@ -1,5 +1,5 @@
 /*
- * $Id: XmlTools.h,v 1.1 2008/10/08 10:16:06 john_f Exp $
+ * $Id: XmlTools.h,v 1.2 2009/09/18 16:25:48 philipn Exp $
  *
  * Utility class for handling XML.
  *
@@ -45,19 +45,19 @@ public:
 //  This is a simple class that lets us do easy (though not terribly efficient)
 //  trancoding of char* data to XMLCh data.
 // ---------------------------------------------------------------------------
-class XStr
+class XmlStr
 {
 public :
     // -----------------------------------------------------------------------
     //  Constructors and Destructor
     // -----------------------------------------------------------------------
-    XStr(const char* const toTranscode)
+    XmlStr(const char* const toTranscode)
     {
         // Call the private transcoding method
         fUnicodeForm = XMLString::transcode(toTranscode);
     }
 
-    ~XStr()
+    ~XmlStr()
     {
         XMLString::release(&fUnicodeForm);
     }
@@ -81,25 +81,25 @@ private :
     XMLCh*   fUnicodeForm;
 };
 
-#define X(str) XStr(str).unicodeForm()
+#define Xml(str) XmlStr(str).unicodeForm()
 
 // ---------------------------------------------------------------------------
 //  This is a simple class that lets us do easy (though not terribly efficient)
 //  trancoding of XMLCh data to local code page for display.
 // ---------------------------------------------------------------------------
-class StrX
+class StrXml
 {
 public :
     // -----------------------------------------------------------------------
     //  Constructors and Destructor
     // -----------------------------------------------------------------------
-    StrX(const XMLCh* const toTranscode)
+    StrXml(const XMLCh* const toTranscode)
     {
         // Call the private transcoding method
         fLocalForm = XMLString::transcode(toTranscode);
     }
 
-    ~StrX()
+    ~StrXml()
     {
         XMLString::release(&fLocalForm);
     }
@@ -123,7 +123,7 @@ private :
     char*   fLocalForm;
 };
 
-inline std::ostream& operator<<(std::ostream& target, const StrX& toDump)
+inline std::ostream& operator<<(std::ostream& target, const StrXml& toDump)
 {
     target << toDump.localForm();
     return target;
