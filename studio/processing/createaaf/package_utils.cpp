@@ -1,5 +1,5 @@
 /*
- * $Id: package_utils.cpp,v 1.1 2009/05/01 13:34:06 john_f Exp $
+ * $Id: package_utils.cpp,v 1.2 2009/09/18 17:05:47 philipn Exp $
  *
  * Package-related utility functions
  *
@@ -149,7 +149,7 @@ void prodauto::getStartAndEndTimes(MaterialPackage * materialPackage, PackageSet
         prodauto::Track * mt = *it;
 
         // Look for video track
-        if (mt->dataDef == PICTURE_DATA_DEFINITION)
+        if (mt->dataDef == PICTURE_DATA_DEFINITION || mt->dataDef == SOUND_DATA_DEFINITION)
         {
             // Length from material package track sourceclip
             prodauto::SourceClip * mt_sc = mt->sourceClip;
@@ -183,6 +183,12 @@ void prodauto::getStartAndEndTimes(MaterialPackage * materialPackage, PackageSet
                             if (sc)
                             {
                                 position = sc->position;
+                                if (mt->editRate != editRate)
+                                {
+                                    double factor = editRate.numerator * mt->editRate.denominator / 
+                                        (double)(editRate.denominator * mt->editRate.numerator);
+                                    position = (int64_t) (sc->position * factor + 0.5);
+                                }
                                 done = true;
                             }
                         }

@@ -1,7 +1,7 @@
 #!/usr/bin/perl -W
 
 #
-# $Id: media_transfer.pl,v 1.2 2007/10/26 16:29:43 john_f Exp $
+# $Id: media_transfer.pl,v 1.3 2009/09/18 17:05:47 philipn Exp $
 #
 # 
 #
@@ -35,8 +35,8 @@ my $keepSuccessPeriod = 12 * 60 * 60; # 12 hours (in seconds)
 
 my $successDirectory = "/video/mxf/";
 
-my $destIncomingDirectory = "/bigmo/video/incoming"; 
-my $destLiveDirectory = "/bigmo/video/";
+my $destIncomingDirectory = "/store/video/incomming"; 
+my $destLiveDirectory = "/store/video/";
 
 my $useDateSubdirectory = 0;
 

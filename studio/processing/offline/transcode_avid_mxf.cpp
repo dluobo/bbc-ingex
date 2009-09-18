@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.10 2009/02/26 19:44:27 john_f Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.11 2009/09/18 17:05:47 philipn Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -92,7 +92,8 @@ using namespace std;
     }
 
 
-static const char* g_dsn = "prodautodb";
+static const char* g_databaseHostName = "localhost";
+static const char* g_databaseName = "prodautodb";
 static const char* g_databaseUserName = "bamzooki";
 static const char* g_databasePassword = "bamzooki";
 
@@ -161,10 +162,10 @@ public:
         }
     }
     
-    void initialise(string dsn, string username, string password,
+    void initialise(string dbhost, string dbname, string username, string password,
         unsigned int initialConnections, unsigned int maxConnections)
     {
-        prodauto::Database::initialise(dsn, username, password, 1, 3);
+        prodauto::Database::initialise(dbhost, dbname, username, password, 1, 3);
         _initialised = true;
     }
     
@@ -1012,7 +1013,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --input-dv-50            transcode from DV 50\n");
     fprintf(stderr, "  --output-mjpeg-201       transcode to Avid MJPEG 20:1 (default)\n");
     fprintf(stderr, "  --fthreads               number of FFMPEG threads (default = 4)\n");
-    fprintf(stderr, "  --dsn <string>           database DNS (default '%s')\n", g_dsn);
+    fprintf(stderr, "  --db-host <string>       database host name (default '%s')\n", g_databaseHostName);
+    fprintf(stderr, "  --db-name <string>       database name (default '%s')\n", g_databaseName);
     fprintf(stderr, "  --db-user <string>       database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --db-password <string>   database user password (default ***)\n");
     fprintf(stderr, "\n");
@@ -1032,7 +1034,8 @@ int main(int argc, const char* argv[])
     string creatingDirectory;
     string destinationDirectory;
     string failureDirectory;
-    string dsn = g_dsn;
+    string dbHostName = g_databaseHostName;
+    string dbName = g_databaseName;
     string dbUserName = g_databaseUserName;
     string dbPassword = g_databasePassword;
     bool loop = false;
@@ -1150,7 +1153,7 @@ int main(int argc, const char* argv[])
             }
             cmdlnIndex += 2;
         }
-        else if (strcmp(argv[cmdlnIndex], "--dsn") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--db-host") == 0)
         {
             if (cmdlnIndex + 1 >= argc)
             {
@@ -1158,7 +1161,18 @@ int main(int argc, const char* argv[])
                 fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                 return 1;
             }
-            dsn = argv[cmdlnIndex + 1];
+            dbHostName = argv[cmdlnIndex + 1];
+            cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--db-name") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            dbName = argv[cmdlnIndex + 1];
             cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--db-user") == 0)
@@ -1235,7 +1249,7 @@ int main(int argc, const char* argv[])
             try
             {
                 prodauto::Logging::info("Initialising database connection...\n");
-                database.initialise(dsn, dbUserName, dbPassword, 1, 3);
+                database.initialise(dbHostName, dbName, dbUserName, dbPassword, 1, 3);
                 prodauto::Logging::info("Initialised connection to database\n");
                 haveDatabaseConnection = true;
             }
@@ -1590,10 +1604,8 @@ int main(int argc, const char* argv[])
     
                 // delete skipped transcode entries 
                 prodauto::Interval zeroTime = {0, 0, 0, 0, 0, 0, 0};
-                vector<int> statuses;
-                statuses.push_back(TRANSCODE_STATUS_NOTFORTRANSCODE);
-                statuses.push_back(TRANSCODE_STATUS_NOTSUPPORTED);
-                int numDeletes = database.instance()->deleteTranscodes(statuses, zeroTime);
+                int numDeletes = database.instance()->deleteTranscodes(TRANSCODE_STATUS_NOTFORTRANSCODE, zeroTime);
+                numDeletes += database.instance()->deleteTranscodes(TRANSCODE_STATUS_NOTSUPPORTED, zeroTime);
                 if (numDeletes > 0)
                 {
                     prodauto::Logging::info("Deleted %d skipped transcode entries from database\n",
@@ -1601,23 +1613,19 @@ int main(int argc, const char* argv[])
                 }
                 
                 // delete completed transcode
-                statuses.clear();
-                statuses.push_back(TRANSCODE_STATUS_COMPLETED);
-                numDeletes = database.instance()->deleteTranscodes(statuses, completedDeleteTime);
+                numDeletes = database.instance()->deleteTranscodes(TRANSCODE_STATUS_COMPLETED, completedDeleteTime);
                 if (numDeletes > 0)
                 {
                     prodauto::Logging::info("Deleted %d completed transcode entries (created '%s' before now) from database\n", 
-                        numDeletes, getODBCInterval(completedDeleteTime).c_str());
+                        numDeletes, getIntervalString(completedDeleteTime).c_str());
                 }
                 
                 // delete failed transcode entries
-                statuses.clear();
-                statuses.push_back(TRANSCODE_STATUS_FAILED);
-                numDeletes = database.instance()->deleteTranscodes(statuses, failedDeleteTime);
+                numDeletes = database.instance()->deleteTranscodes(TRANSCODE_STATUS_FAILED, failedDeleteTime);
                 if (numDeletes > 0)
                 {
                     prodauto::Logging::info("Deleted %d failed transcode entries (created'%s' before now) from database\n",
-                        numDeletes, getODBCInterval(failedDeleteTime).c_str());
+                        numDeletes, getIntervalString(failedDeleteTime).c_str());
                 }
             }
             catch (...)

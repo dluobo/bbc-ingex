@@ -1,5 +1,5 @@
 /*
- * $Id: ConfigReader.h,v 1.1 2009/04/16 17:41:37 john_f Exp $
+ * $Id: ConfigReader.h,v 1.2 2009/09/18 17:05:47 philipn Exp $
  *
  * Class to read XML options for create_aaf
  *
@@ -62,7 +62,8 @@ public:
     std::string getGroup()               { return m_Group; }
     std::string getMultiCam()            { return m_MultiCam; }
     std::string getNTSC()                { return m_NTSC; }
-    std::string getDNS()                 { return m_DNS; }
+    std::string getDBHostName()          { return m_DBHostName; }
+    std::string getDBName()              { return m_DBName; }
     std::string getUser()                { return m_User; }
     std::string getPassword()            { return m_Password; }
     
@@ -72,6 +73,7 @@ public:
     std::string getEditPath()            { return m_EditPath; }
     std::string getDirCut()              { return m_DirCut; }
     std::string getDirSource()           { return m_DirSource; }
+    std::string getDirDB()          	 { return m_DirDB; }
     std::string getAudioEdit()           { return m_AudioEdit; }
     
     std::vector<std::string> PKG_ID;
@@ -84,7 +86,8 @@ private:
     std::string m_Group;
     std::string m_MultiCam;
     std::string m_NTSC;
-    std::string m_DNS;
+    std::string m_DBHostName;
+    std::string m_DBName;
     std::string m_User;
     std::string m_Password;
     std::string m_PkgID;
@@ -93,6 +96,7 @@ private:
     std::string m_EditPath;
     std::string m_DirCut;
     std::string m_DirSource;
+    std::string m_DirDB;    
     std::string m_AudioEdit;
     
     //Internal class use only. Hold Xerces data in UTF-16 SMLCh type.
@@ -106,6 +110,7 @@ private:
     XMLCh* ATTR_EditPath;
     XMLCh* ATTR_DirCut;
     XMLCh* ATTR_DirSource;
+    XMLCh* ATTR_DirDB;
     XMLCh* ATTR_AudioEdit;
     
     //Clip Settings
@@ -119,7 +124,8 @@ private:
     XMLCh* ATTR_Group;
     XMLCh* ATTR_MultiCam;
     XMLCh* ATTR_NTSC;
-    XMLCh* ATTR_DNS;
+    XMLCh* ATTR_DBHostName;
+    XMLCh* ATTR_DBName;
     XMLCh* ATTR_User;
     XMLCh* ATTR_Password;
 };

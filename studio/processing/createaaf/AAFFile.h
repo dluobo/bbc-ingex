@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.h,v 1.3 2009/01/29 07:36:59 stuart_hc Exp $
+ * $Id: AAFFile.h,v 1.4 2009/09/18 17:05:47 philipn Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -104,6 +104,7 @@ private:
     IAAFSmartPointer<IAAFDataDef> pPictureDef;
     IAAFSmartPointer<IAAFDataDef> pSoundDef;
     IAAFSmartPointer<IAAFDataDef> pDescriptiveMetadataDef;
+    IAAFSmartPointer<IAAFContainerDef> pAAFKLVContainerDef;
 };
 
 

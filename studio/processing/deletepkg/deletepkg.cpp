@@ -38,10 +38,10 @@ int main(int argc, char* argv[])
 	try
 	{
 		// Initialise
-		prodauto::Database::initialise("prodautodb", "bamzooki", "bamzooki", 4, 12);
+		prodauto::Database::initialise("acacia", "prodautodb", "bamzooki", "bamzooki", 4, 12);
 
 		Database* db = Database::getInstance();
-		Transaction* transaction = (db->getTransaction());
+		Transaction* transaction = (db->getTransaction("DeletePackages"));
 
 		// String to array
 		char *nextTok = strtok(inStr, ",");
@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 				if(debug){printf("Loading package: %li\n", pkg_identifier);}
 				Package* package = (db->loadPackage(pkg_identifier));
 				db->deletePackageChain(package, transaction);
-				transaction->commitTransaction();
+				transaction->commit();
 				if(debug){printf("Deleted package\n");}
 			}
 			catch (const prodauto::DBException & dbe)

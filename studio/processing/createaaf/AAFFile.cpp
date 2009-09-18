@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.5 2009/05/01 13:34:05 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.6 2009/09/18 17:05:47 philipn Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -23,6 +23,9 @@
 #include <cassert>
 #include <cstdlib>
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 #include <AAFResult.h>
 #include <AAFClassDefUIDs.h>
 #include <AAFFileKinds.h>
@@ -31,6 +34,7 @@
 #include <AAFDataDefs.h>
 #include <AAFStoredObjectIDs.h>
 #include <AAFCompressionDefs.h>
+#include <AAFContainerDefs.h>
 #include <AAFTypeDefUIDs.h>
 #include <AAFExtEnum.h>
 
@@ -47,6 +51,8 @@
 using namespace std;
 using namespace prodauto;
 
+
+const bool DEBUG_PRINT = false;
 
 #define AAF_CHECK(cmd) \
 { \
@@ -351,6 +357,9 @@ AAFFile::AAFFile(string filename, Rational targetEditRate, bool aafxml, bool add
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_LegacyPicture, &pPictureDef));
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_LegacySound, &pSoundDef));
         AAF_CHECK(pDictionary->LookupDataDef(kAAFDataDef_DescriptiveMetadata, &pDescriptiveMetadataDef));
+        
+        // Lookup container definitions
+        AAF_CHECK(pDictionary->LookupContainerDef(kAAFContainerDef_AAFKLV, &pAAFKLVContainerDef));
     
         // register extension properties
         AAF_CHECK(pDictionary->LookupTypeDef(kAAFTypeID_Int32, &pTypeDef));
@@ -1136,6 +1145,10 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
     for (iter1 = mcClipDef->trackDefs.begin(); iter1 != mcClipDef->trackDefs.end(); iter1++)
     {
         MCTrackDef* trackDef = (*iter1).second;
+        if (DEBUG_PRINT)
+        {
+            printf("trackDef->index = %d, trackDef->selectorDefs.size() = %zu\n", trackDef->index, trackDef->selectorDefs.size());
+        }
         
         map<uint32_t, MCSelectorDef*>::const_iterator iter2;
         for (iter2 = trackDef->selectorDefs.begin(); iter2 != trackDef->selectorDefs.end(); iter2++)
@@ -1329,12 +1342,21 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                             
                             if (includeSequence)
                             {
+                                if (DEBUG_PRINT)
+                                {
+                                    printf("sequence size = %zu\n", sequence.size());
+                                    printf("isPicture     = %s\n", (isPicture ? "true" : "false"));
+                                }
                                 if (sequence.size() > 1 && (isPicture || _addAudioEdits))
                                 {
                                     if (trackDef->selectorDefs.size() > 1 &&
                                         AAFRESULT_SUCCEEDED(pSeqMob->LookupSlot(trackDef->index, &pSequenceMobSlot)))
                                     {
                                         // sequence is present, and therefore we add a selector
+                                        if (DEBUG_PRINT)
+                                        {
+                                            printf("sequence present\n");
+                                        }
                                         
                                         size_t i;
                                         aafLength_t sourceClipLength;
@@ -1423,6 +1445,10 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                     else
                                     {
                                         // sequence not present or only 1 selector is present
+                                        if (DEBUG_PRINT)
+                                        {
+                                            printf("sequence not present or only one selector; creating sequence\n");
+                                        }
                                         
                                         if (isPicture == kAAFTrue)
                                         {
@@ -1468,12 +1494,21 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                                 break;
                                             }
                                             
+                                            if (DEBUG_PRINT)
+                                            {
+                                                printf("sequence element %zu\n", i);
+                                            }
                                             current = sequence[i];
                                             if (i != sequence.size() - 1)
                                             {
                                                 // calculate length of segment using next cut in sequence
                                                 
                                                 next = sequence[i + 1];
+                                                if (DEBUG_PRINT)
+                                                {
+                                                    printf("Not last cut in sequence\n");
+                                                    printf("next.position = %"PRIi64"\n", next.position);
+                                                }
                                                 
                                                 // calculate length of segment
                                                 if (next.position > length)
@@ -1491,6 +1526,10 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             else
                                             {
                                                 // calculate length of segment using length of total clip
+                                                if (DEBUG_PRINT)
+                                                {
+                                                    printf("Last cut in sequence\n");
+                                                }
                                                 
                                                 if (current.position > length)
                                                 {
@@ -1505,6 +1544,10 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                                     // clip ends at the start of the next cut
                                                     sourceClipLength = length - current.position;
                                                 }
+                                            }
+                                            if (DEBUG_PRINT)
+                                            {
+                                                printf("sourceClipLength %"PRId64"\n",sourceClipLength);
                                             }
                                             totalSourceClipLength += sourceClipLength;
                                             
@@ -1524,7 +1567,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                                 AAF_CHECK(pSelector->QueryInterface(IID_IAAFComponent, (void **)&pComponent));
                                                 AAF_CHECK(pComponent->SetDataDef(pDataDef));
                                                 AAF_CHECK(pComponent->SetLength(sourceClipLength));
-                                            
+                                                
                                                 if (!isPicture || // the first sound track always becomes the SelectedSegment
                                                     selectorDef->sourceConfig->name.compare(sequence[i].source) == 0)
                                                 {
@@ -1546,7 +1589,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                             }
                             
                                             AAF_CHECK(pSequence->AppendComponent(pComponent));
-                                        }
+                                        } //for (i = 0; i < sequence.size(); i++)
                                     }
                                 }
                                 
@@ -1621,7 +1664,7 @@ void AAFFile::createMCClip(MCClipDef* mcClipDef, MaterialPackageSet& materialPac
                                         seqSlotID++;
                                     }
                                 }
-                            }
+                            } //if (includeSequence)
                         }
                     }
                 }
@@ -2190,6 +2233,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
             
             AAF_CHECK(pFileDescriptor->SetLength(track->sourceClip->length));
             AAF_CHECK(pFileDescriptor->SetSampleRate(convertRational(track->editRate)));
+            AAF_CHECK(pFileDescriptor->SetContainerFormat(pAAFKLVContainerDef));
             
             AAF_CHECK(pCDCIDescriptor2->QueryInterface(IID_IAAFEssenceDescriptor, (void **)&pEssenceDescriptor));
         }
@@ -2211,6 +2255,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
             
             AAF_CHECK(pFileDescriptor->SetLength(track->sourceClip->length));
             AAF_CHECK(pFileDescriptor->SetSampleRate(convertRational(track->editRate)));
+            AAF_CHECK(pFileDescriptor->SetContainerFormat(pAAFKLVContainerDef));
             
             AAF_CHECK(pPCMDescriptor->QueryInterface(IID_IAAFEssenceDescriptor, (void **)&pEssenceDescriptor));
         }

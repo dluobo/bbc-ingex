@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.7 2009/03/19 18:11:12 john_f Exp $
+# $Id: Makefile,v 1.8 2009/09/18 17:05:47 philipn Exp $
 #
 DATABASELIB_DIR = ../../database/src
 LIBMXF_DIR = ../../../libMXF
@@ -43,7 +43,7 @@ FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -l
 
 TRANSCODE_LIBS = -ljpeg $(FFMPEG_LIBS) -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
 	-L$(DATABASELIB_DIR) -lprodautodb -L$(MXFWRITER_DIR) -lmxfwriter -L$(WRITEAVIDMXF_DIR) -lwriteavidmxf \
-	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lodbc++ -luuid -lpthread 
+	-L$(MXFREADER_DIR) -lMXFReader -L$(LIBMXF_DIR)/lib -lMXF -lpq -lpqxx -luuid -lpthread 
 
 YUV422TOMJPEG_LIBS = -L$(STUDIOCOMMON_DIR) -lstudiocommon -L$(YUVLIB_DIR) -lYUVlib \
 	-L$(COMMON_DIR) -lcommon -ljpeg -lpthread
@@ -83,8 +83,8 @@ transcode_avid_mxf: libmxfwriter.a transcode_avid_mxf.o
 yuv422_to_mjpeg: yuv422_to_mjpeg.c
 	$(CC) -g yuv422_to_mjpeg.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
-yuv422_to_mjpeg_threaded: yuv422_to_mjpeg_threaded.c
-	$(CC) -g yuv422_to_mjpeg_threaded.c $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
+yuv422_to_mjpeg_threaded: yuv422_to_mjpeg.c
+	$(CC) -g yuv422_to_mjpeg.c -DBUILD_USING_MJPEG_THREADED_API $(INCLUDES) $(YUV422TOMJPEG_LIBS) -o $@
 
 
 	

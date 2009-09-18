@@ -12,6 +12,13 @@
 #include "mjpeg_compress.h"
 #include "../../../common/video_conversion.h"
 
+#ifdef BUILD_USING_MJPEG_THREADED_API
+#define mjpeg_compress_t mjpeg_compress_threaded_t
+#define mjpeg_compress_init(a,b,c,d) mjpeg_compress_init_threaded(a,b,c,d)
+#define mjpeg_compress_frame_yuv(a,b,c,d,e,f,g,h) mjpeg_compress_frame_yuv_threaded(a,b,c,d,e,f,g,h)
+#define mjpeg_compress_free(a) mjpeg_compress_free_threaded(a)
+#endif
+
 static void usage_exit(void)
 {
     fprintf(stderr, "Usage: yuv422_to_mjpeg [options] input.yuv output.mjpeg\n");
@@ -108,7 +115,7 @@ extern int main(int argc, char *argv[])
 	}
 
 	mjpeg_compress_t *mc = NULL;
-	mjpeg_compress_init(resId, width, height, &mc);
+	mjpeg_compress_init((MJPEGResolutionID)resId, width, height, &mc);
 
 	int total_bytes = 0;
 	int frame_num = 0;

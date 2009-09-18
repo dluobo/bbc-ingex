@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.10 2009/06/09 13:44:10 john_f Exp $             *
+# * $Id: xferserver.pl,v 1.11 2009/09/18 17:05:47 philipn Exp $             *
 # *                                                                         *
 # *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
@@ -37,9 +37,9 @@
 # Identifier values are arbitrary (most likely an incrementing number) except for the special case '0' (zero), which is interpreted as covering all events belonging to the associated client.  This value should be sent when a client is started, so that the event list is cleared of any previous events belonging to this client.  This ensures that traffic control does not remain on permanently due to a client crashing and hence not indicating the end of an event.  It should not be used as an event identifier if the client can have more than one event in action simultaneously.
 # A further special case is to provide the client name on its own.  This is also interpreted as clearing the list of events belonging to this client (as if '0' followed by more arguments had been supplied), and is useful for clients such as players which do not provide copying path information.  (Players typically only play one file set at once, which means that they can always supply the same identifier value to switch traffic control on.)
 
-# Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  Paths are saved in configuration file PATHS_FILE to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
+# Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
-# In each source directory, every file whose name begins with 8 digits* and ends in ".mxf" or ".mov" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
+# In each source directory, every file whose name begins with 8 digits* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
 
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and the destination file is renamed to allow copying without overwriting it.  (Copying is abandoned if there is already a file with the new name.)  If a file fails to copy, any partial file is deleted and no more files are copied from that source directory (because the order of copying must be maintained - see below).  Once a copy cycle has been successfully completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
 # Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data being copied to, the mount point, which may fill up a system drive.
@@ -47,7 +47,7 @@
 # For each priority, the files to copy are sorted by decreasing age as indicated by ctime, making sure that all files with the latest detected ctime have been accounted for.  Before copying a file, the amount of free space is checked to make sure it is likely to fit (unless in FTP mode), and further copying from this source directory is abandoned (until retry) if it doesn't: this avoids wasting time repeatedly copying large files that won't succeed.  When copying of the last file with a particular ctime in a particular source directory is completed, this ctime is written to the configuration file, and any files older than this are subsequently ignored.  This allows files to be removed from the destination without them being copied again if they remain on the source.  (ctime is used rather than mtime, because it indicates the time the source file was made visible by moving it into the source directory, therefore making it impossible for older files, which would never be copied, to appear subsequently.)
 # There must not be more than one destination path for any source path (or the most recent destination path will apply).  When a path pair is supplied, an existing pair with the same source at another priority will be removed.  There is no way to remove path pairs automatically - these must be removed from PATHS_FILE while the script is not running.
 
-# PATHS_FILE contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  An exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
+# PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  An exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
 
 # If option -e is supplied, the path specified with it forms an additional destination for all files at priority '1'.  This is intended for use with a portable drive onto which to copy offline rushes (and operates in the same way whether using FTP mode or not).
 
@@ -76,10 +76,10 @@ use constant DELETE_THRESHOLD => 90; #disk must be at least this full (%) for de
 use constant PERMISSIONS => '0775'; #for directory creation
 #use constant COPY => '/home/ingex/bin/cpfs'; #for copying at different speeds
 use constant COPY => './cpfs'; #for copying at different speeds
-use constant SLOW_LIMIT => 2000; #bandwidth limit as supplied to COPY
-use constant FAST_LIMIT => 0; #bandwidth limit as supplied to COPY (0 = unlimited)
+use constant SLOW_LIMIT => 2000;  #bandwidth limit kByte/s as supplied to COPY
+use constant FAST_LIMIT => 50000; #bandwidth limit kByte/s as supplied to COPY (0 = unlimited)
 use constant RECHECK_INTERVAL => 10; #time (seconds) between rechecks if something failed
-use constant PATHS_FILE => 'paths';
+use constant PATHS_FILE => 'paths'; #name of file the script generates to save copying details for automatic resumption of copying after restarting
 
 use constant FTP_ROOT => '';
 use constant FTP_SPEED => '20'; #Mbits/sec
@@ -87,21 +87,26 @@ use constant FTP_SPEED => '20'; #Mbits/sec
 use constant UP_TO_DATE => 0;
 use constant PROCESSING => 1;
 use constant STALE => 2;
-use vars qw($childPid %opts $curl $interface @ftpDetails);
+use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile);
 
-die "Usage: xferserver.pl [-c] [-d] [-e <path>] [-f <server>] [-f '<server> <username> <password>'] [-p] [-r] [-s] [-v]
+die "Usage: xferserver.pl [-a <path>] [-c] [-d] [-e <path>] [-f <server>] [-f '<server> <username> <password>'] [-p] [-r] [-s] [-t] [-v]
+ -a  optional location of paths file
  -c  clear stored ctime values (re-copy anything not found on server)
  -d  do not make and copy to 8-digit subdirectories
  -e <path>  extra destination for priority 1 files
  -f '<server>[ <username> <password>]'  use ftp rather than copying (apart from to extra destination)
  -p  preserve files (do not delete anything)
  -r  reset (remove stored information)
- -s  start in slow (traffic-limited) mode - NB will switch to fast as soon as ANY client indicates the end of an event
+ -s  start in slow (traffic-limited) mode - NB will switch to fast as soon as ANY client indicates the end of an event; ignored if option -t is specified
+ -t  do not use traffic control
  -v  verbose: print out every source file name with reasons for not copying, and put curl into verbose mode for ftp transfers\n"
-unless getopts('cde:f:prsv', \%opts) && !scalar @ARGV && (!defined $opts{e} || ($opts{e} ne '' && $opts{e} !~ /^-/)) && (!defined $opts{f} || ($opts{f} !~ /^-/ && (@ftpDetails = split/\s+/, $opts{f}) && (1 == scalar @ftpDetails || 3 == scalar @ftpDetails)));
+unless getopts('a:cde:f:prstv', \%opts) && !scalar @ARGV && (!defined $opts{e} || ($opts{e} ne '' && $opts{e} !~ /^-/)) && (!defined $opts{f} || ($opts{f} !~ /^-/ && (@ftpDetails = split/\s+/, $opts{f}) && (1 == scalar @ftpDetails || 3 == scalar @ftpDetails)));
+
+$pathsFile = PATHS_FILE;
+$pathsFile = $opts{a} if $opts{a};
 
 my %transfers;
-$transfers{limit} = ($opts{'s'} |= 0); #quotes stop highlighting getting confused in kate!
+$transfers{limit} = $opts{t} ? 0 : ($opts{'s'} |= 0); #quotes stop highlighting getting confused in kate!
 if ($opts{f}) {
 	FtpTrafficControl(0); #in case it's already on, which would result in an abort when we try to switch it on
 	if ($transfers{limit}) {
@@ -144,14 +149,15 @@ elsif ($childPid == 0) { # child - copying
 CHILD->autoflush(1);
 
 #load the configuration
+
 my $priority = 1;
 if ($opts{r}) {
-	unlink PATHS_FILE;
+	unlink $pathsFile;
 }
-elsif (-e PATHS_FILE) {
-	if (-s PATHS_FILE) {
-		if (open FILE, PATHS_FILE) {
-			print "Reading from '", PATHS_FILE, "'...\n";
+elsif (-e $pathsFile) {
+	if (-s $pathsFile) {
+		if (open FILE, $pathsFile) {
+			print "Reading from '", $pathsFile, "'...\n";
 			my @config = <FILE>;
 			close FILE;
 			chomp @config;
@@ -194,15 +200,15 @@ elsif (-e PATHS_FILE) {
 			}
 		}
 		else {
-			print "WARNING: Couldn't read from '", PATHS_FILE, "': $!\n";
+			print "WARNING: Couldn't read from '", $pathsFile, "': $!\n";
 		}
 	}
 	else {
-		print "Empty '", PATHS_FILE, "' file.\n\n";
+		print "Empty '", $pathsFile, "' file.\n\n";
 	}
 }
 else {
-	print "No stored paths file '", PATHS_FILE, "' found.\n\n";
+	print "No stored paths file '", $pathsFile, "' found.\n\n";
 }
 
 $share->store(freeze \%transfers);
@@ -210,7 +216,7 @@ $share->unlock;
 my $ports = new IO::Select;
 
 #open the socket for instructions from recorders via xferclient.pl
-my $recSock = new IO::Socket::INET(
+$recSock = new IO::Socket::INET(
  	LocalPort => CLIENT_PORT,
 # 	Type => SOCK_STREAM,
  	Reuse => 1,
@@ -220,7 +226,7 @@ $ports->add($recSock);
 Report("Listening for copying clients on port " . CLIENT_PORT . ".\n", 0, $share);
 
 #open the socket for status requests from web browser-type things
-my $monSock = new IO::Socket::INET(
+$monSock = new IO::Socket::INET(
  	LocalPort => MON_PORT,
 # 	Type => SOCK_STREAM,
  	Reuse => 1,
@@ -250,9 +256,19 @@ while (1) {
 sub serveClient {
  my ($client, $share) = @_;
  my ($buf, $data);
- while (sysread($client, $buf, 100)) { # don't use buffered read or can hang if several strings arrive at once
-	$data .= $buf;
+ #read from client with timeout (otherwise one client connection can block communication from another)
+ if (!defined eval {
+	local $SIG{ALRM} = sub { die };
+	alarm 2; #time in seconds before a SIGALRM is generated; less than 2 may be dangerous as it may be rounded down
+	while (sysread($client, $buf, 100)) { # don't use buffered read or can hang if several strings arrive at once
+		$data .= $buf;
+	}
+	alarm 0;
+ }) {
+	Report("WARNING: Client left socket open too long: ignoring.\n", 0, $share);
+	return;
  }
+ #interpret data
  if (!defined $data) {
 	Report("WARNING: Client connection made but no parameters passed: ignoring.\n", 0, $share);
 	return;
@@ -291,14 +307,13 @@ sub serveClient {
 		print "\rTRAFFIC CONTROL OFF\n";
 	}
 	if ($added) {
-		SaveConfig($transfers); #so that if the script is re-started it can carry on copying immediately
+		SaveConfig($transfers, $pathsFile); #so that if the script is re-started it can carry on copying immediately
 	}
  }
  else { #event start
-	#traffic control
 	$events{$client}{$identifier} = 1;
 	Report("Client '$client' has started an event (identifier '$identifier').\n", 1, $transfers);
-	if (!$transfers->{limit}) { #not already controlling traffic
+	if (!$transfers->{limit} && !$opts{t}) { #not already controlling traffic
 		if ($opts{f}) {
 			my $err = FtpTrafficControl(1);
 			Abort("Failed to start FTP traffic control: $err") if $err ne '';
@@ -409,7 +424,7 @@ sub E {
 #assumes share is locked and should be stored afterwards
 sub SaveConfig { #should be locked before doing this to prevent concurrent file writes
 	my $transfers = shift;
- 	my $config = IO::File->new('>' . PATHS_FILE);
+ 	my $config = IO::File->new('>' . $pathsFile);
  	if ($config) {
  		foreach my $priority (sort keys %{ $transfers->{transfers} }) {
 			print $config " $priority\n"; #space indicates priority value
@@ -423,7 +438,7 @@ sub SaveConfig { #should be locked before doing this to prevent concurrent file 
  		$config->close;
  	}
  	else {
- 		Report("WARNING: couldn't open \"" . PATHS_FILE . "\" for writing: $!.\nTransfers will not recommence automatically if script is restarted.\n", 1, $transfers);
+ 		Report("WARNING: couldn't open \"" . $pathsFile . "\" for writing: $!.\nTransfers will not recommence automatically if script is restarted.\n", 1, $transfers);
  	}
 }
 
@@ -529,7 +544,7 @@ sub Scan {
 	#generate temp dest path
 	my ($destDir, $extraDestDir);
 	if ($opts{d}) { #don't use subdirectories
-		if ($srcName =~ /\.[mM][xX][fF]$/ || $srcName =~ /\.[mM][oO][vV]$/) { #NB see subst below before changing this
+		if ($srcName =~ /\.[mM][xX][fF]$/ || $srcName =~ /\.[mM][oO][vV]$/  || $srcName =~ /\.[xX][mM][lL]$/) {
 			$destDir = $destRoot;
 			$extraDestDir = $extraDestRoot if defined $extraDestRoot;
 		}
@@ -539,7 +554,7 @@ sub Scan {
 		}
 	}
 	else {
-		if ($srcName =~ /^(\d{8})_.*\.[mM][xX][fF]$/ || $srcName =~ /^(\d{8})_.*\.[mM][oO][vV]$/) { #NB see subst below before changing this
+		if ($srcName =~ /^(\d{8})_.*\.[mM][xX][fF]$/ || $srcName =~ /^(\d{8})_.*\.[mM][oO][vV]$/ || $srcName =~ /^(\d{8})_.*\.[xX][mM][lL]$/) {
 			$destDir = "$destRoot/$1";
 			$extraDestDir = "$extraDestRoot/$1" if defined $extraDestRoot;
 		}
@@ -568,7 +583,7 @@ sub Scan {
 	}
 	$latestCtime = $ctime if $ctime > $latestCtime;
 	#check for existing copies and generate copy details
-	(my $altName = $srcName) =~ s/(.*)(.{4})/$1_dup$2/; #will always succeed due to check above
+	(my $altName = $srcName) =~ s/(.*)(\.[^.]+)/$1_dup$2/; #will always succeed due to check above
 	my $copied = $ctime <= $ctimeCleared; #already copied if ctime indicates it
 	my @checkDest = CheckDest($srcDir, $destDir, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
 	$ok &= $checkDest[0];
@@ -991,11 +1006,15 @@ sub childLoop {
 			}
 			# check result
 			if ($? & 127) { #child has received terminate signal so terminate
-				unlink "$incomingPath/" . $essenceFile->{name};
+				unlink "$incomingPath/$essenceFile->{name}" if !$opts{f} || $essenceFile->{extra};
 				exit 1; # TODO: use more exit code values
 			}
 			if ($? >> 8) { #copy failed
 				unlink "$incomingPath/$essenceFile->{name}" if !$opts{f} || $essenceFile->{extra};
+				if (141 == $? >> 8 && $opts{f} && !$essenceFile->{extra}) { #141 is the code returned by curl when killed, which happens when "killall xferserver.pl" is done by the ingex termination script.  Without this check, copying will continue.
+					#terminate thread
+					exit 1;
+				}
 				$share->lock(LOCK_EX);
 				$transfers = thaw($share->fetch);
 				Report("WARNING: copy failed, exiting with value " . ($? >> 8) . ": $childMsgs\n", 1, $transfers);
@@ -1070,13 +1089,22 @@ sub childLoop {
 }
 
 sub Abort {
+ my $msg = shift;
+ if (defined $msg) {
+	$msg = ": $msg";
+ }
+ else {
+	$msg = '';
+ }
+ $msg |= '';
+ print "\nABORTING$msg...\n"; #may take some time to abort if copying
  $terminate = 1;
  kill "INT", $childPid if defined $childPid;
  waitpid($childPid, 0) if defined $childPid; #so that it's safe to remove the shared object
- my $msg = shift;
- $msg |= '';
  FtpTrafficControl(0) if $opts{f};
- die "\nAborting: $msg\n";
+ $recSock->shutdown(2); #leaving it open (possible but unlikely) blocks the port
+ $monSock->shutdown(2); #leaving it open (possible but unlikely) blocks the port
+ die "\n";
 }
 
 sub MakeDir { #makes a directory (recursively) without the permissions being modified by the current umask
@@ -1118,41 +1146,93 @@ sub Report {
 }
 
 sub FtpTrafficControl { #Non-zero in first parameter switches traffic control on. Returns an empty string on success
- #get the first hop of a traceroute to the server
- my $cmd = "/usr/sbin/traceroute -m 1 $ftpDetails[0] 2>&1";
- my $hop = `$cmd`;
- return "Failed to run '$cmd': $!" if -1 == $?;
- return "traceroute failed: $hop" if $?;
- my @hop = $hop =~ /\n.*[ (](\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})[) ]/s; #extract the address of the first hop
- if (!@hop) {
-	chomp $hop;
-	return "Failed to extract hop address from traceroute output '$hop'";
- }
- #get the routing table
- $cmd = '/sbin/route 2>&1';
- my $table = `$cmd`;
- return "Failed to run '$cmd': $!" if -1 == $?;
- return "route failed: $table" if $?;
- #try to match each route (in order) to determine the interface in use
- my $interface;
- foreach my $entry (split /\n/, $table) {
-	my @route = $entry =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\s+\S+\s+(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}).+\s(\S+)$/;
-	if (@route) {
-		#mask hop address with network mask to convert to a network address, and compare with route destination
-		foreach (0..3) {
-			$hop[$_] += 0; #convert string to number so it does a numerical bitwise AND
-			if (($hop[$_] & $route[$_ + 4]) != $route[$_]) { #doesn't match
-				undef $route[8]; #the device name
-				last;
-			}
-		}
-		if (defined $route[8]) { #matched
-			$interface = $route[8];
-			last;
-		}
-	}
- }
- return "Failed to ascertain interface for FTP transfers to $ftpDetails[0] from routing table:\n$table" unless defined $interface;
+
+ #determine the interface used to connect to the server
+ $_ = gethostbyname($ftpDetails[0]); #doesn't matter if IP address supplied
+ return "Failed to resolve IP address of $ftpDetails[0]" unless defined $_;
+ $_ = join '.', unpack('C4', $_);
+ $_ = `/bin/ip route get $_`;
+ my ($interface) = / dev (.*?) /; #not at a fixed position in the result
+ return "Failed to ascertain interface for FTP transfers to $ftpDetails[0]" unless defined $interface;
+
+#this one should work but superceded by the above
+
+#  #find out what interfaces are available
+#  my $select = IO::Select->new;
+#  opendir INTERFACES, '/sys/class/net';
+#  my @interfaces;
+#  foreach (readdir INTERFACES) {
+# 	next if /^\.\.?$/;
+# 	next if /^lo$/; #local interface won't be used
+# 	push @interfaces, $_;
+#  }
+#  closedir INTERFACES;
+#  my $interface;
+#  #choose the interface to use
+#  if (1 == scalar @interfaces) { #only one possible interface - no need to ping
+# 	$interface = $interfaces[0];
+#  }
+#  else {
+# 	#ping the server through each interface (in parallel to avoid waiting for timeouts) to find out which one reaches it
+# 	my %interfaces; #to map handles to interface names
+# 	foreach (@interfaces) {
+# 		my $ping = new IO::File "/bin/ping -I $_ -c 1 -W 1 audio1 & |"; #one packet; timeout of 1 sec; do in background so there will be no waiting for it to finish when handle is closed
+# 		$select->add($ping);
+# 		$interfaces{$ping} = $_;
+# 	}
+# 	my @ready;
+# 	READY: while (@ready = $select->can_read) {
+# 		foreach (@ready) {
+# 			if (eof $_) {
+# 				$_->close; #to prevent continuous looping
+# 			}
+# 			elsif (<$_> =~ / bytes from /) { #ping successful
+# 				$interface = $interfaces{$_};
+# 				last READY;
+# 			}
+# 		}
+# 	}
+# }
+
+#this one unreliable and not only because traceroute sometimes can't return anything
+
+#  #get the first hop of a traceroute to the server
+#  my $cmd = "/usr/sbin/traceroute -m 1 $ftpDetails[0] 2>&1";
+#  my $hop = `$cmd`;
+#  return "Failed to run '$cmd': $!" if -1 == $?;
+#  return "traceroute failed: $hop" if $?;
+#  my @hop = $hop =~ /\n.*[ (](\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})[) ]/s; #extract the address of the first hop
+#  if (!@hop) {
+# 	chomp $hop;
+# 	return "Failed to extract hop address from traceroute output '$hop'";
+#  }
+#  #get the routing table
+#  $cmd = '/sbin/route 2>&1';
+#  my $table = `$cmd`;
+#  return "Failed to run '$cmd': $!" if -1 == $?;
+#  return "route failed: $table" if $?;
+#  #try to match each route (in order) to determine the interface in use
+#  my $interface;
+#  foreach my $entry (split /\n/, $table) {
+# 	my @route = $entry =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\s+\S+\s+(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}).+\s(\S+)$/;
+# 	if (@route) {
+# 		#mask hop address with network mask to convert to a network address, and compare with route destination
+# 		foreach (0..3) {
+# 			$hop[$_] += 0; #convert string to number so it does a numerical bitwise AND
+# 			if (($hop[$_] & $route[$_ + 4]) != $route[$_]) { #doesn't match
+# 				undef $route[8]; #the device name
+# 				last;
+# 			}
+# 		}
+# 		if (defined $route[8]) { #matched
+# 			$interface = $route[8];
+# 			last;
+# 		}
+# 	}
+#  }
+#  return "Failed to ascertain interface for FTP transfers to $ftpDetails[0] from routing table:\n$table" unless defined $interface;
+
+ my $cmd;
  if ($_[0]) { #traffice control on
 	$cmd = "sudo /usr/sbin/tc\\
 		qdisc add\\

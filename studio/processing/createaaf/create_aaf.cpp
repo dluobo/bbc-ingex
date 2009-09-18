@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.14 2009/05/01 13:34:06 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.15 2009/09/18 17:05:47 philipn Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -49,7 +49,8 @@ using namespace prodauto;
 using namespace xercesc;
 
 
-static const char* g_dns = "prodautodb";
+static const char* g_databaseHostName = "localhost";
+static const char* g_databaseName = "prodautodb";
 static const char* g_databaseUserName = "bamzooki";
 static const char* g_databasePassword = "bamzooki";
 static const char* g_filenamePrefix = "ingex";
@@ -470,10 +471,11 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --fcp-xml                      Prints Apple XML for Final Cut Pro- disables AAF\n");
     fprintf(stderr, "  --fcp-path <string>            Sets the path for FCP to see Ingex generated media\n");
     fprintf(stderr, "  -n --pro-name <string>         Sets the project name for the edit file to use\n");
-    fprintf(stderr, "  -d, --dns <string>             Database DNS (default '%s')\n", g_dns);
+    fprintf(stderr, "  --dbhost <string>              Database host name (default '%s')\n", g_databaseHostName);
+    fprintf(stderr, "  -d, --dbname <string>          Database name (default '%s')\n", g_databaseName);
     fprintf(stderr, "  -u, --dbuser <string>          Database user name (default '%s')\n", g_databaseUserName);
     fprintf(stderr, "  --dbpassword <string>          Database user password (default ***)\n");
-    fprintf(stderr, "  --xml-command <string>          XML command file\n");
+    fprintf(stderr, "  --xml-command <string>         XML command file\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
     fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff' (PAL: ff ranges 1..24, NTSC: ff ranges 1..29 and is non-drop frame)\n");
@@ -498,7 +500,8 @@ int main(int argc, const char* argv[])
     Date toDate;
     int64_t fromTimecode = 0;
     int64_t toTimecode = 0;
-    string dns = g_dns;
+    string dbHostName = g_databaseHostName;
+    string dbName = g_databaseName;
     string dbUserName = g_databaseUserName;
     string dbPassword = g_databasePassword;
     string tagName;
@@ -714,8 +717,7 @@ int main(int argc, const char* argv[])
                 includeMCCutsSequence = true;
                 cmdlnIndex += 2;
             }
-            else if (strcmp(argv[cmdlnIndex], "-d") == 0 ||
-                strcmp(argv[cmdlnIndex], "--dns") == 0)
+            else if (strcmp(argv[cmdlnIndex], "--dbhost") == 0)
             {
                 if (cmdlnIndex + 1 >= argc)
                 {
@@ -723,7 +725,19 @@ int main(int argc, const char* argv[])
                     fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
                     return 1;
                 }
-                dns = argv[cmdlnIndex + 1];
+                dbHostName = argv[cmdlnIndex + 1];
+                cmdlnIndex += 2;
+            }
+            else if (strcmp(argv[cmdlnIndex], "-d") == 0 ||
+                strcmp(argv[cmdlnIndex], "--dbname") == 0)
+            {
+                if (cmdlnIndex + 1 >= argc)
+                {
+                    usage(argv[0]);
+                    fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                    return 1;
+                }
+                dbName = argv[cmdlnIndex + 1];
                 cmdlnIndex += 2;
             }
             else if (strcmp(argv[cmdlnIndex], "-u") == 0 ||
@@ -833,6 +847,10 @@ int main(int argc, const char* argv[])
             fcpxml = true;
             fcpPath = appConfig.getEditPath();
         }
+	if (appConfig.getDirDB() == test_ss.str())
+	{
+	    includeMCCutsSequence = true;
+	}
         if (appConfig.getDirCut() == test_ss.str())
         {
             includeMCCutsSequence = true;
@@ -844,7 +862,8 @@ int main(int argc, const char* argv[])
         }
         
         
-        dns = appConfig.getDNS();
+        dbHostName = appConfig.getDBHostName();
+        dbName = appConfig.getDBName();
         dbUserName = appConfig.getUser();
         dbPassword = appConfig.getPassword();
         filenamePrefix = appConfig.getPrefix();
@@ -895,7 +914,7 @@ int main(int argc, const char* argv[])
     // initialise the prodauto database
     try
     {
-        Database::initialise(dns, dbUserName, dbPassword, 1, 3);
+        Database::initialise(dbHostName, dbName, dbUserName, dbPassword, 1, 3);
         if (verbose)
         {
             printf("Initialised the database connection\n");
@@ -945,7 +964,7 @@ int main(int argc, const char* argv[])
             if (verbose)
             {
                 //printf("Loaded %d clips from the database based on the web IDs file %s\n", (int)material.topPackages.size());
-                printf("Loaded clip based on package ID from command line");
+                printf("Loaded clip based on package ID from command line.\n");
             }
         }
         else if (fromCreationDate.year != 0)
@@ -1284,7 +1303,10 @@ int main(int argc, const char* argv[])
                         if (!fcpxml && !createAAFGroupOnly)
                         {
                             AAFFile aafFile(addFilename(filenames, createMCClipFilename(filenamePrefix, getStartTime(topPackage1, material.packages, targetEditRate), suffix, index++)), targetEditRate, aafxml, audioEdits); 
-                            aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence);
+                            if (aafFile.addMCClip(mcClipDef, materialPackages, material.packages, sequence))
+                            {
+                                totalMulticamGroups++;
+                            }
                             aafFile.save();
                         }       
 

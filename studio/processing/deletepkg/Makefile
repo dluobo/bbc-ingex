@@ -27,7 +27,7 @@ $(DATABASELIB_DIR)/libprodautodb.a:
 	@cd $(DATABASELIB_DIR) && $(MAKE) libprodautodb.a
 
 deletepkg: $(DATABASELIB_DIR)/libprodautodb.a $(OBJECTS)
-	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -laafiid -lodbc++ -luuid -lpthread -lxerces-c -o $@
+	$(LD) $(OBJECTS) -Xlinker -rpath -Xlinker . -L$(DATABASELIB_DIR) -L$(AAFSDKINSTALL)/lib/debug -lprodautodb -laafiid -lpq -lpqxx -luuid -lpthread -lxerces-c -o $@
 
 	
 
