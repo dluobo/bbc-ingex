@@ -7,4 +7,26 @@ if [ "$1" = "-g" ] ; then
 	shift			# swallow option
 fi
 
-$PRERUN /home/ingex/ap-workspace/ingex/studio/ace-tao/Ingexgui/src/ingexgui -ORBDefaultInitRef corbaloc:iiop:192.168.1.182:8888 -ORBDottedDecimalAddresses 1
+# Set defaults for Ingex parameters
+# These can be overidden by ~/ingex.conf or /etc/ingex.conf
+INGEX_DIR="/home/ingex/ap-workspace/ingex"
+NAMESERVER=":8888"
+DOTTED_DECIMAL=1
+
+# Get the required configuration
+if [ -r $HOME/ingex.conf ]
+then
+        # Read in ingex mode configuration
+        . $HOME/ingex.conf
+
+elif [ -r /etc/ingex.conf ]
+then
+        # Read in ingex mode configuration
+        . /etc/ingex.conf
+fi
+
+# set corba options
+CORBA_OPTIONS="-ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses $DOTTED_DECIMAL"
+
+$PRERUN $INGEX_DIR/studio/ace-tao/Ingexgui/src/ingexgui $CORBA_OPTIONS
+

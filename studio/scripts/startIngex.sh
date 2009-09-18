@@ -1,43 +1,109 @@
 #!/bin/sh
 
-# Starts the Ingex processes as enabled in the file ./ingex.conf or /etc/ingex.conf
+# Starts the Ingex processes as enabled in the file ~/ingex.conf or /etc/ingex.conf
+
+usage="Usage: $0 [-h]
+Options:
+  -h  Start in HD mode
+"
+
+HD_MODE=0
+while getopts 'h' OPT
+do
+  case $OPT in
+  h)   HD_MODE=1
+       ;;
+  ?)   echo "${usage}"
+       exit 1
+       ;;
+  esac
+done
+
 
 # File to store PIDs of the konsoles started here, so we can clsoe them later when stopping ingex with stopIngex.sh
 KONSOLE_PIDS="/tmp/ingexPIDs.txt"
 
-# set up paths etc
-INGEX_DIR="/home/ingex/ap-workspace/ingex/studio"
-capture_path="$INGEX_DIR/capture/"
-xfer_path="$INGEX_DIR/processing/media_transfer/"
-scripts_path="$INGEX_DIR/scripts/"
+# Set defaults for Ingex processes and parameters
+# These can be overidden by ~/ingex.conf or /etc/ingex.conf
+INGEX_DIR="/home/ingex/ap-workspace/ingex"
 
-# recorder details
-recorder_path="$INGEX_DIR/ace-tao/Recorder/"
-run_recorder="./Recorder"
-dbLogin=" bamzooki bamzooki"
-
-routerlogger_path="$INGEX_DIR/ace-tao/routerlog/"
-run_routerLogger="./routerlogger"
-
-# Set defaults for Ingex processes to start
-# These can be overidden by ./ingex.conf and /etc/ingex.conf
 CAPTURE=1
-HD_MODE=0
 MULTICAST=0
 TRANSFER=0
 INGEX_MONITOR=0
 SYSTEM_MONITOR=0
 QUAD_SPLIT=0
 RECORDERS=
+
+# Nameserver details
 NAMESERVER=":8888"
+DOTTED_DECIMAL=1
 
-ROUTER_LOGGER=0
-ROUTER_TTY="/dev/ttyS0"
-ROUTER_PORTS=" -n RouterLog1 -m 5 -d VT1 -p 1 -d VT2 -p 2 -d VT3 -p 3 -d VT4 -p 4 -n RouterLog2 -m 6 -d VT1 -p 1 -d VT2 -p 2 -d VT3 -p 3 -d VT4 -p 4"
-ROUTER_LOGGER_CORBA=" -ORBDefaultInitRef corbaloc:iiop:192.168.1.181:8888 -ORBDottedDecimalAddresses 1"
+# Database details
+DB_HOST='localhost'
+DB_NAME='prodautodb'
+DB_USER='bamzooki'
+DB_PASS='bamzooki'
 
-run_routerLogger="${run_routerLogger} -r ${ROUTER_TTY} -v ${ROUTER_PORTS} ${ROUTER_LOGGER_CORBA}"
+# *** Default HD Capture options ****
+HD_CAPTURE_CHANNELS=2
+HD_CAPTURE_MODE="1920x1080i50"
+HD_CAPTURE_PRIMARY_BUFFER="YUV422"
+HD_CAPTURE_SECONDARY_BUFFER="YUV422"
+HD_CAPTURE_TIMECODE="LTC"
+#HD_CAPTURE_OPTIONS="-aes8"
+HD_CAPTURE_OPTIONS=""
 
+# HD Recorders (space-separated)
+HD_RECORDERS="Ingex-HD"
+
+# HD Quad player options
+HD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s"
+
+# Default SD Capture options
+SD_CAPTURE_CHANNELS=4
+SD_CAPTURE_MODE="PAL"
+SD_CAPTURE_PRIMARY_BUFFER="YUV422"
+SD_CAPTURE_SECONDARY_BUFFER="None"
+SD_CAPTURE_TIMECODE="LTC"
+SD_CAPTURE_OPTIONS=""
+
+# SD Recorders (space-separated)
+SD_RECORDERS="Ingex"
+
+# SD Quad player options
+SD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p"
+
+
+# ********** There are no options to edit below this line *************
+#**********************************************************************
+
+# Get the required configuration
+if [ -r $HOME/ingex.conf ]
+then
+        # Read in ingex mode configuration
+        . $HOME/ingex.conf
+
+elif [ -r /etc/ingex.conf ]
+then
+        # Read in ingex mode configuration
+        . /etc/ingex.conf
+fi
+
+# set up paths etc
+capture_path="$INGEX_DIR/studio/capture/"
+xfer_path="$INGEX_DIR/studio/processing/media_transfer/"
+scripts_path="$INGEX_DIR/studio/scripts/"
+
+# recorder details
+recorder_path="$INGEX_DIR/studio/ace-tao/Recorder/"
+run_recorder="./Recorder"
+
+routerlogger_path="$INGEX_DIR/studio/ace-tao/routerlog/"
+run_routerLogger="./run_routerlogger.sh"
+
+# assemble the database arguments 
+DB_PARAMS=$(echo "--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PASS")
 
 # Check to see if capture is already running. If it is, check with the user to avoid restarting by mistake
 ABORT=0
@@ -83,28 +149,42 @@ fi
 # Start Ingex
 echo "Starting Ingex..."
 
-# Get the configuration required for this PC
-if [ -r ./ingex.conf ]
-then
-        # Read in ingex mode configuration
-        . ./ingex.conf
+# set corba options
+CORBA_OPTIONS="-ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses $DOTTED_DECIMAL"
 
-elif [ -r /etc/ingex.conf ]
-then
-        # Read in ingex mode configuration
-        . /etc/ingex.conf
-fi
-
-# set corba options for recorder command
-CORBA_OPTIONS=" -ORBDefaultInitRef corbaloc:iiop:$NAMESERVER -ORBDottedDecimalAddresses 1"
-
-# check if HD mode selected
-MODE=
+# set the capture mode for HD or SD
 if [ $HD_MODE -ge 1 ] ; then
-   MODE="-h"
+    # Set capture options to HD
+    CAPTURE_CHANNELS="${HD_CAPTURE_CHANNELS}"
+    CAPTURE_MODE="${HD_CAPTURE_MODE}"
+    CAPTURE_PRIMARY_BUFFER="${HD_CAPTURE_PRIMARY_BUFFER}"
+    CAPTURE_SECONDARY_BUFFER="${HD_CAPTURE_SECONDARY_BUFFER}"
+    CAPTURE_TIMECODE="${HD_CAPTURE_TIMECODE}"
+    CAPTURE_OPTIONS="${HD_CAPTURE_OPTIONS}"
+
+    # Recorders
+    RECORDERS="${HD_RECORDERS}"
+
+    # Quad player options
+    QUAD_OPTIONS="${HD_QUAD_OPTIONS}"
+else
+    # Set capture options to SD
+    CAPTURE_CHANNELS="${SD_CAPTURE_CHANNELS}"
+    CAPTURE_MODE="${SD_CAPTURE_MODE}"
+    CAPTURE_PRIMARY_BUFFER="${SD_CAPTURE_PRIMARY_BUFFER}"
+    CAPTURE_SECONDARY_BUFFER="${SD_CAPTURE_SECONDARY_BUFFER}"
+    CAPTURE_TIMECODE="${SD_CAPTURE_TIMECODE}"
+    CAPTURE_OPTIONS="${SD_CAPTURE_OPTIONS}"
+
+    # Recorders (space-separated)
+    RECORDERS="${SD_RECORDERS}"
+
+    # Quad player options
+    QUAD_OPTIONS="${SD_QUAD_OPTIONS}"
+
 fi
 
-# get the pids of exisiting windows
+# get the pids of existing windows
 PIDS=`pidof konsole`
 
 # make an exclusion list of existing windows
@@ -142,7 +222,7 @@ tab=$(dcop $capture_window konsole currentSession)
 if [ $CAPTURE -ge 1 ] ; then
   dcop $capture_window $tab renameSession Capture
   dcop $capture_window $tab sendSession "cd $capture_path"
-  dcop $capture_window $tab sendSession "./capture.sh $MODE"
+  dcop $capture_window $tab sendSession "sudo ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -mt $CAPTURE_TIMECODE -rt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   tab=
 fi
 
@@ -165,6 +245,7 @@ if [ $TRANSFER -ge 1 ] ; then
   dcop $capture_window $tab renameSession Copy
   dcop $capture_window $tab sendSession "cd $xfer_path"
   dcop $capture_window $tab sendSession "./xferserver.pl"
+  #dcop $capture_window $tab sendSession "./xferserver.pl -f 'ingexserver ingex ingex'"
   tab=
 fi
 
@@ -196,7 +277,7 @@ if [ $QUAD_SPLIT -ge 1 ] ; then
   fi
   dcop $capture_window $tab renameSession Quad
   dcop $capture_window $tab sendSession "cd $scripts_path"
-  dcop $capture_window $tab sendSession "./quad-split.sh"
+  dcop $capture_window $tab sendSession "$INGEX_DIR/player/ingex_player/player $QUAD_OPTIONS"
   tab=
 fi
 if [ $ROUTER_LOGGER -ge 1 ] ; then
@@ -255,7 +336,7 @@ if [ -n "$RECORDERS" ] ; then
     dcop $recorder_window $tab renameSession $REC
     sleep 1
     dcop $recorder_window $tab sendSession "cd $recorder_path"
-    dcop $recorder_window $tab sendSession "${run_recorder} ${REC} ${dbLogin} ${CORBA_OPTIONS}"
+    dcop $recorder_window $tab sendSession "${run_recorder} --name ${REC} ${DB_PARAMS} ${CORBA_OPTIONS}"
     tab=
   done
 

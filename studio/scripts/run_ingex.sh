@@ -39,14 +39,14 @@ fi
 sudo ln -f -s /etc/dvs_sd.conf /etc/dvs.conf
 sudo /etc/init.d/dvs_setup restart
 
-xterm -T Capture-SD -geometry 132x25 -e "sudo nice --adjustment=-10 /home/john/ap-workspace/ingex/studio/capture/dvs_sdi -c 4 -mt LTC -mc 0 -rt LTC -f YUV422 -s None" &
+xterm -T Capture-SD -geometry 132x25 -e "sudo nice --adjustment=-10 /home/ingex/ap-workspace/ingex/studio/capture/dvs_sdi -c 4 -mt LTC -mc 0 -rt LTC -f YUV422 -s None" &
 
 usleep 100000
 
-xterm -T Recorder-SD -geometry 132x25 -e "/home/john/ap-workspace/ingex/studio/ace-tao/Recorder/Recorder Ingex bamzooki bamzooki -ORBDefaultInitRef corbaloc:iiop::8888 -ORBDottedDecimalAddresses 1" &
+xterm -T Recorder-SD -geometry 132x25 -e "/home/ingex/ap-workspace/ingex/studio/ace-tao/Recorder/Recorder --name Ingex --dbuser bamzooki --dbpass bamzooki -ORBDefaultInitRef corbaloc:iiop::8888 -ORBDottedDecimalAddresses 1" &
 
 
 # start the quad-split player - X11 output only
-#/home/john/ap-workspace/ingex/player/scripts/quad-split.sh
+#/home/ingex/ap-workspace/ingex/player/scripts/quad-split.sh
 
 exit

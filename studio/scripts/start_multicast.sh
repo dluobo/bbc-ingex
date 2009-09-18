@@ -1,7 +1,9 @@
 #! /bin/bash
 
 # choose sending from either "den" or "evan"
-LOCATION=den
+#LOCATION=den
+LOCATION=den1
+#LOCATION=den2
 #LOCATION=evan
 
 # multicast executable
@@ -37,6 +39,22 @@ then
     $MULTICAST -c 1 -q -s 240x192 239.255.1.1:2001 &
     $MULTICAST -c 2 -q -s 240x192 239.255.1.1:2002 &
     $MULTICAST -c 3 -q -s 240x192 239.255.1.1:2003 &
+
+elif [ "$LOCATION" = "den1" ]
+then
+
+    # for den (cam 1 and 2)
+    echo Sending from den1...
+    $MULTICAST -c 0 -q -s 240x192 239.255.1.1:2000 &
+    $MULTICAST -c 1 -q -s 240x192 239.255.1.1:2001 &
+
+elif [ "$LOCATION" = "den2" ]
+then
+
+    # for den (cam 3 and 4)
+    echo Sending from den2...
+    $MULTICAST -c 0 -q -s 240x192 239.255.1.1:2002 &
+    $MULTICAST -c 1 -q -s 240x192 239.255.1.1:2003 &
 
 elif [ "$LOCATION" = "evan" ]
 then
