@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_multicast.c,v 1.9 2009/04/24 16:08:31 john_f Exp $
+ * $Id: nexus_multicast.c,v 1.10 2009/09/18 16:35:28 philipn Exp $
  *
  * Utility to multicast video frames from dvs_sdi ring buffer to network
  *
@@ -40,6 +40,8 @@
 #include "video_conversion.h"
 #include "video_test_signals.h"
 #include "audio_utils.h"
+
+#define TESTING_FLAG		0
 
 
 int verbose = 1;
@@ -146,24 +148,65 @@ extern int main(int argc, char *argv[])
 		out_height = 576;
 	}
 
-	/* Parse address - udp://@224.1.0.50:1234 or 224.1.0.50:1234 forms */
+ 	/* OLD VERSION (v4only) Parse address - udp://@224.1.0.50:1234 or 224.1.0.50:1234 forms */
+// 	int port;
+// 	char remote[FILENAME_MAX], *p;
+// 	if ((p = strchr(address, '@')) != NULL)
+// 		strcpy(remote, p+1);				/* skip 'udp://@' portion */
+// 	else
+// 		if ((p = strrchr(address, '/')) != NULL)
+// 			strcpy(remote, p+1);			/* skip 'udp://' portion */
+// 		else
+// 			strcpy(remote, address);
+// 
+// 	if ((p = strchr(remote, ':')) == NULL) {	/* get the port number */
+// 		port = 2000;		/* default port to 1234 */
+// 	}
+// 	else {
+// 		port = atol(p+1);
+// 		*p = '\0';
+// 	}
+
+	/* NEW VERSION (v4+ v6) Parse address - udp://@224.1.0.50:1234 or 224.1.0.50:1234 forms */
 	int port;
 	char remote[FILENAME_MAX], *p;
 	if ((p = strchr(address, '@')) != NULL)
 		strcpy(remote, p+1);				/* skip 'udp://@' portion */
+	if ((p = strchr(address, '[')) != NULL)
+		strcpy(remote, p+1);				/* skip 'udp://@[]' ipv6 portion */
 	else
 		if ((p = strrchr(address, '/')) != NULL)
 			strcpy(remote, p+1);			/* skip 'udp://' portion */
+		if ((p = strrchr(address, '[')) != NULL)
+			strcpy(remote, p+1);			/* skip 'udp://[]' ipv6 portion */
 		else
 			strcpy(remote, address);
+	if ((p = strchr(remote, ']')) == NULL)
+	{			/* search for [ipv6] end */
+		if ((p = strchr(remote, ':')) == NULL) //v4 version
+		{	/* get the port number */
+			port =1234;				/* default port to 1234 */
+		}
+	
+		else 
+		{
+			port = atol(p+1);
+			*(p) = '\0';
+		}
+	}
+	else//v6 version
+	{
+		if ((strchr(remote, ']'))-strrchr(remote,':')<= 0) 
+		{	/* get the port number */
+			port =1234;				/* default port to 1234 */
+		}
 
-	if ((p = strchr(remote, ':')) == NULL) {	/* get the port number */
-		port = 2000;		/* default port to 1234 */
+		p=strrchr(remote,':');
+		port =atol(p+1);
+		*(p-1) = '\0';
 	}
-	else {
-		port = atol(p+1);
-		*p = '\0';
-	}
+	printf("The Address is: %s and the port is: %d \n",remote,port); // show address and port
+
 
 	// Connect to NexusControl structure in shared mem
 	NexusConnection	nc;
@@ -185,6 +228,7 @@ extern int main(int argc, char *argv[])
     }
     else if (pctl->sec_video_format == Format422PlanarYUV || pctl->sec_video_format == Format422PlanarYUVShifted)
     {
+
         use_primary_video = 0;
         video_422yuv = 1;
     }
@@ -234,11 +278,15 @@ extern int main(int argc, char *argv[])
 	if (mpegts) {
 		char url[64];
 		// create string suitable for ffmpeg url_fopen() e.g. udp://239.255.1.1:2000
-		sprintf(url, "udp://%s:%d", remote, port);
+		if (strchr(remote, ':')==NULL)
+			sprintf(url, "udp://%s:%d", remote, port);
+		else
+			sprintf(url, "udp://[%s]:%d", remote, port);
 
 		// setup MPEG-TS encoder
 		if ((ts = mpegts_encoder_init(url, out_width, out_height, bitrate, 4)) == NULL) {
 			return 1;
+
 		}
 	}
 	else {
@@ -253,6 +301,7 @@ extern int main(int argc, char *argv[])
 	{
 		const uint8_t *p_video = blank_video, *p_audio = blank_audio;
 		int tc = 0, ltc = 0, signal_ok = 0;
+
 
 		if (! nexus_connection_status(&nc, NULL, NULL)) {
 			last_saved = -1;
@@ -274,7 +323,8 @@ extern int main(int argc, char *argv[])
 				printf("\ndiff_to_last = %d\n", diff_to_last);
 			}
 
-			tc = *(int*)(ring[channelnum] + pctl->elementsize *
+			tc = *(int*)(ring[
+channelnum] + pctl->elementsize *
 										(pc->lastframe % pctl->ringlen)
 								+ pctl->vitc_offset);
 			ltc = *(int*)(ring[channelnum] + pctl->elementsize *
@@ -321,12 +371,18 @@ extern int main(int argc, char *argv[])
 
 		// Send the frame.
 		if (ts) {
+#if TESTING_FLAG
+	printf("Inside nexus_multicast: About to call mpegts_encoder_encode\n");
+#endif
 			mpegts_encoder_encode(ts,
 									p_video,
 									(int16_t*)p_audio,
 									frames_sent++);
 		}
 		else {
+#if TESTING_FLAG
+	printf("Inside nexus_multicast: About to call send_audio_video\n");
+#endif
 			send_audio_video(fd, out_width, out_height, 2,
 									p_video,
 									p_audio,
