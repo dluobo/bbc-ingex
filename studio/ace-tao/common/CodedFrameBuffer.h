@@ -1,5 +1,5 @@
 /*
- * $Id: CodedFrameBuffer.h,v 1.1 2009/06/12 17:41:02 john_f Exp $
+ * $Id: CodedFrameBuffer.h,v 1.2 2009/09/18 15:47:37 john_f Exp $
  *
  * Buffer to handle coded video frames from multiple encoding
  * threads.
@@ -49,6 +49,7 @@ class CodedFrameBuffer
 public:
     ~CodedFrameBuffer();
     void QueueFrame(void * data, size_t size, int index, bool err = false);
+    void QueueNullFrame(int index);
     CodedFrame * GetFrame(int index);
     unsigned int QueueSize();
 private:

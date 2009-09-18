@@ -1,5 +1,5 @@
 /*
- * $Id: CodedFrameBuffer.cpp,v 1.1 2009/06/12 17:41:02 john_f Exp $
+ * $Id: CodedFrameBuffer.cpp,v 1.2 2009/09/18 15:47:37 john_f Exp $
  *
  * Buffer to handle coded video frames from multiple encoding
  * threads.
@@ -34,8 +34,15 @@
 CodedFrame::CodedFrame(const void * data, size_t size, bool err)
 : mSize(size), mError(err)
 {
-    mData = malloc(size);
-    memcpy(mData, data, size);
+    if (size)
+    {
+        mData = malloc(size);
+        memcpy(mData, data, size);
+    }
+    else
+    {
+        mData = 0;
+    }
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Created coded frame of size %u\n"), size));
 }
 
@@ -61,6 +68,17 @@ void CodedFrameBuffer::QueueFrame(void * data, size_t size, int index, bool err)
 {
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("Queueing coded frame %d\n"), index));
     CodedFrame * p_coded_frame = new CodedFrame(data, size, err);
+    {
+        ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
+
+        mFrameBuffer[index] = p_coded_frame;
+    }
+}
+
+void CodedFrameBuffer::QueueNullFrame(int index)
+{
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Queueing coded frame %d as null\n"), index));
+    CodedFrame * p_coded_frame = new CodedFrame(0, 0, true);
     {
         ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
 
