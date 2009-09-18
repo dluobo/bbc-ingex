@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderApp.cpp,v 1.6 2009/04/16 18:09:29 john_f Exp $
+ * $Id: RecorderApp.cpp,v 1.7 2009/09/18 16:15:14 john_f Exp $
  *
  * Encapsulation of the recorder application.
  *
@@ -38,22 +38,31 @@
 #include "RecorderApp.h"
 
 const char * const USAGE =
-    "Usage: Recorder <name> <db_user> <db_pw> [-v] [-t <num ffmpeg threads>]"
-    " <CORBA options>\n"
-    "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
+    "Usage: Recorder [-n | --name <name>] \\\n"
+    "  [--dbhost <db_host>] [--dbname <db_name>] [--dbuser <db_user>] [--dbpass <db_password>] \\\n"
+    "  [-v | --verbose] [-t | --ffmpeg-threads <num ffmpeg threads>] \\\n"
+    "  <CORBA options>\n"
+    "Example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n";
 
-const char * const OPTS = "vt:";
+namespace
+{
+void exit_usage()
+{
+    fprintf(stderr, USAGE);
+    exit(0);
+}
+}
 
 // Static member
 RecorderApp * RecorderApp::mInstance = 0;
 
 bool RecorderApp::Init(int argc, char * argv[])
 {
-// Create the servant object.
-    mpServant = new IngexRecorderImpl();
-
-// other initialisation
+// Enable app to run
     mTerminated = false;
+
+// Initialise return value
+    bool ok = true;
 
 // Initialise ORB
     int initial_argc = argc;
@@ -63,45 +72,99 @@ bool RecorderApp::Init(int argc, char * argv[])
     if (argc == initial_argc)
     {
         // No CORBA options supplied
-        ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT (USAGE)), 0);
+        exit_usage();
     }
 
-// Now that InitOrb has consumed its arguments, check for
-// command line arguments.
-    std::string recorder_name = "Ingex"; // default name
+// Defaults for command line parameters
+    std::string recorder_name = "Ingex";
+    std::string db_host = "localhost";
+    std::string db_name = "prodautodb";
     std::string db_username;
     std::string db_password;
-    if (argc > 1)
-    {
-        recorder_name = argv[1];
-    }
-    if (argc > 2)
-    {
-        db_username = argv[2];
-    }
-    if (argc > 3)
-    {
-        db_password = argv[3];
-    }
-
-    // get command line options
     unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
     int ffmpeg_threads = THREADS_USE_BUILTIN_TUNING;
-    ACE_Get_Opt cmd_opts (argc, argv, OPTS);
 
-    int option;
-    while ((option = cmd_opts ()) != EOF)
+// Now that InitOrb has consumed its arguments, check for
+// other command line arguments.
+    for (int argindex = 1; argindex < argc; ++argindex)
     {
-        switch (option)
+        if (strcmp(argv[argindex], "-h") == 0 ||
+            strcmp(argv[argindex], "--help") == 0)
         {
-        case 'v':
-            // verbose
+            exit_usage();
+        }
+        else if (strcmp(argv[argindex], "-v") == 0 ||
+            strcmp(argv[argindex], "--verbose") == 0)
+        {
             ++debug_level;
-            break;
-        case 't':
-            // ffmpeg threads
-            ffmpeg_threads = ACE_OS::atoi(cmd_opts.opt_arg());
-            break;
+        }
+        else if (strcmp(argv[argindex], "-t") == 0 ||
+            strcmp(argv[argindex], "--ffmpeg-threads") == 0)
+        {
+            if (++argindex < argc)
+            {
+                ffmpeg_threads = ACE_OS::atoi(argv[argindex]);
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "-n") == 0 ||
+            strcmp(argv[argindex], "--name") == 0)
+        {
+            if (++argindex < argc)
+            {
+                recorder_name = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbhost") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_host = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbname") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_name = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbuser") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_username = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
+        }
+        else if (strcmp(argv[argindex], "--dbpass") == 0)
+        {
+            if (++argindex < argc)
+            {
+                db_password = argv[argindex];
+            }
+            else
+            {
+                exit_usage();
+            }
         }
     }
 
@@ -126,7 +189,7 @@ bool RecorderApp::Init(int argc, char * argv[])
     // Initialise database connection
     try
     {
-        DatabaseManager::Instance()->Initialise(db_username, db_password, 4, 12);
+        DatabaseManager::Instance()->Initialise(db_host, db_name, db_username, db_password, 4, 12);
     }
     catch (const prodauto::DBException & dbe)
     {
@@ -137,8 +200,15 @@ bool RecorderApp::Init(int argc, char * argv[])
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Database init failed!\n")));
     }
 
-// Initialise recorder with name and other parameters
-    bool ok = mpServant->Init(recorder_name, ffmpeg_threads);
+// Create the servant object.
+    mpServant = new IngexRecorderImpl();
+
+// Set name and other parameters
+    mpServant->Name(recorder_name);
+    mpServant->FfmpegThreads(ffmpeg_threads);
+
+// Initialise
+    mpServant->Init();
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 8;
@@ -162,7 +232,7 @@ bool RecorderApp::Init(int argc, char * argv[])
 
 // Try to advertise in naming services
     const int max_attempts = 5;
-    const ACE_Time_Value attempt_interval(10);
+    const ACE_Time_Value attempt_interval(1);
     mIsAdvertised = false;
     for (int i = 0; ok && !mIsAdvertised && i < max_attempts; ++i)
     {
@@ -183,7 +253,7 @@ void RecorderApp::Run()
 {
     // Accept CORBA requests until told to stop
     ACE_Time_Value timeout(1,0);  // seconds, microseconds
-    while(!mTerminated)
+    while (!mTerminated)
     {
         CorbaUtil::Instance()->OrbRun(timeout);
     }
@@ -206,7 +276,10 @@ void RecorderApp::Clean()
 // Deactivate the CORBA object and
 // relinquish our reference to the servant.
 // The POA will delete it at an appropriate time.
-    mpServant->Destroy();
+    if (mpServant)
+    {
+        mpServant->Destroy();
+    }
 }
 
 
