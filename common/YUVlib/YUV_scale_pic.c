@@ -1,5 +1,28 @@
-#include <string.h>	// for memset
-#include <stdint.h>	// for uint32_t
+/*
+ * $Id: YUV_scale_pic.c,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+#include <string.h> // for memset
+#include <stdint.h> // for uint32_t
 #include <stdio.h>
 
 #include "YUV_frame.h"
@@ -19,7 +42,7 @@ static inline int min(int a, int b)
 static void h_scale_copy(uint32_t* srcLine, BYTE* dstLine,
                          const int outStride, const int w)
 {
-    int		i;
+    int     i;
 
     for (i = 0; i < w; i++)
     {
@@ -34,10 +57,10 @@ static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
                         const int xup, const int xdown, const int w,
                         uint32_t* work)
 {
-    int		i;
-    int		dx_int;
-    int		dx_frac;
-    int		err;
+    int     i;
+    int     dx_int;
+    int     dx_frac;
+    int     err;
 
     dx_int = xdown / xup; // whole number of input samples per output sample
     dx_frac = xdown - (dx_int * xup); // fractional part of same
@@ -71,10 +94,10 @@ static void h_sub_scale_alias(BYTE* srcLine, uint32_t* dstLine,
                               const int inStride,
                               int xup, int xdown, const int w)
 {
-    int		i;
-    int		dx_int;
-    int		dx_frac;
-    int		err;
+    int     i;
+    int     dx_int;
+    int     dx_frac;
+    int     err;
 
     dx_int = xdown / xup; // whole number of input samples per output sample
     dx_frac = xdown - (dx_int * xup); // fractional part of same
@@ -106,11 +129,11 @@ static void h_sub_scale_interp(BYTE* srcLine, uint32_t* dstLine,
                                const int inStride,
                                int xup, int xdown, const int w)
 {
-    int		i;
-    int		err;
-    uint32_t	alpha;
-    uint32_t	beta;
-    uint32_t	inpA, inpB;
+    int     i;
+    int     err;
+    uint32_t    alpha;
+    uint32_t    beta;
+    uint32_t    inpA, inpB;
 
     // first input and output samples are cosited
     err = xup;
@@ -141,11 +164,11 @@ static void h_sub_scale_ave(BYTE* srcLine, uint32_t* dstLine,
                             const int inStride,
                             int xup, int xdown, const int w)
 {
-    int		i;
-    int		err;
-    uint32_t	part;
-    uint32_t	whole;
-    uint32_t	acc;
+    int     i;
+    int     err;
+    uint32_t    part;
+    uint32_t    whole;
+    uint32_t    acc;
 
     if ((xup * 2) == xdown)
     {
@@ -240,12 +263,12 @@ static void v_sub_alias(component* inFrame, component* outFrame,
                         const int hfil, int xup, int xdown,
                         int yup, int ydown, int yoff, uint32_t** work)
 {
-    BYTE*	inBuff = inFrame->buff;
-    BYTE*	outBuff = outFrame->buff;
-    int		j;
-    int		dy_int;
-    int		dy_frac;
-    int		err;
+    BYTE*   inBuff = inFrame->buff;
+    BYTE*   outBuff = outFrame->buff;
+    int     j;
+    int     dy_int;
+    int     dy_frac;
+    int     err;
     sub_line_proc2* h_sub;
 
     // select horizontal subsampling routine
@@ -281,7 +304,7 @@ static void v_sub_alias(component* inFrame, component* outFrame,
 static void add_line(uint32_t* acc, uint32_t* inp, const int w,
                      const uint32_t gain)
 {
-    int		i;
+    int     i;
 
     for (i = 0; i < w; i++)
         *acc++ += *inp++ * gain;
@@ -290,7 +313,7 @@ static void add_line(uint32_t* acc, uint32_t* inp, const int w,
 static void scale_line(uint32_t* acc, uint32_t* inp, const int w,
                        const uint32_t gain)
 {
-    int		i;
+    int     i;
 
     for (i = 0; i < w; i++)
         *acc++ = *inp++ * gain;
@@ -301,7 +324,7 @@ static void interp_line(uint32_t* inpA, uint32_t* inpB, BYTE* dstLine,
                         const uint32_t alpha, const uint32_t beta,
                         const uint32_t gain)
 {
-    int		i;
+    int     i;
 
     for (i = 0; i < w; i++)
     {
@@ -316,8 +339,8 @@ static void split_line(uint32_t* acc, uint32_t* inp, BYTE* dstLine,
                        const uint32_t alpha, const uint32_t beta,
                        const uint32_t gain)
 {
-    int		i;
-    uint32_t	whole;
+    int     i;
+    uint32_t    whole;
 
     if (beta == 0)
     {
@@ -344,11 +367,11 @@ static void v_sub_interp(component* inFrame, component* outFrame,
                          const int hfil, int xup, int xdown,
                          int yup, int ydown, int yoff, uint32_t** work)
 {
-    BYTE*	inBuff = inFrame->buff;
-    BYTE*	outBuff = outFrame->buff;
-    int		j;
-    int		err;
-    int		A, B;
+    BYTE*   inBuff = inFrame->buff;
+    BYTE*   outBuff = outFrame->buff;
+    int     j;
+    int     err;
+    int     A, B;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -392,11 +415,11 @@ static void v_sub_ave(component* inFrame, component* outFrame,
                       const int hfil, int xup, int xdown,
                       int yup, int ydown, int yoff, uint32_t** work)
 {
-    BYTE*	inBuff = inFrame->buff;
-    BYTE*	outBuff = outFrame->buff;
-    int		j;
-    int		err;
-    uint32_t	scale;
+    BYTE*   inBuff = inFrame->buff;
+    BYTE*   outBuff = outFrame->buff;
+    int     j;
+    int     err;
+    uint32_t    scale;
     sub_line_proc1* h_sub;
 
     // select horizontal subsampling routine
@@ -461,10 +484,10 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
                int x, int y, int xup, int xdown, int yup, int ydown,
                int intlc, int hfil, int vfil, void* workSpace)
 {
-    int		ssx_in, ssx_out;
-    int		ssy_in, ssy_out;
-    YUV_frame	sub_frame;
-    uint32_t*	work[3];
+    int     ssx_in, ssx_out;
+    int     ssy_in, ssy_out;
+    YUV_frame   sub_frame;
+    uint32_t*   work[3];
 
     // make up and down numbers even, for later convenience
     xup = xup * 2;
@@ -506,9 +529,9 @@ int resize_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     work[2] = work[1] + sub_frame.Y.w;
     if (intlc)
     {
-        component	in_field;
-        component	out_field;
-        int		f;
+        component   in_field;
+        component   out_field;
+        int     f;
         for (f = 0; f < 2; f++)
         {
             extract_field(&in_frame->Y, &in_field, f);

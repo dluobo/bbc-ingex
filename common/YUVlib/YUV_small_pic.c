@@ -1,3 +1,26 @@
+/*
+ * $Id: YUV_small_pic.c,v 1.4 2009/09/18 15:07:24 philipn Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include "YUV_frame.h"
 #include "YUV_small_pic.h"
 
@@ -16,9 +39,9 @@ static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
                           const int inStride, const int outStride,
                           const int hsub, const int w)
 {
-    int		i;
-    int		hsub_int, hsub_res;
-    int		inSkip;
+    int     i;
+    int     hsub_int, hsub_res;
+    int     inSkip;
 
     hsub_int = hsub / 100;
     hsub_res = hsub - (hsub_int * 100);
@@ -36,7 +59,7 @@ static void h_sub_alias(BYTE* srcLine, BYTE* dstLine,
     else
     {
         // use nearest sample
-        int	pos;
+        int pos;
         pos = 50;
         for (i = 0; i < w; i++)
         {
@@ -58,8 +81,8 @@ static void h_sub_2_121(BYTE* srcLine, BYTE* dstLine,
                         const int inStride, const int outStride,
                         const int hsub, const int w)
 {
-    int		acc;
-    int		i;
+    int     acc;
+    int     i;
 
     // repeat first edge sample
     acc = *srcLine * 3;
@@ -83,8 +106,8 @@ static void h_sub_2_121_s(BYTE* srcLine, BYTE* dstLine,
                           const int inStride, const int outStride,
                           const int hsub, const int w)
 {
-    int		acc;
-    int		i;
+    int     acc;
+    int     i;
 
     for (i = 0; i < w - 1; i++)
     {
@@ -109,8 +132,8 @@ static void h_sub_2_11_s(BYTE* srcLine, BYTE* dstLine,
                          const int inStride, const int outStride,
                          const int hsub, const int w)
 {
-    int		acc;
-    int		i;
+    int     acc;
+    int     i;
 
     for (i = 0; i < w; i++)
     {
@@ -128,8 +151,8 @@ static void h_sub_3_111(BYTE* srcLine, BYTE* dstLine,
                         const int inStride, const int outStride,
                         const int hsub, const int w)
 {
-    int		acc;
-    int		i;
+    int     acc;
+    int     i;
 
     // repeat first edge sample
     acc = *srcLine;
@@ -151,7 +174,7 @@ static void v_fil_121(BYTE* inBuffA, BYTE* inBuffB,
                       BYTE* inBuffC, BYTE* outBuff,
                       const int inStride, const int outStride, const int w)
 {
-    int		i;
+    int     i;
 
     if (inStride == 1 && outStride == 1)
         for (i = 0; i < w; i++)
@@ -171,7 +194,7 @@ static void v_fil_121(BYTE* inBuffA, BYTE* inBuffB,
 static void v_fil_11(BYTE* inBuffA, BYTE* inBuffB, BYTE* outBuff,
                      const int inStride, const int outStride, const int w)
 {
-    int		i;
+    int     i;
 
     if (inStride == 1 && outStride == 1)
         for (i = 0; i < w; i++)
@@ -191,7 +214,7 @@ static void v_fil_111(BYTE* inBuffA, BYTE* inBuffB,
                       BYTE* inBuffC, BYTE* outBuff,
                       const int inStride, const int outStride, const int w)
 {
-    int		i;
+    int     i;
 
     if (inStride == 1 && outStride == 1)
         for (i = 0; i < w; i++)
@@ -215,9 +238,9 @@ static void comp_2(component* inFrame, component* outFrame,
                    const int vfil, const int yoff,
                    sub_line_proc* do_h_sub, const int hsub, BYTE** work)
 {
-    BYTE*	inBuff = inFrame->buff;
-    BYTE*	outBuff = outFrame->buff;
-    int		j;
+    BYTE*   inBuff = inFrame->buff;
+    BYTE*   outBuff = outFrame->buff;
+    int     j;
 
     if (vfil <= 0)
     {
@@ -276,9 +299,9 @@ static void comp_3(component* inFrame, component* outFrame,
                    const int vfil, const int yoff,
                    sub_line_proc* do_h_sub, const int hsub, BYTE** work)
 {
-    BYTE*	inBuff = inFrame->buff;
-    BYTE*	outBuff = outFrame->buff;
-    int		j;
+    BYTE*   inBuff = inFrame->buff;
+    BYTE*   outBuff = outFrame->buff;
+    int     j;
 
     if (vfil <= 0)
     {
@@ -329,14 +352,14 @@ int small_pic(YUV_frame* in_frame, YUV_frame* out_frame,
               int x, int y, int hsub, int vsub,
               int intlc, int hfil, int vfil, void* workSpace)
 {
-    sub_line_proc*	sub_line_Y;
-    sub_line_proc*	sub_line_UV;
-    BYTE*		work[3];
-    int			ssx_in, ssx_out;
-    int			ssy_in, ssy_out;
-    int			hsub_Y, hsub_UV;
-    int			vsub_Y, vsub_UV;
-    YUV_frame		sub_frame;
+    sub_line_proc*  sub_line_Y;
+    sub_line_proc*  sub_line_UV;
+    BYTE*       work[3];
+    int         ssx_in, ssx_out;
+    int         ssy_in, ssy_out;
+    int         hsub_Y, hsub_UV;
+    int         vsub_Y, vsub_UV;
+    YUV_frame       sub_frame;
 
     ssx_in = in_frame->Y.w / in_frame->U.w;
     ssy_in = in_frame->Y.h / in_frame->U.h;
@@ -416,9 +439,9 @@ int small_pic(YUV_frame* in_frame, YUV_frame* out_frame,
     work[2] = work[1] + in_frame->Y.w;
     if (intlc)
     {
-        YUV_frame	in_field;
-        YUV_frame	out_field;
-        int		f;
+        YUV_frame   in_field;
+        YUV_frame   out_field;
+        int     f;
         for (f = 0; f < 2; f++)
         {
             extract_YUV_field(in_frame, &in_field, f);

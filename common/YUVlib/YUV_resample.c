@@ -1,3 +1,26 @@
+/*
+ * $Id: YUV_resample.c,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include <string.h>
 
 #include "YUV_frame.h"
@@ -18,7 +41,7 @@ static void h_copy(BYTE* srcLine, BYTE* dstLine,
                    const int inStride, const int outStride,
                    const int w)
 {
-    int		i;
+    int     i;
 
     if ((inStride == 1) && (outStride == 1))
     {
@@ -55,10 +78,10 @@ static void h_copy(BYTE* srcLine, BYTE* dstLine,
 static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
                        const int inStride, const int outStride, const int w)
 {
-    int		acc;
-    int		i;
-    BYTE	in_0;
-    BYTE	in_1;
+    int     acc;
+    int     i;
+    BYTE    in_0;
+    BYTE    in_1;
 
     in_0 = *srcLine;
     srcLine += inStride;
@@ -83,14 +106,14 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
 int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
            void* workSpace)
 {
-    BYTE*	work[3];
-    int		ssx, ssy;
-    int		w, h;
-    BYTE*	inBuff0;
-    BYTE*	inBuff1;
-    BYTE*	outBuff0;
-    BYTE*	outBuff1;
-    int		j;
+    BYTE*   work[3];
+    int     ssx, ssy;
+    int     w, h;
+    BYTE*   inBuff0;
+    BYTE*   inBuff1;
+    BYTE*   outBuff0;
+    BYTE*   outBuff1;
+    int     j;
 
     // check out_frame is a 4:4:4 format
     ssx = out_frame->Y.w / out_frame->U.w;
@@ -101,7 +124,7 @@ int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
     ssx = in_frame->Y.w / in_frame->U.w;
     ssy = in_frame->Y.h / in_frame->U.h;
     if ((ssx != 2) || (ssy != 1))
-        return YUV_Fail;	// can only convert from 4:2:2 so far
+        return YUV_Fail;    // can only convert from 4:2:2 so far
     // get dimensions of area to be written
     w = min(in_frame->Y.w, out_frame->Y.w);
     h = min(in_frame->Y.h, out_frame->Y.h);

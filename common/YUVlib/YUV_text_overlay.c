@@ -1,3 +1,31 @@
+/*
+ * $Id: YUV_text_overlay.c,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ *
+ *
+ *
+ * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
+ * Author: Jim Easterbrook
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+/*
+    Note that some functions have an _player version.
+    It would be nice to merge to a common version sometime.
+*/
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
@@ -36,6 +64,11 @@ void free_info_rec(p_info_rec* p_info)
     if (*p_info == NULL)
         return;
     info = *p_info;
+    if (info->face != NULL)
+    {
+        FT_Done_Face(info->face);
+        info->face = NULL;
+    }
     FT_Done_FreeType(info->library);
     if (info->config != NULL)
     {
@@ -54,6 +87,7 @@ static int allocate_info(p_info_rec* p_info)
     if (*p_info == NULL)
         return YUV_no_memory;
     info = *p_info;
+    info->face = NULL;
     strcpy(info->current_family, "");
     // initialise FontConfig
     info->config = FcInitLoadConfigAndFonts();
@@ -97,6 +131,12 @@ static int set_font(info_rec* info, char* family, int size,
 
     if (strcmp(family, info->current_family) != 0)
     {
+        // free the current face
+        if (info->face != NULL)
+        {
+            FT_Done_Face(info->face);
+            info->face = NULL;
+        }
         // need to find and load font face
         result = find_font(info, family, fontPath);
         if (result < 0)
@@ -126,7 +166,11 @@ static int set_font(info_rec* info, char* family, int size,
 
 void free_overlay(overlay* ovly)
 {
-    free(ovly->buff);
+    if (ovly != NULL && ovly->buff != NULL)
+    {
+        free(ovly->buff);
+        ovly->buff = NULL;
+    }
 }
 
 static void filterUV(overlay* ovly, const int ssx, const int ssy)
@@ -335,6 +379,215 @@ int text_to_overlay(p_info_rec* p_info, overlay* ovly, char* text,
     return result;	// length of string actually rendered
 }
 
+YUV_error text_to_overlay_player(p_info_rec* p_info, overlay* ovly, char* text,
+                          int max_width, int min_width,
+                          int x_margin, int y_margin,
+                          int center,
+                          int tab_width,
+                          int enable_align_right,
+                          char* font, const int size,
+                          const int aspect_ratio_num,
+                          const int aspect_ratio_den)
+{
+    info_rec*   info;
+    BYTE*   srcLine;
+    BYTE*   dstLine;
+    int     j;
+    int     error;
+    int     result;
+
+    // initialise our data
+    if (*p_info == NULL)
+    {
+        result = allocate_info(p_info);
+        if (result < 0)
+            return result;
+    }
+    info = *p_info;
+    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    if (result < 0)
+        return result;
+    // render text using freetype2
+    {
+        #define MAX_GLYPHS 100
+        FT_GlyphSlot    slot = info->face->glyph;  /* a small shortcut */
+        FT_UInt     glyph_idx;
+        FT_UInt     last_glyph;
+        FT_Vector   delta;
+        FT_Bool     use_kerning;
+        int     pen_x, pen_y, n, margin;
+        FT_Glyph    glyphs[MAX_GLYPHS];   /* glyph image    */
+        FT_Vector   pos   [MAX_GLYPHS];   /* glyph position */
+        FT_UInt     num_glyphs;
+        FT_UInt     render_num_glyphs;
+        FT_UInt     vis_last_glyph;
+        int     vis_last;   // index of end of last "word"
+        int     vis_width;  // width to vis_last
+        int     x_offset = 0;
+        int     align_right = 0;
+        int     align_right_glyph = 0;
+        int     align_right_shift;
+
+        use_kerning = FT_HAS_KERNING(info->face);
+        // compute initial pen position using font metrics
+        n = info->face->bbox.yMax - info->face->bbox.yMin;//info->face->ascender - info->face->descender;
+        pen_x = ((-info->face->bbox.xMin * size) + (n / 2)) / n;
+        pen_y = ((info->face->bbox.yMax * size) + (n / 2)) / n;
+        margin = pen_x;
+        // convert each character to a glyph and set its position
+        num_glyphs = 0;
+        vis_last = -1;
+        vis_last_glyph = 0;
+        vis_width = 0;
+        last_glyph = FT_Get_Char_Index(info->face, ' ');
+        for (n = 0; n < (int)strlen(text); n++)
+        {
+            if (text[n] == '\n')
+                break;
+            if (num_glyphs >= MAX_GLYPHS)
+                break;
+            if (tab_width > 0 && text[n] == '\t')
+            {
+                pen_x += size - (pen_x % size);
+            }
+            // a '>>' sequence results in alignment of the following text to the right
+            else if (enable_align_right && !align_right && text[n] == '>' && text[n + 1] == '>')
+            {
+                n += 1;
+                align_right = 1;
+                align_right_glyph = num_glyphs;
+                continue;
+            }
+            else
+            {
+                glyph_idx = FT_Get_Char_Index(info->face, text[n]);
+                if (use_kerning && last_glyph && glyph_idx)
+                {
+                    FT_Get_Kerning(info->face, last_glyph, glyph_idx,
+                                   FT_KERNING_DEFAULT, &delta);
+                    pen_x += delta.x / 64;
+                }
+                error = FT_Load_Glyph(info->face, glyph_idx, FT_LOAD_DEFAULT);
+                if (error)
+                    continue;  /* ignore errors */
+                error = FT_Get_Glyph(info->face->glyph, &glyphs[num_glyphs]);
+                if (error)
+                    continue;  /* ignore errors */
+                if (pen_y - slot->bitmap_top < 0)
+                {
+                    fprintf(stderr, "Character '%c' ascends too high\n", text[n]);
+                    pen_y = slot->bitmap_top;
+                }
+                if (pen_y - slot->bitmap_top + slot->bitmap.rows > size)
+                {
+                    fprintf(stderr, "Character '%c' descends too low\n", text[n]);
+                    exit(1);
+                }
+                pos[num_glyphs].x = pen_x;
+                pos[num_glyphs].y = pen_y;
+
+                pen_x += slot->advance.x / 64;
+                last_glyph = glyph_idx;
+                num_glyphs++;
+            }
+
+            if (pen_x + (margin * 2) + (x_margin * 2) > max_width)
+                break;
+
+            if (text[n] != ' ' &&
+               (text[n+1] == ' ' || text[n+1] == '\0' || text[n+1] == '\n'))
+            {
+                vis_last_glyph = num_glyphs;
+                vis_last = n;
+                vis_width = pen_x;
+            }
+        }
+        // truncate string to end of last word
+        if (vis_last < 0)   // haven't found end of first word!
+        {
+            vis_last_glyph = num_glyphs;
+            vis_last = n - 1;
+            vis_width = pen_x;
+        }
+        if (vis_width + (margin * 2) + (x_margin * 2) > max_width)
+        {
+            vis_last_glyph--;
+            vis_last--;
+            vis_width -= slot->advance.x / 64;
+        }
+        render_num_glyphs = vis_last_glyph;
+        result = vis_last + 1;
+        // do right alignment if there is space
+        if (align_right)
+        {
+            align_right_shift = max_width - (vis_width + (margin * 2) + (x_margin * 2));
+            if (align_right_shift > 0)
+            {
+                for (n = align_right_glyph; n < (int)render_num_glyphs; n++)
+                {
+                    pos[n].x += align_right_shift;
+                }
+            }
+        }
+        // find start of next word
+        while (text[result] == ' ' || text[result] == '\n')
+            result++;
+        // set overlay dimensions
+        ovly->w = vis_width + (margin * 2) + (x_margin * 2);
+        // set width >= min_width and center
+        if (ovly->w < min_width && min_width <= max_width)
+        {
+            if (center)
+            {
+                x_offset = (min_width - ovly->w) / 2;
+            }
+            ovly->w = min_width;
+        }
+        ovly->h = size + 2 * y_margin;
+//        fprintf(stderr, "Area of '%s' = (%d x %d)\n", text, ovly->w, ovly->h);
+        ovly->ssx = -1;
+        ovly->ssy = -1;
+        // alloc memory
+        ovly->buff = malloc(ovly->w * ovly->h * 2);
+        if (ovly->buff == NULL)
+            return YUV_no_memory;
+        memset(ovly->buff, 0, ovly->w * ovly->h * 2);
+        ovly->Cbuff = NULL;
+        // render glyphs
+        for (n = 0; n < (int)render_num_glyphs; n++)
+        {
+            error = FT_Glyph_To_Bitmap(&glyphs[n], FT_RENDER_MODE_NORMAL,
+                                       0, 1);
+            if (!error)
+            {
+                FT_BitmapGlyph  bit = (FT_BitmapGlyph)glyphs[n];
+                srcLine = bit->bitmap.buffer;
+                dstLine = ovly->buff + ((pos[n].y - bit->top) * ovly->w) +
+                                        pos[n].x + bit->left +
+                                        x_margin +
+                                        y_margin * ovly->w +
+                                        x_offset;
+                // TODO: fix the problem with offsets
+                if (dstLine < ovly->buff)
+                    dstLine = ovly->buff;
+                for (j = 0; j < bit->bitmap.rows; j++)
+                {
+                    memcpy(dstLine, srcLine, bit->bitmap.width);
+                    srcLine += bit->bitmap.width;
+                    dstLine += ovly->w;
+                }
+            }
+        }
+        // cleanup glyphs
+        for (n = 0; n < (int)num_glyphs; n++)
+        {
+            FT_Done_Glyph(glyphs[n]);
+        }
+    }
+    return result;  // length of string actually rendered
+}
+
+
 int ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
                     int max_width, char* font, const int size,
                     const int aspect_ratio_num, const int aspect_ratio_den)
@@ -390,6 +643,65 @@ int ml_text_to_ovly(p_info_rec* info, overlay* ovly, char* text,
     }
     return YUV_OK;
 }
+
+YUV_error ml_text_to_ovly_player(p_info_rec* info, overlay* ovly, char* text,
+                          int max_width, char* font, const int size, int margin,
+                          const int aspect_ratio_num, const int aspect_ratio_den)
+{
+    #define MAX_LINES 100
+    overlay line_ovly[MAX_LINES];
+    char*   sub_str;
+    int     count;
+    int     length;
+    int     no_lines;
+    BYTE*   src;
+    BYTE*   dst;
+    int     j, n;
+
+    // render each line of text to an overlay
+    sub_str = text;
+    length = strlen(text);
+    no_lines = 0;
+    while (length > 0 && no_lines < MAX_LINES)
+    {
+        count = text_to_overlay_player(info, &line_ovly[no_lines], sub_str, max_width, 0,
+                                0, 0, 0, 0, 0, font, size, aspect_ratio_num, aspect_ratio_den);
+        if (count < 0)
+            return count;
+        sub_str += count;
+        length -= count;
+        no_lines += 1;
+    }
+    // create overlay to accomodate every rendered line
+    ovly->h = no_lines * size;
+    ovly->w = 0;
+    for (n = 0; n < no_lines; n++)
+        ovly->w = max(ovly->w, line_ovly[n].w);
+    ovly->h += margin * 2;
+    ovly->w += margin * 2;
+    ovly->ssx = -1;
+    ovly->ssy = -1;
+    ovly->buff = malloc(ovly->w * ovly->h * 2);
+    if (ovly->buff == NULL)
+        return YUV_no_memory;
+    memset(ovly->buff, 0, ovly->w * ovly->h * 2);
+    ovly->Cbuff = NULL;
+    // copy rendered text
+    for (n = 0; n < no_lines; n++)
+    {
+        src = line_ovly[n].buff;
+        dst = ovly->buff + (ovly->w * n * size) + margin * ovly->w + margin;
+        for (j = 0; j < line_ovly[n].h; j++)
+        {
+            memcpy(dst, src, line_ovly[n].w);
+            src += line_ovly[n].w;
+            dst += ovly->w;
+        }
+        free_overlay(&line_ovly[n]);
+    }
+    return YUV_OK;
+}
+
 
 int text_to_4box(p_info_rec* info, overlay* ovly,
                  char* txt_0, char* txt_1, char* txt_2, char* txt_3,
@@ -709,3 +1021,244 @@ int add_timecode(timecode_data* tc_data, const int frameNo,
     }
     return YUV_OK;
 }
+
+YUV_error add_timecode_player(timecode_data* tc_data, int hr, int mn, int sc, int fr, int isPAL,
+                       YUV_frame* frame, int x, int y,
+                       BYTE txtY, BYTE txtU, BYTE txtV, int box)
+{
+    int     c, n;
+    int     offset;
+    char    tc_str[16];
+    int     result;
+
+    if (isPAL)
+    {
+        sprintf(tc_str, "%02d:%02d:%02d:%02d", hr, mn, sc, fr);
+    }
+    else
+    {
+        sprintf(tc_str, "%02d;%02d;%02d;%02d", hr, mn, sc, fr);
+    }
+    // legitimise start point
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+
+    offset = 0;
+    for (n = 0; n < 11; n++)
+    {
+        c = tc_str[n] - '0';
+        result = add_overlay(&tc_data->tc_ovly[c], frame, x + offset, y,
+                             txtY, txtU, txtV, box);
+        if (result < 0)
+            return result;
+        offset += tc_data->tc_ovly[c].w;
+    }
+    return YUV_OK;
+}
+
+
+YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
+                          char* font, const int size,
+                          const int aspect_ratio_num,
+                          const int aspect_ratio_den)
+{
+    info_rec*       info;
+    FT_GlyphSlot    slot;
+    int         w_max;
+    int         bb_t, bb_b; // bounding box
+    BYTE*       dstLine;
+    BYTE*       srcPtr;
+    BYTE*       dstPtr;
+    int         j;
+    int         result;
+
+    // initialise our data
+    if (*p_info == NULL)
+    {
+        result = allocate_info(p_info);
+        if (result < 0)
+            return result;
+    }
+    info = *p_info;
+    // create a suitable text image
+    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    if (result < 0)
+        return result;
+    // get bounding box for character
+    w_max = 0;
+    bb_t =  1000000;
+    bb_b = -1000000;
+    /* load glyph image into the slot (erase previous one) */
+    if (FT_Load_Char(info->face, character, FT_LOAD_RENDER))
+        return YUV_freetype;
+    slot = info->face->glyph;  /* a small shortcut */
+    if (bb_t > -slot->bitmap_top)
+        bb_t = -slot->bitmap_top;
+    if (w_max < slot->advance.x / 64)
+        w_max = slot->advance.x / 64;
+    if (bb_b < slot->bitmap.rows - slot->bitmap_top)
+        bb_b = slot->bitmap.rows - slot->bitmap_top;
+    // expand bounding box a little
+    bb_t -= 1;
+    bb_b += 1;
+    // initialise character overlays
+    ovly->w = w_max;
+    ovly->h = bb_b - bb_t;
+    ovly->ssx = -1;
+    ovly->ssy = -1;
+    ovly->buff = malloc(ovly->w * ovly->h * 2);
+    if (ovly->buff == NULL)
+        return YUV_no_memory;
+    memset(ovly->buff, 0, ovly->w * ovly->h * 2);
+    ovly->Cbuff = NULL;
+    // copy bitmap
+    /* load glyph image into the slot (erase previous one) */
+    if (FT_Load_Char(info->face, character, FT_LOAD_RENDER))
+        return YUV_freetype;
+    slot = info->face->glyph;  /* a small shortcut */
+    if (character == '(' || character == ')')  // add other characters to this list
+    {
+        // make colon narrower than other characters
+        ovly->w = slot->advance.x / 64;
+    }
+    srcPtr = slot->bitmap.buffer;
+    dstLine = ovly->buff;
+    // add vertical offset
+    dstLine += ovly->w * (-slot->bitmap_top - bb_t);
+    // add horizontal offset
+    dstLine += slot->bitmap_left;
+    if (character != '(' && character != ')') // add other characters to this list
+        // horizontally centre character
+        dstLine += (w_max - (slot->bitmap_left + slot->bitmap.width)) / 2;
+    for (j = 0; j < slot->bitmap.rows; j++)
+    {
+        dstPtr = dstLine;
+        memcpy(dstLine, srcPtr, slot->bitmap.width);
+        srcPtr += slot->bitmap.width;
+        dstLine += ovly->w;
+    }
+    return YUV_OK;
+}
+
+void free_char_set(char_set_data* cs_data)
+{
+    int c;
+
+    if (cs_data == NULL)
+        return;
+
+    for (c = 0; c < cs_data->numChars; c++)
+        free_overlay(&cs_data->cs_ovly[c]);
+}
+
+YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
+                          char* cset, char* font, const int size,
+                          const int aspect_ratio_num,
+                          const int aspect_ratio_den)
+{
+    info_rec*       info;
+    FT_GlyphSlot    slot;
+    int         w_max;
+    int         bb_t, bb_b; // bounding box
+    BYTE*       dstLine;
+    BYTE*       srcPtr;
+    BYTE*       dstPtr;
+    int         c, j;
+    int         result;
+    int         csetLen;
+
+    // check maximum chars not exceeded
+    csetLen = (int)strlen(cset);
+    if (csetLen > MAX_CHARS_IN_SET)
+    {
+        return YUV_size_error;
+    }
+    // initialise our data
+    if (*p_info == NULL)
+    {
+        result = allocate_info(p_info);
+        if (result < 0)
+            return result;
+    }
+    info = *p_info;
+    // create a suitable text image
+    result = set_font(info, font, size, aspect_ratio_num, aspect_ratio_den);
+    if (result < 0)
+        return result;
+    // get bounding box for characters
+    w_max = 0;
+    bb_t =  1000000;
+    bb_b = -1000000;
+    for (c = 0; c < csetLen; c++)
+    {
+        /* load glyph image into the slot (erase previous one) */
+        if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
+            return YUV_freetype;
+        slot = info->face->glyph;  /* a small shortcut */
+        if (bb_t > -slot->bitmap_top)
+            bb_t = -slot->bitmap_top;
+        if (w_max < slot->advance.x / 64)
+            w_max = slot->advance.x / 64;
+        if (bb_b < slot->bitmap.rows - slot->bitmap_top)
+            bb_b = slot->bitmap.rows - slot->bitmap_top;
+    }
+    // expand bounding box a little
+    bb_t -= 1;
+    bb_b += 1;
+    // initialise character overlays
+    for (c = 0; c < csetLen; c++)
+    {
+        cs_data->cs_ovly[c].w = w_max;
+        cs_data->cs_ovly[c].h = bb_b - bb_t;
+        cs_data->cs_ovly[c].ssx = -1;
+        cs_data->cs_ovly[c].ssy = -1;
+        cs_data->cs_ovly[c].buff = malloc(cs_data->cs_ovly[c].w *
+                                          cs_data->cs_ovly[c].h * 2);
+        if (cs_data->cs_ovly[c].buff == NULL)
+            return YUV_no_memory;
+        memset(cs_data->cs_ovly[c].buff, 0, cs_data->cs_ovly[c].w *
+                                            cs_data->cs_ovly[c].h * 2);
+        cs_data->cs_ovly[c].Cbuff = NULL;
+    }
+    // copy bitmaps
+    for (c = 0; c < csetLen; c++)
+    {
+        /* load glyph image into the slot (erase previous one) */
+        if (FT_Load_Char(info->face, cset[c], FT_LOAD_RENDER))
+            return YUV_freetype;
+        slot = info->face->glyph;  /* a small shortcut */
+        if (c == 10)
+        {
+            // make colon narrower than other characters
+            cs_data->cs_ovly[c].w = slot->advance.x / 64;
+        }
+        srcPtr = slot->bitmap.buffer;
+        dstLine = cs_data->cs_ovly[c].buff;
+        // add vertical offset
+        dstLine += cs_data->cs_ovly[c].w * (-slot->bitmap_top - bb_t);
+        // add horizontal offset
+        dstLine += slot->bitmap_left;
+        if (c != 10)
+            // horizontally centre character
+            dstLine += (w_max - (slot->bitmap_left + slot->bitmap.width)) / 2;
+        // TODO: fix the problem with offsets
+        if (dstLine < cs_data->cs_ovly[c].buff)
+            dstLine = cs_data->cs_ovly[c].buff; 
+        for (j = 0; j < slot->bitmap.rows; j++)
+        {
+            dstPtr = dstLine;
+            memcpy(dstLine, srcPtr, slot->bitmap.width);
+            srcPtr += slot->bitmap.width;
+            dstLine += cs_data->cs_ovly[c].w;
+        }
+    }
+
+    memcpy(cs_data->chars, cset, csetLen);
+    cs_data->numChars = csetLen;
+
+    return YUV_OK;
+}
+
+
+
+
