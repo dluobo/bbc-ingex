@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerDoc.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: GalleryLoggerDoc.cpp,v 1.3 2009/09/18 15:57:38 john_f Exp $
  *
  * Implementation of the "document" class of document/view
  * in Gallery Logger application.
@@ -70,7 +70,7 @@ CGalleryLoggerDoc::CGalleryLoggerDoc()
     // Init database
     try
     {
-        prodauto::Database::initialise("prodautodb","bamzooki","bamzooki",5,10);
+        prodauto::Database::initialise("localhost","prodautodb","bamzooki","bamzooki",5,10);
         mpDb = prodauto::Database::getInstance();
     }
     catch(...)
