@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.h,v 1.9 2009/02/26 19:22:30 john_f Exp $
+ * $Id: IngexRecorder.h,v 1.10 2009/09/18 16:14:13 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -43,6 +43,7 @@ const char * const QUAD_NAME = "quad";
 
 // Path separator.  It would be different for Windows.
 const char PATH_SEPARATOR = '/';
+const char * const CREATING_SUBDIR = "Creating";
 
 
 // This interval ensures that timecode found during CheckStartTimecode() is still

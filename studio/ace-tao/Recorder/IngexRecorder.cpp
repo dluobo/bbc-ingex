@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.10 2009/02/26 19:22:30 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.11 2009/09/18 16:14:13 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -233,11 +233,7 @@ bool IngexRecorder::CheckStartTimecode(
         for (unsigned int i = 0; !found_target && i < search_limit; ++i)
         {
             // read timecode value
-			int frame = lastframe - i;
-			if (frame < 0)
-			{
-				frame += ring_length;
-            }
+            int frame = lastframe - i;
             int tc = IngexShm::Instance()->Timecode(channel_i, frame);
 
             if (i == 0)
@@ -371,20 +367,31 @@ void IngexRecorder::Setup(
             clean_filename(project_subdir);
             it->dir += PATH_SEPARATOR;
             it->dir += project_subdir;
-            it->dest += PATH_SEPARATOR;
-            it->dest += project_subdir;
+            it->copy_dest += PATH_SEPARATOR;
+            it->copy_dest += project_subdir;
         }
 
         FileUtils::CreatePath(it->dir);
-        // For MXF we also use "creating" and "failures" directories
+
         if (it->file_format == MXF_FILE_FORMAT_TYPE)
         {
+            // Make Creating and Failures subdirs for MXF
             std::ostringstream creating_path;
             creating_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_creating;
             FileUtils::CreatePath(creating_path.str());
             std::ostringstream failures_path;
             failures_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_failures;
             FileUtils::CreatePath(failures_path.str());
+            //std::ostringstream metadata_path;
+            //metadata_path << it->dir << PATH_SEPARATOR << settings->mxf_subdir_metadata;
+            //FileUtils::CreatePath(metadata_path.str());
+        }
+        else
+        {
+            // Make Creating subdir for other formats
+            std::ostringstream creating_path;
+            creating_path << it->dir << PATH_SEPARATOR << CREATING_SUBDIR;
+            FileUtils::CreatePath(creating_path.str());
         }
     }
 
@@ -422,7 +429,7 @@ void IngexRecorder::Setup(
 
             tp.p_opt = new RecordOptions;
             tp.p_opt->channel_num = first_enabled_channel;
-            tp.p_opt->index = 0;
+            tp.p_opt->index = encoding_i;
             tp.p_opt->quad = true;
             tp.p_opt->resolution = it->resolution;
             tp.p_opt->file_format = it->file_format;
@@ -546,12 +553,22 @@ bool IngexRecorder::Stop( framecount_t & stop_timecode,
                 const char * description,
                 const std::vector<Locator> & locs)
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
-        Timecode(stop_timecode, mFps, mDf).Text(), post_roll));
+    if (stop_timecode < 0)
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(\"now\")\n")));
+    }
+    else
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorder::Stop(%C, %d)\n"),
+            Timecode(stop_timecode, mFps, mDf).Text(), post_roll));
+    }
 
     // Store description
-    mUserComments.push_back(
-        prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description, STATIC_COMMENT_POSITION, 0));
+    if (description)
+    {
+        mUserComments.push_back(
+            prodauto::UserComment(AVID_UC_DESCRIPTION_NAME, description, STATIC_COMMENT_POSITION, 0));
+    }
 
     // Store locators
     for (std::vector<Locator>::const_iterator it = locs.begin(); it != locs.end(); ++it)
