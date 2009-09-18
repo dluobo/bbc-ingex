@@ -38,9 +38,9 @@ sub build_javascript
 	my @javaScript;
 	my $js;
 	
-	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ext.js')){
-			push(@javaScript, $js);
-	}
+	# if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ext.js')){
+	#		push(@javaScript, $js);
+	# }
 	
 	if($js = getJS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ModuleJavascript.js')){
 		push(@javaScript, $js);

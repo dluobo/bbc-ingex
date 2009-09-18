@@ -42,14 +42,14 @@ img {
 	margin-right:5px;
 }
 
-table th {
+.simpleTable th {
 	text-align: left; 
 	font-weight: bold; 
 	vertical-align: baseline;
 	padding: 3px;
 }
 
-table td {
+.simpleTable td {
 	text-align: left; 
 	padding: 3px;
 }

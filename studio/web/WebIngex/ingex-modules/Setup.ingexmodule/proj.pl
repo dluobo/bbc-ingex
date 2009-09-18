@@ -66,7 +66,7 @@ sub get_page_content
  
     my @tableRows;
     push(@tableRows, 
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            th(['Name',
             '',
             '']),
@@ -85,7 +85,7 @@ sub get_page_content
         # else
         # {
             push(@tableRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                    td([$proj->{'NAME'},
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editproj','id=$proj->{'ID'}')"}, 'Edit'))),
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deleteproj','id=$proj->{'ID'}')"}, 'Delete')))]),

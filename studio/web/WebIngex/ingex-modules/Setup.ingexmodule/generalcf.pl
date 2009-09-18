@@ -67,7 +67,7 @@ sub get_page_content
  
     my @tableRows;
     push(@tableRows, 
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            th(['Name',
             '',
             '']),
@@ -77,7 +77,7 @@ sub get_page_content
         if ($rcl->{'ID'} == 1) # id=1 is a reserved value ("Unspecified")
         {
             push(@tableRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                    td([$rcl->{'NAME'},
                     '',
                     '']),
@@ -86,7 +86,7 @@ sub get_page_content
         else
         {
             push(@tableRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                    td([$rcl->{'NAME'},
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editgcf','type=recloc&id=$rcl->{'ID'}')"}, 'Edit'))),
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deletegcf','type=recloc&id=$rcl->{'ID'}')"}, 'Delete')))]),

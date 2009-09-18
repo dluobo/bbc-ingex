@@ -183,7 +183,7 @@ sub get_edit_content
     my @topRows;
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([
                 div({-class=>"propHeading1"}, 'Name:'), 
                 textfield('name', $rocf->{'config'}->{'NAME'})
@@ -193,15 +193,15 @@ sub get_edit_content
 
     my @inputRows;
     push(@inputRows, 
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             th(['Index', 'Name', 'Source']),
         ])
     );
     foreach my $input (@{ $rocf->{'inputs'} })
     {
         push(@inputRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
-                Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                     td([div($input->{'INDEX'}, 
                             hidden(
                                 get_html_param_id([ "input", "index" ], [ $input->{'ID'} ]),
@@ -226,15 +226,15 @@ sub get_edit_content
 
     my @outputRows;
     push(@outputRows, 
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             th(['Index', 'Name']),
         ])
     );
     foreach my $output (@{ $rocf->{'outputs'} })
     {
         push(@outputRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
-                Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                     td([div($output->{'INDEX'}, 
                             hidden(
                                 get_html_param_id([ "output", "index" ], [ $output->{'ID'} ]),
@@ -252,12 +252,12 @@ sub get_edit_content
     }
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Inputs:'), 
                 table({-class=>"borderTable"}, @inputRows),
             ]),
         ]),
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Outputs:'), 
                 table({-class=>"borderTable"}, @outputRows),
             ]),

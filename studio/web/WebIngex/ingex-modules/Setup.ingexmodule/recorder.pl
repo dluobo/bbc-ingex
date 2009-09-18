@@ -85,7 +85,7 @@ sub get_page_content
                 if (defined $rec->{"CONF_ID"} && $rec->{"CONF_ID"} == $rcfConfig->{"ID"})
                 {
                     unshift(@configRows,
-                        Tr({-align=>"left", -valign=>"top"}, [
+                        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                             td([div({-class=>"propHeading2"}, "config:"), 
                                 a({-href=>"javascript:show('RecorderConfig-$rcfConfig->{'ID'}',true)"}, $rcfConfig->{"NAME"}),
                             ]),
@@ -95,7 +95,7 @@ sub get_page_content
                 else
                 {
                     push(@configRows,
-                        Tr({-align=>"left", -valign=>"top"}, [
+                        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                             td([div({-class=>"propHeading2"}, "alternative:"), 
                                 a({-href=>"javascript:show('RecorderConfig-$rcfConfig->{'ID'}',true)"}, $rcfConfig->{"NAME"}),
                             ]),
@@ -109,25 +109,25 @@ sub get_page_content
         {
             # not connected
             unshift(@configRows,
-                Tr({-align=>"left", -valign=>"top"}, [
+                Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                     td([div({-class=>"propHeading2"}, "config:"), i("not set")]), 
                 ])
             );
         }
         
         push(@recorderRows, 
-            Tr({-align=>"left", -valign=>"top"},
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
                 td(b($rec->{"NAME"})),
                 td(
                     small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editrec','id=$rec->{'ID'}')"}, "Edit")),
                     small(a({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deleterec','id=$rec->{'ID'}')"}, "Delete")),
                 ),
             ),
-			Tr({-align=>"left", -valign=>"top"},
+			Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
                 td(""),
                 td(small(a({-href=>"javascript:getContentWithVars('creatercf','recid=$rec->{'ID'}')"}, "Create new config"))),
             ),
-            Tr({-align=>"left", -valign=>"top"},
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"},
                 td(""),
                 td(table({-border=>0, -cellspacing=>3,-cellpadding=>3}, @configRows)),
             ),

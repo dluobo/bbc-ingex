@@ -43,7 +43,7 @@ function Status_process_recorderState (instanceData,visible) {
 			html += "<div class='recorder_recorder'>";
 			html += "<h3>Recorder: "+recorder+"</h3>";
 			// Use tables to make data line up nicely. Should possibly be done with CSS in a future revision
-			html += "<table>";
+			html += "<table class='simpleTable'>";
 			for (channel in data[recorder]) {
 				// For each channel
 				var chan = instanceData.monitorData.ring[channel];
@@ -189,7 +189,7 @@ function Status_processRecordingInfo (field,instanceData,recorder,channel,visibl
 			} else {
 				var html = "";
 				for(recording in recData){
-					html += "<table><tr><td>";
+					html += "<table class='simpleTable'><tr><td>";
 					html += "<img class='recorderChanImg' id='"+channelDesc+"_"+recording+"_errimg' src='/ingex/img/error_small.gif'/>";
 					html += "<img class='recorderChanImg' id='"+channelDesc+"_"+recording+"_recimg' src='/ingex/img/recording.gif'/>";
 					html += '</td><td><div class="bufferOuterBar">';

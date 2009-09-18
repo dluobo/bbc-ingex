@@ -19,7 +19,7 @@
 package ingexconfig;
 
 use strict;
-
+use File::Temp qw(mktemp tempfile); 
 
 
 ####################################
@@ -80,12 +80,73 @@ sub load_config
     }
 }
 
+
+####################################
+#
+# Write key and value to configuration
+#
+####################################
+
+sub write_config
+{
+	my ($configFilename, $newKey, $newValue) = @_;
+	
+	my $next;
+	my $match;
+	my $newFilename = mktemp("/tmp/configFile_XXXXXX");
+    my $oldFilename = "$configFilename.old";
+    
+    open(IN, "<", "$configFilename") or die "Failed to open config file: $!";
+    open(NEW, ">", "$newFilename") or die "Failed to open temp file: $!";
+    
+  
+    # untaint values
+    $newKey =~ /(.*)/;
+    $newValue =~ /(.*)/;
+    
+    while(my $line = <IN>)
+    {
+    	chomp($line);
+    	
+    	$next = $line;
+    	$next =~ s/#.*//;
+        $next =~ s/^\s+//;
+        $next =~ s/\s+$//;
+        
+        if (length $next > 0)
+        {
+            my ($key,$value) = split(/\s*=\s*/, $next, 2);
+            
+            if($key eq $newKey)
+            {
+            	$line = "$newKey = $newValue";	# replace line
+            	$match = 1;
+            }
+        }
+        
+        print NEW "$line\n";		# store next line
+    }
+    
+    # if key was not found, add to end of file
+    if(!$match)
+	{
+		my $line = "$newKey = $newValue";	# new line
+        print NEW "$line\n";
+	}
+    
+    close(IN);
+    close(NEW);
+    
+    rename($configFilename, $oldFilename);
+    rename($newFilename, $configFilename);
+    
+}
+
+
 sub untaint
 {
 	 # untaint values
         # TODO: do a better job with matching
-        ($ingexConfig{"db_odbc_dsn"}) = ($ingexConfig{"db_odbc_dsn"} =~ /(.*)/)
-            if ($ingexConfig{"db_odbc_dsn"});
         ($ingexConfig{"db_host"}) = ($ingexConfig{"db_host"} =~ /(.*)/)
             if ($ingexConfig{"db_host"});
         ($ingexConfig{"db_name"}) = ($ingexConfig{"db_name"} =~ /(.*)/)
@@ -94,6 +155,8 @@ sub untaint
             if ($ingexConfig{"db_user"});
         ($ingexConfig{"db_password"}) = ($ingexConfig{"db_password"} =~ /(.*)/)
             if ($ingexConfig{"db_password"});
+        ($ingexConfig{"ingex_log"}) = ($ingexConfig{"ingex_log"} =~ /(.*)/)
+            if ($ingexConfig{"ingex_log"});
 }
 
 1;

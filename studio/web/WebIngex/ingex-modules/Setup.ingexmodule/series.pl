@@ -67,7 +67,7 @@ sub get_page_content
  
     my @tableRows;
     push(@tableRows, 
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            th(['Name',
             '',
             '']),
@@ -75,7 +75,7 @@ sub get_page_content
     foreach my $ser (@{$series})
     {    
             push(@tableRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                    td([$ser->{'NAME'},
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('editseries','id=$ser->{'ID'}')"}, 'Edit'))),
                     small(a(({-class=>"simpleButton",-href=>"javascript:getContentWithVars('deleteseries','id=$ser->{'ID'}')"}, 'Delete')))]),

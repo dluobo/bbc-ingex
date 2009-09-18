@@ -136,25 +136,25 @@ sub get_source_config
     my @tableRows;
     
     push(@tableRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            td([div({-class=>"propHeading1"}, "Name:"), $scfConfig->{"NAME"}]),
         ]));
         
     push(@tableRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            td([div({-class=>"propHeading1"}, "Type:"), $scfConfig->{"TYPE"}]),
         ]));
     if ($scfConfig->{"TYPE"} eq "LiveRecording")
     {
         push(@tableRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                td([div({-class=>"propHeading1"}, "Location:"), $scfConfig->{"LOCATION"}]),
             ]));
     }
     else
     {
         push(@tableRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                td([div({-class=>"propHeading1"}, "Spool number:"), $scfConfig->{"SPOOL"}]),
             ]));
     }
@@ -162,7 +162,7 @@ sub get_source_config
     
     my @trackRows;
     push(@trackRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            th(["Id", "Name", "Type"]),
         ]));
         
@@ -170,7 +170,7 @@ sub get_source_config
     foreach my $track (@{$sourceConfig->{"tracks"}})
     {
         push(@trackRows, 
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                 td([$track->{"TRACK_ID"}, 
                     $track->{"NAME"},
                     $track->{"DATA_DEF"},]),
@@ -179,7 +179,7 @@ sub get_source_config
     }
     
     push(@tableRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            td([div({-class=>"propHeading1"}, "Tracks:"), 
             table({-class=>"borderTable"}, @trackRows)]),
         ]));
@@ -293,14 +293,14 @@ sub get_recorder_config
     {
         my @trackRows;
         push(@trackRows,
-            Tr({-align=>"left", -valign=>"top"}, 
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                th(["Id", "Source Name", "Source Track Name", "Clip Track Number"]),
             )
         );
         foreach my $ritcf (@{ $ricf->{"tracks"} })
         {
             push(@trackRows, 
-                Tr({-align=>"left", -valign=>"top"}, 
+                Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                     td([$ritcf->{"INDEX"}, 
                         (defined $ritcf->{"SOURCE_NAME"}) ? $ritcf->{"SOURCE_NAME"} : "",
                         (defined $ritcf->{"SOURCE_TRACK_NAME"}) ? $ritcf->{"SOURCE_TRACK_NAME"} : "",
@@ -311,7 +311,7 @@ sub get_recorder_config
         }
 
         push(@inputRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                 td([div({-class=>"propHeading2"}, "Index:"), $ricf->{"config"}->{"INDEX"}]),
                 td([div({-class=>"propHeading2"}, "Name:"), $ricf->{"config"}->{"NAME"}]),
                 td([div({-class=>"propHeading2"}, "Tracks:"), 
@@ -323,7 +323,7 @@ sub get_recorder_config
 
     my @paramRows;
     push(@paramRows,
-        Tr({-align=>"left", -valign=>"top"}, 
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
            th(["Name", "Value"]),
         )
     );
@@ -352,7 +352,7 @@ sub get_recorder_config
             }
         }
         push(@paramRows,
-            Tr({-align=>"left", -valign=>"top"}, 
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                 td([$rp->{"NAME"}, $value]),
             )
         );
@@ -360,7 +360,7 @@ sub get_recorder_config
     
     my @rcfRows;
     push(@rcfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), $rcf->{"config"}->{"NAME"}]),
             td([div({-class=>"propHeading1"}, "Recorder:"), $rcf->{"config"}->{"RECORDER_NAME"}]),
             td([div({-class=>"propHeading1"}, "Inputs:"), 
@@ -393,14 +393,14 @@ sub get_multicam_config
     my @mccfRows;
 
     push(@mccfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), $mccf->{"config"}->{"NAME"}]),
         ]));
         
 
     my @trackRows;
     push(@trackRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            th(["Index", "Clip track num", "Selectors"]),
         ]));
         
@@ -408,14 +408,14 @@ sub get_multicam_config
     {
         my @selectorRows;
         push(@selectorRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                th(["Index", "Source Name", "Source Track Name"]),
             ]));
             
         foreach my $mcscf (@{$mctcf->{"selectors"}})
         {
             push(@selectorRows, 
-                Tr({-align=>"left", -valign=>"top"}, [
+                Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                     td([$mcscf->{"INDEX"}, 
                         ($mcscf->{"SOURCE_NAME"}) ? $mcscf->{"SOURCE_NAME"} : "",
                         ($mcscf->{"SOURCE_TRACK_NAME"}) ? $mcscf->{"SOURCE_TRACK_NAME"} : "",
@@ -424,7 +424,7 @@ sub get_multicam_config
         }
 
         push(@trackRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                 td([$mctcf->{"config"}->{"INDEX"},
                     $mctcf->{"config"}->{"TRACK_NUMBER"},
                     table({-class=>"borderTable"}, @selectorRows),
@@ -433,7 +433,7 @@ sub get_multicam_config
     }
 
     push(@mccfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            td([div({-class=>"propHeading1"}, "Tracks:"), 
                table({-class=>"borderTable"}, @trackRows)
            ]),
@@ -487,7 +487,7 @@ sub get_proxy_def
     my @pxdfRows;
 
     push(@pxdfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), $pxdf->{"def"}->{"NAME"}]),
             td([div({-class=>"propHeading1"}, "Type:"), $pxdf->{"def"}->{"TYPE"}]),
         ]));
@@ -495,7 +495,7 @@ sub get_proxy_def
 
     my @trackRows;
     push(@trackRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            th(["ID", "Data def", "Sources"]),
         ]));
         
@@ -503,14 +503,14 @@ sub get_proxy_def
     {
         my @sourceRows;
         push(@sourceRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                th(["Index", "Source Name", "Source Track Name"]),
             ]));
             
         foreach my $pxsdf (@{$pxtdf->{"sources"}})
         {
             push(@sourceRows, 
-                Tr({-align=>"left", -valign=>"top"}, [
+                Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                     td([$pxsdf->{"INDEX"}, 
                         ($pxsdf->{"SOURCE_NAME"}) ? $pxsdf->{"SOURCE_NAME"} : "",
                         ($pxsdf->{"SOURCE_TRACK_NAME"}) ? $pxsdf->{"SOURCE_TRACK_NAME"} : "",
@@ -519,7 +519,7 @@ sub get_proxy_def
         }
 
         push(@trackRows,
-            Tr({-align=>"left", -valign=>"top"}, [
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
                 td([$pxtdf->{"def"}->{"TRACK_ID"},
                     $pxtdf->{"def"}->{"DATA_DEF"},
                     table({-class=>"borderTable"}, @sourceRows),
@@ -528,7 +528,7 @@ sub get_proxy_def
     }
 
     push(@pxdfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
            td([div({-class=>"propHeading1"}, "Tracks:"), 
                table({-class=>"borderTable"}, @trackRows)
            ]),
@@ -562,14 +562,14 @@ sub get_router_config
     
     my @inputRows;
     push(@inputRows,
-        Tr({-align=>"left", -valign=>"top"}, 
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
            th(["Index", "Name", "Source Name", "Source Track Name"]),
         )
     );
     foreach my $input (@{ $rocf->{"inputs"} })
     {
         push(@inputRows, 
-            Tr({-align=>"left", -valign=>"top"}, 
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                 td([$input->{"INDEX"}, $input->{"NAME"}, 
                     (defined $input->{"SOURCE_NAME"}) ? $input->{"SOURCE_NAME"} : "",
                     (defined $input->{"SOURCE_TRACK_NAME"}) ? $input->{"SOURCE_TRACK_NAME"} : "",
@@ -583,14 +583,14 @@ sub get_router_config
     
     my @outputRows;
     push(@outputRows,
-        Tr({-align=>"left", -valign=>"top"}, 
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
            th(["Index", "Name"]),
         )
     );
     foreach my $output (@{ $rocf->{"outputs"} })
     {
         push(@outputRows, 
-            Tr({-align=>"left", -valign=>"top"}, 
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                 td([$output->{"INDEX"}, $output->{"NAME"}]),
             )
         );
@@ -599,7 +599,7 @@ sub get_router_config
     
     my @rocfRows;
     push(@rocfRows,
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), $rocf->{"config"}->{"NAME"}]),
             td([div({-class=>"propHeading1"}, "Inputs:"), 
                 table({-class=>"borderTable"}, @inputRows)

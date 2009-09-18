@@ -167,7 +167,7 @@ sub get_edit_content
     my @topRows;
 
     push(@topRows,  
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Name:"), 
                 textfield("name", $rec->{"NAME"})
             ]),

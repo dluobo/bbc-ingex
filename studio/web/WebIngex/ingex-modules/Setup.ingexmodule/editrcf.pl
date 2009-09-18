@@ -197,13 +197,13 @@ sub get_edit_content
     my @topRows;
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([
                 div({-class=>"propHeading1"}, 'Recorder:'), 
                 $rcf->{'config'}->{'RECORDER_NAME'}
             ]),
         ]),
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([
                 div({-class=>"propHeading1"}, 'Name:'), 
                 textfield('name', $rcf->{'config'}->{'NAME'})
@@ -215,7 +215,7 @@ sub get_edit_content
     foreach my $input (@{ $rcf->{'inputs'} })
     {
         push(@inputRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Index:'), 
                     div($input->{'config'}->{'INDEX'},
                         hidden(
@@ -225,7 +225,7 @@ sub get_edit_content
                     ),
                  ]),
             ]),
-            Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Name:'), 
                     textfield(
                         get_html_param_id([ "input", "name" ], [ $input->{'config'}->{'ID'} ]),
@@ -237,7 +237,7 @@ sub get_edit_content
 
         my @trackRows;
         push(@trackRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 th(['Index', 'Source', 'Clip Track Number']),
             ])
         );
@@ -245,7 +245,7 @@ sub get_edit_content
         foreach my $track (@{ $input->{'tracks'} })
         {
             push(@trackRows, 
-                Tr({-align=>'left', -valign=>'top'}, [
+                Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                     td([div($track->{'INDEX'}, 
                             hidden(
                                 get_html_param_id([ "input", "track", "index" ], [ $input->{'config'}->{'ID'}, $track->{'ID'} ]),
@@ -268,7 +268,7 @@ sub get_edit_content
         }
 
         push(@inputRows,  
-            Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([div({-class=>"propHeading2"}, 'Tracks:'), 
                     table({-class=>"borderTable"}, @trackRows),
                 ]),
@@ -277,7 +277,7 @@ sub get_edit_content
     }
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Inputs:'), 
                 table({-class=>"noBorderTable"}, @inputRows),
             ]),
@@ -286,7 +286,7 @@ sub get_edit_content
 
     my @paramRows;
     push(@paramRows,
-        Tr({-align=>"left", -valign=>"top"}, 
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
            th(["Name", "Value"]),
         )
     );
@@ -312,14 +312,14 @@ sub get_edit_content
         }
         
         push(@paramRows,
-            Tr({-align=>"left", -valign=>"top"}, 
+            Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, 
                 td([$rp->{"NAME"}, $valueField]),
             )
         );
     }
     
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, "Parameters:"), 
                 table({-class=>"borderTable"}, @paramRows),
             ]),

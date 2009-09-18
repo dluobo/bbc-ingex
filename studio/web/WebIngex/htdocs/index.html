@@ -24,18 +24,32 @@
 	<head>
 		<title>Ingex</title>
 		<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1"/>
+		<link href="/ingex/ext/resources/css/ext-all.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+		
 		<link href="/ingex/injax.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
 		<link href="/ingex/webingex.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
-		<link href="/ingex/ext-all.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+		<link href="/ingex/messagebox.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+		
+		<!--[if IE 7]>
+					<link href="/ingex/IE7.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
+					<script type="text/javascript">window.isIE7 = true;</script>
+		<![endif]-->
 		<!--[if lt IE 7]>
 					<link href="/ingex/oldIE.css" rel="stylesheet" rev="stylesheet" type="text/css" media="screen"/>
 					<script type="text/javascript">window.isIE6 = true;</script>
 		<![endif]-->
+		
+		<script type="text/javascript" src="/ingex/ext/adapter/ext/ext-base.js"></script>
+		<script type="text/javascript" src="/ingex/ext/ext-all.js"></script>
+		<script type="text/javascript" src="/ingex/ext/MultiSelectTree-1.1.js"></script>
+		<script type="text/javascript" src="/ingex/ext/ColumnNodeUI.js"></script>
+		
 		<script type="text/javascript" src="/ingex/json2.js"></script>
 		<script type="text/javascript" src="/ingex/rsh.js"></script>
 		<script type="text/javascript" src="/ingex/ingex.js"></script>
 		<script type="text/javascript" src="/ingex/injax_config.js"></script>
 		<script type="text/javascript" src="/ingex/injax.js"></script>		
+		<script type="text/javascript" src="/ingex/messagebox.js"></script>
 	</head>
 	<body>
 		<!-- Header -->
@@ -57,6 +71,13 @@
 			<!-- Menu -->
 			<div id="menu"></div>
 			<!--End Menu -->
+			
+			<!---include message box overlay html--->
+			<div id="fixme">
+				<div id="message_overlay" class="message_overlay">
+				</div>
+			</div>
+			<!---End message box--->
 		</div>		
 		<!-- End Header -->
 		<div id="pageBody">

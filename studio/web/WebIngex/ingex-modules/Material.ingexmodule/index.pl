@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
-# Copyright (C) 2008  British Broadcasting Corporation
-# Author: Philip de Nier <philipn@users.sourceforge.net>
+# Copyright (C) 2009  British Broadcasting Corporation
+# Author: Sean Casey <seantc@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -17,486 +17,782 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
- 
-use strict;
+#
 
-use CGI::Pretty qw(:standard);
+
+#
+# Materials page - displays a browsable tree containing a heirachal view of all materials.
+#
+# Materials can be filtered depending on a number of user-selectable parameters and selected materials
+# can be packaged and exported to avid and final cut formats.
+#
+
+use strict;
 
 use lib ".";
 use lib "../../ingex-config";
-use ingexconfig;
-use materialconfig;
-use ingexhtmlutil;
+
 use prodautodb;
 use db;
+use ingexhtmlutil;
+use ingexconfig;
+use materialconfig;
 
-
+use CGI::Pretty qw(:standard);
 
 my $dbh = prodautodb::connect(
-        $ingexConfig{"db_host"},
-        $ingexConfig{"db_name"},
-        $ingexConfig{"db_user"},
-        $ingexConfig{"db_password"}) 
-    or die();
+		$ingexConfig{"db_host"}, 
+		$ingexConfig{"db_name"},
+		$ingexConfig{"db_user"}, 
+		$ingexConfig{"db_password"})
+ 	or die();
 
+my $main_browser = get_main_browser();
 
-my ($numRows) = (param("numrows") =~ /(\d+)/) if (defined param("numrows"));
-my ($start) = (param("start") =~ /(\d+)/) if (defined param("start"));
-
-
-
-my $max = get_material_count($dbh);
-return_error_page("failed to get count of material in database: $prodautodb::errstr") if ($max < 0);
-
-$numRows = $ingexConfig{"default_material_rows"} 
-    if !defined $numRows || $numRows < 1 || $numRows > $ingexConfig{"max_material_rows"};
-$start = 1 if !defined $start ||  $start < 1 || $start > $max;
-
-
-my $page;
-if ($max < 1)
-{
-    $page = get_page_content(undef, $numRows, 0, 0)
-        or return_error_page("failed to fill in content for material page");
-}
-else
-{
-    my $material = load_material_1($dbh, $start - 1, $numRows)
-        or return_error_page("failed to load $numRows material items, starting from $start, "
-            . "from the database: $prodautodb::errstr");
-        
-    $page = get_page_content($material, $numRows, $start, $max)
-        or return_error_page("failed to fill in content for material page");
-}
-   
 print header;
-print $page;
+print $main_browser;
 
 exit(0);
 
 
-sub get_duration_string
-{
-    my ($duration) = @_;
-    
-    my ($hour, $min, $sec, $fr);
-    
-    $hour = int($duration / (60 * 60 * 25));
-    $min = int(($duration % (60 * 60 * 25)) / (60 * 25));
-    $sec = int((($duration % (60 * 60 * 25)) % (60 * 25)) / 25);
-    $fr = int(((($duration % (60 * 60 * 25)) % (60 * 25)) % 25));
-    
-    my $durationString;
-    if ($hour > 0)
-    {
-        $durationString = sprintf("%02d:%02d:%02d:%02d", 
-            $hour, $min, $sec, $fr);
-    }
-    elsif ($min > 0)
-    {
-        $durationString = sprintf("%02d:%02d:%02d", 
-            $min, $sec, $fr);
-    }
-    else
-    {
-        $durationString = sprintf("%02d:%02d", 
-            $sec, $fr);
-    }
-        
-    return $durationString;
+#
+# Create html for main browser panel containing the media files
+# Generates a tree/grid browser using ext components
+#
+sub get_main_browser {
+	# get video resolution formats
+	my $vresIds = prodautodb::load_video_resolutions($dbh)
+	  	or return_error_page(
+			"failed to load video resolutions from the database: $prodautodb::errstr"
+	  	);
+
+	my $val      = "";
+	my $name     = "";
+	my $fmt_opts = "<OPTION value='-1'>[any resolution]</OPTION>";
+
+	foreach my $vres ( @{$vresIds} ) {
+		$val      = $vres->{'ID'};
+		$name     = $vres->{'NAME'};
+		$fmt_opts = $fmt_opts . "<OPTION value='$val'>$name</OPTION>";
+	}
+
+	# get project names
+	my $projnames = db::load_projects($dbh)
+	  	or return_error_page(
+			"failed to load video resolutions from the database: $prodautodb::errstr"
+	  	);
+
+	my $id = "";
+	$name = "";
+	my $proj_opts = "<OPTION value='-1'>[any project]</OPTION>";
+
+	foreach my $proj ( @{$projnames} ) {
+		$id        = $proj->{'ID'};
+		$name      = $proj->{'NAME'};
+		$proj_opts = $proj_opts . "<OPTION value='$id'>$name</OPTION>";
+	}
+
+	# panels displaying properties of selected package
+	my $package_details1 = get_package_details('src');
+	my $package_details2 = get_package_details('dest');
+
+	# get export directories
+	my $dest_directories = '';
+	my $defaultSendTo;
+	my @allExportDirs = get_all_avid_aaf_export_dirs();
+
+	foreach my $exportDir (@allExportDirs) {
+		if ( -e $exportDir->[1] ) {
+			my $label = $exportDir->[0] . " ($exportDir->[1])";
+			my $value = $exportDir->[0];
+			$dest_directories .= "<option value='$value'>$label</option>";
+			if ( !defined $defaultSendTo ) {
+				$defaultSendTo = $value;
+			}
+		}
+	}
+
+
+# Director's cut source is now sql-based
+
+#	# get director's cut databases
+#	my $defaultDCSource;
+#	my $dc_directories = '';
+#
+#	foreach my $dctDb ( get_all_directors_cut_dbs() ) {
+#		if ( -e $dctDb->[1] ) {
+#			my $label = $dctDb->[0] . " ($dctDb->[1])";
+#			my $value = $dctDb->[1];
+#			$dc_directories .= "<option value='$value'>$label</option>";
+#			if ( !defined $defaultDCSource ) {
+#				$defaultDCSource = $value;
+#			}
+#		}
+#	}
+
+#						<li>
+#							<label for="dirsource">
+#								Director's cut source
+#							</label> 
+#							<select id="dirsource" default="$defaultDCSource" class="item">
+#								$dc_directories
+#							</select>
+#						</li>						Director's cut source is now sql-based
+
+	my $content;
+
+	if($ingexConfig{"drag_drop"} eq 'true')
+	{
+	
+	# html content for main page body
+	$content = <<ENDHTML;
+		
+		<body>
+			
+			<h1>Material Browser</h1>		
+		
+			<div class="materials_browser">
+				<h3>Materials Browser - <i>select required packages</i></h3>
+				
+				
+	
+												
+				<!---		EXAMPLE TEMPLATE FOR LAYING OUT FORM ELEMENTS
+							<fieldset class="table">
+							<legend>Time Range</legend>
+								<ol>
+									<li>
+										<label for="item1">
+										fewfew
+										</label>
+										<div id="item1" class="item">
+											regvre
+										</div>
+									</li>
+								</ol>
+							</fieldset>	--->
+							
+							
+							
+						<fieldset class="table">
+							<legend>Filter Options</legend>
+								<ol>
+									<li>
+										<label for="proj_name">
+											Project Name
+										</label>
+										<select id="proj_name" name="proj_name" class="item" default="0">
+											$proj_opts
+										</select>
+									</li>
+									
+									<li>
+										<label for="search_text">
+											Search Terms
+										</label>
+										<input type="text" id="search_text" class="item" />
+									</li>
+								
+									<li>
+										<label for="v_res">
+											Video Resolution
+										</label>
+										<select id="v_res" class="item" default="8" />
+											$fmt_opts
+										</select>
+									</li>
+								</ol>
+							</fieldset>
+							
+							<fieldset class="table">
+								<legend>Time Range</legend>
+								<ol>
+									<li>
+										<label for="dummy">
+											<input type="radio" name="time_type" id="all_time_radio" value="all" onclick="allTimesSet()" checked="checked" />
+											All times
+										</label>
+										<div id="dummy" class="var_container"></div>
+									</li>
+									
+									<li>
+										<label for="dummy2">
+											<input type="radio" name="time_type" id="time_period_radio" value="range" onclick="dayFilterSet()" />
+											Time range: 
+										</label>
+										<div id="dummy2" class="var_container"></div>
+									</li>
+									
+									<li>
+										<label for="range_in" class="label_r">
+											Period
+										</label>
+										<select id="range_in" class="item" disabled="true">
+											<option value="1">last 10 minutes</option>
+											<option value="2">last 20 minutes</option>
+											<option value="3">morning (00:00 - 11:59)</option>
+											<option value="4">afternoon (12:00 - 23:59)</option>
+											<option value="5">all day</option>
+											<option value="6">2 days</option>
+										</select>
+									</li>
+									
+									<li>
+										<label for="day_in" class="label_r">
+											Day
+										</label>
+										<select id="day_in" class="item" disabled="true">
+											<option value="1">today</option>
+											<option value="2">yesterday</option>
+											<option value="3">2 days ago</option>
+											<option value="4">3 days ago</option>
+										</select>
+									</li>
+									
+								
+									<li>
+										<label for="dummy3">
+											<input type="radio" name="time_type" id="time_range_radio" value="period" onclick="dateFilterSet()" /> 
+											Within the period:
+										</label>
+										<div id="dummy3" class="var_container">
+										</div>
+									</li>
+								
+								
+									<li>
+										<label for="datetime_from" class="label_r">
+											From
+										</label>
+										<div id="datetime_from" class="var_container">
+											<div class="var_container">
+												<div id="from_cal"></div>	<!--- Ext calendar popup ---> 
+											</div>			
+											<div id="from_time" class="var_container">
+												<input type="textbox" name="hh_from" id="hh_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="mm_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="ss_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="ff_from" class="time_in" size="2" value="00" disabled="true" />
+											</div>
+											<div class="var_container"> [hh:mm:ss:ff]</div>
+											
+											<!--- Verification error --->			
+											<div id="time_range_err" class="time_range_err">
+												* Timecode must be in the format hh:mm:ss:ff
+											</div>		
+										</div>
+									</li>
+									<li>
+										<label for="datetime_to" class="label_r">
+											To
+										</label>
+										<div id="datetime_to" class="var_container">
+											<div class="var_container">
+												<div id="to_cal"></div>	<!--- Ext calendar popup ---> 
+											</div>			
+											<div id="to_time" class="var_container">
+												<input type="textbox" id="hh_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="mm_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="ss_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="ff_to" class="time_in" size="2" value="00" disabled="true">
+											</div>
+											<div class="var_container"> [hh:mm:ss:ff]</div>
+										</div>
+									</li>
+								</ol>
+							</fieldset>	
+							
+		
+		
+		
+		 
+							<fieldset class="noborder">
+								<!--- Submit --->
+								<div class="var_container">
+									<input type="button" value="Load Clips" onclick="submitFilter()" />
+								</div>
+								<div class="var_container">
+									<!--- Search matches ---> 
+									<div nane='filter_matches' id='filter_matches' class="filter_matches"></div>
+								</div>
+							</fieldset>
+												 
+							
+											
+				<div class="container">
+					<div id="tree" class="tree"></div>
+					<div id="metadata" class="metadata">
+						$package_details1
+					</div>
+				</div>
+				
+				<div id="status_bar_src" class="status_bar_src">
+				</div>
+			</div>
+			
+			
+			<br/>
+						
+			<div class="aaf_selection">
+				<h3>Materials Selection - <i>drag materials here</i></h3>
+				
+				<div class="container2">
+						<div id="aafbasket" class="aafbasket"></div>
+						<div id="metadata" class="metadata">
+							$package_details2
+						</div>
+						
+				</div>
+				
+				<div id="status_bar_dest" class="status_bar_src">
+				</div>
+				
+				
+				
+									
+									
+				<fieldset class="table">
+					<legend>Export Options</legend>
+					<ol>
+						<li>
+							<label for="format">
+								Format
+							</label> 
+							<select id="format" class="item" onchange="updateEnabledOpts()">
+								<option value="avid">Avid</option>
+								<option value="fcp">Final Cut Pro</option>
+							</select>
+						</li>
+						
+						<li>
+							<label for="editpath">
+								Editing directory path
+							</label> 
+							<input type="text" id="editpath" class="item" />
+							<div class="var_container"> FCP only</div>
+						</li>
+					</ol>
+				</fieldset>
+				
+				<fieldset class="table">
+					<legend>Director's cut</legend>
+					<ol>
+						<li>
+							<label for="dummy">
+								<input type="checkbox" id="dircut" onclick="updateEnabledOpts()"/>
+								Add director's cut
+							</label>
+							<div id="dummy" class="var_container">
+							</div>
+						</li>
+						
+						<li>
+							<label for="dummy">
+								<input type="checkbox" id="dircutaudio" onchange="updateEnabledOpts()"/>
+								Add audio edits
+							</label>
+							<div id="dummy" class="var_container">
+							</div>
+						</li>
+					</ol>
+				</fieldset>
+				
+				
+				<fieldset class="table">
+					<legend>Output</legend>
+					<ol>
+						<li>
+							<label for="fnameprefix">
+								Filename prefix
+							</label> 
+							<input id="fnameprefix" type="text" class="item" /> 
+							<div class="var_container">
+								<input type="checkbox" id="longsuffix"> Add long suffix
+							</div>
+						</li>
+						
+						<li>
+							<label for="exportdir">
+								Destination directory
+							</label> 
+							<select id="exportdir" default="$defaultSendTo" class="item">
+								$dest_directories
+							</select>
+						</li>
+					</ol>
+				</fieldset>
+			
+			<fieldset class="noborder">
+				<div class="var_container">
+					<input type="button" value="Create Package" onclick="packageAAF()" />
+					<input type="checkbox" id="save" /> Save these options as global defaults
+				</div>
+			</fieldset>
+			
+			</div>
+			
+			<fieldset class="noborder">
+				<div class="centre_container">
+					<span onclick="javascript:getContent('instructions')" onMouseOver="this.style.cursor='pointer'">
+						How do I use this page?
+					</span> |
+					<span onclick="javascript:getTab('OldMaterial', false, true, true)" onMouseOver="this.style.cursor='pointer'">
+						View in basic HTML
+					</span> 
+				</div>
+			</fieldset>
+			
+			<br/>
+			<br/>
+
+		</body>
+		
+ENDHTML
+	}
+	
+	
+	# non drag-drop version
+	else
+	{
+			
+	# html content for main page body
+	$content = <<ENDHTML;
+		
+		<body>
+			
+			<h1>Material Browser</h1>		
+		
+			<div class="materials_browser">
+				
+				<div class="filter_container">
+				
+					<h3>1) Clip Selection - <i>select required clips</i></h3>
+					
+					
+		
+													
+					<!---		EXAMPLE TEMPLATE FOR LAYING OUT FORM ELEMENTS
+								<fieldset class="table">
+								<legend>Time Range</legend>
+									<ol>
+										<li>
+											<label for="item1">
+											fewfew
+											</label>
+											<div id="item1" class="item">
+												regvre
+											</div>
+										</li>
+									</ol>
+								</fieldset>	--->
+								
+								
+								
+							<fieldset class="table">
+								<legend>Filter Options</legend>
+									<ol>
+										<li>
+											<label for="proj_name">
+												Project Name
+											</label>
+											<select id="proj_name" name="proj_name" class="item" default="0">
+												$proj_opts
+											</select>
+										</li>
+										
+										<li>
+											<label for="search_text">
+												Search Terms
+											</label>
+											<input type="text" id="search_text" class="item" />
+										</li>
+									
+										<li>
+											<label for="v_res">
+												Video Resolution
+											</label>
+											<select id="v_res" class="item" default="8" />
+												$fmt_opts
+											</select>
+										</li>
+									</ol>
+								</fieldset>
+								
+								<fieldset class="table">
+									<legend>Time Range</legend>
+									<ol>
+										<li>
+											<label for="dummy">
+												<input type="radio" name="time_type" id="all_time_radio" value="all" onclick="allTimesSet()" checked="checked" />
+												All times
+											</label>
+											<div id="dummy" class="var_container"></div>
+										</li>
+										
+										<li>
+											<label for="dummy2">
+												<input type="radio" name="time_type" id="time_period_radio" value="range" onclick="dayFilterSet()" />
+												Time range: 
+											</label>
+											<div id="dummy2" class="var_container"></div>
+										</li>
+										
+										<li>
+											<label for="range_in" class="label_r">
+												Period
+											</label>
+											<select id="range_in" class="item" disabled="true">
+												<option value="1">last 10 minutes</option>
+												<option value="2">last 20 minutes</option>
+												<option value="3">morning (00:00 - 11:59)</option>
+												<option value="4">afternoon (12:00 - 23:59)</option>
+												<option value="5">all day</option>
+												<option value="6">2 days</option>
+											</select>
+										</li>
+										
+										<li>
+											<label for="day_in" class="label_r">
+												Day
+											</label>
+											<select id="day_in" class="item" disabled="true">
+												<option value="1">today</option>
+												<option value="2">yesterday</option>
+												<option value="3">2 days ago</option>
+												<option value="4">3 days ago</option>
+											</select>
+										</li>
+										
+									
+										<li>
+											<label for="dummy3">
+												<input type="radio" name="time_type" id="time_range_radio" value="period" onclick="dateFilterSet()" /> 
+												Within the period:
+											</label>
+											<!--- Verification error --->			
+												<div id="time_range_err" class="time_range_err">
+													* Timecode must be in the format hh:mm:ss:ff
+												</div>	
+											<div id="dummy3" class="var_container">
+											</div>
+										</li>
+									
+									
+										<li>
+											<label for="datetime_from" class="label_r">
+												From
+											</label>
+											<div id="datetime_from" class="var_container">
+												<div class="var_container">
+													<div id="from_cal"></div>	<!--- Ext calendar popup ---> 
+												</div>			
+												<div id="from_time" class="var_container">
+													<input type="textbox" name="hh_from" id="hh_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="mm_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="ss_from" class="time_in" size="2" value="00" disabled="true" />:<input type="textbox" id="ff_from" class="time_in" size="2" value="00" disabled="true" />
+												</div>
+												<div class="var_container"> [hh:mm:ss:ff]</div>
+												
+													
+											</div>
+										</li>
+										<li>
+											<label for="datetime_to" class="label_r">
+												To
+											</label>
+											<div id="datetime_to" class="var_container">
+												<div class="var_container">
+													<div id="to_cal"></div>	<!--- Ext calendar popup ---> 
+												</div>			
+												<div id="to_time" class="var_container">
+													<input type="textbox" id="hh_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="mm_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="ss_to" class="time_in" size="2" value="00" disabled="true">:<input type="textbox" id="ff_to" class="time_in" size="2" value="00" disabled="true">
+												</div>
+												<div class="var_container"> [hh:mm:ss:ff]</div>
+											</div>
+										</li>
+									</ol>
+								</fieldset>	
+								 
+								<fieldset class="noborder">
+									<!--- Submit --->
+									<div class="var_container">
+										<input type="button" value="Load Clips" onclick="submitFilter()" />
+									</div>
+									<div class="var_container">
+										<!--- Search matches ---> 
+										<div nane='filter_matches' id='filter_matches' class="filter_matches"></div>
+									</div>
+								</fieldset>
+								
+					</div>		
+				
+				
+				
+				<div class="export_container">
+					<h3>2) Output - <i>create package</i></h3>
+					<fieldset class="table">
+						<legend>Export Options</legend>
+						<ol>
+							<li>
+								<label for="format">
+									Format
+								</label> 
+								<select id="format" class="item" onchange="updateEnabledOpts()">
+									<option value="avid">Avid</option>
+									<option value="fcp">Final Cut Pro</option>
+								</select>
+							</li>
+							
+							<li>
+								<label for="editpath">
+									Editing directory path
+								</label> 
+								<input type="text" id="editpath" class="item" />
+								<div class="var_container"> FCP only</div>
+							</li>
+						</ol>
+					</fieldset>
+					
+					<fieldset class="table">
+						<legend>Director's cut</legend>
+						<ol>
+							<li>
+								<input type="checkbox" id="dircut" onclick="updateEnabledOpts()"/>
+								Add director's cut
+							</li>
+							
+							<li>
+								<input type="checkbox" id="dircutaudio" onchange="updateEnabledOpts()"/>
+								Add audio edits
+							</li>
+						</ol>
+					</fieldset>
+					
+					
+					<fieldset class="table">
+						<legend>Output</legend>
+						<ol>
+							<li>
+								<label for="fnameprefix">
+									Filename prefix
+								</label> 
+								<input id="fnameprefix" type="text" class="item" /> 
+								<div class="var_container">
+									<input type="checkbox" id="longsuffix"> Long suffix
+								</div>
+							</li>
+							
+							<li>
+								<label for="exportdir">
+									Destination directory
+								</label> 
+								<select id="exportdir" default="$defaultSendTo" class="item">
+									$dest_directories
+								</select>
+							</li>
+						</ol>
+					</fieldset>
+				
+				<fieldset class="noborder">
+					<div class="var_container">
+						<input type="button" value="Create Package" onclick="packageAAF()" />
+					</div>
+					<div class="var_container">
+							<input type="checkbox" id="save" /> Save these options as local defaults
+					</div>
+					
+				</fieldset>
+			</div>
+				
+
+				
+				
+				<div class="container">
+					<div id="tree" class="tree"></div>
+					<div id="metadata" class="metadata">
+						$package_details1
+					</div>
+				</div>
+				
+				<div id="status_bar_src" class="status_bar_src">
+				</div>
+			</div>
+			
+									
+
+			
+			
+			<fieldset class="noborder">
+				<div class="centre_container">
+					<span onclick="javascript:getContent('instructions')" onMouseOver="this.style.cursor='pointer'">
+						How do I use this page?
+					</span> |
+					<span onclick="javascript:getTab('OldMaterial', false, true, true)" onMouseOver="this.style.cursor='pointer'">
+						View in basic HTML
+					</span> 
+				</div>
+			</fieldset>
+			
+			<br/>
+			<br/>
+
+		</body>
+		
+ENDHTML
+		
+	}
+	
+	return $content;
 }
 
-sub get_timecode_string
-{
-    my ($position) = @_;
-    
-    my ($hour, $min, $sec, $fr);
-    
-    $hour = int($position / (60 * 60 * 25));
-    $min = int(($position % (60 * 60 * 25)) / (60 * 25));
-    $sec = int((($position % (60 * 60 * 25)) % (60 * 25)) / 25);
-    $fr = int(((($position % (60 * 60 * 25)) % (60 * 25)) % 25));
-    
-    return sprintf("%02d:%02d:%02d:%02d", 
-        $hour, $min, $sec, $fr);
-}
 
-# convert UTC to local time
-sub get_local_time
-{
-    my ($creationDate) = @_;
-    
-    if (!defined $creationDate || length $creationDate == 0)
-    {
-        return "";
-    }
-    
-    local $ENV{"PATH"} = "";
-    
-    my $cmd = "/bin/date -d \"$creationDate\"" . "Z +\"%Y-%m-%d %H:%M:%S\"";
-    return `$cmd`;
-}
+#
+# create a panel which can display properties of selected materials package, such as track names and urls and delete options.
+#
+sub get_package_details {
+	my ($id) = @_;
 
-sub merge_track_numbers
-{
-    my ($numberRanges, $number) = @_;
+	my $package_details;
+	my $title;
 
-    my $index = 0;
-    my $inserted = 0;
-    foreach my $range (@{ $numberRanges })
-    {
-        if ($inserted)
-        {
-            if ($number == $range->[0] - 1)
-            {
-                # merge range with previous range
-                $numberRanges->[$index - 1]->[1] = $range->[1];
-                delete $numberRanges->[$index];
-            }
-            last;
-        }
-        else
-        {
-            if ($number == $range->[0] || $number == $range->[0] - 1)
-            {
-                # extend range to left
-                $range->[0] = $number;
-                $inserted = 1;   
-            }
-            elsif ($number == $range->[1] || $number == $range->[1] + 1)
-            {
-                # extend range to right
-                $range->[1] = $number;
-                $inserted = 1;   
-            }
-        }
-        
-        $index++;
-    }
-    
-    if (!$inserted)
-    {
-        push(@{ $numberRanges }, [$number, $number]);
-    }
-}
+	if ( $id eq 'src' ) {
+		$title = "Source Details";    # source tree
+	}
+	else {
+		$title = "Output Package";    # destination tree
+	}
 
-sub get_page_content
-{
-    my ($material, $numRows, $start, $max) = @_;
-    
-    my $end = $start + $numRows - 1;
-    $end = $max if ($end > $max);
-    
-    my $prevStart = 0;
-    my $prevEnd;
-    if ($start > 1)
-    {
-        $prevEnd = $start - 1;
-        $prevStart = $prevEnd - $numRows + 1;
-        $prevStart = 1 if ($prevStart < 1);
-    }
-    
-    my $nextStart = 0;
-    my $nextEnd;
-    if ($end < $max)
-    {
-        $nextStart = $end + 1;
-        $nextEnd = $nextStart + $numRows - 1;
-        $nextEnd = $max if ($nextEnd > $max);
-    }
-    
-    
-    my @pageContent;
-    
-    push(@pageContent, h1("Essence material"));
+	$package_details = <<ENDHTML;
+						<div id="m_text" class="m_text">
+							<h2>
+								$title
+							</h2>
+							<br/>
+							
+							<h4>
+								Material Actions: 	<!--- TODO: make these pluggable for future expansion - should be loaded from array/refer to functions --->
+							</h4>
+							<span onclick='deleteClicked("$id")' onMouseOver="this.style.cursor='pointer'">> delete</span><br/>
+							<span onclick='deleteAllClicked("$id")' onMouseOver="this.style.cursor='pointer'">> delete all</span><br/>
+							<!---span onclick='copyToExtMedia("$id")' onMouseOver="this.style.cursor='pointer'">> copy to external media</span><br/>--->		
+							<br/>
+							
+							<div id='package_$id' style='visibility: hidden;'>
+								<h4>
+									Tracks:
+								</h4>
+								<div id='tracks_$id'></div>
+								<br/>
+								<h4>
+									Description:
+								</h4>
+								<div id="meta_description_$id"></div>
+								<br/>
+								<h4>
+									Comments:
+								</h4>
+								<div id="meta_comments_$id"></div>
+							</div>
+						</div>
+ENDHTML
 
-    
-    push(@pageContent, br());
-    
-    my @searchNav;
-    
-    push(@searchNav,  
-        a({-href=>"javascript:getContentWithVars('index','start=1&numrows=$numRows')"}, "<<"),
-    );
-    
-    if ($prevStart)
-    {
-        push(@searchNav,  
-            a({-href=>"javascript:getContentWithVars('index','start=$prevStart&numrows=$numRows')"}, 
-                "&nbsp;&nbsp;<"),
-        );
-    }
-    else
-    {
-        push(@searchNav, "&nbsp;&nbsp;<");
-    }
-    
-    if ($start > 0)
-    {
-        push(@searchNav, "&nbsp;&nbsp;$start-$end of $max");
-    }
-        
-    if ($nextStart)
-    {
-        push(@searchNav,
-            a({-href=>"javascript:getContentWithVars('index','start=$nextStart&numrows=$numRows')"}, 
-                "&nbsp;&nbsp;>"),
-        );
-    }
-    else
-    {
-        push(@searchNav, "&nbsp;>");
-    }
-
-    my $lastStart = $max - $numRows + 1;
-    $lastStart = 1 if ($lastStart < 1);
-    push(@searchNav,  
-        a({-href=>"javascript:getContentWithVars('index','start=$lastStart&numrows=$numRows')"}, "&nbsp;&nbsp;>>"),
-    );
-    
-    push(@pageContent, div({-id=>"resultNav"}, @searchNav));
-    
-    
-    push(@pageContent, br());
-    
-    
-    my @rows;
-    push(@rows,
-        Tr({-align=>'left', -valign=>'top'},
-            th([
-                "Index",
-                "Name",
-                "Tracks",
-                "Start",
-                "End",
-                "Duration",
-                "Created",
-                "Video",
-                "Tape/Live",
-                "Descript",
-                "Comments",
-            ]),
-        ),
-    );
-
-    if (defined $material)
-    {
-        my @materialRows;
-        my $index = 0;
-        foreach my $mp (values %{ $material->{"materials"} })
-        {
-            my %materialRow;
-            my $startTC;
-            my $endTC;
-            my $duration; 
-            
-            $materialRow{"name"} = $mp->{"NAME"} || "";
-            $materialRow{"created"} = $mp->{"CREATION_DATE"} || "";
-            
-
-            my @videoTrackNumberRanges;
-            my @audioTrackNumberRanges;
-            foreach my $track (@{ $mp->{"tracks"} })
-            {
-                if ($track->{"DATA_DEF_ID"} == 1)
-                {
-                    merge_track_numbers(\@videoTrackNumberRanges, $track->{'TRACK_NUMBER'});
-                }
-                else
-                {
-                    merge_track_numbers(\@audioTrackNumberRanges, $track->{'TRACK_NUMBER'});
-                }
-                
-                my $sourceClip = $track->{"sourceclip"};
-                
-                #TODO: don't hard code edit rate at 25 fps??
-                if (!defined $duration)
-                {
-                    $duration = $sourceClip->{"LENGTH"} 
-                        * (25 / $track->{"EDIT_RATE_NUM"}) * $track->{"EDIT_RATE_DEN"};
-                    $materialRow{"duration"} = get_duration_string($duration);
-                }
-                    
-                if ($sourceClip->{"SOURCE_PACKAGE_UID"} !~ /\\0*/)
-                {
-                    my $sourcePackage = $material->{"packages"}->{
-                        $sourceClip->{"SOURCE_PACKAGE_UID"} };
-                        
-                    if ($sourcePackage 
-                        && $sourcePackage->{"descriptor"} # is source package
-                        && $sourcePackage->{"descriptor"}->{"TYPE"} == 1) # is file source package
-                    {
-                        if (!defined $materialRow{"video"})
-                        {
-                            my $descriptor = $sourcePackage->{"descriptor"};
-                            
-                            if ($descriptor)
-                            {
-                                $materialRow{"video"} = $descriptor->{"FILE_FORMAT"}.":<br />".$descriptor->{"VIDEO_RES"};
-                            }
-                        }
-
-                        if (scalar @{ $sourcePackage->{"tracks"} } >= 1) # expecting 1 track in the file package
-                        {
-                            my $sourceTrack = $sourcePackage->{"tracks"}[0];
-                            $sourceClip = $sourceTrack->{"sourceclip"};
-                            
-                            if (!defined $startTC)
-                            {
-                                #TODO: don't hard code edit rate at 25 fps??
-                                $startTC = $sourceClip->{"POSITION"} 
-                                    * (25 / $sourceTrack->{"EDIT_RATE_NUM"}) * $sourceTrack->{"EDIT_RATE_DEN"};
-                                $materialRow{"startTC"} = get_timecode_string($startTC);
-                            }
-                            
-                            $sourcePackage = $material->{"packages"}->{
-                                $sourceClip->{"SOURCE_PACKAGE_UID"} };
-                                
-                            if ($sourcePackage 
-                                && $sourcePackage->{"descriptor"} # is source package
-                                && ($sourcePackage->{"descriptor"}->{"TYPE"} == 2 # is tape source package
-                                    || $sourcePackage->{"descriptor"}->{"TYPE"} == 3)) # is live source package
-                            {
-                                $materialRow{"tapeOrLive"} = $sourcePackage->{"NAME"};
-                            }
-                        }
-                    }
-                }
-            }
-            my $first = 1;
-            $materialRow{"tracks"} = "";
-            foreach my $range (@videoTrackNumberRanges)
-            {
-                if ($first)
-                {
-                    $materialRow{"tracks"} .= "V";
-                    $first = 0;
-                }
-                else
-                {
-                    $materialRow{"tracks"} .= ",";
-                }
-                if ($range->[0] != $range->[1])
-                {
-                    $materialRow{"tracks"} .= "$range->[0]-$range->[1]";
-                }
-                else
-                {
-                    $materialRow{"tracks"} .= "$range->[0]";
-                }
-            }
-            $first = 1;
-            foreach my $range (@audioTrackNumberRanges)
-            {
-                if ($first)
-                {
-                    $materialRow{"tracks"} .= "&nbsp;" if $materialRow{"tracks"};
-                    $materialRow{"tracks"} .= "A";
-                    $first = 0;
-                }
-                else
-                {
-                    $materialRow{"tracks"} .= ",";
-                }
-                if ($range->[0] != $range->[1])
-                {
-                    $materialRow{"tracks"} .= "$range->[0]-$range->[1]";
-                }
-                else
-                {
-                    $materialRow{"tracks"} .= "$range->[0]";
-                }
-            }
-
-            $endTC = $startTC + $duration if defined $startTC && defined $duration;
-            if ($endTC)
-            {
-                $materialRow{"endTC"} = get_timecode_string($endTC);
-            }
-            
-            if ($mp->{"usercomments"})
-            {
-                foreach my $userComment (@{ $mp->{"usercomments"} })
-                {
-                    if (!defined $materialRow{"descript"})
-                    {
-                        $materialRow{"descript"} = $userComment->{"VALUE"} if ($userComment->{"NAME"} eq "Descript");
-                    }
-                    if (!defined $materialRow{"comments"})
-                    {
-                        $materialRow{"comments"} = $userComment->{"VALUE"} if ($userComment->{"NAME"} eq "Comments");
-                    }
-                    last if $materialRow{"descript"} && $materialRow{"comments"};
-                }
-            }
-
-            push(@materialRows, \%materialRow);
-
-            $index++;
-        }
-
-        sub materialCmp
-        {
-            if ($a->{"created"} eq $b->{"created"})
-            {
-                return $a->{"name"} cmp $b->{"name"}
-            }
-            else
-            {
-                return $b->{"created"} cmp $a->{"created"};
-            }
-        }
-
-        my $prevDate = "";
-        my $prevStartTC = "";
-        my $bgColour = "grey";
-        $index = 0;        
-        foreach my $materialRow (sort materialCmp @materialRows)
-        {
-            my $date = ($materialRow->{"created"} =~ /^(.*)\ .*$/);
-            if ($date ne $prevDate || $materialRow->{"startTC"} ne $prevStartTC)
-            {
-                $bgColour = ($bgColour eq "white") ? "lightgrey" : "white";
-                $prevStartTC = $materialRow->{"startTC"};
-                $prevDate = $date;
-            }
-            
-            push(@rows,
-                Tr({-bgcolor=>$bgColour},
-                    td([
-                        $index + $start,
-                        $materialRow->{"name"},
-                        $materialRow->{"tracks"} || "",
-                        $materialRow->{"startTC"} || "",
-                        $materialRow->{"endTC"} || "",
-                        $materialRow->{"duration"} || "",
-                        #get_local_time($materialRow->{"created"}),
-						$materialRow->{"created"},
-                        $materialRow->{"video"} || "",
-                        $materialRow->{"tapeOrLive"} || "",
-                        $materialRow->{"descript"} || "",
-                        $materialRow->{"comments"} || "",
-                    ]),
-                ),
-            );
-            
-            $index++;
-        }
-    }
-    
-    push(@pageContent,
-        table({-id=>"materialTable", -border=>1, -cellspacing=>3,-cellpadding=>3}, @rows)
-    );
-    
-    return join("",@pageContent);
+	return $package_details;
 }
 
 
-
-
-END
-{
-    prodautodb::disconnect($dbh) if ($dbh);
+END {
+	prodautodb::disconnect($dbh) if ($dbh);
 }
-
 

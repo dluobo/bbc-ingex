@@ -21,6 +21,7 @@ package ingexhtmlutil;
 
 use strict;
 use warnings;
+use ingexconfig;
 
 use CGI::Pretty qw(:standard);
 
@@ -42,6 +43,7 @@ BEGIN
         &redirect_to_page
         &return_error_page
 		&get_node
+		&log_message
     );
 }
 
@@ -151,6 +153,32 @@ sub get_node
         @tableRows));
 
     return join("", @pageContent);
+}
+
+####################################
+#
+# Error log
+#
+####################################
+
+# write a string to the log file
+sub log_message 
+{
+	my ($logmsg) = @_;
+	my $logfile = ">>".$ingexConfig{'ingex_log'};
+	sub LOCK_EX()  { 2 }     #  Exclusive lock (for writing)
+	
+	if($logmsg){
+		($logmsg) = ($logmsg =~ /((.|\n)*)/); 	#untaint
+		
+		if(open(LOG, $logfile))
+		{
+			flock(LOG, LOCK_EX);	# gain exclusive lock
+			my ($sec, $min, $hour, $day, $mon, $year) = localtime(time);
+			printf LOG "[%04d/%02d/%02d-%02d:%02d:%02d] - $logmsg\n", $year+1900, $mon+1, $day, $hour, $min, $sec;
+			close LOG;
+		}
+	}
 }
 
 1;

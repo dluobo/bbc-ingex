@@ -216,13 +216,13 @@ sub get_edit_content
     my @topRows;
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Name:'), 
             textfield('name', $scf->{"config"}->{'NAME'})]),
         ]));
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Type:'), 
                 popup_menu(
                     -name=>'type',
@@ -240,7 +240,7 @@ sub get_edit_content
         $labels{$recLoc->{'ID'}} = $recLoc->{'NAME'};
     }
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Location:'), 
                 popup_menu(
                     -name=>'recloc',
@@ -250,7 +250,7 @@ sub get_edit_content
         ]));
 
     push(@topRows,  
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
             td([div({-class=>"propHeading1"}, 'Tape number:'), 
                 textfield('tapenum', $scf->{"config"}->{'SPOOL'})]),
         ]));
@@ -258,14 +258,14 @@ sub get_edit_content
         
     my @trackRows;
     push(@trackRows,
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            th(['Id', 'Name', 'Type']),
         ]));
     
     foreach my $track (@{$scf->{'tracks'}})
     {
         push(@trackRows, 
-            Tr({-align=>'left', -valign=>'top'}, [
+            Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
                 td([$track->{'TRACK_ID'}, 
                     textfield("trackname-$track->{'TRACK_ID'}", $track->{'NAME'}),
                     $track->{'DATA_DEF'}]),
@@ -274,7 +274,7 @@ sub get_edit_content
     }
     
     push(@topRows,
-        Tr({-align=>'left', -valign=>'top'}, [
+        Tr({-class=>"simpleTable", -align=>'left', -valign=>'top'}, [
            td([div({-class=>"propHeading1"}, 'Tracks:'), 
             table({-class=>"borderTable"}, @trackRows)]),
         ]));

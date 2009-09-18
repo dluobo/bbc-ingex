@@ -120,7 +120,7 @@ function Status_process_channelState (instanceData, visible) {
 	}
 	
 	if(visible && this.container.$().innerHTML == ''){
-		var h = "<table>";
+		var h = "<table class='simpleTable'>";
 		for (channel in instanceData.monitorData[this.name]) {
 			var chan = instanceData.monitorData[this.name][channel];
 			h += "<tr><td>";

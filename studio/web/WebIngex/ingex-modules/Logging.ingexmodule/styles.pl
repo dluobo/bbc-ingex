@@ -42,10 +42,6 @@ sub build_css
 		push(@allCSS, $css);
 	}
 	
-	# if($css = getCSS('/srv/www/cgi-bin/ingex-modules/Logging.ingexmodule/ext-all.css')){
-	# 		push(@allCSS, $css);
-	# 	}
-	
 	return join("\n\n",@allCSS);
 }
 

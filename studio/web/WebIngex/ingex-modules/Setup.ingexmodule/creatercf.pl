@@ -180,7 +180,7 @@ sub get_create_content
     my @tableRows;
     
     push(@tableRows,  
-        Tr({-align=>"left", -valign=>"top"}, [
+        Tr({-class=>"simpleTable", -align=>"left", -valign=>"top"}, [
             td([div({-class=>"propHeading1"}, "Recorder:"), $rec->{"NAME"}]),
             td([div({-class=>"propHeading1"}, "Name:"), textfield("name")]),
             td([div({-class=>"propHeading1"}, "# Inputs:"), 

@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 # Copyright (C) 2009  British Broadcasting Corporation
-# Author: Sean Casey
+# Author: Sean Casey <seantc@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -17,6 +17,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
+
+
+#
+# download script - outputs contents of a local filename so it can be downloaded
+#
 
 use strict;
 use CGI qw(:standard);
@@ -43,7 +48,9 @@ if($fname eq ''){
     return_error_page("No filename supplied");
 }
 
-open FILE, $fname or die $!;
+open FILE, $fname or 
+	return_error_page("File does not exist");
+	
 my @data = <FILE>;
 close FILE;
 

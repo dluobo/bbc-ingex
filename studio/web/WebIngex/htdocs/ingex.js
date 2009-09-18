@@ -149,7 +149,7 @@ function getTab(tabName, optionNotTab, logToHistory, getContent, postStr)
 	}
 
 	//get the menu
-	if((optionNotTab && tabName == "index") || tabName == "Logging"){
+	if((optionNotTab && tabName == "index") || tabName == "Logging" || tabName == "Material"){
 		$("menu").style.display = "none";
 		$("contentPane").style.marginLeft = "";
 	} else if (optionNotTab) {

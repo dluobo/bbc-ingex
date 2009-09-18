@@ -59,19 +59,22 @@ sub load_config
 {
     ingexconfig::load_config("/srv/www/cgi-bin/ingex-modules/Material.ingexmodule/material.conf");
 
-	($ingexConfig{"create_aaf_dir"}) = ($ingexConfig{"create_aaf_dir"} =~ /(.*)/)
+				($ingexConfig{"create_aaf_dir"}) = ($ingexConfig{"create_aaf_dir"} =~ /(.*)/)
 	                if ($ingexConfig{"create_aaf_dir"});
+	            ($ingexConfig{"delete_pkg_dir"}) = ($ingexConfig{"delete_pkg_dir"} =~ /(.*)/)
+	                if ($ingexConfig{"delete_pkg_dir"});
 	            ($ingexConfig{"avid_aaf_export_dir"}) = ($ingexConfig{"avid_aaf_export_dir"} =~ /(.*)/)
 	                if ($ingexConfig{"avid_aaf_export_dir"});
 	            ($ingexConfig{"avid_aaf_prefix"}) = ($ingexConfig{"avid_aaf_prefix"} =~ /(.*)/)
 	                if ($ingexConfig{"avid_aaf_prefix"});
 	            ($ingexConfig{"directors_cut_db"}) = ($ingexConfig{"directors_cut_db"} =~ /(.*)/)
 	                if ($ingexConfig{"directors_cut_db"});
-
 	            ($ingexConfig{"default_material_rows"}) = ($ingexConfig{"default_material_rows"} =~ /(.*)/)
 	                if ($ingexConfig{"default_material_rows"});
 	            ($ingexConfig{"max_material_rows"}) = ($ingexConfig{"max_material_rows"} =~ /(.*)/)
 	                if ($ingexConfig{"max_material_rows"});
+	            ($ingexConfig{"drag_drop"}) = ($ingexConfig{"drag_drop"} =~ /(.*)/)
+	                if ($ingexConfig{"drag_drop"});
 } 
 
     

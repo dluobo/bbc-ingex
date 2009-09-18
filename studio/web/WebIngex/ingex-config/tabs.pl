@@ -49,7 +49,7 @@ sub build_tabs
 	my $f;
 	
 	foreach $f (@thefiles) {
-		if(substr($f, -12) eq ".ingexmodule"){
+		if(substr($f, -12) eq ".ingexmodule" && $f ne "OldMaterial.ingexmodule"){
 			substr($f, -12)  = "";
 			push(@tabsHTML, "<li class='tab' id='$f\_tab'><a href='javascript:getTab(\"$f\",false,true,true)'>$f</a></li>");
 		}
