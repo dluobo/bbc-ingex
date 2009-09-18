@@ -4,13 +4,14 @@ project(routerlogger): taoserver, naming, messaging, valuetype {
   includes += ../IDL/Generated
   includes += ../IDL
   includes += ../common
+  includes += ../../common
   includes += ../../../common
   includes += ../../database/src
   specific(vc71) {
-    includes += $(LIBODBCPP)/include
+    //includes += $(LIBODBCPP)/include
   }
 
-  libs += odbc++
+  libs += pqxx
   libs += prodautodb
   libs += common
   libs += acetaocommon
