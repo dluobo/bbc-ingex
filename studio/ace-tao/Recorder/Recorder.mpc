@@ -12,13 +12,13 @@ project(Recorder): taoserver, naming, messaging, valuetype {
   includes += ../../mxfwriter
   includes += /usr/local/include/ffmpeg
   specific(vc71) {
-    includes += $(LIBODBCPP)/include
+    //includes += $(LIBODBCPP)/include
   }
   libs += avformat avcodec avutil swscale bz2 z mp3lame x264 faac faad
   libs += jpeg
   //libs += jpeg-mmx
   libs += uuid
-  libs += odbc++
+  libs += pqxx
   libs += common
   libs += acetaocommon
   libs += YUVlib
