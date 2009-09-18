@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_save.c,v 1.9 2009/03/19 18:01:58 john_f Exp $
+ * $Id: nexus_save.c,v 1.10 2009/09/18 16:35:50 philipn Exp $
  *
  * Utility to store video frames from dvs_sdi ring buffer to disk files
  *
@@ -319,6 +319,10 @@ extern int main(int argc, char *argv[])
 		}
 		video_offset = pctl->sec_video_offset;
 		break;
+    default:
+        fprintf(stderr, "unsupported encoder resolution\n");
+        return 1;
+        break;
 	}
 #endif
 
