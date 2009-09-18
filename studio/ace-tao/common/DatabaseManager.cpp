@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseManager.cpp,v 1.1 2009/01/23 19:40:09 john_f Exp $
+ * $Id: DatabaseManager.cpp,v 1.2 2009/09/18 15:49:10 john_f Exp $
  *
  * Manager for prodauto::Database class
  *
@@ -29,16 +29,20 @@
 DatabaseManager * DatabaseManager::mInstance = 0;
 
 // constants
-const std::string DSN = "prodautodb";
+const std::string DBHOST = "localhost";
+const std::string DBNAME = "prodautodb";
 
 
 DatabaseManager::DatabaseManager()
 : mInitialConnections(0), mMaxConnections(0)
 { }
 
-void DatabaseManager::Initialise(const std::string & username, const std::string password,
+void DatabaseManager::Initialise(const std::string & host, const std::string & dbname,
+                                 const std::string & username, const std::string & password,
                                  unsigned int initial_connections, unsigned int max_connections)
 {
+    mHost = host;
+    mDbName = dbname;
     mUsername = username;
     mPassword = password;
     mInitialConnections = initial_connections;
@@ -49,7 +53,7 @@ void DatabaseManager::Initialise(const std::string & username, const std::string
 
 void DatabaseManager::ReInitialise()
 {
-    prodauto::Database::initialise(DSN, mUsername, mPassword, mInitialConnections, mMaxConnections);
+    prodauto::Database::initialise(mHost, mDbName, mUsername, mPassword, mInitialConnections, mMaxConnections);
 }
 
 

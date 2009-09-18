@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseManager.h,v 1.1 2009/01/23 19:40:09 john_f Exp $
+ * $Id: DatabaseManager.h,v 1.2 2009/09/18 15:49:10 john_f Exp $
  *
  * Manager for prodauto::Database class
  *
@@ -35,7 +35,8 @@ class DatabaseManager
 public:
 // methods
     static DatabaseManager * Instance();
-    void Initialise(const std::string & username, const std::string password,
+    void Initialise(const std::string & host, const std::string & dbname,
+        const std::string & username, const std::string & password,
         unsigned int initial_connections, unsigned int max_connections);
     void ReInitialise();
 
@@ -49,6 +50,8 @@ private:
 // methods
 // variables
     static DatabaseManager * mInstance;
+    std::string mHost;
+    std::string mDbName;
     std::string mUsername;
     std::string mPassword;
     unsigned int mInitialConnections;
