@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: help.cpp,v 1.13 2009/05/14 11:00:10 john_f Exp $                *
+ *   $Id: help.cpp,v 1.14 2009/09/18 16:10:15 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -45,7 +45,7 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	notebook->AddPage(project, wxT("Project Names"));
 
 	wxTextCtrl * cuePoints = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-	message = wxT("Cue points, or locators, can be added to recordings.  The #Misc# menu has an option to assign predefined text and colour to up to ten different cue points, so that they can be inserted quickly during recording.  The left hand column contains the text, while clicking on the right hand column produces a pop-up menu to select a colour.  If you press #ENTER# while editing cue point text, the next cell down becomes highlighted, allowing you to enter text for several cue points quickly.");
+	message = wxT("Cue points, or locators, can be added to recordings.  The #Misc# menu has an option to assign predefined text and colour to up to ten different cue points, so that they can be inserted quickly during recording.  The left hand column contains the text, while clicking on the right hand column produces a pop-up menu to select a colour.  If you press #ENTER# while editing cue point text, the next cell down becomes highlighted, allowing you to enter text for several cue points quickly.\n\nSee the \"Cue point display and controls\" help tab for instructions about how to add cue points to recordings.");
 	StyleAndWrite(cuePoints, message);
 	notebook->AddPage(cuePoints, wxT("Cue Points (Locators)"));
 
@@ -71,7 +71,7 @@ HelpDlg::HelpDlg(wxWindow * parent)
 #else
 	message += wxT("two");
 #endif
-	message += wxT(" buttons.  The first indicator shows the recorder status: stopped, running-up, recording, playing (forwards and backwards, and at various speeds), or paused.  Its function is echoed in the status text at the bottom of the window.\n\nTo the right of the status display is #Studio timecode#, as obtained from the recorders.  The title shows which recorder is supplying this timecode, if any.  (The controller prefers to use non-router recorders.)  It is followed by a health indicator which will warn of a problem - look at the source tree in the record tab for details.\n\nFinally, there is #Position#, which corresponds to the current recording.  This will show question marks if the recorder was already recording when you connected to it.\n\nThe buttons control the player mode.  #Recordings# causes the player to play back recordings from the cue point display at the bottom of the window.  #Files# plays back files which have been selected in the #Player# menu.");
+	message += wxT(" buttons.  The first indicator shows the recorder status: stopped, running-up, recording, playing (forwards and backwards, and at various speeds), or paused.  Its function is echoed in the status text at the bottom of the window.\n\nTo the right of the status display is #Studio timecode#, as obtained from the recorders.  The title shows which recorder is supplying this timecode, if any.  (The controller prefers to use non-router recorders.)  It is followed by a health indicator which will warn of a problem - look at the source tree in the record tab for details.\n\nNext, there is #Position#, which corresponds to the current recording.  This will show question marks if the recorder was already recording when you connected to it.\n\nFinally, the three buttons control the player mode.  #Recordings# causes the player to play back recordings from the cue point display at the bottom of the window (and is only enabled if there are any recordings listed).  #Opened Files# plays back what has been opened from the #Player# menu (and is only enabled once something has been opened).");
 #ifndef DISABLE_SHARED_MEM_SOURCE
 	message += wxT("  #E to E#  shows live incoming material if the application is running on a recorder.");
 #endif
@@ -98,7 +98,8 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	message += wxT("  If an SDI card has been detected, playback can be to an external monitor exclusively, or as well as, the computer monitor - select from the #Player type# submenu of the #Player# menu.  (If external playback is disabled, an SDI card will output whatever is connected to its input.)");
 #endif
 	message += wxT("\n\nThe player window will only appear for the first time when at least one video file from the recording is available, which may take a while, depending on post-roll and the configuration of the recorders.  If not all files appear simultaneously, the player will start with what is available and reload automatically (maintaining its position in the recording) as more files become available.\n\nThe video tracks recorded during the take appear as radio buttons when the #Playback# tab, below the transport controls, is clicked.  The space given to this tab can be varied by dragging the dotted splitter line below it.  Each radio button has a tool-tip showing the associated file name.  Only the tracks currently available are enabled.\n\nA quad split is also provided, and when selected the player window title will show the names of the tracks displayed.  If more than four tracks are available, the first four are shown on the quad split.  Note that it takes more processing power and bandwidth to display the quad split than an individual track, so the quad split may play slowly depending on the capabilities of the computer and the network.\n\nThe first pair of audio tracks are normally played, but a #Player# menu option allows the audio to follow the current video source.\n\nThe #Playback# tab also shows the project name used when the recording was made.\n\nPlayer-specific shortcut keys (see #Shortcuts# submenu of #Help# menu) are #F7# and #F8# to cycle through the tracks, #J#, #K# and #L# for reverse (with fast reverse)/pause/forwards (with fast forwards), #Space# to toggle between forwards/reverse (depending on what was last selected) and pause, #3# and #4# for stepping by frame, and #M# to toggle audio mute.  Shortcut keys will work when either the controller or the player window has focus on the computer desktop, but some will not work if the #Description# field has focus - see the #Record tab# help section.  In addition, when the player has focus, left and right arrows become available as alternatives to #3# and #4# for stepping.\n\nThe player also responds to the mouse.  You can drag the progress bar pointer, or click anywhere on the progress bar to jump to that position.  You can also click on the image to toggle between the quad split and the source shown in the quadrant of the quad split in which you click.\n\nWhen a new recording is made, the player window is blanked rather than disappearing.  This allows the player to maintain its position on the screen during a session.");
-	message += wxT("\n\nIt is possible to use the player to open arbitrary MXF and MOV files.  To do this, select the appropriate option from the #Player# menu and pick the files to play.  In the case of MXF, you can make a multiple selection, whereas you can only select one MOV file.  When you have chosen file(s) to play, the #Play files# button is enabled, which allows you to toggle between playing the file(s) and recordings you have made this session.");
+	message += wxT("\n\nIt is possible to use the player to open arbitrary MXF and MOV files, or to play back complete recordings from a server.  To do this, select the appropriate option from the #Player#->#Open# submenu.  You can select multiple MXF files at once, whereas you can only select one MOV file.  The #Open recording...# option (shortcut #Ctrl-O#) brings up a dialogue which allows you to select a recording (group of MXF files) by project name and date.  The recordings listed are of offline quality, but #Online available# indicates that at least one file of the online version has also been found.  If the #Prefer Online# button is toggled, the online version will be played if available.  The button will be orange when selecting online material, because this option uses a lot of server bandwidth which may interfere with other operations.  (Note that if copying to the server is still in progress, a recording may be missing some audio or video files despite being shown.  Furthermore, offline copying takes priority, and the files are smaller, so online material will take longer to appear.  If files are missing, try opening the recording again later.)");
+	message += wxT("\n\nWhen you have chosen file(s) to play, the #Play files# button is enabled, which allows you to switch between playing the file(s), recordings you have made this session, and E-E mode.");
 	message += wxT("\n\nThe #Player# menu also contains options to show on-screen position instead of timecode, or no on-screen display at all");
 #ifdef HAVE_DVS
 	message += wxT(", or no on-screen display on the external monitor");
@@ -108,13 +109,12 @@ HelpDlg::HelpDlg(wxWindow * parent)
 	notebook->AddPage(player, wxT("Video player and playback tab"));
 
 	wxTextCtrl * jogshuttle = new wxTextCtrl(notebook, -1, wxT(""), wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxTE_MULTILINE);
-	message = wxT("A Shuttle Pro or Shuttle Pro 2 USB jog/shuttle control can be used to provide the following functions:\n\nJog wheel and shuttle ring: jog/shuttle the player.\n\nTop row of buttons (L-R):\n\t#Record#\n\t#Mark cue#\n\t#Stop#*\n\t#Stop#.*\n\n*The two right hand buttons need to be pressed simultaneously, or one of the buttons plus one of the black buttons on the Shuttle Pro 2, to stop.  If you are entering a cue point, the dialogue will be dismissed and the cue point will not be stored.\n\nSecond row of buttons (L-R):\n\tPlay backwards\n\tPause\n\tPlay forwards\n\ttoggle #Play Files#\n\t");
+	message = wxT("A Shuttle Pro or Shuttle Pro 2 USB jog/shuttle control can be used to provide the following functions:\n\nJog wheel and shuttle ring: jog/shuttle the player.\n\nTop row of buttons (L-R):\n\t#Record#\n\t#Mark cue#\n\t#Stop#*\n\t#Stop#.*\n\n*The two right hand buttons need to be pressed simultaneously, or one of the buttons plus one of the black buttons on the Shuttle Pro 2, to stop.  If you are entering a cue point, the dialogue will be dismissed and the cue point will not be stored.\n\nSecond row of buttons (L-R):\n\tPlay #Recordings# mode (if available)\n\tPlay/fast backwards\n\tPause");
 #ifndef DISABLE_SHARED_MEM_SOURCE
-	message += wxT("toggle #E to E#");
-#else
-	message += wxT("Unassigned");
+	message += wxT(" if playing, then toggle #E to E# mode");
 #endif
-	message += wxT(".\n\nLeft hand long silver buttons:\n\tUp/Down cue points.\n\nRight hand long silver buttons:\n\tsame as #Previous Take# and #Next Take# buttons.");
+	message += wxT("\n\tPlay/fast forwards\n\tPlay #Opened Files# mode (if opened).");
+	message += wxT("\n\nLeft hand long silver buttons:\n\tUp/Down cue points.\n\nRight hand long silver buttons:\n\tsame as #Previous Take# and #Next Take# buttons.");
 	StyleAndWrite(jogshuttle, message);
 	notebook->AddPage(jogshuttle, wxT("Jog/Shuttle Control"));
 
@@ -172,6 +172,6 @@ AboutDlg::AboutDlg(wxWindow * parent)
 #ifdef DISABLE_SHARED_MEM_SOURCE
 	message += wxT("not ");
 #endif
-	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.13 2009/05/14 11:00:10 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2009/05/14 11:00:10 $.");
+	message += wxT("included.  Please send feedback to matthewmarks@users.sourceforge.net.\n\nVersion $Id: help.cpp,v 1.14 2009/09/18 16:10:15 john_f Exp $\n\nCopyright (C) British Broadcasting Corporation 2006-2009 - All rights reserved.\n\n$Date: 2009/09/18 16:10:15 $.");
 	textBox->SetValue(message);
 };

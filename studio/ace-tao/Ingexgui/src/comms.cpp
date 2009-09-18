@@ -31,7 +31,7 @@
 /// @param parent the parent window (to where events will be sent)
 /// @param argc Command line argument count - see argv.
 /// @param argv Command line arguments - the ORB will remove and respond to any it recognises.
-Comms::Comms(wxWindow * parent, int argc, wxChar** argv)
+Comms::Comms(wxWindow * parent, int& argc, char** argv)
 : wxThread(wxTHREAD_JOINABLE), mParent(parent), mNameService(CosNaming::NamingContext::_nil()), mOK(true), mErrMsg(wxT("Not Initialised")) //joinable thread means we can terminate it in order to be able to delete mCondition safely
 {
 	if (argc < 3) {
@@ -40,18 +40,9 @@ Comms::Comms(wxWindow * parent, int argc, wxChar** argv)
 		mOK = false;
 	}
 	if (mOK) {
-		// create char * [] version of argv
-//		char * argv_[argc]; //gcc likes this but Win32 doesn't
-		char ** argv_ = new char * [argc];
-		for (int i = 0; i < argc; i++) {
-			wxString wxArg = argv[i];
-			char * arg = new char[wxArg.Len() + 1];
-			strcpy(arg, wxArg.mb_str());
-			argv_[i] = arg;
-		}
 		// Initialise ORB
 		try {
-			mOrb = CORBA::ORB_init(argc, argv_);
+			mOrb = CORBA::ORB_init(argc, argv);
 			SetTimeout(5); //Can lock up for a long time if this isn't set
 		// Initialise naming service, supplied to the orb in the command line args
 		}
@@ -62,7 +53,6 @@ Comms::Comms(wxWindow * parent, int argc, wxChar** argv)
 			dlg.ShowModal();
 			mOK = false;
 		}
-		delete[] argv_;
 	}
 	if (mOK && !InitNs()) {
 		wxMessageDialog dlg(mParent, wxT("Failed to initialise naming service."), wxT("Comms problem"), wxICON_EXCLAMATION | wxOK);
@@ -118,15 +108,16 @@ void Comms::SetTimeout(int secs)
 /// Shuts down thread (if running) to avoid memory leaks.
 Comms::~Comms()
 {
- 	if (mOK) {
- 		//the thread's running and mCondition exists
- 		mMutex.Lock();
- 		mDie = true;
- 		mCondition->Signal(); //doesn't matter if this gets lost because thread will still be doing the previous loop
- 		mMutex.Unlock();
- 		Wait();
- 		delete mCondition;
- 	}
+	if (mOK) {
+		mOrb->destroy(); //prevents it waiting for a pending CORBA call to return
+		//the thread's running and mCondition exists
+		mMutex.Lock();
+		mDie = true;
+		mCondition->Signal(); //doesn't matter if this gets lost because thread will still be doing the previous loop
+		mMutex.Unlock();
+		Wait();
+		delete mCondition;
+	}
 }
 
 /// Get the NameService object reference from the command line and decode multiple profile IOR.

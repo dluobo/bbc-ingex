@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.12 2009/05/01 13:41:34 john_f Exp $              *
+ *   $Id: player.cpp,v 1.13 2009/09/18 16:10:16 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -71,7 +71,8 @@ LocalIngexPlayer(&mListenerRegistry,
 	4, //non-default number of audio level monitors
 	-18.0,
 	true
-), mOSDtype(displayType), mEnabled(enabled), mOK(false), mSpeed(0), mMuted(false), mOpeningSocket(false)
+), mOSDtype(displayType), mEnabled(enabled), mOK(false), mMode(PlayerMode::STOP), mSpeed(0), mMuted(false), mOpeningSocket(false),
+mPrevTrafficControl(true) //so that it can be switched off
 {
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
@@ -170,12 +171,13 @@ void Player::Load(std::vector<std::string> * fileNames, std::vector<std::string>
 				mNFilesExisting = mFileNames.size();
 			}
 		}
-		if (!mNFilesExisting) {
-			mOK = reset(); //otherwise it keeps showing what was there before even if it can't open any files
+		if (!mNFilesExisting || SHM_INPUT == inputType) {
+			TrafficControl(false);
+			mOK = reset(); //otherwise it keeps showing what was there before even if it can't open any files/shared memory
 		}
 		//load the player (this will merely store the parameters if the player is not enabled)
-		if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint, chunkBefore, chunkAfter) && mEnabled && mFileNames.size() != mNFilesExisting) {
-			//player isn't happy, and (probably) not all files were there when the player opened, so start polling for them
+		if (!Start(fileNames, trackNames, inputType, offset, cuePoints, startIndex, cuePoint, chunkBefore, chunkAfter) && mEnabled && mFileNames.size() != mNFilesExisting) { //player isn't happy, and (probably) not all files were there when the player opened
+			//start polling for files
 			mFilePollTimer->Start(FILE_POLL_TIMER_INTERVAL);
 		}
 	}
@@ -242,7 +244,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			inputs.push_back(input);
 		}
 		mOK = start(inputs, mOpened, SHM_INPUT != mInputType && LOAD_FIRST_CHUNK != mChunkLinking && (PlayerMode::PAUSE == mMode || PlayerMode::STOP == mMode), SHM_INPUT == mInputType ? 0 : mPreviousFrameDisplayed); //play forwards or paused
-		int trackToSelect = 0; //display quad split by default
+		int trackToSelect = (1 == mFileNames.size() ? 1 : 0); //display quad split by default unless only one file
 		if (mOK) {
 			if (SHM_INPUT != mInputType) {
 				//(re)load stored cue points
@@ -255,7 +257,8 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 				else if (PlayerMode::PLAY_BACKWARDS == mMode) {
 					playSpeed(-1);
 				}
-				SetOSD(mOSDtype);
+//				SetOSD(mOSDtype); //player doesn't respond to setOSDScreen() here, so wait until a frame has been displayed
+				mSetOSDType = true; //if player is fixed, revert to the above
 				if (LOAD_PREV_CHUNK == mChunkLinking) {
 					JumpToCue(-1); //the end
 				}
@@ -510,7 +513,7 @@ void Player::Reset()
 
 /// Moves to the given cue point.
 /// @param cuePoint 0 for the start; 1+ for cue points supplied in Load(); the end for negative values or anything greater than the number of cue points supplied.
-void Player::JumpToCue(int cuePoint)
+void Player::JumpToCue(const int cuePoint)
 {
 //std::cerr << "Player JumpToCue" << std::endl;
 	if (mOK) {
@@ -531,6 +534,15 @@ void Player::JumpToCue(int cuePoint)
 		mPreviousFrameDisplayed = 0; //so that the cue point takes priority when the player is reloaded if it is currently disabled
 	}
 	mLastRequestedCuePoint = cuePoint;
+}
+
+/// Moves to the given frame.
+/// @param frame The frame offset.
+void Player::JumpToFrame(const int64_t frame)
+{
+	if (mOK) {
+		seek(frame, SEEK_SET, FRAME_PLAY_UNIT);
+	}
 }
 
 /// Sets the type of on screen display.
@@ -642,6 +654,10 @@ void Player::OnFrameDisplayed(wxCommandEvent& event) {
 				}
 				mLastCuePointNotified = mark;
 			}
+			if (mSetOSDType) {
+				SetOSD(mOSDtype); //player doesn't obey this call on loading, so do it here
+				mSetOSDType = false;
+			}
 		}
 		//tell the gui so it can update the position display
 		event.Skip();
@@ -670,7 +686,7 @@ void Player::OnStateChange(wxCommandEvent& event)
 void Player::OnSpeedChange(wxCommandEvent& event)
 {
 	//inform any copying server
-	if (event.GetInt() && !mSpeed) { //just started playing
+	if (event.GetInt() && !mSpeed && SHM_INPUT != mInputType) { //just started playing
 		//traffic control on, to ensure smooth playback
 		TrafficControl(true);
 	}
@@ -721,8 +737,10 @@ void Player::OnFilePollTimer(wxTimerEvent& WXUNUSED(event))
 /// Sends traffic control message and disconnects.
 void Player::OnSocketEvent(wxSocketEvent& WXUNUSED(event))
 {
-//std::cerr << "Socket Connection made" << std::endl;
+//std::cerr << "Socket Connection made; setting traffic control " << (mTrafficControl ? "ON\n" : "OFF\n");
+	//Socket is now open so best send a message even if traffic control status hasn't changed
 	mSocket->Write(mTrafficControl ? "ingexgui\n0\n" : "ingexgui\n", mTrafficControl ? 11 : 9);
+	mPrevTrafficControl = mTrafficControl;
 	mSocket->Close();
 	mOpeningSocket = false;
 }
@@ -787,8 +805,9 @@ void Player::SetWindowName(const wxString & name)
 /// @param synchronous Don't use events - block until the message has been sent (with a timeout)
 void Player::TrafficControl(const bool state, const bool synchronous)
 {
-	if (!mOpeningSocket) { //without this, app can hang with 100% usage in gettimeofday() if there is a server
-		mTrafficControl = state;
+	mTrafficControl = state; //allows state to be changed while waiting for socket to open
+	if (!mOpeningSocket //without this check, app can hang with 100% usage in gettimeofday() if it manages to open a socket
+	 && mTrafficControl != mPrevTrafficControl) { //avoid unnecessary socket connections
 		wxIPV4address addr;
 		addr.Hostname(wxT("localhost"));
 		addr.Service(TRAFFIC_CONTROL_PORT);

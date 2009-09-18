@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.h,v 1.6 2009/05/01 13:41:34 john_f Exp $         *
+ *   $Id: recordergroup.h,v 1.7 2009/09/18 16:10:16 john_f Exp $         *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -35,7 +35,7 @@ class wxXmlDocument;
 class RecorderGroupCtrl : public wxListBox
 {
 	public:
-		RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int, wxChar**, const wxXmlDocument *);
+		RecorderGroupCtrl(wxWindow *, wxWindowID id, const wxPoint &, const wxSize &, int&, char**, const wxXmlDocument *);
 		~RecorderGroupCtrl();
 		void StartGettingRecorders();
 		void SetPreroll(const ProdAuto::MxfDuration);
@@ -75,6 +75,7 @@ class RecorderGroupCtrl : public wxListBox
 			TIMECODE_MISSING,
 			COMM_FAILURE,
 			SET_TRIGGER,
+			CHUNK_START,
 			CHUNK_END,
 		};
 	private:

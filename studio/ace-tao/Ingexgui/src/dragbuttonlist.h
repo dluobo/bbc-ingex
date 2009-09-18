@@ -25,6 +25,7 @@
 #include <vector>
 #include <string>
 #include "RecorderC.h"
+#include "LocalIngexPlayer.h" //for prodauto
 
 class ChunkInfo;
 
@@ -33,7 +34,7 @@ class DragButtonList : public wxScrolledWindow
 {
 	public:
 		DragButtonList(wxWindow *);
-		void SetTracks(ChunkInfo &, std::vector<std::string> &, std::vector<std::string> &);
+		prodauto::PlayerInputType SetTracks(ChunkInfo &, std::vector<std::string> &, std::vector<std::string> &);
 		const wxString SetMXFFiles(wxArrayString &, std::vector<std::string> &, std::vector<std::string> &, ProdAuto::MxfTimecode &);
 		void SetEtoE(std::vector<std::string> &, std::vector<std::string> &);
 		void EnableAndSelectTracks(std::vector<bool> *, const unsigned int);

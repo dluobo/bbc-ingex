@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.10 2009/05/01 13:41:34 john_f Exp $                *
+ *   $Id: player.h,v 1.11 2009/09/18 16:10:16 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -112,7 +112,8 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		void Pause();
 		void Step(bool);
 		void Reset();
-		void JumpToCue(int cuePoint);
+		void JumpToCue(const int);
+		void JumpToFrame(const int64_t);
 		bool Within();
 		bool AtRecEnd();
 		bool LastPlayingBackwards();
@@ -156,11 +157,13 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		bool mMuted;
 		bool mLastPlayingBackwards;
 		wxSocketClient * mSocket;
-		bool mTrafficControl;
 		bool mOpeningSocket;
+		bool mTrafficControl;
+		bool mPrevTrafficControl;
 		bool mChunkBefore;
 		bool mChunkAfter;
 		PlayerEventType mChunkLinking;
+		bool mSetOSDType;
 		DECLARE_EVENT_TABLE()
 };
 

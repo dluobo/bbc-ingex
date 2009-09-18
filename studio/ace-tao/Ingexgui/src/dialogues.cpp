@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.cpp,v 1.10 2009/05/14 11:00:10 john_f Exp $           *
+ *   $Id: dialogues.cpp,v 1.11 2009/09/18 16:10:15 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -26,6 +26,11 @@
 #include <wx/spinctrl.h>
 #include <wx/tglbtn.h>
 #include <wx/colordlg.h>
+#include <wx/filename.h>
+#include <wx/dir.h>
+
+#include "up.xpm"
+#include "down.xpm"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -976,17 +981,18 @@ bool SetTapeIdsDlg::IsUpdated()
 
 BEGIN_EVENT_TABLE(JumpToTimecodeDlg, wxDialog)
 	EVT_TEXT(wxID_ANY, JumpToTimecodeDlg::OnTextChange)
-	EVT_TEXT_ENTER(wxID_ANY, JumpToTimecodeDlg::OnEnter)
 	EVT_SET_FOCUS(JumpToTimecodeDlg::OnFocus)
 	EVT_KILL_FOCUS(JumpToTimecodeDlg::OnFocus)
 END_EVENT_TABLE()
 
-JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Jump to Timecode"))
+JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent, ProdAuto::MxfTimecode tc) : wxDialog(parent, wxID_ANY, (const wxString &) wxT("Jump to Timecode")), mTimecode(tc)
 {
+	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+	SetSizer(mainSizer);
 	wxBoxSizer * timecodeSizer = new wxBoxSizer(wxHORIZONTAL);
-	SetSizer(timecodeSizer);
+	mainSizer->Add(timecodeSizer, 0, wxALL, CONTROL_BORDER);
 	wxFont * font = wxFont::New(TIME_FONT_SIZE, wxFONTFAMILY_MODERN); //this way works under GTK
-	mHours = new MyTextCtrl(this, HRS, wxT("00"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	mHours = new MyTextCtrl(this, HRS, wxT("00"));
 	mHours->SetFont(*font);
 	wxWindowDC DC(mHours);
 	wxSize size = DC.GetTextExtent(wxT("00"));
@@ -998,7 +1004,7 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_
 	wxStaticText * hoursSep = new wxStaticText(this, wxID_ANY, wxT(":"));
 	hoursSep->SetFont(*font);
 	timecodeSizer->Add(hoursSep);
-	mMins = new MyTextCtrl(this, MINS, wxT("00"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	mMins = new MyTextCtrl(this, MINS, wxT("00"));
 	mMins->SetFont(*font);
 	mMins->SetClientSize(size);
 	mMins->SetMaxLength(2);
@@ -1006,7 +1012,7 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_
 	wxStaticText * minsSep = new wxStaticText(this, wxID_ANY, wxT(":"));
 	minsSep->SetFont(*font);
 	timecodeSizer->Add(minsSep);
-	mSecs = new MyTextCtrl(this, SECS, wxT("00"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	mSecs = new MyTextCtrl(this, SECS, wxT("00"));
 	mSecs->SetFont(*font);
 	mSecs->SetClientSize(size);
 	mSecs->SetMaxLength(2);
@@ -1014,11 +1020,15 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_
 	wxStaticText * secsSep = new wxStaticText(this, wxID_ANY, wxT(":"));
 	secsSep->SetFont(*font);
 	timecodeSizer->Add(secsSep);
-	mFrames = new MyTextCtrl(this, FRAMES, wxT("00"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	mFrames = new MyTextCtrl(this, FRAMES, wxT("00"));
 	mFrames->SetFont(*font);
 	mFrames->SetClientSize(size);
 	mFrames->SetMaxLength(2);
 	timecodeSizer->Add(mFrames, 0, wxFIXED_MINSIZE);
+	mainSizer->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxALL, CONTROL_BORDER);
+	Fit();
+//	wxButton * jumpButton = new wxButton(this, wxID_OK, wxT("Jump!"));
+//	timecodeSizer->Add(jumpButton, 0, wxALL, CONTROL_BORDER);
 //	hours->SetClientSize(size);
 //	hours->Layout();
 //	hours->SetInitialSize(wxSize(hours->GetCharWidth()*2 + 10, hours->GetCharHeight()));
@@ -1027,70 +1037,108 @@ JumpToTimecodeDlg::JumpToTimecodeDlg(wxWindow * parent) : wxDialog(parent, wxID_
 //	hours->SetClientSize(size);
 //	hours->SetSize(size);
 
-	ShowModal();
 }
 
+/// Checks a defined timecode value (for edit rate) has been supplied before allowing dialogue to be shown
+int JumpToTimecodeDlg::ShowModal()
+{
+	if (!mTimecode.undefined) {
+		return wxDialog::ShowModal();
+	}
+	else {
+		return wxID_CANCEL; //sanity check - avoids divide by zero if timecode not defined
+	}
+}
+
+/// Responds to character entry in text entry field by checking, changing focus or deleting character just entered as appropriate
 void JumpToTimecodeDlg::OnTextChange(wxCommandEvent & event)
 {
-	unsigned int limit;
+	MyTextCtrl * ctrl = (MyTextCtrl *) event.GetEventObject();
+	wxString value = ctrl->GetValue();
+	bool ok;
 	switch (event.GetId()) {
 		case HRS:
-			limit = 23;
+			ok = CheckValue(value, wxT("23"));
 			break;
 		case MINS: case SECS:
-			limit = 59;
+			ok = CheckValue(value, wxT("59"));
 			break;
 		default:
-			limit = 24; //FIXME
+			ok = CheckValue(value, wxString::Format(wxT("%02d"), mTimecode.edit_rate.numerator / mTimecode.edit_rate.denominator - 1));
 			break;
 	}
-	int value = CalcValue(event, limit);
-	MyTextCtrl * ctrl = (MyTextCtrl *) event.GetEventObject();
-	if (-1 == value) { //illegal value
+	if (!ok) { //illegal value
 		//remove the last character entered
-		ctrl->SetValue(ctrl->GetValue().Left(ctrl->GetInsertionPoint()));
+		ctrl->SetValue(value.Left(ctrl->GetInsertionPoint()));
 	}
-	else if (2 == ctrl->GetValue().Len() && FRAMES != event.GetId()) { //full field
+	else if (2 == value.Len()) { //full field
 		//move to the next field
-		ctrl->Navigate();
+//		ctrl->Navigate();
+		if (FRAMES == event.GetId()) {
+			FindWindow(HRS)->SetFocus();
+		}
+		else {
+			FindWindow(event.GetId() + 1)->SetFocus();
+		}
 	}
 }
 
-int JumpToTimecodeDlg::CalcValue(wxCommandEvent & event, unsigned int limit)
+/// Returns true if a control has an allowed value
+/// @param value value expressed as a string
+/// @param limit Max value (expressed as a string) that is allowed for this control
+bool JumpToTimecodeDlg::CheckValue(const wxString & value, const wxString & limit)
 {
 	const wxString digits(wxT("0123456789"));
-	const wxString text = ((MyTextCtrl *) event.GetEventObject())->GetValue();
-	int digit1, digit2;
-	digit1 = digit2 = 0;
-	if (!text.Len() || wxNOT_FOUND != (digit1 = digits.Find(text[0]))) { //either empty or first char is a digit
-		if (text.Len() < 2 || wxNOT_FOUND != (digit2 = digits.Find(text[1]))) { //either <2 chars or second char is a digit
-			unsigned int total = digit1 * (text.Len() == 2 ? 10 : 1) + digit2;
-			if (total <= limit) {
-//std :: cerr << digit1 * (text.Len() == 2 ? 10 : 1) + digit2 << std::endl;
-				return total;
+	int digit;
+	if (!value.Len() || ((wxNOT_FOUND != (digit = digits.Find(value[0]))) && digit <= digits.Find(limit[0]))) { //either empty or first char is a digit, within the limit for that digit
+		if (value.Len() < 2 || (wxNOT_FOUND != digits.Find(value[1]))) { //either <2 chars or second char is a digit, within the limit for that digit
+			long total, limitVal;
+			value.ToLong(&total);
+			limit.ToLong(&limitVal);
+			if (total <= limitVal) {
+				return true;
 			}
 		}
 	}
-	return -1;
+	return false;
 }
 
+/// Puts leading zeros into text entry fields that are losing focus
 void JumpToTimecodeDlg::OnFocus(wxFocusEvent & event)
 {
-return;
-	if (wxEVT_KILL_FOCUS == event.GetEventType()) {
+	if (wxEVT_KILL_FOCUS == event.GetEventType()) { //this is a control losing focus
 		switch (event.GetId()) {
-			case HRS: case MINS: case SECS: case FRAMES:
-				((MyTextCtrl *) event.GetEventObject())->SetValue(wxString(wxT("00") + ((MyTextCtrl *) event.GetEventObject())->GetValue().Left(2)));
+			case HRS: case MINS: case SECS: case FRAMES: {
+				MyTextCtrl * ctrl = (MyTextCtrl *) event.GetEventObject();
+				if (2 != ctrl->GetValue().Len()) { //this check prevents the value being changed unnecessarily, which causes the control focus to be changed which breaks shift-tabbing
+					//put in leading zeros
+					ctrl->SetValue(wxString(wxT("00") + ctrl->GetValue()).Right(2));
+				}
 				break;
+			}
 			default:
 				break;
 		}
 	}
+	event.Skip();
 }
 
-void JumpToTimecodeDlg::OnEnter(wxCommandEvent & WXUNUSED(event))
+/// Returns the timecode corresponding to the values in the boxes
+const ProdAuto::MxfTimecode JumpToTimecodeDlg::GetTimecode()
 {
+	long field;
+	((wxTextCtrl *) FindWindow(HRS))->GetValue().ToLong(&field);
+	mTimecode.samples = field * 60;
+	((MyTextCtrl *) FindWindow(MINS))->GetValue().ToLong(&field);
+	mTimecode.samples = (mTimecode.samples + field) * 60;
+	((MyTextCtrl *) FindWindow(SECS))->GetValue().ToLong(&field);
+	mTimecode.samples += field;
+	mTimecode.samples *= mTimecode.edit_rate.numerator / mTimecode.edit_rate.denominator;
+	((MyTextCtrl *) FindWindow(FRAMES))->GetValue().ToLong(&field);
+	mTimecode.samples += field;
+	return mTimecode;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1608,7 +1656,7 @@ const wxColour CuePointsDlg::GetColour(const size_t index)
 	return wxColour(wxString(Colours[index].colour, *wxConvCurrent));
 }
 
-/// Returns the label colour corresponding to an index
+/// Returns the label colour corresponding to an index.
 const wxColour CuePointsDlg::GetLabelColour(const size_t index)
 {
 	return wxColour(wxString(Colours[index].labelColour, *wxConvCurrent));
@@ -1641,8 +1689,23 @@ static const int Alignments[N_ALIGNMENTS] = {
 
 /// Sets up dialogue.
 /// @param parent Parent window.
-/// @param chunkButton The "chunk now" button, for "pressing" and manipulating the label.
+/// @param chunkButton The "chunk now" button, for manipulating the label and tooltip.
 /// @param savedState The XML document for retrieving and saving settings.
+/// Chunking occurs in two ways: manually, when the "chunk now" button in the main frame is pressed, or automatically, when enabled in this dialogue.
+/// The "chunk now" button should only be enabled while recording.  When pressed, it calls IngexguiFrame::OnChunk(), which disables the button to prevent another chunk being asked for while the previous chunking cycle is still in progress, and calls ChunkingDlg::RunFrom() with no arguments, which stops any pending automatic chunking trigger and resets the button label.  A chunking cycle is then initiated by calling RecorderGroupCtrl::ChunkStop() with the current timecode and recording details.  See later in this description for what happens when this method is called.
+/// Automatic chunking is set up at the start of recording, when ChunkingDlg::RunFrom() is called, with the start timecode, and a chunking postroll value determined by the RecorderGroup object (about half a second if all recorders can manage this).  If automatic chunking is enabled in the dialogue, the trigger timecode for the start of the next chunk is worked out.
+/// This is either the start time plus the chunk length, or, if alignment is enabled in the dialogue and the function call, the next alignment point (or the one after that, if it's less than half a minute away).
+/// The "chunk now" button label is set to the time difference if an alignment was calculated (otherwise it's already showing the chunk length, which is the correct value) and a repeating countdown tick timer of a second's duration is started, which decrements the countdown value on the button until it reaches zero.  (It is not used to trigger generation of the next chunk, as a timer cannot be relied upon to do this with frame accuracy.)
+/// The postroll value is then subtracted from the trigger timecode, which allows recorders to be contacted sufficiently in advance of the timecode at which they are instructed to stop, to avoid recording overruns.  It also ensures that the trigger occurs in time despite it being generated asynchronously from a refresh timer.
+/// Timepos::SetTrigger() is called with the next chunk start time, with a wrap flag to indicate if it is to happen tomorrow (or the trigger would occur immediately), and a window pointer to send an event to.
+/// At the first Timepos::OnRefreshTimer() call after the trigger point, an event is generated which is picked up by IngexguiFrame::OnTimeposEvent(), which calls RecorderGroupCtrl::ChunkStop() with the trigger timecode, the current contents of the description field, and cue point data.  This initiates a chunking cycle by causing all the recorders to be told to stop at the trigger time, plus a postroll of the chunking postroll duration.  It also sets mode variable RecorderGroupCtrl::mChunking from (initially) RecorderGroupCtrl::NOT_CHUNKING to RecorderGroupCtrl::STOPPING.
+/// Because this mode is set, the first recorder that reports that it has successfully stopped causes the mode to be updated to RecorderGroupCtrl::WAITING, and generates a RecorderGroupCtrl::SET_TRIGGER event with the timecode of the next chunk start, which is the timecode returned by the recorder (as this is the first frame not recorded).  the RecorderGroupCtrl::WAITING mode causes RecorderGroupCtrl::TRACK_STATUS events to have a flag set which prevents the recorder source tree briefly reporting an error due to a mismatch between the recorder mode (stopped) and the main frame mode (recording).
+/// This event is picked up by IngexguiFrame::OnRecorderGroupEvent(), which generates another call to Timepos::SetTrigger() with the next chunk start (which can be in the past so long as it is within the recorders' preroll abilities), targeted at the RecorderGroup.  It also calls EventList::AddEvent() to append the chunk boundary entry to the recording list.
+/// Every recorder that stops also causes a RecorderGroupCtrl::CHUNK_END event to be generated, which is treated by the frame similarly to a RecorderGroupCtrl::STOP event except it does not cause the frame to go into STOP mode.
+/// When Timepos reaches the trigger point, ensuring that recorders are not asked to start recording in the future, the event it generates is picked up by RecorderGroupCtrl::OnTimeposEvent() which checks that the mode is still RecorderGroupCtrl::WAITING (preventing race states due to user intervention while an event is in the queue).  If so, it sets the mode to RecorderGroupCtrl::RECORDING_CHUNK and starts recording again just as if the user had pressed the record button, but at the timecode returned by the first recorder that stopped.  The mode results in each recording command (sent after requesting source details from the frame) having a preroll of zero (which is safe to do as we know the start time is in the past), rather than the normal value.
+/// When recorders report that they are recording, the mode causes a RecorderGroupCtrl::CHUNK_START rather than a RecorderGroupCtrl::RECORDING event to be generated.  This prevents the main frame from calling Timepos::Record(), which would otherwise start the position display counting from zero and generate incorrect positions in the recording list, and also prevents EventList::AddEvent() from being called to append a start entry to the recording list (as the chunk boundary entry performs this function).
+/// Instead, ChunkingDlg::RunFrom() is called with the timecode from the event and the align argument false, to start counting down exactly one chunk length to the next chunk point (if automatic chunking is enabled) - regardless of whether the chunk had been intiated manually or automatically.  The chunking button is also enabled in case it had been pressed by the user, which would have been disabled it.  The cycle thus begins again.
+/// The mode is set back to RecorderGroupCtrl::NOT_CHUNKING when RecorderGroupCtrl::Stop() is called as a result of the user pressing the stop button. ChunkingDlg::RunFrom() with no arguments is called when the frame mode changes from recording, to stop any pending automatic chunking trigger and reset the countdown display on the "chunk now" button.
 ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * timepos, wxXmlDocument & savedState) : wxDialog(parent, wxID_ANY, wxT("Chunking")), mChunkButton(chunkButton), mTimepos(timepos), mSavedState(savedState), mRecording(false)
 {
 	const wxChar* alignmentLabels[N_ALIGNMENTS] = {
@@ -1697,7 +1760,7 @@ ChunkingDlg::ChunkingDlg(wxWindow * parent, wxButton * chunkButton, Timepos * ti
 	Reset();
 }
 
-/// Overloads Show Modal to update the XML document
+/// Overloads Show Modal to update the XML document with chunking settings.
 int ChunkingDlg::ShowModal()
 {
 	wxDialog::ShowModal();
@@ -1721,7 +1784,7 @@ int ChunkingDlg::ShowModal()
 	return wxID_OK;
 }
 
-/// Responds to chunking enable button being toggled by starting/stopping chunking if recording, and updating the button label
+/// Responds to chunking enable button being toggled by starting/stopping chunking if recording, and updating the button label.
 void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 {
 	if (mRecording) {
@@ -1740,7 +1803,7 @@ void ChunkingDlg::OnEnable(wxCommandEvent & WXUNUSED(event))
 	SetCountdownLabel();
 }
 
-/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down
+/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down.
 void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 {
 	if (!mCountdownTimer->IsRunning()) {
@@ -1748,7 +1811,7 @@ void ChunkingDlg::OnChangeChunkSize(wxSpinEvent & WXUNUSED(event))
 	}
 }
 
-/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down
+/// Responds to chunking size being changed by resetting the countdown counter and updating the label on the chunking button if not currently counting down.
 void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 {
 	if (!mCountdownTimer->IsRunning()) {
@@ -1759,7 +1822,7 @@ void ChunkingDlg::OnChangeChunkAlignment(wxCommandEvent & WXUNUSED(event))
 /// Starts or stops the countdown.
 /// @param startTimecode Timecode from which to calculate when to trigger a chunk.  Stops the countdown if undefined flag set.
 /// @param postroll Subtracted from the time to trigger a chunk.  If undefined flag set, previous stored value is used.
-/// @param align True to start next chunk at the next alignment point (or the one after, if the next one is too soon).
+/// @param align True to start next chunk at the next alignment point (or the one after, if the next one is too soon), if aligning is enabled.
 void ChunkingDlg::RunFrom(const ProdAuto::MxfTimecode & startTimecode, const ProdAuto::MxfDuration & postroll, const bool align)
 {
 	Reset();
@@ -1840,5 +1903,309 @@ void ChunkingDlg::SetCountdownLabel()
 	else {
 		mChunkButton->SetLabel(wxT("Chunk ---:--"));
 		mChunkButton->SetToolTip(wxT("Automatic chunking is disabled"));
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+BEGIN_EVENT_TABLE(SelectRecDlg, wxDialog)
+	EVT_CHOICE(PROJECT, SelectRecDlg::OnSelectProject)
+	EVT_CHOICE(DATE, SelectRecDlg::OnSelectDate)
+	EVT_LISTBOX(RECORDING, SelectRecDlg::OnSelectRecording)
+	EVT_LISTBOX_DCLICK(RECORDING, SelectRecDlg::OnDoubleClick)
+	EVT_BUTTON(UP, SelectRecDlg::OnNavigateRecordings)
+	EVT_BUTTON(DOWN, SelectRecDlg::OnNavigateRecordings)
+	EVT_TOGGLEBUTTON(PREFER_ONLINE, SelectRecDlg::OnPreferOnline)
+END_EVENT_TABLE()
+
+/// Sets up dialogue.
+SelectRecDlg::SelectRecDlg(wxWindow * parent) : wxDialog(parent, wxID_ANY, wxT("Select a recording"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+{
+	//controls
+	wxBoxSizer * mainSizer = new wxBoxSizer(wxVERTICAL);
+	SetSizer(mainSizer);
+
+	wxStaticBoxSizer * projectBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Project"));
+	mainSizer->Add(projectBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mProjectSelector = new wxChoice(this, PROJECT);
+	projectBox->Add(mProjectSelector, 1, wxEXPAND);
+
+	wxStaticBoxSizer * dateBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Date"));
+	mainSizer->Add(dateBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mDateSelector = new wxChoice(this, DATE);
+	dateBox->Add(mDateSelector, 1, wxEXPAND);
+
+	wxStaticBoxSizer * recordingBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Recording"));
+	mainSizer->Add(recordingBox, 1, wxEXPAND | wxALL, CONTROL_BORDER);
+	wxBoxSizer * recSizer = new wxBoxSizer(wxHORIZONTAL);
+	recordingBox->Add(recSizer, 1, wxEXPAND);
+	wxSize size = wxDefaultSize;
+	size.SetHeight(100);
+	mRecordingSelector = new wxListBox(this, RECORDING, wxDefaultPosition, size);
+	recSizer->Add(mRecordingSelector, 1, wxEXPAND);
+	wxBoxSizer * arrowsSizer = new wxBoxSizer(wxVERTICAL);
+	recSizer->Add(arrowsSizer, 0, wxEXPAND);
+	mUpButton = new wxBitmapButton(this, UP, wxBitmap(up));
+	arrowsSizer->Add(mUpButton);
+	arrowsSizer->AddStretchSpacer();
+	mDownButton = new wxBitmapButton(this, DOWN, wxBitmap(down));
+	arrowsSizer->Add(mDownButton);
+
+	wxStaticBoxSizer * qualityBox = new wxStaticBoxSizer(wxHORIZONTAL, this, wxT("Quality"));
+	mainSizer->Add(qualityBox, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mPreferOnline = new wxToggleButton(this, PREFER_ONLINE, wxT("Prefer Online"));
+	qualityBox->Add(mPreferOnline, 0, wxEXPAND | wxALL, CONTROL_BORDER);
+	mOnlineMessage = new wxStaticText(this, wxID_ANY, wxT("Online available"));
+	qualityBox->Add(mOnlineMessage, 0, wxEXPAND | wxALL | wxALIGN_CENTRE_VERTICAL, CONTROL_BORDER);
+
+	mainSizer->Add(CreateButtonSizer(wxOK|wxCANCEL), 0, wxALL, CONTROL_BORDER);
+
+	//accelerator keys
+	wxAcceleratorEntry accelerators[2];
+	accelerators[0].Set(wxACCEL_NORMAL, WXK_UP, UP);
+	accelerators[1].Set(wxACCEL_NORMAL, WXK_DOWN, DOWN);
+	wxAcceleratorTable table(2, accelerators);
+	SetAcceleratorTable(table);
+
+	//window
+	Fit(); //needed as size of recording selector
+	SetMinSize(GetSize()); //stops window being shrunk far enough for controls to overlap
+}
+
+/// Displays dialogue.
+int SelectRecDlg::ShowModal()
+{
+//	wxArrayString projects;
+//	wxDir::GetAllFiles(ROOT_DIR, &projects, wxEmptyString, wxDIR_FILES|wxDIR_DIRS);
+//	mProjectSelector->Append(projects);
+	wxDir offlineDir(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR);
+	if (offlineDir.IsOpened()) {
+		wxString project;
+		mProjectSelector->Clear(); //repopulating it in case directory structure has changed
+		if (offlineDir.GetFirst(&project, wxEmptyString, wxDIR_DIRS)) { //GetAllFiles() doesn't return directory names so use this method instead
+			mProjectSelector->Enable();
+			do {
+				mProjectSelector->Append(project);
+				//maintain the selection if this was the previously selected project
+				if (project == mSelectedProject) {
+					mProjectSelector->SetSelection(mProjectSelector->GetCount() - 1);
+					wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, PROJECT);
+					AddPendingEvent(event); //trigger repopulating of date control
+				}
+			} while (offlineDir.GetNext(&project));
+			//if only a single project, select it for convenience
+			if (1 == mProjectSelector->GetCount() && wxNOT_FOUND == mProjectSelector->GetSelection()) {
+				mProjectSelector->SetSelection(0);
+				wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, PROJECT);
+				AddPendingEvent(event); //trigger repopulating of date control
+			}
+		}
+		else { //no projects
+			mProjectSelector->Append(wxT("NO PROJECTS"));
+			mProjectSelector->Select(0);
+			mProjectSelector->Disable();
+		}
+	}
+	else {
+		mProjectSelector->Append(wxT("NO OFFLINE MATERIAL DIRECTORY"));
+		mProjectSelector->Select(0);
+		mProjectSelector->Disable();
+	}
+	if (!mProjectSelector->IsEnabled() || wxNOT_FOUND == mProjectSelector->GetSelection()) { //no project selected
+		//can select no dates and recordings so clear
+		mDateSelector->Clear();
+		mDateSelector->Disable();
+		mRecordingSelector->Clear();
+		mRecordingSelector->Disable();
+		mUpButton->Disable();
+		mDownButton->Disable();
+		mPreferOnline->SetBackgroundColour(wxNullColour);
+		mOnlineMessage->Hide();
+		FindWindow(wxID_OK)->Disable();
+	}
+	Fit(); //make sure all text can all be displayed
+	return wxDialog::ShowModal();
+}
+
+/// Populates the date selector with available dates for this project.
+/// If previously-selected date is found, or only one date is found, selects this and generates a date select event.
+void SelectRecDlg::OnSelectProject(wxCommandEvent & WXUNUSED(event))
+{
+	mSelectedProject = mProjectSelector->GetStringSelection();
+	wxDir projDir(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR + wxFileName::GetPathSeparator() + mSelectedProject); //produces rubbish if ROOT_DIR not turned into a wxString
+	wxString date;
+	mDateSelector->Clear(); //repopulating it in case directory structure has changed
+	wxArrayString dates; //to allow sorting
+	if (projDir.GetFirst(&date, wxEmptyString, wxDIR_DIRS)) { //GetAllFiles() doesn't return directory names so use this method instead
+		mDateSelector->Enable();
+		long value;
+		do {
+			if (8 == date.Len() && wxNOT_FOUND == date.Find(wxT("-")) && date.ToLong(&value)) { //it's an 8-digit date directory
+				dates.Add(date);
+			}
+		} while (projDir.GetNext(&date));
+		dates.Sort();
+		wxDateTime dateTime;
+		for (size_t i = 0; i < dates.GetCount(); i++) {
+			date = dates[i];
+			//show a formatted date as the choice
+			date.Left(4).ToLong(&value);
+			dateTime.SetYear((int) value);
+			date.Mid(4, 2).ToLong(&value);
+			dateTime.SetMonth((wxDateTime::Month) (value - 1));
+			date.Right(2).ToLong(&value);
+			dateTime.SetDay((wxDateTime::wxDateTime_t) value);
+			mDateSelector->Append(dateTime.Format(wxT("%a %d %b %g")));
+			//store the directory name for later use
+			mDateSelector->SetClientObject(mDateSelector->GetCount() - 1, new StringContainer(date)); //deleted by control
+			//maintain the selection if this was the previously selected date, or select for convenience if it's the only date
+			if (date == mSelectedDate || (1 == mDateSelector->GetCount() && dates.GetCount() == i + 1)) {
+				mDateSelector->SetSelection(mDateSelector->GetCount() - 1);
+				wxCommandEvent event(wxEVT_COMMAND_CHOICE_SELECTED, DATE);
+				AddPendingEvent(event); //trigger repopulating of timecode control
+			}
+		}
+	}
+	else { //no dates for selected project
+		mDateSelector->Append(wxT("NO DATES"));
+		mDateSelector->Select(0);
+		mDateSelector->Disable();
+	}
+	if (!mDateSelector->IsEnabled() || wxNOT_FOUND == mDateSelector->GetSelection()) { //no date selected
+		//can select no recordings so clear
+		mRecordingSelector->Clear();
+		mRecordingSelector->Disable();
+		mUpButton->Disable();
+		mDownButton->Disable();
+		mOnlineMessage->Hide();
+		mPreferOnline->SetBackgroundColour(wxNullColour);
+		FindWindow(wxID_OK)->Disable();
+	}
+}
+
+/// Populates the recording selector with available recordings for this project and date.
+/// If previously-selected recording is found, or only one recording is found, selects this and enables thmPreferOnline->SetBackgroundColour(e OK button.
+void SelectRecDlg::OnSelectDate(wxCommandEvent & WXUNUSED(event))
+{
+	mSelectedDate = ((StringContainer *) mDateSelector->GetClientObject(mDateSelector->GetSelection()))->GetString();
+	mRecordingSelector->Clear(); //repopulating it in case directory structure has changed
+	wxArrayString paths; //to allow sorting
+	wxDir::GetAllFiles(wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + OFFLINE_SUBDIR + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate, &paths, wxEmptyString, wxDIR_FILES); //produces rubbish if ROOT_DIR not turned into a wxString
+	if (paths.GetCount()) {
+		paths.Sort(); //into time order
+		mRecordingSelector->Enable();
+		long value;
+		for (size_t i = 0; i < paths.GetCount(); i++) {
+			wxString file = paths[i].Mid(paths[i].Find(wxFileName::GetPathSeparator(), true) + 1); //remove path
+			if (file.Left(8) == mSelectedDate //first 8 digits (date)
+			 && file[8] == wxT('_') //following underscore
+			 && wxNOT_FOUND == file.Mid(9, 8).Find(wxT("-")) && file.Mid(9, 8).ToLong(&value) //next 8 digits (time)
+			 && file[17] == wxT('_') //following underscore
+			 && 0 == file.Mid(18).Find(mSelectedProject + wxT("_")) //project name and following underscore
+			 && !file.Right(4).CmpNoCase(wxT(".mxf")) //extension
+			) { //it's a valid filename
+				wxString recording = file.Mid(9, 2) + wxT(":") + file.Mid(11, 2) + wxT(":") + file.Mid(13, 2) + wxT(":") + file.Mid(15, 2);// + (file.Right(6)[0] == wxT('a') ? wxT(" (Audio only)") : wxEmptyString);
+				if (!mRecordingSelector->GetCount() || mRecordingSelector->GetString(mRecordingSelector->GetCount() - 1).Left(11) != recording.Left(11)) { //new recording
+					mRecordingSelector->Append(recording + (file.Right(6)[0] == wxT('a') ? wxT(" (Audio only)") : wxEmptyString)); //subsequently found video tracks will overwrite the "audio only" indication
+				}
+				else if (file.Right(6)[0] != wxT('a')) { //already added this recording, and this is a video track
+					mRecordingSelector->SetString(mRecordingSelector->GetCount() - 1, recording); //it might have been marked audio only
+				}
+				//maintain the selection if this was the previously selected recording
+				if (mSelectedRecording == recording) { //the previously selected recording still exists
+					//maintain the selection
+					mRecordingSelector->SetSelection(mRecordingSelector->GetCount() - 1);
+					wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
+					AddPendingEvent(event); //trigger repopulating of timecode control
+				}
+			}
+		}
+		//if only a single recording, select it for convenience
+		if (1 == mRecordingSelector->GetCount() && wxNOT_FOUND == mRecordingSelector->GetSelection()) {
+			mRecordingSelector->SetSelection(0);
+			wxCommandEvent event(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
+			AddPendingEvent(event); //trigger repopulating of date control
+		}
+	}
+	else {
+		mRecordingSelector->Append(wxT("NO RECORDINGS"));
+		mRecordingSelector->Select(0);
+		mRecordingSelector->Disable();
+	}
+	if (!mRecordingSelector->IsEnabled() || wxNOT_FOUND == mRecordingSelector->GetSelection()) { //no recording selected
+		//can select no recordings so clear
+		mUpButton->Disable();
+		mDownButton->Disable();
+		mOnlineMessage->Hide();
+		mPreferOnline->SetBackgroundColour(wxNullColour);
+		FindWindow(wxID_OK)->Disable();
+	}
+}
+
+/// Sets state of up and down buttons, OK button, background colour of PreferOnline button and visibility of online message depending on the recording selected.
+void SelectRecDlg::OnSelectRecording(wxCommandEvent & WXUNUSED(event))
+{
+	if (wxNOT_FOUND == mRecordingSelector->GetSelection()) { //deselecting - this is fairly pointless so could be disabled but would require control to be subclassed
+		FindWindow(wxID_OK)->Disable();
+		mUpButton->Disable();
+		mDownButton->Disable();
+		mOnlineMessage->Hide();
+		mPreferOnline->SetBackgroundColour(wxNullColour);
+	}
+	else {
+		mSelectedRecording = mRecordingSelector->GetString(mRecordingSelector->GetSelection()).Left(11);
+		FindWindow(wxID_OK)->Enable();
+		mUpButton->Enable(mRecordingSelector->GetSelection());
+		mDownButton->Enable((unsigned int) mRecordingSelector->GetSelection() != mRecordingSelector->GetCount() - 1);
+		//see if online is available
+		wxArrayString dummy;
+		GetPaths(dummy, true);
+		if (dummy.GetCount()) {
+			mOnlineMessage->Show(dummy.GetCount());
+			Layout(); //needed to put messge in the right place
+		}
+		mPreferOnline->SetBackgroundColour((mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if prefer online and online file(s) are present
+	}
+}
+
+/// Closes the dialogue as if the OK button had been pressed.
+void SelectRecDlg::OnDoubleClick(wxCommandEvent & WXUNUSED(event))
+{
+	EndModal(wxID_OK);
+}
+
+/// Selects previous or next recording in the list, if possible.
+void SelectRecDlg::OnNavigateRecordings(wxCommandEvent & event)
+{
+	//check that we can move in the requested direction (as this might be called from an accelerator key, which is always enabled)
+	if (mRecordingSelector->GetCount()
+	 && ((UP == event.GetId() && mRecordingSelector->GetSelection() > 0) //want to go up and not at the top
+	  || (DOWN  == event.GetId() && mRecordingSelector->GetSelection() != (int) mRecordingSelector->GetCount() - 1) //want to go down and not at the bottom
+	)) {
+		mRecordingSelector->Select(mRecordingSelector->GetSelection() + (UP == event.GetId() ? -1 : 1));
+		wxCommandEvent newEvent(wxEVT_COMMAND_LISTBOX_SELECTED, RECORDING);
+		AddPendingEvent(newEvent);
+	}
+}
+
+/// Sets the background colour of the PreferOnline button depending on its state and if online material is available.
+void SelectRecDlg::OnPreferOnline(wxCommandEvent & WXUNUSED(event))
+{
+	mPreferOnline->SetBackgroundColour((mPreferOnline->GetValue() && mOnlineMessage->IsShown()) ? BUTTON_WARNING_COLOUR : wxNullColour); //highlight button if prefer online and online file(s) are present
+}
+
+/// Gets the paths of the files of the selected recording.
+/// @param paths Returns the full path of each file, unsorted.
+/// @param selectOnline Forces online files to be returned; otherwise, online files are returned if PreferOnline button is pressed and at least one is available.
+void SelectRecDlg::GetPaths(wxArrayString & paths, bool selectOnline)
+{
+	wxString stem = wxString(RECORDING_SERVER_ROOT) + wxFileName::GetPathSeparator() + ((selectOnline || BUTTON_WARNING_COLOUR == mPreferOnline->GetBackgroundColour()) ? ONLINE_SUBDIR : OFFLINE_SUBDIR) + wxFileName::GetPathSeparator() + mSelectedProject + wxFileName::GetPathSeparator() + mSelectedDate;
+	wxDir::GetAllFiles(stem, &paths, wxEmptyString, wxDIR_FILES); //all files in the recording's directory
+	stem += wxFileName::GetPathSeparator() + mSelectedDate + wxT("_") + mSelectedRecording.Left(2) + mSelectedRecording.Mid(3, 2) + mSelectedRecording(6, 2) + mSelectedRecording(9, 2) + wxT("_") + mSelectedProject + wxT("_"); //common stem for all files in the wanted recording
+	for (size_t i = 0; i < paths.GetCount(); i++) {
+		if (paths[i].Find(stem) || paths[i].Right(4).CmpNoCase(wxT(".mxf"))) { //doesn't match
+			paths.RemoveAt(i);
+			i--; //next value moved to this position
+		}
 	}
 }

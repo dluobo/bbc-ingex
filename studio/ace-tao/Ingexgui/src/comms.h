@@ -32,7 +32,7 @@ Handles communication with the name server in a threaded manner.
 class Comms : public wxThread
 {
 public:
-	Comms(wxWindow *, int, wxChar**);
+	Comms(wxWindow*, int&, char**);
 	~Comms();
 	void StartGettingRecorders(WXTYPE, int);
 	bool GetStatus(wxString & errMsg);

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: controller.cpp,v 1.9 2009/04/16 17:56:11 john_f Exp $          *
+ *   $Id: controller.cpp,v 1.10 2009/09/18 16:10:15 john_f Exp $          *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -140,9 +140,9 @@ void Controller::Record(const ProdAuto::MxfTimecode & startTimecode, const ProdA
 	mPreroll = preroll;
 	mProject = project;
 	mEnableList = enableList;
-	mPendingCommand = RECORD; //act on it later or detect if it is superceded while retrying
 	if (mReconnecting) { //can't send a command now
 //std::cerr << "Record while reconnecting: setting timecode undefined" << std::endl;
+		mPendingCommand = RECORD; //act on it later or detect if it is superceded while retrying
 		mStartTimecode.undefined = true; //the requested frame might not be available by the time we reconnect
 		mMutex.Unlock();
 	}

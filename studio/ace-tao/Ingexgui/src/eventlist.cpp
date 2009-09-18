@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.6 2009/06/03 09:18:18 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.7 2009/09/18 16:10:15 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -42,9 +42,9 @@ END_EVENT_TABLE()
 
 const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Start"), wxT("Last Frame"), wxT("PROBLEM")}; //must match order of EventType enum
 
-EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size) :
+EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0),  mChunking(false), mRunThread(false), mSyncThread(false)
+mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0),  mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
 {
 	//set up the columns
 	wxListItem itemCol;
@@ -433,54 +433,53 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
 			break;
 		case STOP :
-		case CHUNK :
-			mChunking = CHUNK == type;
-			item.SetText(mChunking ? TypeLabels[CHUNK] : TypeLabels[STOP]);
-			item.SetTextColour(mChunking ? wxColour(wxT("GREY")) : wxColour(wxT("BLACK")));
-			item.SetBackgroundColour(wxColour(wxT("WHITE")));
-			mRecordingNode->AddProperty(wxT("Linking"), mChunking ? wxT("Continues") : wxT("Finishes"));
-			if (!description.IsEmpty()) {
-				new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
-			}
-			if (timecode && !timecode->undefined) {
-				//work out the exact duration mod 1 day
-				position = timecode->samples - GetStartTimecode().samples;
-				if (position < 0) { //rolled over midnight
-					position += 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator;
+		case CHUNK : {
+				mChunking = CHUNK == type;
+				item.SetText(mChunking ? TypeLabels[CHUNK] : TypeLabels[STOP]);
+				item.SetTextColour(mChunking ? wxColour(wxT("GREY")) : wxColour(wxT("BLACK")));
+				item.SetBackgroundColour(wxColour(wxT("WHITE")));
+				mRecordingNode->AddProperty(wxT("Linking"), mChunking ? wxT("Continues") : wxT("Finishes"));
+				if (!description.IsEmpty()) {
+					new wxXmlNode(new wxXmlNode(mRecordingNode, wxXML_ELEMENT_NODE, wxT("Description")), wxXML_CDATA_SECTION_NODE, wxT(""), description);
 				}
-				//use the approx. framecount to add whole days
-				int64_t totalMinutes = frameCount / timecode->edit_rate.numerator * timecode->edit_rate.denominator / 60; //this is an approx number of minutes in total
-				if (position < 3600 * 12 * timecode->edit_rate.numerator / timecode->edit_rate.denominator) { //fractional day is less than half
-					totalMinutes += 1; //nudge upwards to ensure all the days are added if frameCount is a bit low
+				if (timecode && !timecode->undefined) {
+					//work out the exact duration mod 1 day
+					position = timecode->samples - GetStartTimecode().samples;
+					if (position < 0) { //rolled over midnight
+						position += 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator;
+					}
+					//use the approx. framecount to add whole days
+					int64_t totalMinutes = frameCount / timecode->edit_rate.numerator * timecode->edit_rate.denominator / 60; //this is an approx number of minutes in total
+					if (position < 3600 * 12 * timecode->edit_rate.numerator / timecode->edit_rate.denominator) { //fractional day is less than half
+						totalMinutes += 1; //nudge upwards to ensure all the days are added if frameCount is a bit low
+					}
+					else {
+						totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
+					}
+					position += (totalMinutes / 60 / 24) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
+					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //first sample not recorded. Relative to start of chunk
+				}
+				else if (frameCount) {
+					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //less accurate than the above. Relative to start of chunk
+					wxListItem startItem;
+					startItem.SetId(GetItemCount());
+					while (startItem.GetId()) {
+						startItem.SetId(startItem.GetId() - 1);
+						GetItem(startItem);
+						if (startItem.GetText() == TypeLabels[START]) {
+							tc = mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode();
+							break;
+						}
+					}
+					tc.samples += frameCount;
+					tc.samples %= 24LL * 3600 * tc.edit_rate.numerator / tc.edit_rate.denominator;
+					timecode = &tc;
+					position = frameCount;
 				}
 				else {
-					totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
+					timecode = &tc; //invalid timecode
 				}
-				position += (totalMinutes / 60 / 24) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
-				mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //first sample not recorded. Relative to start of chunk
-			}
-			else if (frameCount) {
-				mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //less accurate than the above. Relative to start of chunk
-				wxListItem startItem;
-				startItem.SetId(GetItemCount());
-				while (startItem.GetId()) {
-					startItem.SetId(startItem.GetId() - 1);
-					GetItem(startItem);
-					if (startItem.GetText() == TypeLabels[START]) {
-						tc = mChunkInfoArray.Item(startItem.GetData()).GetStartTimecode();
-						break;
-					}
-				}
-				tc.samples += frameCount;
-				tc.samples %= 24LL * 3600 * tc.edit_rate.numerator / tc.edit_rate.denominator;
-				timecode = &tc;
-				position = frameCount;
-			}
-			else {
-				timecode = &tc; //invalid timecode
-			}
-			//add all cue points to XML doc now, because they could have been edited or deleted up to this point
-			{
+				//add all cue points to XML doc now, because they could have been edited or deleted up to this point
 				ChunkInfo latestChunkInfo = mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1);
 				wxListItem item;
 				item.SetColumn(3); //description column
@@ -494,12 +493,16 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 						new wxXmlNode(cuePointNode, wxXML_CDATA_SECTION_NODE, wxT(""), item.GetText());
 					}
 				}
+				mChunkInfoArray[mChunkInfoArray.GetCount() - 1].SetLastTimecode(*timecode);
+				if (mChunking) {
+					//chunking is like stopping and then immediately starting again
+					NewChunkInfo(timecode, position);
+				}
+				else if (!timecode->undefined) {
+					--(timecode->samples) %= 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //previous frame is the last recorded; wrap-around
+				}
+				break;
 			}
-			if (mChunking) {
-				//chunking is like stopping and then immediately starting again
-				NewChunkInfo(timecode, position);
-			}
-			break;
 		default : //FIXME: putting these in will break the creation of the list of locators
 			item.SetText(TypeLabels[PROBLEM]);
 			item.SetTextColour(wxColour(wxT("RED")));
@@ -531,9 +534,6 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 
 	//timecode
 	item.SetColumn(1);
-	if (STOP == type && !timecode->undefined) {
-		--(timecode->samples) %= 24LL * 3600 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //previous frame is the last recorded; wrap-around
-	}
 	item.SetText(Timepos::FormatTimecode(*timecode));
 	font.SetFamily(wxFONTFAMILY_MODERN); //fixed pitch so fields don't move about
 	SetItem(item);
@@ -572,8 +572,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 #endif
 	}
 
-	if (-1 == GetFirstSelected()) {
-		//First item to be put in the list
+	if (-1 == GetFirstSelected()) { //First item to be put in the list
 		Select(0);
 	}
 }
@@ -594,7 +593,7 @@ void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
 	mChunkInfoArray.Add(info);
 }
 
-
+/// Returns the timecode of the start of the latest chunk
 ProdAuto::MxfTimecode EventList::GetStartTimecode()
 {
 	ProdAuto::MxfTimecode startTimecode = InvalidMxfTimecode;
@@ -665,10 +664,32 @@ ProdAuto::LocatorSeq EventList::GetLocators()
 			locators[i].comment = item.GetText().mb_str(*wxConvCurrent);
 			locators[i].colour = CuePointsDlg::GetColourCode(latestChunkInfo.GetCueColourIndeces()[i]);
 			locators[i].timecode = latestChunkInfo.GetStartTimecode();
-			locators[i].timecode.samples = latestChunkInfo.GetCuePointFrames()[i] % (24 * 3600 * latestChunkInfo.GetStartTimecode().edit_rate.numerator / latestChunkInfo.GetStartTimecode().edit_rate.denominator);
+			locators[i].timecode.samples += latestChunkInfo.GetCuePointFrames()[i];
+			locators[i].timecode.samples %= (24LL * 3600 * latestChunkInfo.GetStartTimecode().edit_rate.numerator / latestChunkInfo.GetStartTimecode().edit_rate.denominator);
 		}
 	}
 	return locators;
+}
+
+/// Tries to find the first instance of the given timecode in the event list, and jumps to the selected chunk if found.
+/// Does not flag the selected event as being changed, to avoid the frame offset being lost by the resulting reload
+/// @param offset Sets this to the frame offset within the chunk, if found
+/// @return True if timecode found
+bool EventList::JumpToTimecode(const ProdAuto::MxfTimecode & tc, int64_t & offset) {
+	for (size_t index = 0; index < mChunkInfoArray.GetCount(); index++) {
+		if (mChunkInfoArray.Item(index).GetLastTimecode().samples >= tc.samples) { //desired timecode is somewhere at or before the end of this chunk
+			if (mChunkInfoArray.Item(index).GetStartTimecode().samples <= tc.samples) { //desired timecode is somewhere at or after the start of this chunk
+				//timecode is within this chunk so select it
+				Select(mChunkInfoArray.Item(index).GetStartIndex(), true); //don't flag the selected event as changed, or it will be reloaded without the offset; instead, it must be reloaded manually with the offset
+				offset = tc.samples - mChunkInfoArray.Item(index).GetStartTimecode().samples;
+				return true;
+			}
+			else { //desired timecode lies in the gap before this recording
+//				break; keep searching in case recordings wrap midnight
+			}
+		}
+	}
+	return false;
 }
 
 /// Sets the project name, for use in start event description and the filename of the saved events.
@@ -686,7 +707,7 @@ ProdAuto::MxfTimecode EventList::SetCurrentProjectName(const wxString & name)
 	filename += wxDateTime::Now().Format(wxT("-%y%m%d"));
 	ClearSavedData();
 	mFilename = filename; //safe to do this after calling ClearSavedData()
-	return Load();
+	return mLoadEventFiles ? Load() : InvalidMxfTimecode;
 }
 
 /// Populates the XML tree from a file, which will then be used to save to when new events are added.

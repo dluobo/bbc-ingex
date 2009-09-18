@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: timepos.cpp,v 1.5 2009/05/01 13:41:34 john_f Exp $           *
+ *   $Id: timepos.cpp,v 1.6 2009/09/18 16:10:16 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -22,6 +22,7 @@
  ***************************************************************************/
 
 #include "timepos.h"
+#include "Timecode.h"
 
 DEFINE_EVENT_TYPE(wxEVT_TIMEPOS_EVENT)
 
@@ -47,9 +48,14 @@ Timepos::Timepos(wxEvtHandler * parent, wxStaticText * timecodeDisplay, wxStatic
 /// @param event The timer event.
 void Timepos::OnRefreshTimer(wxTimerEvent& WXUNUSED(event))
 {
-	if (mTimecodeRunning) {
-		wxDateTime timecode = wxDateTime::UNow() + mTimecodeOffset;
-		mTimecodeDisplay->SetLabel(wxString::Format(timecode.Format(wxT("%H:%M:%S:")) + wxString::Format(wxT("%02d"), (int) (timecode.GetMillisecond() * mLastTimecodeReceived.edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000))));
+	if (mTimecodeRunning && mLastKnownTimecode.edit_rate.denominator) { //latter a sanity check
+		wxDateTime now = wxDateTime::UNow();
+		wxDateTime midnight = now;
+		midnight.ResetTime();
+		wxTimeSpan sinceMidnight = now - midnight + mTimecodeOffset;
+		ProdAuto::MxfTimecode tc = mLastKnownTimecode;
+		tc.samples = sinceMidnight.GetMilliseconds().GetLo() * mLastKnownTimecode.edit_rate.numerator / mLastKnownTimecode.edit_rate.denominator / 1000;
+		mTimecodeDisplay->SetLabel(FormatTimecode(tc));
 	}
 	if (mPositionRunning) {
 		if (mPostrolling && wxDateTime::UNow() >= mStopTime) { //finished postrolling
@@ -95,23 +101,23 @@ bool Timepos::SetTrigger(const ProdAuto::MxfTimecode * tc, wxEvtHandler * handle
 unsigned long Timepos::GetFrameCount()
 {
 	unsigned long frameCount = 0;
-	if (mPositionRunning) {
+	if (mPositionRunning && mStartTimecode.edit_rate.denominator) {
 		wxTimeSpan position = wxDateTime::UNow() - TimeFromTimecode(mStartTimecode);
-		frameCount = position.GetMilliseconds().GetLo() * mLastTimecodeReceived.edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000;
+		frameCount = position.GetMilliseconds().GetLo() * mStartTimecode.edit_rate.numerator / mStartTimecode.edit_rate.denominator / 1000;
 	}
 	return frameCount;
 }
 
 
 /// Converts a duration into a string for display.
-/// Default value if edit rate parameters not known.
+/// Default value if undefined or either edit rate value is zero (which would cause a divide by zero if not checked).
 const wxString Timepos::FormatPosition(const ProdAuto::MxfDuration duration)
 {
 	wxString msg = UNKNOWN_POSITION;
 	if (!duration.undefined && duration.edit_rate.numerator) { //latter a sanity check
 		wxTimeSpan timespan(0, 0, 0, (unsigned long) 1000 * duration.samples * duration.edit_rate.denominator / duration.edit_rate.numerator); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
 		ProdAuto::MxfTimecode editRate;
-		editRate.undefined = duration.undefined;
+		editRate.undefined = false;
 		editRate.edit_rate.numerator = duration.edit_rate.numerator;
 		editRate.edit_rate.denominator = duration.edit_rate.denominator;
 		msg = FormatPosition(timespan, editRate);
@@ -121,7 +127,7 @@ const wxString Timepos::FormatPosition(const ProdAuto::MxfDuration duration)
 
 /// Converts a time span object into a string for display.
 /// @param timespan Contains the duration.
-/// @param editRate Contains edit rate needed for conversion.
+/// @param editRate Contains edit rate needed for conversion, checked to prevent divide by zero.
 const wxString Timepos::FormatPosition(const wxTimeSpan timespan, const ProdAuto::MxfTimecode editRate)
 {
 	wxString msg;
@@ -191,12 +197,12 @@ wxDateTime Timepos::TimeFromTimecode(const ProdAuto::MxfTimecode & tc, bool wrap
 		tm += wxTimeSpan(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //start timecode with today's date; use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
 	}
 	tm -= mTimecodeOffset; //adjust to system clock
-	if (tm.Subtract(wxDateTime::UNow()).GetHours()) { //seems to be at least an hour later than real time so must be yesterday
+/*	if (tm.Subtract(wxDateTime::UNow()).GetHours()) { //seems to be at least an hour later than real time so must be yesterday
 		tm.Subtract(wxDateSpan(0, 0, 0, 1));
 	}
 	else if (wxDateTime::UNow().Subtract(tm).GetHours() > 0) { //seems to be at least an hour earlier than real time so must be tomorrow
 		tm.Add(wxDateSpan(0, 0, 0, 1));
-	}
+	}*/
 	return tm;
 }
 
@@ -207,10 +213,10 @@ const wxString Timepos::GetTimecode(ProdAuto::MxfTimecode * tc)
 {
 	if (tc) {
 		if (mTimecodeRunning) {
-			*tc = mLastTimecodeReceived; // for edit rate/defined
+			*tc = mLastKnownTimecode; // for edit rate/defined
 			wxDateTime timecode = wxDateTime::UNow() + mTimecodeOffset;
 			tc->samples = (((((unsigned long) timecode.GetHour() * 60) + timecode.GetMinute()) * 60) + timecode.GetSecond()) * tc->edit_rate.numerator / tc->edit_rate.denominator;
-			tc->samples += timecode.GetMillisecond() * tc->edit_rate.numerator / mLastTimecodeReceived.edit_rate.denominator / 1000;
+			tc->samples += timecode.GetMillisecond() * tc->edit_rate.numerator / mLastKnownTimecode.edit_rate.denominator / 1000;
 		}
 		else {
 			tc->undefined = true;
@@ -240,8 +246,11 @@ const wxString Timepos::FormatTimecode(const ProdAuto::MxfTimecode tc)
 		return UNKNOWN_TIMECODE;
 	}
 	else {
-		long seconds = tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator;
-		return wxString::Format(wxT("%02d:%02d:%02d:%02d"), (seconds / 3600) % 24, (seconds / 60) % 60, seconds % 60, tc.samples % (tc.edit_rate.numerator / tc.edit_rate.denominator));
+		//long seconds = tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator;
+		//return wxString::Format(wxT("%02d:%02d:%02d:%02d"), (seconds / 3600) % 24, (seconds / 60) % 60, seconds % 60, tc.samples % (tc.edit_rate.numerator / tc.edit_rate.denominator));
+		//generate compatible with dropped frame formats
+		Timecode timecode(tc.samples, tc.edit_rate.numerator / tc.edit_rate.denominator, tc.edit_rate.numerator % tc.edit_rate.denominator); //assume dropped frames if not integral number of frames per second
+		return wxString(timecode.Text(), *wxConvCurrent);
 	}
 }
 
@@ -283,13 +292,14 @@ void Timepos::SetPositionUnknown(bool noPosition)
 	mPositionRunning = false;
 }
 
-/// Stops the timecode display running, invalidates previously received timecode, and displays the given message.
+// Stops the timecode display running and displays the given message.
+/// Stops the timecode display running and displays the given message.
 /// @param message The string to display.
 void Timepos::DisableTimecode(const wxString & message)
 {
 	mTimecodeRunning = false;
 	mTimecodeDisplay->SetLabel(message);
-	mLastTimecodeReceived.undefined = true;
+//	mLastKnownTimecode.undefined = true;
 }
 
 /// Calculates given timecode's offset from the system clock and starts the timecode display running, or displays it as a stuck timecode.
@@ -302,13 +312,11 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 		DisableTimecode();
 	}
 	else if (tc.edit_rate.numerator && tc.edit_rate.denominator) { //sensible values: no chance of divide by zero!
-		mLastTimecodeReceived = tc;
 		mLastKnownTimecode = tc;
 		if (stuck) {
 			mTimecodeRunning = false;
 			//show the stuck value
-			wxTimeSpan stuckTimecode(0, 0, 0, (unsigned long) 1000 * tc.samples * tc.edit_rate.denominator / tc.edit_rate.numerator); //use unsigned long because long isn't quite big enough and rolls over at about 23:51:38 (@25fps)
-			mTimecodeDisplay->SetLabel(wxString::Format(stuckTimecode.Format(wxT("%H:%M:%S:")) + wxString::Format(wxT("%02d"), (int) ((stuckTimecode.GetMilliseconds().GetLo() % 1000) * tc.edit_rate.numerator / tc.edit_rate.denominator / 1000)))); //GetLo() is sufficient because 24 hours'-worth of milliseconds is < 32 bits
+			mTimecodeDisplay->SetLabel(FormatTimecode(tc));
 		}
 		else {
 			mTimecodeRunning = true;
@@ -328,7 +336,16 @@ void Timepos::SetTimecode(const ProdAuto::MxfTimecode tc, bool stuck)
 }
 
 /// Sets the edit rate
-/// @param rate Edit rate - this is not checked for sensible values.
+/// @param rate Edit rate - this is checked for sensible values.
 void Timepos::SetDefaultEditRate(const ProdAuto::MxfTimecode rate) {
 	mLastKnownTimecode = rate;
+	if (!rate.edit_rate.numerator || !rate.edit_rate.denominator) {
+		mLastKnownTimecode.undefined = true;
+	}
+}
+
+/// Returns the edit rate
+const ProdAuto::MxfTimecode Timepos::GetDefaultEditRate()
+{
+	return mLastKnownTimecode;
 }

@@ -15,9 +15,9 @@
     <ignoreparts/>
     <projectdirectory>.</projectdirectory>
     <absoluteprojectpath>false</absoluteprojectpath>
-    <description/>
+    <description></description>
     <projectname>ingexgui</projectname>
-    <defaultencoding/>
+    <defaultencoding></defaultencoding>
   </general>
   <kdevautoproject>
     <general>
@@ -25,17 +25,15 @@
       <useconfiguration>debug</useconfiguration>
     </general>
     <run>
-      <mainprogram>/home/matthew/cvs_build/ingex/studio/ace-tao/Ingexgui/debug/src/ingexgui</mainprogram>
+      <mainprogram>/home/ingex/ap-workspace/ingex/studio/ace-tao/Ingexgui/debug/src/ingexgui</mainprogram>
       <directoryradio>executable</directoryradio>
       <customdirectory>/</customdirectory>
-      <programargs>-ORBDefaultInitRef corbaloc:iiop:172.29.144.108:8888</programargs>
+      <programargs>-ORBDefaultInitRef corbaloc:iiop:192.168.1.197:8888</programargs>
       <terminal>false</terminal>
       <autocompile>true</autocompile>
-      <envvars>
-        <envvar value="/home/matthew/packages/ACE_wrappers/lib" name="LD_LIBRARY_PATH" />
-      </envvars>
-      <globaldebugarguments>-ORBDefaultInitRef corbaloc:iiop:172.29.144.108:8888</globaldebugarguments>
-      <globalcwd>/home/matthew/cvs_build/ingex/studio/ace-tao/Ingexgui/debug</globalcwd>
+      <envvars/>
+      <globaldebugarguments>-ORBDefaultInitRef corbaloc:iiop:192.168.1.197:8888</globaldebugarguments>
+      <globalcwd>/home/ingex/ap-workspace/ingex/studio/ace-tao/Ingexgui/debug</globalcwd>
       <useglobalprogram>true</useglobalprogram>
       <autoinstall>false</autoinstall>
       <autokdesu>false</autokdesu>
@@ -55,9 +53,7 @@
         <cxxcompiler>kdevgppoptions</cxxcompiler>
         <f77compiler>kdevg77options</f77compiler>
         <cxxflags>-O0 -g3 -W -Wall `wx-config --cxxflags`</cxxflags>
-        <envvars>
-          <envvar value="thing" name="DVSSDK" />
-        </envvars>
+        <envvars/>
         <topsourcedir/>
         <cppflags/>
         <ldflags/>
@@ -149,9 +145,9 @@
       <dbgshell>libtool</dbgshell>
       <programargs>-ORBDefaultInitRef corbaloc:iiop:132.185.129.118:8888 </programargs>
       <gdbpath>/usr/bin/gdb</gdbpath>
-      <configGdbScript/>
-      <runShellScript/>
-      <runGdbScript/>
+      <configGdbScript></configGdbScript>
+      <runShellScript></runShellScript>
+      <runGdbScript></runGdbScript>
       <breakonloadinglibs>true</breakonloadinglibs>
       <separatetty>false</separatetty>
       <floatingtoolbar>false</floatingtoolbar>
@@ -232,7 +228,7 @@
       <designerpluginpaths/>
     </qt>
     <creategettersetter>
-      <prefixGet/>
+      <prefixGet></prefixGet>
       <prefixSet>set</prefixSet>
       <prefixVariable>m_,_</prefixVariable>
       <parameterName>theValue</parameterName>

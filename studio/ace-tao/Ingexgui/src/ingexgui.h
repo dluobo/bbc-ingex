@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.13 2009/05/01 13:41:34 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.14 2009/09/18 16:10:16 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -49,6 +49,10 @@
 #define UNKNOWN_TIMECODE wxT("??:??:??:??")
 
 #define SAVED_STATE_FILENAME wxT(".ingexguirc")
+#define RECORDING_SERVER_ROOT wxT("/store")
+#define ONLINE_SUBDIR wxT("mxf_online")
+#define OFFLINE_SUBDIR wxT("mxf_offline")
+
 
 #define USING_ULONGLONG 0 //this allows larger numbers to be incrementable in tape ID cells but if the C runtime library does not support 64-bit numbers the increment buttons will not work at all
 
@@ -78,8 +82,20 @@ class RecorderGroupCtrl;
 class CuePointsDlg;
 class TestModeDlg;
 class ChunkingDlg;
+class SelectRecDlg;
 class wxToggleButton;
 class EventList;
+
+/// As the stock text ctrl but passes on focus set and kill events
+class MyTextCtrl : public wxTextCtrl
+{
+	public:
+		MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxT(""), const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) {};
+	private:
+		void OnFocus(wxFocusEvent & event) { GetParent()->AddPendingEvent(event); };
+
+		DECLARE_EVENT_TABLE()
+};
 
 /// The main displayed frame, at the heart of the application
 class IngexguiFrame : public wxFrame
@@ -107,6 +123,7 @@ class IngexguiFrame : public wxFrame
 		MENU_NextTake,
 		MENU_FirstTake,
 		MENU_LastTake,
+		MENU_JumpToTimecode,
 		MENU_PlayBackwards,
 		MENU_Pause,
 		MENU_PlayForwards,
@@ -114,12 +131,10 @@ class IngexguiFrame : public wxFrame
 		MENU_AutoClear,
 		MENU_ClearLog,
 		MENU_PlayerDisable,
-		MENU_PlayMOV,
-		MENU_PlayMXF,
-		MENU_TogglePlayFiles,
-#ifndef DISABLE_SHARED_MEM_SOURCE
-		MENU_ToggleEtoE,
-#endif
+		MENU_PlayerOpen,
+		MENU_OpenMOV,
+		MENU_OpenMXF,
+		MENU_OpenRec,
 		MENU_PlayerType,
 		MENU_PlayerAccelOutput,
 #ifdef HAVE_DVS
@@ -137,11 +152,11 @@ class IngexguiFrame : public wxFrame
 		MENU_PlayerAudioFollowsVideo,
 		MENU_Chunking,
 		MENU_TestMode,
+		BUTTON_MENU_PlayRecordings,
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		BUTTON_EtoE,
+		BUTTON_MENU_EtoE,
 #endif
-		BUTTON_PlayRecordings,
-		BUTTON_PlayFiles,
+		BUTTON_MENU_PlayFiles,
 		BUTTON_Record,
 		BUTTON_Stop,
 		BUTTON_Cue,
@@ -182,7 +197,7 @@ class IngexguiFrame : public wxFrame
 		void OnSetTapeIds(wxCommandEvent&);
 		void OnStop(wxCommandEvent&);
 		void OnCue(wxCommandEvent&);
-		void OnChunk(wxCommandEvent&);
+		void OnChunkButton(wxCommandEvent&);
 		void OnClearLog(wxCommandEvent&);
 		void OnPlayerOSDChange(wxCommandEvent&);
 #ifdef HAVE_DVS
@@ -217,7 +232,7 @@ class IngexguiFrame : public wxFrame
 		void OnPrevTake(wxCommandEvent&);
 		void OnNextTake(wxCommandEvent&);
 
-		void UpdatePlayerAndEventControls(bool = false, bool = false);
+		void UpdatePlayerAndEventControls(bool = false, bool = false, bool = false);
 		void UpdateTextShortcutStates();
 		void SetStatus(Stat);
 		ProdAuto::MxfDuration SetRoll(const wxChar *, int, const ProdAuto::MxfDuration &, wxStaticBoxSizer *);
@@ -229,6 +244,7 @@ class IngexguiFrame : public wxFrame
 		void EnableButtonReliably(wxControl *, bool = true);
 		void CanEditCues(const bool);
 		void EtoE();
+		void EnablePlayer(const bool = true);
 
 		wxStaticBitmap * mStatusCtrl, * mAlertCtrl;
 		RecorderGroupCtrl * mRecorderGroup;
@@ -241,9 +257,10 @@ class IngexguiFrame : public wxFrame
 		wxButton * mDescClearButton;
 		TickTreeCtrl * mTree;
 		wxStaticText * mRecProjectNameCtrl;
+		wxBoxSizer * mPlaybackPageSizer;
 		wxStaticBoxSizer * mPlayProjectNameBox;
 		wxStaticText * mPlayProjectNameCtrl;
-		wxTextCtrl * mDescriptionCtrl;
+		MyTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
 		wxButton * mDeleteCueButton;
@@ -252,6 +269,7 @@ class IngexguiFrame : public wxFrame
 		CuePointsDlg * mCuePointsDlg;
 		TestModeDlg * mTestModeDlg;
 		ChunkingDlg * mChunkingDlg;
+		SelectRecDlg * mSelectRecDlg;
 		wxStaticBoxSizer * mTimecodeBox;
 		wxToggleButton * mPlayRecordingsButton;
 		wxToggleButton * mPlayFilesButton;
@@ -266,7 +284,7 @@ class IngexguiFrame : public wxFrame
 		wxString mSavedStateFilename;
 		bool mDescriptionControlHasFocus;
 		wxLogStream * mLogStream;
-		wxArrayString mFileModeFiles;
+		wxArrayString mFileModeMxfFiles;
 		unsigned int mFilesModeSelectedTrack;
 		wxString mFileModeMovFile;
 		int64_t mFileModeFrameOffset;
@@ -274,17 +292,11 @@ class IngexguiFrame : public wxFrame
 		ingex::JogShuttle * mJogShuttle;
 		JSListener * mJSListener;
 		wxDateTime mToday;
-		DECLARE_EVENT_TABLE()
-};
-
-/// As the stock text ctrl but passes on focus set and kill events
-class MyTextCtrl : public wxTextCtrl
-{
-	public:
-		MyTextCtrl(wxWindow * parent, wxWindowID id, const wxString & value = wxT(""), const wxPoint & pos = wxDefaultPosition, const wxSize & size = wxDefaultSize, long style = 0) : wxTextCtrl(parent, id, value, pos, size, style) { SetNextHandler(parent); };
-	private:
-		void OnFocus(wxFocusEvent & event) { event.Skip(); };
-
+		int mLastPlayerMode;
+#ifndef DISABLE_SHARED_MEM_SOURCE
+		int mLastNonEtoEPlayerMode;
+		int mLastPlayerModeBeforeRec;
+#endif
 		DECLARE_EVENT_TABLE()
 };
 

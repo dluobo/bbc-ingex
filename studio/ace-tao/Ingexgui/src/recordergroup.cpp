@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: recordergroup.cpp,v 1.8 2009/05/01 13:41:34 john_f Exp $       *
+ *   $Id: recordergroup.cpp,v 1.9 2009/09/18 16:10:16 john_f Exp $       *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -46,20 +46,13 @@ END_EVENT_TABLE()
 /// @param size The control's size.
 /// @param argc Argument count, for ORB initialisation.
 /// @param argv Argument vector, for ORB initialisation.
-/// @param doc The saved state.
-RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int argc, wxChar** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mChunking(NOT_CHUNKING)
+/// @param doc The saved state.  Pointer merely saved; not used until controller events are received.
+RecorderGroupCtrl::RecorderGroupCtrl(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, int& argc, char** argv, const wxXmlDocument * doc) : wxListBox(parent, id, pos, size, 0, 0, wxLB_MULTIPLE), mEnabledForInput(true), mPreroll(InvalidMxfDuration), mDoc(doc), mChunking(NOT_CHUNKING)
 {
 	SetNextHandler(parent);
 	Insert(wxT(""), 0); //make sure something's in the control...
 	SetMinSize(GetEffectiveMinSize()); //...so that it won't shrink if Comms doesn't start up or there are no recorders initially
 	mComms = new Comms(this, argc, argv);
-	wxString dummy;
-	if (mComms->GetStatus(dummy)) { //started properly
-		StartGettingRecorders();
-	}
-	else {
-		EnableForInput(false);
-	}
 }
 
 RecorderGroupCtrl::~RecorderGroupCtrl()
@@ -72,12 +65,17 @@ RecorderGroupCtrl::~RecorderGroupCtrl()
 void RecorderGroupCtrl::StartGettingRecorders()
 {
 	wxString dummy;
-	if (IsEmpty()) {
-		//show that something's happening
-		Insert(wxT("Getting list..."), 0); //this will be removed when the list has been obtained
+	if (mComms->GetStatus(dummy)) { //started properly
+		if (IsEmpty()) {
+			//show that something's happening
+			Insert(wxT("Getting list..."), 0); //this will be removed when the list has been obtained
+		}
+		EnableForInput(false);
+		mComms->StartGettingRecorders(wxEVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
 	}
-	EnableForInput(false);
-	mComms->StartGettingRecorders(wxEVT_RECORDERGROUP_MESSAGE, ENABLE_REFRESH); //threaded, so won't hang app; sends the given event when it's finished
+	else {
+		EnableForInput(false);
+	}
 }
 
 /// Enables or disables the control for input, by sending an event to the parent
@@ -387,10 +385,9 @@ void RecorderGroupCtrl::OnControllerEvent(ControllerThreadEvent & event)
 					}
 					break;
 				case Controller::RECORD : {
-					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, RECORDING);
+					wxCommandEvent frameEvent(wxEVT_RECORDERGROUP_MESSAGE, NOT_CHUNKING == mChunking ? RECORDING : CHUNK_START);
 					frameEvent.SetString(event.GetName());
 					frameEvent.SetInt(Controller::SUCCESS == event.GetResult());
-					frameEvent.SetExtraLong(NOT_CHUNKING == mChunking ? 0 : 1);
 					RecorderData * recorderData = new RecorderData(event.GetTimecode()); //must be deleted by event handler
 					frameEvent.SetClientData(recorderData);
 					AddPendingEvent(frameEvent);
@@ -549,7 +546,7 @@ void RecorderGroupCtrl::SetTapeIds(const wxString & recorderName, const CORBA::S
 void RecorderGroupCtrl::OnTimeposEvent(wxCommandEvent & event)
 {
 	if (WAITING == mChunking) {
-		RecordAll(mStartTimecode); //timecode as already been set to be the frame after the recordings stopped
+		RecordAll(mStartTimecode); //timecode has already been set to be the frame after the recordings stopped
 		mChunking = RECORDING_CHUNK;
 	}
 	delete (ProdAuto::MxfTimecode *) event.GetClientData();

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dialogues.h,v 1.8 2009/05/14 11:00:10 john_f Exp $             *
+ *   $Id: dialogues.h,v 1.9 2009/09/18 16:10:15 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -165,20 +165,22 @@ class SetTapeIdsDlg : public wxDialog
 class JumpToTimecodeDlg : public wxDialog
 {
 	public:
-		JumpToTimecodeDlg(wxWindow *);
+		JumpToTimecodeDlg(wxWindow *, ProdAuto::MxfTimecode);
+		int ShowModal();
+		const ProdAuto::MxfTimecode GetTimecode();
 	private:
-		enum
+		enum //these must be in order
 		{
 			HRS = wxID_HIGHEST + 1,
 			MINS,
 			SECS,
-			FRAMES
+			FRAMES,
 		};
 		void OnTextChange(wxCommandEvent &);
-		void OnEnter(wxCommandEvent &);
 		void OnFocus(wxFocusEvent &);
-		int CalcValue(wxCommandEvent &, unsigned int);
+		bool CheckValue(const wxString &, const wxString &);
 		MyTextCtrl * mHours, * mMins, * mSecs, * mFrames;
+		ProdAuto::MxfTimecode mTimecode;
 	DECLARE_EVENT_TABLE()
 };
 
@@ -308,4 +310,48 @@ class ChunkingDlg : public wxDialog
 		ProdAuto::MxfDuration mPostroll;
 		bool mRecording;
 	DECLARE_EVENT_TABLE()
+};
+
+class SelectRecDlg : public wxDialog
+{
+	public:
+		SelectRecDlg(wxWindow *);
+		int ShowModal();
+		void GetPaths(wxArrayString &, bool = false);
+	private:
+		void OnSelectProject(wxCommandEvent &);
+		void OnSelectDate(wxCommandEvent &);
+		void OnSelectRecording(wxCommandEvent &);
+		void OnDoubleClick(wxCommandEvent &);
+		void OnPreferOnline(wxCommandEvent &);
+		void OnNavigateRecordings(wxCommandEvent &);
+		wxChoice * mProjectSelector;
+		wxChoice * mDateSelector;
+		wxListBox * mRecordingSelector;
+		wxBitmapButton * mUpButton;
+		wxBitmapButton * mDownButton;
+		wxStaticText * mOnlineMessage;
+		wxToggleButton * mPreferOnline;
+		wxString mSelectedProject;
+		wxString mSelectedDate;
+		wxString mSelectedRecording;
+		enum {
+			PROJECT = wxID_HIGHEST + 1,
+			DATE,
+			RECORDING,
+			UP,
+			DOWN,
+			PREFER_ONLINE
+		};
+	DECLARE_EVENT_TABLE()
+};
+
+/// Class storing a constant string, to be attached to each entry in a choice control.
+class StringContainer : public wxClientData
+{
+	public:
+		StringContainer(const wxString & data) : mData(data) {};
+		const wxString GetString() { return mData; };
+	private:
+		const wxString mData;
 };

@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: dragbuttonlist.cpp,v 1.9 2009/05/01 13:41:34 john_f Exp $             *
+ *   $Id: dragbuttonlist.cpp,v 1.10 2009/09/18 16:10:15 john_f Exp $      *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -30,19 +30,19 @@
 DragButtonList::DragButtonList(wxWindow * parent)
 : wxScrolledWindow(parent)
 {
-	SetNextHandler(parent); //the radio button events are not handled here
 	mSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(mSizer);
 }
 
 /// Replaces current state with a new column of video track radio buttons, one for each track with a video file, and with a quad split button at the top.
-/// Returns information about the current state.
+/// Returns information about the new state.
 /// Single track buttons are labelled with the track name and have a tool tip showing the associated filename.
 /// All buttons are disabled.
 /// @param chunkInfo The file names, the track names and the track types.  Gets all info from here rather than examining the files themselves, because they may not be available yet
 /// @param fileNames Returns the file name associated with each video track which has a file, with the audio filenames at the end.
 /// @param trackNames Returns corresponding names of tracks.
-void DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
+/// @return The input type.
+prodauto::PlayerInputType DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> & fileNames, std::vector<std::string> & trackNames)
 {
 	mSizer->Clear(true); //delete all buttons
 	fileNames.clear();
@@ -52,21 +52,37 @@ void DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> &
 	mSizer->Add(quadSplit, -1, wxEXPAND);
 	quadSplit->Enable(false); //enable later if any files successfully loaded
 	std::vector<std::string> audioFileNames;
+	prodauto::PlayerInputType inputType = prodauto::MXF_INPUT;
 	if (chunkInfo.GetFiles()->GetCount()) { //this chunk has files associated
+		wxString name;
 		for (size_t i = 0; i < chunkInfo.GetFiles()->GetCount(); i++) { //recorder loop
+			wxArrayString uniqueNames;
 			for (size_t j = 0; j < (*chunkInfo.GetFiles())[i]->length(); j++) { //file loop
-				if (ProdAuto::VIDEO == chunkInfo.GetTracks()[i][j].type && strlen((*chunkInfo.GetFiles())[i][j])) {
-					fileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
+				name = wxString((*chunkInfo.GetFiles())[i][j].in(), *wxConvCurrent);
+				bool duplicated = (wxNOT_FOUND != uniqueNames.Index(name));
+				if (!duplicated) {
+					uniqueNames.Add(name);
+				}
+				if (ProdAuto::VIDEO == chunkInfo.GetTracks()[i][j].type && !name.IsEmpty()) {
+					if (!duplicated) {
+						fileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
+					}
 					wxRadioButton * rb = new wxRadioButton(this, fileNames.size(), wxString(chunkInfo.GetTracks()[i][j].src.package_name, *wxConvCurrent)); //ID corresponds to file index
 					rb->Enable(false); //we don't know whether the player can open this file yet
-					rb->SetToolTip(wxString((*chunkInfo.GetFiles())[i][j], *wxConvCurrent));
+					rb->SetToolTip(name);
 					mSizer->Add(rb, -1, wxEXPAND);
 					trackNames.push_back(chunkInfo.GetTracks()[i][j].src.package_name.in());
 				}
-				else if (ProdAuto::AUDIO == chunkInfo.GetTracks()[i][j].type && strlen((*chunkInfo.GetFiles())[i][j])) {
+				else if (ProdAuto::AUDIO == chunkInfo.GetTracks()[i][j].type && !name.IsEmpty() && !duplicated) {
 					audioFileNames.push_back((*chunkInfo.GetFiles())[i][j].in());
 				}
 			}
+		}
+		if (!name.Right(4).CmpNoCase(wxT(".mov"))) {
+			inputType = prodauto::FFMPEG_INPUT;
+		}
+		else if (!name.Right(3).CmpNoCase(wxT(".dv"))) {
+			inputType = prodauto::DV_INPUT;
 		}
 	}
 	Layout();
@@ -74,6 +90,7 @@ void DragButtonList::SetTracks(ChunkInfo & chunkInfo, std::vector<std::string> &
 	for (size_t i = 0; i < audioFileNames.size(); i++) {
 		fileNames.push_back(audioFileNames.at(i));
 	}
+	return inputType;
 }
 
 /// Alternative to SetTracks for MXF file mode

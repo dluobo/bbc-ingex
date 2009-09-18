@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.4 2009/06/03 09:18:18 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.5 2009/09/18 16:10:15 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -38,9 +38,10 @@ DEFINE_EVENT_TYPE (wxEVT_RESTORE_LIST_LABEL);
 class ChunkInfo
 {
 	public:
-		ChunkInfo(const unsigned long startIndex, const wxString & projectName, ProdAuto::MxfTimecode startTimecode, const int64_t startPosition) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition) {};
+		ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition) {};
 		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
 		void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
+		void SetLastTimecode(const ProdAuto::MxfTimecode & lastTimecode) {mLastTimecode = lastTimecode;};
 		bool DeleteCuePoint(const unsigned long index) {
 			if (mCuePointFrames.size() > index) {
 				mCuePointFrames.erase(mCuePointFrames.begin() + index); mCueColourIndeces.erase(mCueColourIndeces.begin() + index);
@@ -52,6 +53,7 @@ class ChunkInfo
 		};
 		unsigned long GetStartIndex() {return mStartIndex;};
 		ProdAuto::MxfTimecode GetStartTimecode() {return mStartTimecode;};
+		ProdAuto::MxfTimecode GetLastTimecode() {return mLastTimecode;};
 		ArrayOfStringSeq_var * GetFiles() {return &mFiles;};
 		const wxString GetProjectName() {return mProjectName;};
 		ArrayOfTrackList_var & GetTracks() {return mTracks;};
@@ -63,6 +65,7 @@ class ChunkInfo
 		ArrayOfStringSeq_var mFiles;
 		const wxString mProjectName;
 		ProdAuto::MxfTimecode mStartTimecode;
+		ProdAuto::MxfTimecode mLastTimecode;
 		int64_t mStartPosition;
 		ArrayOfTrackList_var mTracks; //deletes itself
 		std::vector<int64_t> mCuePointFrames;
@@ -77,7 +80,7 @@ class RecorderData;
 class EventList : public wxListView, wxThread //used wxListCtrl for a while because wxListView crashed when you added an item - seems ok with 2.8
 {
 	public:
-		EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize);
+		EventList(wxWindow *, wxWindowID, const wxPoint & = wxDefaultPosition, const wxSize & = wxDefaultSize, bool = true);
 		enum EventType //NB order must match TypeLabels[] initialisation
 		{
 			NONE = 0,
@@ -110,6 +113,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		ChunkInfo * GetCurrentChunkInfo();
 		int64_t GetCurrentChunkStartPosition();
 		void Clear();
+		bool JumpToTimecode(const ProdAuto::MxfTimecode &, int64_t &);
 	private:
 		ExitCode Entry();
 		void OnEventBeginEdit(wxListEvent&);
@@ -136,6 +140,7 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		wxXmlNode * mRootNode;
 		bool mRunThread;
 		bool mSyncThread;
+		bool mLoadEventFiles;
 		wxString mFilename;
 	DECLARE_EVENT_TABLE()
 };
