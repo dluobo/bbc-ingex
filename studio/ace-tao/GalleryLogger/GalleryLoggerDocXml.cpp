@@ -1,5 +1,5 @@
 /*
- * $Id: GalleryLoggerDocXml.cpp,v 1.2 2008/08/07 16:41:48 john_f Exp $
+ * $Id: GalleryLoggerDocXml.cpp,v 1.3 2009/09/18 15:59:05 john_f Exp $
  *
  * Implementation of XML methods in the CGalleryLoggerDoc class.
  *
@@ -67,21 +67,21 @@ void CGalleryLoggerDoc::ExportSmil(const char * filename)
     // Create the DOM document
     {
 
-       DOMImplementation* impl =  DOMImplementationRegistry::getDOMImplementation(X("Core"));
+       DOMImplementation* impl =  DOMImplementationRegistry::getDOMImplementation(Xml("Core"));
 
         if (impl != NULL)
         {
             try
             {
                 doc = impl->createDocument(
-                   //X("http://www.w3.org/2001/SMIL20/Language"),    // root element namespace URI.
+                   //Xml("http://www.w3.org/2001/SMIL20/Language"),    // root element namespace URI.
                    0,
-                   X("smil"),         // root element name
+                   Xml("smil"),         // root element name
                    0);                   // document type object (DTD).
 
                 DOMElement* rootElem = doc->getDocumentElement();
-                rootElem->setAttribute(X("xmlns:smil2"), X("http://www.w3.org/2001/SMIL20/Language"));
-                rootElem->appendChild(doc->createTextNode(X(newline)));
+                rootElem->setAttribute(Xml("xmlns:smil2"), Xml("http://www.w3.org/2001/SMIL20/Language"));
+                rootElem->appendChild(doc->createTextNode(Xml(newline)));
 
                 // Sequences
                 for(int s = 0; s < SequenceCount(); ++s)
@@ -107,14 +107,14 @@ void CGalleryLoggerDoc::ExportSmil(const char * filename)
 
                                     if(Recording::DV == clip.Recording().Format())
                                     {
-                                        DOMElement*  seqElem = doc->createElement(X("seq"));
+                                        DOMElement*  seqElem = doc->createElement(Xml("seq"));
                                         rootElem->appendChild(seqElem);
-                                        rootElem->appendChild(doc->createTextNode(X(newline)));
+                                        rootElem->appendChild(doc->createTextNode(Xml(newline)));
 
-                                        DOMElement*  videoElem = doc->createElement(X("video"));
-                                        seqElem->appendChild(doc->createTextNode(X(newline)));
+                                        DOMElement*  videoElem = doc->createElement(Xml("video"));
+                                        seqElem->appendChild(doc->createTextNode(Xml(newline)));
                                         seqElem->appendChild(videoElem);
-                                        seqElem->appendChild(doc->createTextNode(X(newline)));
+                                        seqElem->appendChild(doc->createTextNode(Xml(newline)));
 
                                         std::string filename = clip.Recording().FileId();
                                         // remove file://host
@@ -124,15 +124,15 @@ void CGalleryLoggerDoc::ExportSmil(const char * filename)
                                             filename = filename.substr(pos);
                                         }
 
-                                        videoElem->setAttribute(X("src"), X(filename.c_str()));
+                                        videoElem->setAttribute(Xml("src"), Xml(filename.c_str()));
                                         Timecode begin = clip.Start();
                                         Timecode end = begin + take.Duration();
                                         char begin_text[10];
                                         char end_text[10];
                                         ACE_OS::itoa(begin.TotalFrames(), begin_text, 10);
                                         ACE_OS::itoa(end.TotalFrames(), end_text, 10);
-                                        videoElem->setAttribute(X("clipBegin"), X(begin_text));
-                                        videoElem->setAttribute(X("clipEnd"), X(end_text));
+                                        videoElem->setAttribute(Xml("clipBegin"), Xml(begin_text));
+                                        videoElem->setAttribute(Xml("clipEnd"), Xml(end_text));
                                     } //if(Recording::RAWDV == clip.Type())
                                 }
                             } //if(take.SourceCount() > 0)
@@ -186,7 +186,7 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
     // Create the DOM document
    {
 
-        DOMImplementation* impl =  DOMImplementationRegistry::getDOMImplementation(X("Core"));
+        DOMImplementation* impl =  DOMImplementationRegistry::getDOMImplementation(Xml("Core"));
 
         if (impl != NULL)
         {
@@ -194,56 +194,56 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
             {
                 doc = impl->createDocument(
                            0,             // root element namespace URI.
-                           X("log"),       // root element name
+                           Xml("log"),       // root element name
                            0);                 // document type object (DTD).
 
                 DOMElement * rootElem = doc->getDocumentElement();
-                rootElem->appendChild(doc->createTextNode(X(newline)));
+                rootElem->appendChild(doc->createTextNode(Xml(newline)));
 
-                DOMElement *  seriesElem = doc->createElement(X("series"));
+                DOMElement *  seriesElem = doc->createElement(Xml("series"));
                 rootElem->appendChild(seriesElem);
 
                 if (this->HasSeries())
                 {
-                    DOMElement *  tmpElem = doc->createElement(X("name"));
-                    tmpElem->appendChild(doc->createTextNode(X(CurrentSeriesName())));
+                    DOMElement *  tmpElem = doc->createElement(Xml("name"));
+                    tmpElem->appendChild(doc->createTextNode(Xml(CurrentSeriesName())));
                     seriesElem->appendChild(tmpElem);
                 }
 
-                DOMElement *  programmeElem = doc->createElement(X("programme"));
-                seriesElem->appendChild(doc->createTextNode(X(newline)));
+                DOMElement *  programmeElem = doc->createElement(Xml("programme"));
+                seriesElem->appendChild(doc->createTextNode(Xml(newline)));
                 seriesElem->appendChild(programmeElem);
 
 
                 if (this->HasProgramme())
                 {
-                    DOMElement * tmpElem = doc->createElement(X("name"));
-                    tmpElem->appendChild(doc->createTextNode(X(CurrentProgrammeName())));
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    DOMElement * tmpElem = doc->createElement(Xml("name"));
+                    tmpElem->appendChild(doc->createTextNode(Xml(CurrentProgrammeName())));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
                     programmeElem->appendChild(tmpElem);
                 }
 
                 if(this->HasProducer())
                 {
-                    DOMElement * tmpElem = doc->createElement(X("producer"));
-                    tmpElem->appendChild(doc->createTextNode(X(Producer())));
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    DOMElement * tmpElem = doc->createElement(Xml("producer"));
+                    tmpElem->appendChild(doc->createTextNode(Xml(Producer())));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
                     programmeElem->appendChild(tmpElem);
                 }
 
                 if(this->HasDirector())
                 {
-                    DOMElement * tmpElem = doc->createElement(X("director"));
-                    tmpElem->appendChild(doc->createTextNode(X(Director())));
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    DOMElement * tmpElem = doc->createElement(Xml("director"));
+                    tmpElem->appendChild(doc->createTextNode(Xml(Director())));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
                     programmeElem->appendChild(tmpElem);
                 }
 
                 if(this->HasPA())
                 {
-                    DOMElement * tmpElem = doc->createElement(X("pa"));
-                    tmpElem->appendChild(doc->createTextNode(X(PA())));
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    DOMElement * tmpElem = doc->createElement(Xml("pa"));
+                    tmpElem->appendChild(doc->createTextNode(Xml(PA())));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
                     programmeElem->appendChild(tmpElem);
                 }
 
@@ -254,83 +254,83 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
                     ::Sequence & sequence = * mProgrammeOrder[s]; 
                     //::Sequence & sequence = * mRecordingOrder[s];
 
-                    DOMElement * itemElem = doc->createElement(X("item"));
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    DOMElement * itemElem = doc->createElement(Xml("item"));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
                     programmeElem->appendChild(itemElem);
 
-                    DOMElement * nameElem = doc->createElement(X("name"));
+                    DOMElement * nameElem = doc->createElement(Xml("name"));
                     itemElem->appendChild(nameElem);
-                    nameElem->appendChild(doc->createTextNode(X(sequence.Name())));
+                    nameElem->appendChild(doc->createTextNode(Xml(sequence.Name())));
 
-                    DOMElement * scriptRefElem = doc->createElement(X("scriptRef"));
+                    DOMElement * scriptRefElem = doc->createElement(Xml("scriptRef"));
                     itemElem->appendChild(scriptRefElem);
-                    scriptRefElem->appendChild(doc->createTextNode(X(sequence.ScriptRefRange().c_str())));
+                    scriptRefElem->appendChild(doc->createTextNode(Xml(sequence.ScriptRefRange().c_str())));
 
-                    DOMElement * idElem = doc->createElement(X("itemId"));
+                    DOMElement * idElem = doc->createElement(Xml("itemId"));
                     itemElem->appendChild(idElem);
-                    idElem->appendChild(doc->createTextNode(X(sequence.UniqueId())));
+                    idElem->appendChild(doc->createTextNode(Xml(sequence.UniqueId())));
 
-                    DOMElement * durElem = doc->createElement(X("targetDuration"));
+                    DOMElement * durElem = doc->createElement(Xml("targetDuration"));
                     itemElem->appendChild(durElem);
-                    durElem->appendChild(doc->createTextNode(X(sequence.TargetDuration().TextS())));
+                    durElem->appendChild(doc->createTextNode(Xml(sequence.TargetDuration().TextS())));
 
-                    programmeElem->appendChild(doc->createTextNode(X(newline)));
+                    programmeElem->appendChild(doc->createTextNode(Xml(newline)));
 
                     // Takes
                     for(int t = 0; t < sequence.TakeCount(); ++t)
                     {
                         ::Take & take = sequence.Take(t);
 
-                        DOMElement *  takeElem = doc->createElement(X("take"));
+                        DOMElement *  takeElem = doc->createElement(Xml("take"));
                         itemElem->appendChild(takeElem);
 
                         char tmp[8];
-                        DOMElement *  tmpElem = doc->createElement(X("number"));
+                        DOMElement *  tmpElem = doc->createElement(Xml("number"));
                         tmpElem->appendChild(doc->createTextNode(
-                            X(ACE_OS::itoa(take.Number(), tmp, 10))));
+                            Xml(ACE_OS::itoa(take.Number(), tmp, 10))));
                         takeElem->appendChild(tmpElem);
 
-                        DOMElement * dateElem = doc->createElement(X("date"));
+                        DOMElement * dateElem = doc->createElement(Xml("date"));
                         takeElem->appendChild(dateElem);
-                        dateElem->appendChild(doc->createTextNode(X(take.Date())));
+                        dateElem->appendChild(doc->createTextNode(Xml(take.Date())));
 
-                        DOMElement * inElem = doc->createElement(X("in"));
+                        DOMElement * inElem = doc->createElement(Xml("in"));
                         takeElem->appendChild(inElem);
-                        DOMText * inDataVal = doc->createTextNode(X(take.In().Text()));
+                        DOMText * inDataVal = doc->createTextNode(Xml(take.In().Text()));
                         inElem->appendChild(inDataVal);
 
-                        DOMElement * outElem = doc->createElement(X("out"));
+                        DOMElement * outElem = doc->createElement(Xml("out"));
                         takeElem->appendChild(outElem);
-                        outElem->appendChild(doc->createTextNode(X(take.Out().Text())));
+                        outElem->appendChild(doc->createTextNode(Xml(take.Out().Text())));
 
-                        DOMElement * durElem = doc->createElement(X("duration"));
+                        DOMElement * durElem = doc->createElement(Xml("duration"));
                         takeElem->appendChild(durElem);
-                        durElem->appendChild(doc->createTextNode(X(take.Duration().Text())));
+                        durElem->appendChild(doc->createTextNode(Xml(take.Duration().Text())));
 
-                        DOMElement * resultElem = doc->createElement(X("result"));
+                        DOMElement * resultElem = doc->createElement(Xml("result"));
                         takeElem->appendChild(resultElem);
-                        DOMText * resultDataVal = doc->createTextNode(X((take.IsGood() ? "Good" : "NG")));
+                        DOMText * resultDataVal = doc->createTextNode(Xml((take.IsGood() ? "Good" : "NG")));
                         resultElem->appendChild(resultDataVal);
 
-                        DOMElement * commentElem = doc->createElement(X("comment"));
+                        DOMElement * commentElem = doc->createElement(Xml("comment"));
                         takeElem->appendChild(commentElem);
-                        commentElem->appendChild(doc->createTextNode(X(take.Comment())));
+                        commentElem->appendChild(doc->createTextNode(Xml(take.Comment())));
 
                         // Recorded Sources
                         for(int r = 0; r < take.SourceCount(); r++)
                         {
                             ::RecordedSource & rec_source = take.RecordedSource(r);
 
-                            DOMElement * sourceElem = doc->createElement(X("source"));
+                            DOMElement * sourceElem = doc->createElement(Xml("source"));
                             takeElem->appendChild(sourceElem);
 
                             DOMElement * elem;
-                            elem = doc->createElement(X("name"));
-                            elem->appendChild(doc->createTextNode(X(rec_source.Source().Name())));
+                            elem = doc->createElement(Xml("name"));
+                            elem->appendChild(doc->createTextNode(Xml(rec_source.Source().Name())));
                             sourceElem->appendChild(elem);
 
-                            //elem = doc->createElement(X("description"));
-                            //elem->appendChild(doc->createTextNode(X(rec_source.Source().Description())));
+                            //elem = doc->createElement(Xml("description"));
+                            //elem->appendChild(doc->createTextNode(Xml(rec_source.Source().Description())));
                             //sourceElem->appendChild(elem);
 
                             // Clips
@@ -341,11 +341,11 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
 
                                 if(fmt == Recording::FILE) // temporarily only output file info
                                 {
-                                    DOMElement * clipElem = doc->createElement(X("clip"));
+                                    DOMElement * clipElem = doc->createElement(Xml("clip"));
                                     sourceElem->appendChild(clipElem);
 
-                                    elem = doc->createElement(X("format"));
-                                    elem->appendChild(doc->createTextNode(X(Recording::FormatText(fmt))));
+                                    elem = doc->createElement(Xml("format"));
+                                    elem->appendChild(doc->createTextNode(Xml(Recording::FormatText(fmt))));
                                     clipElem->appendChild(elem);
 
                                     Timecode start;
@@ -353,8 +353,8 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
                                     switch(fmt)
                                     {
                                     case Recording::TAPE:
-                                        elem = doc->createElement(X("spool"));
-                                        elem->appendChild(doc->createTextNode(X(clip.Recording().TapeId())));
+                                        elem = doc->createElement(Xml("spool"));
+                                        elem->appendChild(doc->createTextNode(Xml(clip.Recording().TapeId())));
                                         clipElem->appendChild(elem);
 
                                         start = take.In() - Duration("00:00:01:00");
@@ -364,29 +364,29 @@ void CGalleryLoggerDoc::ExportXml(const char * filename)
                                     case Recording::DV:
                                     case Recording::SDI:
                                     case Recording::FILE:
-                                        elem = doc->createElement(X("file"));
-                                        elem->appendChild(doc->createTextNode(X(clip.Recording().FileId())));
+                                        elem = doc->createElement(Xml("file"));
+                                        elem->appendChild(doc->createTextNode(Xml(clip.Recording().FileId())));
                                         clipElem->appendChild(elem);
 
                                         start = clip.Recording().FileStartTimecode();
                                         end = clip.Recording().FileEndTimecode();
                                         break;
                                     }
-                                    elem = doc->createElement(X("startTimecode"));
-                                    elem->appendChild(doc->createTextNode(X(start.Text())));
+                                    elem = doc->createElement(Xml("startTimecode"));
+                                    elem->appendChild(doc->createTextNode(Xml(start.Text())));
                                     clipElem->appendChild(elem);
 
                                     Duration duration = end - start;
-                                    elem = doc->createElement(X("duration"));
+                                    elem = doc->createElement(Xml("duration"));
                                     char tmp[16]; // for itoa conversion
-                                    elem->appendChild(doc->createTextNode(X(ACE_OS::itoa(duration.TotalFrames(),tmp, 10))));
+                                    elem->appendChild(doc->createTextNode(Xml(ACE_OS::itoa(duration.TotalFrames(),tmp, 10))));
                                     clipElem->appendChild(elem);
                                 }
-                                sourceElem->appendChild(doc->createTextNode(X(newline)));
+                                sourceElem->appendChild(doc->createTextNode(Xml(newline)));
                             } // for Clip
                         } // for RecordedSource
 
-                        itemElem->appendChild(doc->createTextNode(X(newline)));
+                        itemElem->appendChild(doc->createTextNode(Xml(newline)));
                     } // for take
                 } // for programme
 
@@ -430,33 +430,33 @@ void CGalleryLoggerDoc::ExportToFcp(const char * filename)
     XmlTools::Initialise();
 
     // Create the DOM document
-    DOMImplementation * impl =  DOMImplementationRegistry::getDOMImplementation(X("Core"));
+    DOMImplementation * impl =  DOMImplementationRegistry::getDOMImplementation(Xml("Core"));
     DOMDocument * doc;
 
     if(impl != 0)
     {
         try
         {
-            DOMDocumentType * docType = impl->createDocumentType(X("xmeml"), 0, 0);
+            DOMDocumentType * docType = impl->createDocumentType(Xml("xmeml"), 0, 0);
             doc = impl->createDocument(
                        0,             // root element namespace URI.
-                       X("xmeml"),       // root element name
+                       Xml("xmeml"),       // root element name
                        docType);                 // document type object (DTD).
             DOMElement * rootElem = doc->getDocumentElement();
-            rootElem->setAttribute(X("version"),X("1"));
-            rootElem->appendChild(doc->createTextNode(X(newline)));
+            rootElem->setAttribute(Xml("version"),Xml("1"));
+            rootElem->appendChild(doc->createTextNode(Xml(newline)));
 
             // bin
-            DOMElement * binElem = doc->createElement(X("bin"));
+            DOMElement * binElem = doc->createElement(Xml("bin"));
             rootElem->appendChild(binElem);
 
             // bin-name
-            DOMElement * nameElem = doc->createElement(X("name"));
-            nameElem->appendChild(doc->createTextNode(X(this->CurrentProgrammeName())));
+            DOMElement * nameElem = doc->createElement(Xml("name"));
+            nameElem->appendChild(doc->createTextNode(Xml(this->CurrentProgrammeName())));
             binElem->appendChild(nameElem);
 
             // children
-            DOMElement * childrenElem = doc->createElement(X("children"));
+            DOMElement * childrenElem = doc->createElement(Xml("children"));
             binElem->appendChild(childrenElem);
 
             // Items
@@ -495,28 +495,28 @@ void CGalleryLoggerDoc::ExportToFcp(const char * filename)
                                             << "_" << rec_source.Source().Name();
 
                                         // clip
-                                        DOMElement * clipElem = doc->createElement(X("clip"));
-                                        //clipElem->setAttribute(X("id"),X(name_ss.str().c_str()));
+                                        DOMElement * clipElem = doc->createElement(Xml("clip"));
+                                        //clipElem->setAttribute(Xml("id"),Xml(name_ss.str().c_str()));
                                         childrenElem->appendChild(clipElem);
 
                                         // name
-                                        DOMElement * nameElem = doc->createElement(X("name"));
-                                        nameElem->appendChild(doc->createTextNode(X(name_ss.str().c_str())));
+                                        DOMElement * nameElem = doc->createElement(Xml("name"));
+                                        nameElem->appendChild(doc->createTextNode(Xml(name_ss.str().c_str())));
                                         clipElem->appendChild(nameElem);
 
                                         // logginginfo
-                                        DOMElement * logginginfoElem = doc->createElement(X("logginginfo"));
+                                        DOMElement * logginginfoElem = doc->createElement(Xml("logginginfo"));
                                         clipElem->appendChild(nameElem);
 
                                         // logginginfo-good
-                                        DOMElement * goodElem = doc->createElement(X("good"));
-                                        goodElem->appendChild(doc->createTextNode(X(
+                                        DOMElement * goodElem = doc->createElement(Xml("good"));
+                                        goodElem->appendChild(doc->createTextNode(Xml(
                                             (take.IsGood() ? "true" : "false"))));
                                         logginginfoElem->appendChild(goodElem);
 
                                         // ismasterclip
-                                        DOMElement * ismasterclipElem = doc->createElement(X("ismasterclip"));
-                                        ismasterclipElem->appendChild(doc->createTextNode(X("true")));
+                                        DOMElement * ismasterclipElem = doc->createElement(Xml("ismasterclip"));
+                                        ismasterclipElem->appendChild(doc->createTextNode(Xml("true")));
                                         clipElem->appendChild(ismasterclipElem);
 
                                         // calculate duration
@@ -527,32 +527,32 @@ void CGalleryLoggerDoc::ExportToFcp(const char * filename)
                                         dur_ss << duration.TotalFrames();
 
                                         // duration
-                                        DOMElement * durationElem = doc->createElement(X("duration"));
-                                        durationElem->appendChild(doc->createTextNode(X(dur_ss.str().c_str())));
+                                        DOMElement * durationElem = doc->createElement(Xml("duration"));
+                                        durationElem->appendChild(doc->createTextNode(Xml(dur_ss.str().c_str())));
                                         clipElem->appendChild(durationElem);
 
                                         // rate
-                                        DOMElement * rateElem = doc->createElement(X("rate"));
+                                        DOMElement * rateElem = doc->createElement(Xml("rate"));
                                         clipElem->appendChild(rateElem);
 
                                         // ntsc
-                                        DOMElement * ntscElem = doc->createElement(X("ntsc"));
-                                        ntscElem->appendChild(doc->createTextNode(X("false")));
+                                        DOMElement * ntscElem = doc->createElement(Xml("ntsc"));
+                                        ntscElem->appendChild(doc->createTextNode(Xml("false")));
                                         rateElem->appendChild(ntscElem);
 
                                         // timebase
-                                        DOMElement * timebaseElem = doc->createElement(X("timebase"));
-                                        timebaseElem->appendChild(doc->createTextNode(X("25")));
+                                        DOMElement * timebaseElem = doc->createElement(Xml("timebase"));
+                                        timebaseElem->appendChild(doc->createTextNode(Xml("25")));
                                         rateElem->appendChild(timebaseElem);
 
 #if 1
                                         // file
-                                        DOMElement * fileElem = doc->createElement(X("file"));
+                                        DOMElement * fileElem = doc->createElement(Xml("file"));
                                         clipElem->appendChild(fileElem);
 
                                         // name
-                                        nameElem = doc->createElement(X("name"));
-                                        nameElem->appendChild(doc->createTextNode(X(name_ss.str().c_str())));
+                                        nameElem = doc->createElement(Xml("name"));
+                                        nameElem->appendChild(doc->createTextNode(Xml(name_ss.str().c_str())));
                                         fileElem->appendChild(nameElem);
 
                                         // pathurl
@@ -564,44 +564,44 @@ void CGalleryLoggerDoc::ExportToFcp(const char * filename)
                                             << "_S"
                                             << name_ss.str()
                                             << "_v1.dv";
-                                        DOMElement * pathurlElem = doc->createElement(X("pathurl"));
-                                        pathurlElem->appendChild(doc->createTextNode(X(pathurl_ss.str().c_str())));
+                                        DOMElement * pathurlElem = doc->createElement(Xml("pathurl"));
+                                        pathurlElem->appendChild(doc->createTextNode(Xml(pathurl_ss.str().c_str())));
                                         fileElem->appendChild(pathurlElem);
 #endif
 
                                         // timecode
-                                        DOMElement * timecodeElem = doc->createElement(X("timecode"));
+                                        DOMElement * timecodeElem = doc->createElement(Xml("timecode"));
                                         //fileElem->appendChild(timecodeElem);
                                         clipElem->appendChild(timecodeElem);
 
                                         // timecode string
-                                        DOMElement * stringElem = doc->createElement(X("string"));
+                                        DOMElement * stringElem = doc->createElement(Xml("string"));
                                         timecodeElem->appendChild(stringElem);
-                                        stringElem->appendChild(doc->createTextNode(X(start.Text())));
+                                        stringElem->appendChild(doc->createTextNode(Xml(start.Text())));
 
                                         // According to spec we only need string
                                         // timecode frame
                                         //std::ostringstream frame_ss;
                                         //frame_ss << start.TotalFrames();
-                                        //DOMElement * frameElem = doc->createElement(X("frame"));
+                                        //DOMElement * frameElem = doc->createElement(Xml("frame"));
                                         //timecodeElem->appendChild(frameElem);
-                                        //frameElem->appendChild(doc->createTextNode(X(frame_ss.str().c_str())));
+                                        //frameElem->appendChild(doc->createTextNode(Xml(frame_ss.str().c_str())));
 
                                         // timecode displayformat
-                                        //DOMElement * displayformatElem = doc->createElement(X("displayformat"));
+                                        //DOMElement * displayformatElem = doc->createElement(Xml("displayformat"));
                                         //timecodeElem->appendChild(displayformatElem);
-                                        //displayformatElem->appendChild(doc->createTextNode(X("NDF")));
+                                        //displayformatElem->appendChild(doc->createTextNode(Xml("NDF")));
 
                                         // media
-                                        DOMElement * mediaElem = doc->createElement(X("media"));
+                                        DOMElement * mediaElem = doc->createElement(Xml("media"));
                                         clipElem->appendChild(mediaElem);
 
                                         // video
-                                        DOMElement * videoElem = doc->createElement(X("video"));
+                                        DOMElement * videoElem = doc->createElement(Xml("video"));
                                         mediaElem->appendChild(videoElem);
 
                                         // track
-                                        DOMElement * trackElem = doc->createElement(X("track"));
+                                        DOMElement * trackElem = doc->createElement(Xml("track"));
                                         videoElem->appendChild(trackElem);
 
                                     }
@@ -774,142 +774,142 @@ void CGalleryLoggerDoc::AddFcpClip(DOMDocument * doc,
     int a1_track = trackNo * 2 + 1;
     int a2_track = trackNo * 2 + 2;
 
-    DOMElement * sequence = static_cast<DOMElement *> (doc->getElementsByTagName(X("sequence"))->item(0));
-    DOMElement * media = static_cast<DOMElement *> (sequence->getElementsByTagName(X("media"))->item(0));
-    DOMElement * video = static_cast<DOMElement *> (media->getElementsByTagName(X("video"))->item(0));
+    DOMElement * sequence = static_cast<DOMElement *> (doc->getElementsByTagName(Xml("sequence"))->item(0));
+    DOMElement * media = static_cast<DOMElement *> (sequence->getElementsByTagName(Xml("media"))->item(0));
+    DOMElement * video = static_cast<DOMElement *> (media->getElementsByTagName(Xml("video"))->item(0));
 
-    while (video->getElementsByTagName(X("track"))->getLength() < (trackNo + 1))
+    while (video->getElementsByTagName(Xml("track"))->getLength() < (trackNo + 1))
     {
-        video->appendChild(doc->createElement(X("track")));
+        video->appendChild(doc->createElement(Xml("track")));
     }
 
-    DOMNode * trackTag = video->getElementsByTagName(X("track"))->item(trackNo);
+    DOMNode * trackTag = video->getElementsByTagName(Xml("track"))->item(trackNo);
     // We now have the relevant video track
 
     // Add a video clipitem
-    DOMElement * clipitemTag = doc->createElement(X("clipitem"));
-    clipitemTag->setAttribute(X("id"),X(id.c_str()));  // set id for clipitem
-    trackTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * clipitemTag = doc->createElement(Xml("clipitem"));
+    clipitemTag->setAttribute(Xml("id"),Xml(id.c_str()));  // set id for clipitem
+    trackTag->appendChild(doc->createTextNode(Xml(newline)));
     trackTag->appendChild(clipitemTag);
 
-    DOMElement * nameTag = doc->createElement(X("name"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * nameTag = doc->createElement(Xml("name"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(nameTag);
-    DOMText * nameText = doc->createTextNode(X(name.c_str()));
+    DOMText * nameText = doc->createTextNode(Xml(name.c_str()));
     nameTag->appendChild(nameText);
 
-    DOMElement * durationTag = doc->createElement(X("duration"));
+    DOMElement * durationTag = doc->createElement(Xml("duration"));
     clipitemTag->appendChild(durationTag);
     std::stringstream durStr;
     durStr << durationInFrames;
-    durationTag->appendChild(doc->createTextNode(X(durStr.str().c_str())));
+    durationTag->appendChild(doc->createTextNode(Xml(durStr.str().c_str())));
 
-    DOMElement * startTag = doc->createElement(X("start"));
+    DOMElement * startTag = doc->createElement(Xml("start"));
     clipitemTag->appendChild(startTag);
     std::stringstream startStr;
     startStr << start;
-    DOMText * startText = doc->createTextNode(X(startStr.str().c_str()));
+    DOMText * startText = doc->createTextNode(Xml(startStr.str().c_str()));
     startTag->appendChild(startText);
 
-    DOMElement * endTag = doc->createElement(X("end"));
+    DOMElement * endTag = doc->createElement(Xml("end"));
     clipitemTag->appendChild(endTag);
     std::stringstream endStr;
     endStr << end;
-    DOMText * endText = doc->createTextNode(X(endStr.str().c_str()));
+    DOMText * endText = doc->createTextNode(Xml(endStr.str().c_str()));
     endTag->appendChild(endText);
 
-    DOMElement * inTag = doc->createElement(X("in"));
+    DOMElement * inTag = doc->createElement(Xml("in"));
     clipitemTag->appendChild(inTag);
     std::stringstream inStr;
     inStr << in;
-    DOMText * inText = doc->createTextNode(X(inStr.str().c_str()));
+    DOMText * inText = doc->createTextNode(Xml(inStr.str().c_str()));
     inTag->appendChild(inText);
 
-    DOMElement * outTag = doc->createElement(X("out"));
+    DOMElement * outTag = doc->createElement(Xml("out"));
     clipitemTag->appendChild(outTag);
     std::stringstream outStr;
     outStr << out;
-    DOMText * outText = doc->createTextNode(X(outStr.str().c_str()));
+    DOMText * outText = doc->createTextNode(Xml(outStr.str().c_str()));
     outTag->appendChild(outText);
 
     // The file element
-    DOMElement * fileTag = doc->createElement(X("file"));
-    fileTag->setAttribute(X("id"),X(filename.c_str()));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * fileTag = doc->createElement(Xml("file"));
+    fileTag->setAttribute(Xml("id"),Xml(filename.c_str()));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(fileTag);
 
-    DOMElement * pathurlTag = doc->createElement(X("pathurl"));
+    DOMElement * pathurlTag = doc->createElement(Xml("pathurl"));
     fileTag->appendChild(pathurlTag);
-    DOMText * urlText = doc->createTextNode(X(pathurl.c_str()));
+    DOMText * urlText = doc->createTextNode(Xml(pathurl.c_str()));
     pathurlTag->appendChild(urlText);
 
     // Link video and audio tracks
-    DOMElement * linkElem = doc->createElement(X("link"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * linkElem = doc->createElement(Xml("link"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(linkElem);
-    DOMElement * elem = doc->createElement(X("mediatype"));
-    elem->appendChild(doc->createTextNode(X("video")));
+    DOMElement * elem = doc->createElement(Xml("mediatype"));
+    elem->appendChild(doc->createTextNode(Xml("video")));
     linkElem->appendChild(elem);
-    elem = doc->createElement(X("trackindex"));
-    elem->appendChild(doc->createTextNode(X(ACE_OS::itoa(v_track,tmp,10))));
+    elem = doc->createElement(Xml("trackindex"));
+    elem->appendChild(doc->createTextNode(Xml(ACE_OS::itoa(v_track,tmp,10))));
     linkElem->appendChild(elem);
     std::stringstream index;
     index << clipIndex;
-    elem = doc->createElement(X("clipindex"));
-    elem->appendChild(doc->createTextNode(X(index.str().c_str())));
+    elem = doc->createElement(Xml("clipindex"));
+    elem->appendChild(doc->createTextNode(Xml(index.str().c_str())));
     linkElem->appendChild(elem);
 
-    linkElem = doc->createElement(X("link"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    linkElem = doc->createElement(Xml("link"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(linkElem);
-    elem = doc->createElement(X("mediatype"));
-    elem->appendChild(doc->createTextNode(X("audio")));
+    elem = doc->createElement(Xml("mediatype"));
+    elem->appendChild(doc->createTextNode(Xml("audio")));
     linkElem->appendChild(elem);
-    elem = doc->createElement(X("trackindex"));
-    elem->appendChild(doc->createTextNode(X(ACE_OS::itoa(a1_track,tmp,10))));
+    elem = doc->createElement(Xml("trackindex"));
+    elem->appendChild(doc->createTextNode(Xml(ACE_OS::itoa(a1_track,tmp,10))));
     linkElem->appendChild(elem);
-    elem = doc->createElement(X("clipindex"));
-    elem->appendChild(doc->createTextNode(X(index.str().c_str())));
+    elem = doc->createElement(Xml("clipindex"));
+    elem->appendChild(doc->createTextNode(Xml(index.str().c_str())));
     linkElem->appendChild(elem);
 
-    linkElem = doc->createElement(X("link"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    linkElem = doc->createElement(Xml("link"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(linkElem);
-    elem = doc->createElement(X("mediatype"));
-    elem->appendChild(doc->createTextNode(X("audio")));
+    elem = doc->createElement(Xml("mediatype"));
+    elem->appendChild(doc->createTextNode(Xml("audio")));
     linkElem->appendChild(elem);
-    elem = doc->createElement(X("trackindex"));
-    elem->appendChild(doc->createTextNode(X(ACE_OS::itoa(a2_track,tmp,10))));
+    elem = doc->createElement(Xml("trackindex"));
+    elem->appendChild(doc->createTextNode(Xml(ACE_OS::itoa(a2_track,tmp,10))));
     linkElem->appendChild(elem);
-    elem = doc->createElement(X("clipindex"));
-    elem->appendChild(doc->createTextNode(X(index.str().c_str())));
+    elem = doc->createElement(Xml("clipindex"));
+    elem->appendChild(doc->createTextNode(Xml(index.str().c_str())));
     linkElem->appendChild(elem);
 
     // Add audio clipitems (one for each channel)
-    DOMElement * audio = static_cast<DOMElement *> (media->getElementsByTagName(X("audio"))->item(0));
+    DOMElement * audio = static_cast<DOMElement *> (media->getElementsByTagName(Xml("audio"))->item(0));
 
-    while (audio->getElementsByTagName(X("track"))->getLength() < (2 * (trackNo + 1)))
+    while (audio->getElementsByTagName(Xml("track"))->getLength() < (2 * (trackNo + 1)))
     {
-        audio->appendChild(doc->createElement(X("track")));
+        audio->appendChild(doc->createElement(Xml("track")));
     }
 
     for(int channel = 0; channel < 2; ++channel)
     {
         // Get track
-        trackTag = audio->getElementsByTagName(X("track"))->item(channel + 2 * trackNo);
+        trackTag = audio->getElementsByTagName(Xml("track"))->item(channel + 2 * trackNo);
 
         // Add audio clipitem
-        clipitemTag = doc->createElement(X("clipitem"));
-        clipitemTag->setAttribute(X("id"),X(id.c_str()));  // set id for clipitem
-        trackTag->appendChild(doc->createTextNode(X(newline)));
+        clipitemTag = doc->createElement(Xml("clipitem"));
+        clipitemTag->setAttribute(Xml("id"),Xml(id.c_str()));  // set id for clipitem
+        trackTag->appendChild(doc->createTextNode(Xml(newline)));
         trackTag->appendChild(clipitemTag);
         // Note that we have used same id as video clipitem so we don't need
         // to repeat the in/out/start/end data.
 
         // Add file element
-        DOMElement * fileTag = doc->createElement(X("file"));
-        fileTag->setAttribute(X("id"),X(filename.c_str()));
-        clipitemTag->appendChild(doc->createTextNode(X(newline)));
+        DOMElement * fileTag = doc->createElement(Xml("file"));
+        fileTag->setAttribute(Xml("id"),Xml(filename.c_str()));
+        clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
         clipitemTag->appendChild(fileTag);
         // Note that we have used same id as video file so we don't need
         // to repeat the pathurl etc.
@@ -934,58 +934,58 @@ void CGalleryLoggerDoc::AddFcpStill(DOMDocument * doc,
 
     char tmp[16];  // for use by itoa
 
-    DOMElement * sequence = static_cast<DOMElement *> (doc->getElementsByTagName(X("sequence"))->item(0));
-    DOMElement * media = static_cast<DOMElement *> (sequence->getElementsByTagName(X("media"))->item(0));
-    DOMElement * video = static_cast<DOMElement *> (media->getElementsByTagName(X("video"))->item(0));
+    DOMElement * sequence = static_cast<DOMElement *> (doc->getElementsByTagName(Xml("sequence"))->item(0));
+    DOMElement * media = static_cast<DOMElement *> (sequence->getElementsByTagName(Xml("media"))->item(0));
+    DOMElement * video = static_cast<DOMElement *> (media->getElementsByTagName(Xml("video"))->item(0));
 
-    while (video->getElementsByTagName(X("track"))->getLength() < (track + 1))
+    while (video->getElementsByTagName(Xml("track"))->getLength() < (track + 1))
     {
-        video->appendChild(doc->createElement(X("track")));
+        video->appendChild(doc->createElement(Xml("track")));
     }
 
-    DOMNode * trackTag = video->getElementsByTagName(X("track"))->item(track);
+    DOMNode * trackTag = video->getElementsByTagName(Xml("track"))->item(track);
     // We now have the relevant video track
 
     // Add a video clipitem
-    DOMElement * clipitemTag = doc->createElement(X("clipitem"));
-    //clipitemTag->setAttribute(X("id"),X(id.c_str()));  // set id for clipitem
-    trackTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * clipitemTag = doc->createElement(Xml("clipitem"));
+    //clipitemTag->setAttribute(Xml("id"),Xml(id.c_str()));  // set id for clipitem
+    trackTag->appendChild(doc->createTextNode(Xml(newline)));
     trackTag->appendChild(clipitemTag);
 
-    DOMElement * nameTag = doc->createElement(X("name"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * nameTag = doc->createElement(Xml("name"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(nameTag);
-    DOMText * nameText = doc->createTextNode(X(name.c_str()));
+    DOMText * nameText = doc->createTextNode(Xml(name.c_str()));
     nameTag->appendChild(nameText);
 
-    DOMElement * durationTag = doc->createElement(X("duration"));
+    DOMElement * durationTag = doc->createElement(Xml("duration"));
     clipitemTag->appendChild(durationTag);
-    durationTag->appendChild(doc->createTextNode(X(ACE_OS::itoa(duration,tmp,10))));
+    durationTag->appendChild(doc->createTextNode(Xml(ACE_OS::itoa(duration,tmp,10))));
 
-    DOMElement * startTag = doc->createElement(X("start"));
+    DOMElement * startTag = doc->createElement(Xml("start"));
     clipitemTag->appendChild(startTag);
-    DOMText * startText = doc->createTextNode(X(ACE_OS::itoa(start,tmp,10)));
+    DOMText * startText = doc->createTextNode(Xml(ACE_OS::itoa(start,tmp,10)));
     startTag->appendChild(startText);
 
-    DOMElement * endTag = doc->createElement(X("end"));
+    DOMElement * endTag = doc->createElement(Xml("end"));
     clipitemTag->appendChild(endTag);
-    DOMText * endText = doc->createTextNode(X(ACE_OS::itoa(end,tmp,10)));
+    DOMText * endText = doc->createTextNode(Xml(ACE_OS::itoa(end,tmp,10)));
     endTag->appendChild(endText);
 
-    DOMElement * stillframeElem = doc->createElement(X("stillframe"));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * stillframeElem = doc->createElement(Xml("stillframe"));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(stillframeElem);
-    stillframeElem->appendChild(doc->createTextNode(X("TRUE")));
+    stillframeElem->appendChild(doc->createTextNode(Xml("TRUE")));
 
     // The file element
-    DOMElement * fileTag = doc->createElement(X("file"));
-    //fileTag->setAttribute(X("id"),X(filename.c_str()));
-    clipitemTag->appendChild(doc->createTextNode(X(newline)));
+    DOMElement * fileTag = doc->createElement(Xml("file"));
+    //fileTag->setAttribute(Xml("id"),Xml(filename.c_str()));
+    clipitemTag->appendChild(doc->createTextNode(Xml(newline)));
     clipitemTag->appendChild(fileTag);
 
-    DOMElement * pathurlTag = doc->createElement(X("pathurl"));
+    DOMElement * pathurlTag = doc->createElement(Xml("pathurl"));
     fileTag->appendChild(pathurlTag);
-    DOMText * urlText = doc->createTextNode(X(pathurl.c_str()));
+    DOMText * urlText = doc->createTextNode(Xml(pathurl.c_str()));
     pathurlTag->appendChild(urlText);
 
 }
