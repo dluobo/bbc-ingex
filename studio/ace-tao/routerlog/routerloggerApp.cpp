@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.9 2009/04/16 18:33:48 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.10 2009/09/18 16:26:32 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -33,6 +33,7 @@
 #include "quartzRouter.h"
 #include "EasyReader.h"
 #include "ClockReader.h"
+#include "ShmTimecodeReader.h"
 #include "Timecode.h"
 #include "DatabaseManager.h"
 #include "DBException.h"
@@ -41,7 +42,8 @@
 #include <sstream>
 
 const char * const USAGE =
-    "Usage: Routerlogger.exe [-v] [-r <router port>] [-s] [-t <timecode port>] [-u]"
+    "Usage: Routerlogger.exe [-v] [-r <router port>] [-s]"
+    "[[-t <timecode port>] [-u] | [-l] | [-i]]"
     " [-n <name>] [-c <mc_clip_def_name>] [-f <db file>]"
     " [-d <name> -p <number>] [-m <MixerOut dest>]"
     " [-a <nameserver>]"
@@ -49,16 +51,13 @@ const char * const USAGE =
     " <CORBA options>\n"
     "    -s  router on TCP socket, router port in format host:port\n"
     "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
+    "    -l  take LTC timecode from shared memory\n"
+    "    -i  take VITC timecode from shared memory\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
-    "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService";
+    "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService\n";
 
-const char * const OPTS = "vr:st:un:c:f:a:d:p:m:o:";
+const char * const OPTS = "vr:st:ulin:c:f:a:d:p:m:o:";
 
-#ifdef WIN32
-    const char * const DB_PATH = "C:\\TEMP\\RouterLogs\\";
-#else
-    const char * const DB_PATH = "/var/tmp/RouterLogs/";
-#endif
 
 
 // Static member
@@ -119,8 +118,17 @@ bool routerloggerApp::Init(int argc, char * argv[])
     Transport::EnumType  router_transport = Transport::SERIAL;
     std::string tc_port;
     Transport::EnumType  tc_transport = Transport::SERIAL;
+    bool tc_from_shm = false;
+    ShmTimecodeReader::TcEnum tc_mode = ShmTimecodeReader::LTC;
 
     unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
+
+    // Database parameters
+    // TODO: Get from command line as for recorder
+    const std::string db_host = "localhost";
+    const std::string db_name = "prodautodb";
+    const std::string db_username = "bamzooki";
+    const std::string db_password = "bamzooki";
 
     int option;
     while ((option = cmd_opts ()) != EOF)
@@ -149,6 +157,16 @@ bool routerloggerApp::Init(int argc, char * argv[])
 
         case 'u':
             tc_transport = Transport::TCP;
+            break;
+
+        case 'l':
+            tc_from_shm = true;
+            tc_mode = ShmTimecodeReader::LTC;
+            break;
+        
+        case 'i':
+            tc_from_shm = true;
+            tc_mode = ShmTimecodeReader::VITC;
             break;
         
         case 'n':
@@ -236,7 +254,14 @@ bool routerloggerApp::Init(int argc, char * argv[])
     Logfile::DebugLevel(debug_level);
 
     ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("router on   \"%C\"\n"), router_port.c_str() ));
-    ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"\n"), tc_port.c_str() ));
+    if (tc_from_shm)
+    {
+        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode from shared memory\n")));
+    }
+    else
+    {
+        ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("timecode on \"%C\"\n"), tc_port.c_str() ));
+    }
 
 // apply timeout for CORBA operations
     const int timeoutsecs = 5;
@@ -250,7 +275,12 @@ bool routerloggerApp::Init(int argc, char * argv[])
     mpRouter->Init(router_port, router_transport);
 
 // Create timecode reader
-    if (tc_port.empty())
+    if (tc_from_shm)
+    {
+        // Timecode from Ingex capture buffer
+        mpTcReader = new ShmTimecodeReader;
+    }
+    else if (tc_port.empty())
     {
         // Use PC clock
         mpTcReader = new ClockReader;
@@ -261,6 +291,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
         mpTcReader = new EasyReader;
     }
 
+    // Specific initialisation for EasyReader
     EasyReader * er = dynamic_cast<EasyReader *>(mpTcReader);
     if (er)
     {
@@ -276,17 +307,18 @@ bool routerloggerApp::Init(int argc, char * argv[])
             ok = false;
         }
     }
-    else
+
+    // Specific initialisation for ShmTimecodeReader
+    ShmTimecodeReader * sr = dynamic_cast<ShmTimecodeReader *>(mpTcReader);
+    if (sr)
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode will be derived from PC clock\n")));
+        sr->TcMode(tc_mode);
     }
 
     // Initialise database connection
-    const std::string db_username = "bamzooki";
-    const std::string db_password = "bamzooki";
     try
     {
-        DatabaseManager::Instance()->Initialise(db_username, db_password, 4, 12);
+        DatabaseManager::Instance()->Initialise(db_host, db_name, db_username, db_password, 4, 12);
     }
     catch (const prodauto::DBException & dbe)
     {
@@ -312,13 +344,6 @@ bool routerloggerApp::Init(int argc, char * argv[])
         it = mServantInfo.begin(); it != mServantInfo.end(); ++it)
     {
         ServantInfo * servant_info = *it;
-
-        if (servant_info->db_file.empty())
-        {
-            std::ostringstream dbf;
-            dbf << DB_PATH << servant_info->name << ".txt";
-            servant_info->db_file = dbf.str();
-        }
 
         // Create object
         servant_info->servant = new SimplerouterloggerImpl();
