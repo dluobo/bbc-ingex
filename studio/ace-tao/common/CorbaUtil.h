@@ -1,5 +1,5 @@
 /*
- * $Id: CorbaUtil.h,v 1.2 2008/09/03 13:43:33 john_f Exp $
+ * $Id: CorbaUtil.h,v 1.3 2009/09/18 15:48:10 john_f Exp $
  *
  * CORBA utilities
  *
@@ -46,6 +46,7 @@ public:
         return mInstance;// address of sole instance
     }
     void InitOrb(int & argc, char * argv[]);
+    void DestroyOrb();
     void ActivatePoaMgr();
     void SetTimeout(int secs);
     bool InitNs();

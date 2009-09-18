@@ -1,5 +1,5 @@
 /*
- * $Id: CorbaUtil.cpp,v 1.2 2008/09/03 13:43:33 john_f Exp $
+ * $Id: CorbaUtil.cpp,v 1.3 2009/09/18 15:48:10 john_f Exp $
  *
  * CORBA utilities
  *
@@ -48,13 +48,17 @@ CorbaUtil::CorbaUtil()
 
 void CorbaUtil::InitOrb(int & argc, char * argv[])
 {
-    if(!CORBA::is_nil(mOrb))
+    this->DestroyOrb();
+    mOrb = CORBA::ORB_init(argc, argv);
+}
+
+void CorbaUtil::DestroyOrb()
+{
+    if (!CORBA::is_nil(mOrb))
     {
         mOrb->destroy();
     }
-
     mNameService = CosNaming::NamingContext::_nil();  // can't use old ref with new orb
-    mOrb = CORBA::ORB_init(argc, argv);
 }
 
 void CorbaUtil::ActivatePoaMgr()
