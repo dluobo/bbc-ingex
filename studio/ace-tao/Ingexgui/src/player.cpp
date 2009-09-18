@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.13 2009/09/18 16:10:16 john_f Exp $              *
+ *   $Id: player.cpp,v 1.14 2009/09/18 17:24:21 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -52,28 +52,13 @@ Rational fourthirds = {4, 3};
 /// @param outputType The output type - accelerated or unaccelerated; SDI or not.
 /// @param displayType The on screen display type.
 Player::Player(wxEvtHandler * handler, const bool enabled, const PlayerOutputType outputType, const OSDtype displayType) :
-LocalIngexPlayer(&mListenerRegistry,
-	outputType,
-	QUAD_SPLIT_VIDEO_SWITCH,
-	4,
-	false,
-	true,
-	true,
-	0,
-	false,
-	false,
-	zero,
-	zero,
-	fourthirds,
-	1.0,
-	false,
-	0,
-	4, //non-default number of audio level monitors
-	-18.0,
-	true
-), mOSDtype(displayType), mEnabled(enabled), mOK(false), mMode(PlayerMode::STOP), mSpeed(0), mMuted(false), mOpeningSocket(false),
+LocalIngexPlayer(&mListenerRegistry),
+mOSDtype(displayType), mEnabled(enabled), mOK(false), mMode(PlayerMode::STOP), mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true) //so that it can be switched off
 {
+    setOutputType(outputType);
+    setNumAudioLevelMonitors(4);
+
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
 	SetNextHandler(handler);
@@ -582,7 +567,7 @@ void Player::EnableSDIOSD(bool enabled)
 void Player::SetOutputType(const PlayerOutputType outputType)
 {
 //std::cerr << "Player SetOutputType" << std::endl;
-	setOutputType(outputType, 1.0);
+	setOutputType(outputType);
 	if (mOK) {
 		//above call has stopped the player so start it again
 		Start();
