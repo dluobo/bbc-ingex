@@ -1,5 +1,5 @@
 /*
- * $Id: AvidHeaderMetadata.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: AvidHeaderMetadata.cpp,v 1.2 2009/09/18 15:33:41 philipn Exp $
  *
  * 
  *
@@ -64,7 +64,7 @@ void AvidHeaderMetadata::write(File* file, Partition* partition, FillerWriter* f
 {
     partition->markHeaderStart(file);
     
-    MXFPP_CHECK(mxf_avid_write_header_metadata(file->getCFile(), getCHeaderMetadata()));
+    MXFPP_CHECK(mxf_avid_write_header_metadata(file->getCFile(), getCHeaderMetadata(), partition->getCPartition()));
     if (filler)
     {
         filler->write(file);
