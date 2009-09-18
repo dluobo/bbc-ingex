@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.8 2009/02/26 19:40:30 john_f Exp $
+ * $Id: test_mxfwriter.cpp,v 1.9 2009/09/18 16:58:43 philipn Exp $
  *
  * Tests the MXF writer
  *
@@ -668,7 +668,7 @@ int main(int argc, const char* argv[])
     // initialise the database
     try
     {
-        Database::initialise("prodautodb", "bamzooki", "bamzooki", 1, 2 * NUM_RECORD_THREADS);
+        Database::initialise("localhost", "prodautodb", "bamzooki", "bamzooki", 1, 2 * NUM_RECORD_THREADS);
     }
     catch (const DBException& ex)
     {
