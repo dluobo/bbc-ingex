@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.16 2009/03/19 17:46:57 john_f Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.17 2009/09/18 16:13:50 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -20,7 +20,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <pthread.h>
 #include <cassert>
 #include <unistd.h>
 #include <cstring>
@@ -484,50 +483,39 @@ static void x11_mouse_clicked(void* data, int imageWidth, int imageHeight, int x
 }
 
 
-LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType, VideoSwitchSplit videoSplit,
-    int numFFMPEGThreads, bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
-    int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio,
-    Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale, bool disablePCAudio,
-    int audioDevice, int numAudioLevelMonitors, float audioLineupLevel, bool enableAudioSwitch)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1),
-_nextVideoSplit(videoSplit), _videoSplit(videoSplit),
-_numFFMPEGThreads(numFFMPEGThreads),
-_initiallyLocked(initiallyLocked), _useWorkerThreads(useWorkerThreads),
-_applySplitFilter(applySplitFilter), _srcBufferSize(srcBufferSize),
-_disableSDIOSD(disableSDIOSD), _nextDisableSDIOSD(disableSDIOSD), _disableX11OSD(disableX11OSD),
-_x11WindowName("Ingex Player"),
-_sourceAspectRatio(sourceAspectRatio), _pixelAspectRatio(pixelAspectRatio),
-_monitorAspectRatio(monitorAspectRatio), _scale(scale), _prevScale(scale),
-_disablePCAudio(disablePCAudio), _audioDevice(audioDevice),
-_numAudioLevelMonitors(numAudioLevelMonitors), _audioLineupLevel(audioLineupLevel),
-_enableAudioSwitch(enableAudioSwitch)
+LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry)
 {
-    initialise(listenerRegistry);
-}
+    _config.outputType = X11_AUTO_OUTPUT;
+    _config.dvsCard = -1;
+    _config.dvsChannel = -1;
+    _config.videoSplit = QUAD_SPLIT_VIDEO_SWITCH;
+    _config.numFFMPEGThreads = 4;
+    _config.initiallyLocked = false;
+    _config.useWorkerThreads = true;
+    _config.applySplitFilter = true;
+    _config.srcBufferSize = 0;
+    _config.disableSDIOSD = false;
+    _config.disableX11OSD = false;
+    _config.sourceAspectRatio = (Rational){0, 1};
+    _config.pixelAspectRatio = (Rational){0, 1};
+    _config.monitorAspectRatio = (Rational){4, 3};
+    _config.scale = 1.0;
+    _config.disablePCAudio = false;
+    _config.audioDevice = 0;
+    _config.numAudioLevelMonitors = 2;
+    _config.audioLineupLevel = -18.0;
+    _config.enableAudioSwitch = true;
+    memset(&_config.externalWindowInfo, 0, sizeof(_config.externalWindowInfo));
+    
+    _nextConfig = _config;
+    
+    _actualOutputType = X11_OUTPUT;
 
-LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType)
-: _nextOutputType(outputType), _outputType(X11_OUTPUT), _actualOutputType(X11_OUTPUT), _dvsCard(-1), _dvsChannel(-1),
-_nextVideoSplit(QUAD_SPLIT_VIDEO_SWITCH), _videoSplit(QUAD_SPLIT_VIDEO_SWITCH),
-_numFFMPEGThreads(4),
-_initiallyLocked(false), _useWorkerThreads(true),
-_applySplitFilter(true), _srcBufferSize(0), _disableSDIOSD(false), _nextDisableSDIOSD(false), _disableX11OSD(false),
-_x11WindowName("Ingex Player"),
-_scale(1.0), _prevScale(1.0), _disablePCAudio(false), _audioDevice(0),
-_numAudioLevelMonitors(2), _audioLineupLevel(-18.0),
-_enableAudioSwitch(true)
-{
-    _sourceAspectRatio.num = 0;
-    _sourceAspectRatio.den = 0;
-    _pixelAspectRatio.num = 0;
-    _pixelAspectRatio.den = 0;
-    _monitorAspectRatio.num = 4;
-    _monitorAspectRatio.den = 3;
+    memset(&_windowInfo, 0, sizeof(_windowInfo));
 
-    initialise(listenerRegistry);
-}
+    _x11WindowName = "Ingex Player";
+    
 
-void LocalIngexPlayer::initialise(IngexPlayerListenerRegistry* listenerRegistry)
-{
     _playState = 0;
 
     memset(&_mediaPlayerListener, 0, sizeof(MediaPlayerListener));
@@ -560,10 +548,7 @@ void LocalIngexPlayer::initialise(IngexPlayerListenerRegistry* listenerRegistry)
 
     memset(&_videoStreamInfo, 0, sizeof(_videoStreamInfo));
 
-    memset(&_windowInfo, 0, sizeof(_windowInfo));
-    memset(&_localWindowInfo, 0, sizeof(_localWindowInfo));
-    memset(&_externalWindowInfo, 0, sizeof(_externalWindowInfo));
-
+    pthread_mutex_init(&_configMutex, NULL);
     pthread_rwlock_init(&_playStateRWLock, NULL);
 
     init_dv_decoder_resources();
@@ -580,6 +565,7 @@ LocalIngexPlayer::~LocalIngexPlayer()
     }
     SAFE_DELETE(&currentPlayState);
 
+    pthread_mutex_destroy(&_configMutex);
     pthread_rwlock_destroy(&_playStateRWLock);
 
     free_dv_decoder_resources();
@@ -613,39 +599,143 @@ bool LocalIngexPlayer::x11XVIsAvailable()
 
 void LocalIngexPlayer::setWindowInfo(const X11WindowInfo* windowInfo)
 {
-    _externalWindowInfo = *windowInfo;
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.externalWindowInfo = *windowInfo;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
-void LocalIngexPlayer::setOutputType(PlayerOutputType outputType, float scale)
+void LocalIngexPlayer::setInitiallyLocked(bool locked)
 {
-    _nextOutputType = outputType;
-    _scale = scale;
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.initiallyLocked = locked;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setNumFFMPEGThreads(int num)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.numFFMPEGThreads = num;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setUseWorkerThreads(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.useWorkerThreads = enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setApplySplitFilter(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.applySplitFilter = enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setSourceBufferSize(int size)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.srcBufferSize = size;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setEnableX11OSD(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.disableX11OSD = !enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setSourceAspectRatio(Rational *aspect)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.sourceAspectRatio = *aspect;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setPixelAspectRatio(Rational *aspect)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.pixelAspectRatio = *aspect;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setMonitorAspectRatio(Rational *aspect)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.monitorAspectRatio = *aspect;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setEnablePCAudio(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.disablePCAudio = !enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setAudioDevice(int device)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.audioDevice = device;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setNumAudioLevelMonitors(int num)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.numAudioLevelMonitors = num;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setAudioLineupLevel(float level)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.audioLineupLevel = level;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setEnableAudioSwitch(bool enable)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.enableAudioSwitch = enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setOutputType(PlayerOutputType outputType)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.outputType = outputType;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
+}
+
+void LocalIngexPlayer::setScale(float scale)
+{
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.scale = scale;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
 void LocalIngexPlayer::setDVSTarget(int card, int channel)
 {
-    _dvsCard = card;
-    _dvsChannel = channel;
-}
-
-PlayerOutputType LocalIngexPlayer::getOutputType()
-{
-    return _outputType;
-}
-
-PlayerOutputType LocalIngexPlayer::getActualOutputType()
-{
-    return _actualOutputType;
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.dvsCard = card;
+    _nextConfig.dvsChannel = channel;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
 void LocalIngexPlayer::setVideoSplit(VideoSwitchSplit videoSplit)
 {
-    _nextVideoSplit = videoSplit;
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.videoSplit = videoSplit;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
 void LocalIngexPlayer::setSDIOSDEnable(bool enable)
 {
-    _nextDisableSDIOSD = !enable;
+    PTHREAD_MUTEX_LOCK(&_configMutex);
+    _nextConfig.disableSDIOSD = !enable;
+    PTHREAD_MUTEX_UNLOCK(&_configMutex);
 }
 
 bool LocalIngexPlayer::reset()
@@ -682,7 +772,7 @@ bool LocalIngexPlayer::close()
 
         SAFE_DELETE(&currentPlayState);
 
-        x11c_close_window(&_localWindowInfo);
+        closeLocalX11Window();
     }
     catch (...)
     {
@@ -706,6 +796,8 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
     int swScale = 1;
     vector<bool> inputsPresent;
     MediaSource* mainMediaSource = 0;
+    bool forceUYVYFormat;
+    Configuration nextConfig;
 
     try
     {
@@ -720,11 +812,22 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             currentPlayState = _playState;
             _playState = 0;
         }
+        
+        // stop playing
+        if (currentPlayState)
+        {
+            currentPlayState->stopPlaying();
+        }
+        
+        // get the next config
+        PTHREAD_MUTEX_LOCK(&_configMutex);
+        nextConfig = _nextConfig;
+        PTHREAD_MUTEX_UNLOCK(&_configMutex);
 
 
         // create a multiple source source
 
-        CHK_OTHROW(mls_create(&_sourceAspectRatio, -1, &g_palFrameRate, &multipleSource));
+        CHK_OTHROW(mls_create(&nextConfig.sourceAspectRatio, -1, &g_palFrameRate, &multipleSource));
         mainMediaSource = mls_get_media_source(multipleSource);
 
 
@@ -789,8 +892,12 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case FFMPEG_INPUT:
                 {
+                    forceUYVYFormat = (nextConfig.outputType == DVS_OUTPUT ||
+                        nextConfig.outputType == DUAL_DVS_AUTO_OUTPUT ||
+                        nextConfig.outputType == DUAL_DVS_X11_OUTPUT ||
+                        nextConfig.outputType == DUAL_DVS_X11_XV_OUTPUT);
                     numFFMPEGThreads = parse_int_option(input.options, "num_ffmpeg_threads", 0);
-                    if (!fms_open(input.name.c_str(), numFFMPEGThreads, &mediaSource))
+                    if (!fms_open(input.name.c_str(), numFFMPEGThreads, forceUYVYFormat, &mediaSource))
                     {
                         ml_log_warn("Failed to open FFmpeg file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
@@ -977,9 +1084,9 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
         // open the buffered media source
 
-        if (_srcBufferSize > 0)
+        if (nextConfig.srcBufferSize > 0)
         {
-            CHK_OTHROW(bmsrc_create(mainMediaSource, _srcBufferSize, 1, -1.0, &bufferedSource));
+            CHK_OTHROW(bmsrc_create(mainMediaSource, nextConfig.srcBufferSize, 1, -1.0, &bufferedSource));
             mainMediaSource = bmsrc_get_source(bufferedSource);
         }
 
@@ -988,65 +1095,80 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
         if (currentPlayState)
         {
-            bool resetPlayer = true;
+            bool resetPlayer = true; // if false then close and restart the player
             if (videoChanged)
             {
-                // video format has changed - stop the player
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
-                resetPlayer = false;
-            }
-            else if (_nextOutputType != _outputType || _scale != _prevScale)
-            {
-                // output type or scale has changed - stop the player
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
-                resetPlayer = false;
-            }
-            else if (_outputType == X11_AUTO_OUTPUT && _actualOutputType == X11_OUTPUT &&
-                x11XVIsAvailable())
-            {
-                // Xv is now available
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
-                resetPlayer = false;
-            }
-            else if (_outputType == DUAL_DVS_AUTO_OUTPUT && _actualOutputType == DUAL_DVS_X11_OUTPUT &&
-                x11XVIsAvailable())
-            {
-                // Xv is now available
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
-                resetPlayer = false;
-            }
-            else if (_nextVideoSplit != _videoSplit)
-            {
-                // video split has changed - stop the player
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
-                resetPlayer = false;
-            }
-            else if (_nextDisableSDIOSD != _disableSDIOSD)
-            {
-                // sdi osd disable has changed - stop the player
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                // video format has changed
                 resetPlayer = false;
             }
             else if (_actualOutputType != DVS_OUTPUT &&
-                _externalWindowInfo.window != 0 &&
-                memcmp(&_windowInfo, &_externalWindowInfo, sizeof(_windowInfo)) != 0)
+                nextConfig.externalWindowInfo.window != 0 &&
+                nextConfig.externalWindowInfo.window != _config.externalWindowInfo.window)
             {
-                // external window info has changed - stop the player
-                SAFE_DELETE(&currentPlayState);
-                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
+                // external window info has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.outputType != _config.outputType || nextConfig.scale != _config.scale)
+            {
+                // output type or scale has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.outputType == X11_AUTO_OUTPUT && _actualOutputType == X11_OUTPUT &&
+                x11XVIsAvailable())
+            {
+                // Xv is now available
+                resetPlayer = false;
+            }
+            else if (nextConfig.outputType == DUAL_DVS_AUTO_OUTPUT && _actualOutputType == DUAL_DVS_X11_OUTPUT &&
+                x11XVIsAvailable())
+            {
+                // Xv is now available
+                resetPlayer = false;
+            }
+            else if ((nextConfig.outputType == DVS_OUTPUT || nextConfig.outputType == DUAL_DVS_AUTO_OUTPUT ||
+                nextConfig.outputType == DUAL_DVS_X11_OUTPUT || nextConfig.outputType == DUAL_DVS_X11_XV_OUTPUT) &&
+                (nextConfig.dvsCard != _config.dvsCard || nextConfig.dvsChannel != _config.dvsChannel))
+            {
+                // DVS card/channel selection has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.videoSplit != _config.videoSplit ||
+                nextConfig.applySplitFilter != _config.applySplitFilter)
+            {
+                // video split has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.disableSDIOSD != _config.disableSDIOSD)
+            {
+                // sdi osd disable has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.disableX11OSD != _config.disableX11OSD)
+            {
+                // x11 osd disable has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.disablePCAudio != _config.disablePCAudio ||
+                nextConfig.audioDevice != _config.audioDevice)
+            {
+                // pc audio support has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.numAudioLevelMonitors != _config.numAudioLevelMonitors ||
+                nextConfig.audioLineupLevel != _config.audioLineupLevel)
+            {
+                // audio monitoring has changed
+                resetPlayer = false;
+            }
+            else if (nextConfig.enableAudioSwitch != _config.enableAudioSwitch)
+            {
+                // audio switching support has changed
                 resetPlayer = false;
             }
 
             if (resetPlayer)
             {
-                // stop and reset the player
-                currentPlayState->stopPlaying();
+                // reset the player
                 haveReset = currentPlayState->reset();
                 if (haveReset)
                 {
@@ -1059,6 +1181,12 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     SAFE_DELETE(&currentPlayState);
                     newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
                 }
+            }
+            else
+            {
+                // close the player and start again
+                SAFE_DELETE(&currentPlayState);
+                newPlayState = auto_ptr<LocalIngexPlayerState>(new LocalIngexPlayerState());
             }
         }
         else
@@ -1080,7 +1208,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         {
             // get the actual output type, possibly auto-detect whether X11 XV is available as output type
 
-            if (_nextOutputType == X11_AUTO_OUTPUT)
+            if (nextConfig.outputType == X11_AUTO_OUTPUT)
             {
                 if (x11XVIsAvailable())
                 {
@@ -1093,7 +1221,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     _actualOutputType = X11_OUTPUT;
                 }
             }
-            else if (_nextOutputType == DUAL_DVS_AUTO_OUTPUT)
+            else if (nextConfig.outputType == DUAL_DVS_AUTO_OUTPUT)
             {
                 if (x11XVIsAvailable())
                 {
@@ -1108,20 +1236,17 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             }
             else
             {
-                _actualOutputType = _nextOutputType;
+                _actualOutputType = nextConfig.outputType;
             }
-
-
-            _disableSDIOSD = _nextDisableSDIOSD;
 
 
             switch (_actualOutputType)
             {
                 case X11_OUTPUT:
-                    CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(xsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio,
-                        _scale, swScale, &_windowInfo, &x11Sink),
-                        ("Failed to open X11 display sink\n"));
+                    CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
+                    CHK_OTHROW_MSG(xsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, &_windowInfo,
+                        &x11Sink), ("Failed to open X11 display sink\n"));
                     xsk_register_window_listener(x11Sink, &_x11WindowListener);
                     xsk_register_keyboard_listener(x11Sink, &_x11KeyListener);
                     xsk_register_progress_bar_listener(x11Sink, &_x11ProgressBarListener);
@@ -1134,10 +1259,10 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     break;
 
                 case X11_XV_OUTPUT:
-                    CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(xvsk_open(20, _disableX11OSD, &_pixelAspectRatio, &_monitorAspectRatio,
-                        _scale, swScale, &_windowInfo, &x11XVSink),
-                        ("Failed to open X11 XV display sink\n"));
+                    CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
+                    CHK_OTHROW_MSG(xvsk_open(20, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, &_windowInfo,
+                        &x11XVSink), ("Failed to open X11 XV display sink\n"));
                     xvsk_register_window_listener(x11XVSink, &_x11WindowListener);
                     xvsk_register_keyboard_listener(x11XVSink, &_x11KeyListener);
                     xvsk_register_progress_bar_listener(x11XVSink, &_x11ProgressBarListener);
@@ -1151,17 +1276,17 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case DVS_OUTPUT:
                     closeLocalX11Window();
-                    CHK_OTHROW_MSG(dvs_open(_dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, _disableSDIOSD, 1, &dvsSink),
-                        ("Failed to open DVS sink\n"));
+                    CHK_OTHROW_MSG(dvs_open(nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12,
+                        nextConfig.disableSDIOSD, 1, &dvsSink), ("Failed to open DVS sink\n"));
                     newPlayState->mediaSink = dvs_get_media_sink(dvsSink);
                     break;
 
                 case DUAL_DVS_X11_OUTPUT:
-                    CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0, _disableSDIOSD,
-                        _disableX11OSD, &_pixelAspectRatio,
-                        &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
-                        ("Failed to open dual DVS and X11 display sink\n"));
+                    CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
+                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12, 0,
+                        nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
+                        &dualSink), ("Failed to open dual DVS and X11 display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
@@ -1171,11 +1296,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                     break;
 
                 case DUAL_DVS_X11_XV_OUTPUT:
-                    CHK_OTHROW(setOrCreateX11Window());
-                    CHK_OTHROW_MSG(dusk_open(20, _dvsCard, _dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1, _disableSDIOSD,
-                        _disableX11OSD, &_pixelAspectRatio,
-                        &_monitorAspectRatio, _scale, swScale, 1, &_windowInfo, &dualSink),
-                        ("Failed to open dual DVS and X11 XV display sink\n"));
+                    CHK_OTHROW(setOrCreateX11Window(&nextConfig.externalWindowInfo));
+                    CHK_OTHROW_MSG(dusk_open(20, nextConfig.dvsCard, nextConfig.dvsChannel, VITC_AS_SDI_VITC, 0, 12, 1,
+                        nextConfig.disableSDIOSD, nextConfig.disableX11OSD, &nextConfig.pixelAspectRatio,
+                        &nextConfig.monitorAspectRatio, nextConfig.scale, swScale, 1, &_windowInfo,
+                        &dualSink), ("Failed to open dual DVS and X11 XV display sink\n"));
                     dusk_register_window_listener(dualSink, &_x11WindowListener);
                     dusk_register_keyboard_listener(dualSink, &_x11KeyListener);
                     dusk_register_progress_bar_listener(dualSink, &_x11ProgressBarListener);
@@ -1191,14 +1316,14 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 #if defined(HAVE_PORTAUDIO)
             // create audio sink
 
-            if (!_disablePCAudio)
+            if (!nextConfig.disablePCAudio)
             {
                 if (_actualOutputType == X11_OUTPUT ||
                     _actualOutputType == X11_XV_OUTPUT)
                     // TODO: DVS drops frames when pc audio is enabled _actualOutputType != DVS_OUTPUT)
                 {
                     AudioSink* audioSink;
-                    if (!aus_create_audio_sink(newPlayState->mediaSink, _audioDevice, &audioSink))
+                    if (!aus_create_audio_sink(newPlayState->mediaSink, nextConfig.audioDevice, &audioSink))
                     {
                         ml_log_warn("Audio device is not available and will be disabled\n");
                     }
@@ -1212,29 +1337,29 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
             // create video switch sink
 
-            if (_nextVideoSplit == QUAD_SPLIT_VIDEO_SWITCH || _nextVideoSplit == NONA_SPLIT_VIDEO_SWITCH)
+            if (nextConfig.videoSplit == QUAD_SPLIT_VIDEO_SWITCH || nextConfig.videoSplit == NONA_SPLIT_VIDEO_SWITCH)
             {
                 VideoSwitchSink* videoSwitch;
-                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, _nextVideoSplit, _applySplitFilter,
-                    0, 0, 0, -1, -1, -1, &videoSwitch));
+                CHK_OTHROW(qvs_create_video_switch(newPlayState->mediaSink, nextConfig.videoSplit,
+                    nextConfig.applySplitFilter, 0, 0, 0, -1, -1, -1, &videoSwitch));
                 newPlayState->mediaSink = vsw_get_media_sink(videoSwitch);
             }
 
 
             // create audio level monitors
 
-            if (_numAudioLevelMonitors > 0)
+            if (nextConfig.numAudioLevelMonitors > 0)
             {
                 AudioLevelSink* audioLevelSink;
-                CHK_OTHROW(als_create_audio_level_sink(newPlayState->mediaSink, _numAudioLevelMonitors,
-                    _audioLineupLevel, &audioLevelSink));
+                CHK_OTHROW(als_create_audio_level_sink(newPlayState->mediaSink, nextConfig.numAudioLevelMonitors,
+                    nextConfig.audioLineupLevel, &audioLevelSink));
                 newPlayState->mediaSink = als_get_media_sink(audioLevelSink);
             }
 
 
             // create audio switch sink
 
-            if (_enableAudioSwitch)
+            if (nextConfig.enableAudioSwitch)
             {
                 AudioSwitchSink* audioSwitch;
                 CHK_OTHROW(qas_create_audio_switch(newPlayState->mediaSink, &audioSwitch));
@@ -1246,11 +1371,11 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         // create the player
 
         CHK_OTHROW(ply_create_player(newPlayState->mediaSource, newPlayState->mediaSink,
-            _initiallyLocked, 0, _numFFMPEGThreads, _useWorkerThreads, 0, 0,
+            nextConfig.initiallyLocked, 0, nextConfig.numFFMPEGThreads, nextConfig.useWorkerThreads, 0, 0,
             &g_invalidTimecode, &g_invalidTimecode, NULL, NULL, 0, &newPlayState->mediaPlayer));
         CHK_OTHROW(ply_register_player_listener(newPlayState->mediaPlayer, &_mediaPlayerListener));
 
-        if (_srcBufferSize > 0)
+        if (nextConfig.srcBufferSize > 0)
         {
             bmsrc_set_media_player(bufferedSource, newPlayState->mediaPlayer);
         }
@@ -1274,9 +1399,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         CHK_OTHROW(create_joinable_thread(&newPlayState->playThreadId, player_thread, &newPlayState->playThreadArgs));
 
 
-        _outputType = _nextOutputType;
-        _prevScale = _scale;
-        _videoSplit = _nextVideoSplit;
+        _config = nextConfig;
         {
             ReadWriteLockGuard guard(&_playStateRWLock, true);
             _playState = newPlayState.release();
@@ -1293,6 +1416,16 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
         return false;
     }
     return true;
+}
+
+PlayerOutputType LocalIngexPlayer::getOutputType()
+{
+    return _config.outputType;
+}
+
+PlayerOutputType LocalIngexPlayer::getActualOutputType()
+{
+    return _actualOutputType;
 }
 
 bool LocalIngexPlayer::setX11WindowName(string name)
@@ -2080,23 +2213,23 @@ bool LocalIngexPlayer::review(int64_t duration)
 }
 
 
-bool LocalIngexPlayer::setOrCreateX11Window()
+bool LocalIngexPlayer::setOrCreateX11Window(const X11WindowInfo* externalWindowInfo)
 {
-    if (_externalWindowInfo.window != 0)
+    if (externalWindowInfo->window != 0)
     {
         closeLocalX11Window();
 
         /* use the externally provided window */
-        _windowInfo = _externalWindowInfo;
+        _windowInfo = *externalWindowInfo;
     }
     else
     {
-        if (_localWindowInfo.window == 0)
+        if (_windowInfo.window == 0 || _windowInfo.window == _config.externalWindowInfo.window)
         {
             /* create a locally provided window */
-            if (x11c_open_display(&_localWindowInfo.display))
+            if (x11c_open_display(&_windowInfo.display))
             {
-                if (!x11c_create_window(&_localWindowInfo, 720, 576, _x11WindowName.c_str()))
+                if (!x11c_create_window(&_windowInfo, 720, 576, _x11WindowName.c_str()))
                 {
                     ml_log_error("Failed to create X11 window\n");
                     return false;
@@ -2108,8 +2241,6 @@ bool LocalIngexPlayer::setOrCreateX11Window()
                 return false;
             }
         }
-
-        _windowInfo = _localWindowInfo;
     }
 
     return true;
@@ -2117,8 +2248,8 @@ bool LocalIngexPlayer::setOrCreateX11Window()
 
 void LocalIngexPlayer::closeLocalX11Window()
 {
-    if (_localWindowInfo.window != 0)
+    if (_windowInfo.window != 0 && _windowInfo.window != _config.externalWindowInfo.window)
     {
-        x11c_close_window(&_localWindowInfo);
+        x11c_close_window(&_windowInfo);
     }
 }

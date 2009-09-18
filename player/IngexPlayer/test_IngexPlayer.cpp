@@ -1,5 +1,5 @@
 /*
- * $Id: test_IngexPlayer.cpp,v 1.11 2009/02/09 19:16:02 john_f Exp $
+ * $Id: test_IngexPlayer.cpp,v 1.12 2009/09/18 16:13:50 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -339,7 +339,8 @@ int main (int argc, const char** argv)
 
 
     listener_registry = auto_ptr<IngexPlayerListenerRegistry>(new IngexPlayerListenerRegistry);
-    player = auto_ptr<LocalIngexPlayer>(new LocalIngexPlayer(listener_registry.get(), X11_AUTO_OUTPUT));
+    player = auto_ptr<LocalIngexPlayer>(new LocalIngexPlayer(listener_registry.get()));
+    player->setOutputType(X11_AUTO_OUTPUT);
     listener = auto_ptr<TestIngexPlayerListener>(new TestIngexPlayerListener(player.get(), listener_registry.get()));
 
     printf("Version %s, build %s\n", player->getVersion().c_str(),
@@ -420,7 +421,7 @@ int main (int argc, const char** argv)
     if (dvsCardIsAvailable)
     {
         printf("DVS card is available\n");
-        player->setOutputType(DUAL_DVS_AUTO_OUTPUT, 1.0);
+        player->setOutputType(DUAL_DVS_AUTO_OUTPUT);
     }
     else
     {
@@ -700,11 +701,11 @@ int main (int argc, const char** argv)
     printf("\nSwitching output type and restarting...\n\n");
     if (dvsCardIsAvailable)
     {
-        player->setOutputType(DUAL_DVS_X11_OUTPUT, 1.0);
+        player->setOutputType(DUAL_DVS_X11_OUTPUT);
     }
     else
     {
-        player->setOutputType(X11_AUTO_OUTPUT, 1.0);
+        player->setOutputType(X11_AUTO_OUTPUT);
     }
 
     opened.clear();
@@ -739,11 +740,13 @@ int main (int argc, const char** argv)
 
     if (dvsCardIsAvailable)
     {
-        player->setOutputType(DUAL_DVS_X11_XV_OUTPUT, 1.5);
+        player->setOutputType(DUAL_DVS_X11_XV_OUTPUT);
+        player->setScale(1.5);
     }
     else
     {
-        player->setOutputType(X11_XV_OUTPUT, 1.5);
+        player->setOutputType(X11_XV_OUTPUT);
+        player->setScale(1.5);
     }
 
     opened.clear();

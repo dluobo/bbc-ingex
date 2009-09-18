@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPIngexPlayer.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: HTTPIngexPlayer.cpp,v 1.2 2009/09/18 16:13:50 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -564,7 +564,8 @@ void HTTPIngexPlayer::setOutputType(HTTPConnection* connection)
         return;
     }
 
-    _player->setOutputType((PlayerOutputType)type, scale);
+    _player->setOutputType((PlayerOutputType)type);
+    _player->setScale(scale);
 
     connection->sendOk();
 }

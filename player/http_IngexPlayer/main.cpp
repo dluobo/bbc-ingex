@@ -1,5 +1,5 @@
 /*
- * $Id: main.cpp,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+ * $Id: main.cpp,v 1.2 2009/09/18 16:13:51 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -152,11 +152,11 @@ int main(int argc, const char** argv)
 
         IngexPlayerListenerRegistry* listener_registry = new IngexPlayerListenerRegistry;
         // TODO: change X11 to DVS
-        LocalIngexPlayer* localPlayer = new LocalIngexPlayer(listener_registry, X11_OUTPUT);
+        LocalIngexPlayer* localPlayer = new LocalIngexPlayer(listener_registry);
 
+        localPlayer->setOutputType(X11_AUTO_OUTPUT);
         localPlayer->setVideoSplit(NO_SPLIT_VIDEO_SWITCH);
         localPlayer->setDVSTarget(dvsCard, dvsChannel);
-        localPlayer->setOutputType(X11_AUTO_OUTPUT, 1.0);
 
         HTTPIngexPlayer httpPlayer(&httpServer, localPlayer, listener_registry);
 

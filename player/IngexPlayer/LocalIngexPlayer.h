@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.13 2009/02/26 19:13:25 john_f Exp $
+ * $Id: LocalIngexPlayer.h,v 1.14 2009/09/18 16:13:50 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -23,6 +23,8 @@
 #ifndef __PRODAUTO_LOCAL_INGEX_PLAYER_H__
 #define __PRODAUTO_LOCAL_INGEX_PLAYER_H__
 
+
+#include <pthread.h>
 
 #include <map>
 
@@ -121,16 +123,8 @@ typedef struct
 class LocalIngexPlayer : public IngexPlayer
 {
 public:
-    LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType, VideoSwitchSplit videoSplit, int numFFMPEGThreads,
-        bool initiallyLocked, bool useWorkerThreads, bool applySplitFilter,
-        int srcBufferSize, bool disableSDIOSD, bool disableX11OSD, Rational& sourceAspectRatio,
-        Rational& pixelAspectRatio, Rational& monitorAspectRatio, float scale,
-        bool disablePCAudio, int audioDevice, int numAudioLevelMonitors, float audioLineupLevel,
-        bool enableAudioSwitch);
-    LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry, PlayerOutputType outputType);
-
+    LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry);
     virtual ~LocalIngexPlayer();
-
 
     std::string getVersion();
     std::string getBuildTimestamp();
@@ -140,25 +134,31 @@ public:
     bool dvsCardIsAvailable();
     bool dvsCardIsAvailable(int card, int channel);
 
+    /* returns true if an X11 XV output is available */
+    bool x11XVIsAvailable();
+    
 
-    /* e.g. set the window-id when used as a browser plugin */
-    void setWindowInfo(const X11WindowInfo* windowInfo);
-
-    /* setting the output type will cause the the player to be stop()ped and restarted when start() is called again */
-    void setOutputType(PlayerOutputType outputType, float scale);
-    void setDVSTarget(int card, int channel);
-
-    /* returns the output type used */
-    PlayerOutputType getOutputType();
-    /* same as getOutputType(), except it returns the actual output type if an auto type is used */
-    /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
-    PlayerOutputType getActualOutputType();
-
-    /* sets the video split type (see ingex_player/video_switch_sink.h for enum values) when start() is called again */
-    void setVideoSplit(VideoSwitchSplit videoSplit);
-
-    /* disables/enables the on screen display in the SDI output */
-    void setSDIOSDEnable(bool enable);
+    /* configuration - call these methods before calling start() */
+    void setWindowInfo(const X11WindowInfo* windowInfo); /* default: not set */
+    void setInitiallyLocked(bool locked); /* default: false */
+    void setNumFFMPEGThreads(int num); /* default: 4 */
+    void setUseWorkerThreads(bool enable); /* default: true */
+    void setApplySplitFilter(bool enable); /* default: true */
+    void setSourceBufferSize(int size); /* default: 0 */
+    void setEnableX11OSD(bool enable); /* default: true */
+    void setSourceAspectRatio(Rational *aspect); /* default: 0 */
+    void setPixelAspectRatio(Rational *aspect); /* default: 0 */
+    void setMonitorAspectRatio(Rational *aspect); /* default: 4/3 */
+    void setEnablePCAudio(bool enable); /* default: true */
+    void setAudioDevice(int device); /* default: 0 */
+    void setNumAudioLevelMonitors(int num); /* default: 2 */
+    void setAudioLineupLevel(float level); /* default: -18.0 */
+    void setEnableAudioSwitch(bool enable); /* default: true */
+    void setOutputType(PlayerOutputType outputType); /* default: X11_AUTO_OUTPUT */
+    void setScale(float scale); /* default: 1.0 */
+    void setDVSTarget(int card, int channel); /* default: -1, -1 */
+    void setVideoSplit(VideoSwitchSplit videoSplit); /* default: QUAD_SPLIT_VIDEO_SWITCH */
+    void setSDIOSDEnable(bool enable); /* default: true */
 
 
     /* will reset the player and display blank video on the output - returns false if a reset fails and
@@ -173,7 +173,13 @@ public:
     it was successfully opened or not */
     virtual bool start(std::vector<PlayerInput> inputs, std::vector<bool>& opened, bool startPaused, int64_t startPosition);
 
+    /* returns the output type used */
+    PlayerOutputType getOutputType();
+    /* same as getOutputType(), except it returns the actual output type if an auto type is used */
+    /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
+    PlayerOutputType getActualOutputType();
 
+    
     /* functions inherited from IngexPlayer */
     virtual bool setX11WindowName(std::string name);
     virtual bool stop();
@@ -209,44 +215,45 @@ public:
 
 
 private:
-    void initialise(IngexPlayerListenerRegistry* listenerRegistry);
-
-    /* returns true if a X11 XV output is available */
-    bool x11XVIsAvailable();
-
-    bool setOrCreateX11Window();
+    typedef struct
+    {
+        X11WindowInfo externalWindowInfo;
+        PlayerOutputType outputType;
+        int dvsCard;
+        int dvsChannel;
+        VideoSwitchSplit videoSplit;
+        int numFFMPEGThreads;
+        bool initiallyLocked;
+        bool useWorkerThreads;
+        bool applySplitFilter;
+        int srcBufferSize;
+        bool disableSDIOSD;
+        bool disableX11OSD;
+        Rational sourceAspectRatio;
+        Rational pixelAspectRatio;
+        Rational monitorAspectRatio;
+        float scale;
+        bool disablePCAudio;
+        int audioDevice;
+        int numAudioLevelMonitors;
+        float audioLineupLevel;
+        bool enableAudioSwitch;
+    } Configuration;
+    
+private:
+    bool setOrCreateX11Window(const X11WindowInfo* externalWindowInfo);
     void closeLocalX11Window();
 
+private:
+    pthread_mutex_t _configMutex;
+    Configuration _config;
+    Configuration _nextConfig;
 
-    PlayerOutputType _nextOutputType;
-    PlayerOutputType _outputType;
     PlayerOutputType _actualOutputType;
-    int _dvsCard;
-    int _dvsChannel;
-    VideoSwitchSplit _nextVideoSplit;
-    VideoSwitchSplit _videoSplit;
-    int _numFFMPEGThreads;
-    bool _initiallyLocked;
-    bool _useWorkerThreads;
-    bool _applySplitFilter;
-    int _srcBufferSize;
-    bool _disableSDIOSD;
-    bool _nextDisableSDIOSD;
-    bool _disableX11OSD;
-    X11WindowInfo _externalWindowInfo;
-    X11WindowInfo _localWindowInfo;
+
     X11WindowInfo _windowInfo;
+
     std::string _x11WindowName;
-    Rational _sourceAspectRatio;
-    Rational _pixelAspectRatio;
-    Rational _monitorAspectRatio;
-    float _scale;
-    float _prevScale;
-    bool _disablePCAudio;
-    int _audioDevice;
-    int _numAudioLevelMonitors;
-    float _audioLineupLevel;
-    bool _enableAudioSwitch;
 
     pthread_rwlock_t _playStateRWLock;
     LocalIngexPlayerState* _playState;
