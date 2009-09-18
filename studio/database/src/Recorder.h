@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.h,v 1.2 2007/10/26 16:23:41 john_f Exp $
+ * $Id: Recorder.h,v 1.3 2009/09/18 17:48:40 philipn Exp $
  *
  * Recorder and configuration
  *
@@ -34,7 +34,6 @@
 
 
 // parameter may not exceed this amount of characters
-// TODO: check odbc limits for varchar on Windows
 #define MAX_PARAMETER_LENGTH        250
 
 
