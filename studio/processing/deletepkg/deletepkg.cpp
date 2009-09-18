@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 	try
 	{
 		// Initialise
-		prodauto::Database::initialise("acacia", "prodautodb", "bamzooki", "bamzooki", 4, 12);
+		prodauto::Database::initialise("localhost", "prodautodb", "bamzooki", "bamzooki", 4, 12);
 
 		Database* db = Database::getInstance();
 		Transaction* transaction = (db->getTransaction("DeletePackages"));
