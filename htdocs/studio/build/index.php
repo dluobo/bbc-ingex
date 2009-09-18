@@ -5,6 +5,7 @@
  <STYLE TYPE="text/css">
  	TD.red { background-color: #f98ce1 }
  	TD.yellow { background-color: yellow }
+ 	TD.orange { background-color: #ffa500 }
  	TD.blue { background-color: #add8e6 }
  	TD.green { background-color: #90ee90 }
  	TD.gray { background-color: gray }
@@ -36,6 +37,7 @@ All snapshot times are UTC so set your TZ environment variable as shown in the e
  	<TR>	<TD class="green">MT<TD>Make and tests succeeded
  	<TR>	<TD class="blue">MT<TD>Make succeeded, tests succeeded<br>with some tests not executed
  	<TR>	<TD class="yellow">MT<TD>Make succeeded but tests failed
+ 	<TR>	<TD class="orange">MT<TD>Make and tests succeeded but<br>package/rpm build and install failed
  	<TR>	<TD class="red">M<TD>Make failed
 	<TR>	<TD class="gray">&nbsp;&nbsp;<TD>Failed to start build (could be network error<br>or compile farm node offline)
 </TABLE>
