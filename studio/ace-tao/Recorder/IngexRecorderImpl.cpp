@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.13 2009/04/16 18:10:15 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.14 2009/09/18 16:11:55 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -65,27 +65,30 @@ void recording_completed(IngexRecorder * rec)
 // Implementation constructor
 // Note that CopyManager mode is set here.
 IngexRecorderImpl::IngexRecorderImpl (void)
-: mFfmpegThreads(-1), mRecording(false), mRecordingIndex(1), mCopyManager(CopyMode::NEW)
+: mFfmpegThreads(-1), mRecording(false), mRecordingIndex(1), mpIngexRecorder(0), mCopyManager(CopyMode::NEW)
 {
     mInstance = this;
 }
 
 // Initialise the recorder
-bool IngexRecorderImpl::Init(const std::string & name, int ffmpeg_threads)
+bool IngexRecorderImpl::Init()
 {
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(%C)\n"), name.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Init(\"%C\")\n"), mName.c_str()));
 
-    mFfmpegThreads = ffmpeg_threads;
     bool ok = true;
 
     // Shared memory initialisation
+    IngexShm::Instance();
+    /*
     if (!IngexShm::Instance()->Init())
     {
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared Memory init failed!\n")));
         ok = false;
     }
+    */
 
     // Get frame rate
+    /*
     if (ok)
     {
         mEditRate.numerator = IngexShm::Instance()->FrameRateNumerator();
@@ -109,14 +112,13 @@ bool IngexRecorderImpl::Init(const std::string & name, int ffmpeg_threads)
             mEditRate.numerator, mEditRate.denominator, mFps,
             (mDf ? " DF" : "")));
     }
+    */
 
     // Base class initialisation
-    // Each channel has 1 video and 4 or 8 audio tracks
-    const unsigned int max_inputs = IngexShm::Instance()->Channels();
-    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
-    ok = ok && RecorderImpl::Init(name, max_inputs, max_tracks_per_input);
+    RecorderImpl::Init(mName);
 
 
+    /*
     // Store video source names in shared memory
     UpdateShmSourceNames();
 
@@ -139,11 +141,9 @@ bool IngexRecorderImpl::Init(const std::string & name, int ffmpeg_threads)
     mMaxPostRoll.samples = 0;
 
     RecorderSettings * settings = RecorderSettings::Instance();
-    if (ok)
+    if (settings && mRecorder.get())
     {
         settings->Update(mRecorder.get());
-
-        mCopyManager.RecorderName(name);
 
         // Register this Recorder in the monitoring area of shared memory
         // and initialise encoding enabled/disabled flags for all channels and encodings
@@ -181,6 +181,7 @@ bool IngexRecorderImpl::Init(const std::string & name, int ffmpeg_threads)
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
         break;
     }
+    */
 
     // Start copy process
     this->StartCopying(0);
@@ -212,6 +213,88 @@ char * IngexRecorderImpl::RecordingFormat (
     return CORBA::string_dup("Ingex recorder");
 }
 
+::ProdAuto::MxfDuration IngexRecorderImpl::MaxPreRoll (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    ProdAuto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+
+    ProdAuto::MxfDuration pre_roll;
+
+    pre_roll.undefined = false;
+    pre_roll.edit_rate = edit_rate;
+    if (IngexShm::Instance()->RingLength() > (SEARCH_GUARD + 1))
+    {
+        pre_roll.samples = IngexShm::Instance()->RingLength() - (SEARCH_GUARD + 1);
+    }
+    else
+    {
+        pre_roll.samples = 0;
+    }
+
+    return pre_roll;
+}
+
+::ProdAuto::MxfDuration IngexRecorderImpl::MaxPostRoll (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    ProdAuto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+
+    ProdAuto::MxfDuration post_roll;
+
+    post_roll.undefined = true; // no limit to post-roll
+    post_roll.edit_rate = edit_rate;
+    post_roll.samples = 0;
+
+    return post_roll;
+}
+
+::ProdAuto::Rational IngexRecorderImpl::EditRate (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    ProdAuto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+
+    return edit_rate;
+}
+
+::ProdAuto::TrackList * IngexRecorderImpl::Tracks (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    // The IngexGUI controller invokes the Tracks operation
+    // when it connects to a recorder.
+
+    // Get latest parameters from shared memory
+    const unsigned int max_inputs = IngexShm::Instance()->Channels();
+    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
+
+    // Update tracks accordingly
+    UpdateFromDatabase(max_inputs, max_tracks_per_input);
+
+
+    return RecorderImpl::Tracks();
+}
+
 ::ProdAuto::TrackStatusList * IngexRecorderImpl::TracksStatus (
     
   )
@@ -219,6 +302,28 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
+    ProdAuto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+
+    // Set timecode mode
+    RecorderSettings * settings = RecorderSettings::Instance();
+    if (settings)
+    {
+        switch (settings->timecode_mode)
+        {
+        case LTC_PARAMETER_VALUE:
+            IngexShm::Instance()->TcMode(IngexShm::LTC);
+            break;
+        case VITC_PARAMETER_VALUE:
+            IngexShm::Instance()->TcMode(IngexShm::VITC);
+            break;
+        default:
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
+            break;
+        }
+    }
+
 #if 1
     // Alternative to method below
     for (unsigned int i = 0; i < mTracks->length(); ++i)
@@ -237,12 +342,14 @@ char * IngexRecorderImpl::RecordingFormat (
         {
             ts.timecode.undefined = 0;
             ts.timecode.samples = timecode;
+            ts.timecode.edit_rate = edit_rate;
         }
         else
         {
             ts.timecode.undefined = 1;
             ts.timecode.samples = 0;
         }
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Track %d: edit_rate %d/%d\n"), i, ts.timecode.edit_rate.numerator, ts.timecode.edit_rate.denominator));
     }
 #else
     // Below we are relying on hardware order to get same order of tracks in
@@ -270,13 +377,13 @@ char * IngexRecorderImpl::RecordingFormat (
                 {
                     ts.timecode.undefined = 0;
                     ts.timecode.samples = timecode;
+                    ts.timecode.edit_rate = edit_rate;
                 }
                 else
                 {
                     ts.timecode.undefined = 1;
                     ts.timecode.samples = 0;
                 }
-                //ACE_DEBUG((LM_INFO, ACE_TEXT("Track %d: %C\n"), track_i, (ts.rec ? "recording" : "not recording")));
             }
         }
     }
@@ -298,6 +405,24 @@ char * IngexRecorderImpl::RecordingFormat (
     ::CORBA::SystemException
   )
 {
+    // Set timecode parameters
+    ProdAuto::Rational edit_rate;
+    edit_rate.numerator = IngexShm::Instance()->FrameRateNumerator();
+    edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
+    if (edit_rate.denominator > 0)
+    {
+        mFps = edit_rate.numerator / edit_rate.denominator;
+        if (edit_rate.numerator % edit_rate.denominator)
+        {
+            mDf = true;
+            mFps += 1;
+        }
+        else
+        {
+            mDf = false;
+        }
+    }
+
     Timecode start_tc(start_timecode.undefined ? 0 : start_timecode.samples, mFps, mDf);
     framecount_t pre = (pre_roll.undefined ? 0 : pre_roll.samples);
     ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start(), tc %C, pre-roll %d, time %C\n"),
@@ -333,6 +458,10 @@ char * IngexRecorderImpl::RecordingFormat (
     UpdateFromDatabase();
 #endif
 
+    // Latest parameters from shared memory
+    const unsigned int max_inputs = IngexShm::Instance()->Channels();
+    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
+
     // Translate enables to per-track and per-channel.
     std::vector<bool> channel_enables;
     std::vector<bool> track_enables;
@@ -341,7 +470,7 @@ char * IngexRecorderImpl::RecordingFormat (
     // - not yet finished
 
     // Start with channel enables false.
-    for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
+    for (unsigned int channel_i = 0; channel_i < max_inputs; ++channel_i)
     {
         channel_enables.push_back(false);
     }
@@ -358,15 +487,15 @@ char * IngexRecorderImpl::RecordingFormat (
     }
 #else
     // Older method
-    for (unsigned int channel_i = 0; channel_i < mMaxInputs; ++channel_i)
+    for (unsigned int channel_i = 0; channel_i < max_inputs; ++channel_i)
     {
         // Start with channel enables false.
         bool ce = false;
 
         // Go through tracks
-        for (unsigned int j = 0; j < mMaxTracksPerInput; ++j)
+        for (unsigned int j = 0; j < max_tracks_per_input; ++j)
         {
-            CORBA::ULong track_i = channel_i * mMaxTracksPerInput + j;
+            CORBA::ULong track_i = channel_i * max_tracks_per_input + j;
 
             bool te = false;
             if (track_i < mTracks->length() && mTracks[track_i].has_source)
@@ -444,7 +573,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
     // Set return value for actual start timecode
     start_timecode.undefined = false;
-    start_timecode.edit_rate = mEditRate;
+    //start_timecode.edit_rate = mEditRate;
     start_timecode.samples = start;
 
     // Setup IngexRecorder
@@ -480,7 +609,7 @@ char * IngexRecorderImpl::RecordingFormat (
     }
 
     // Debug to measure delay in responding to Start command
-    ACE_DEBUG((LM_INFO, ACE_TEXT("IngexRecorderImpl::Start() Returning %C at time          %C\n"),
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Start() Returning %C at time          %C\n"),
         (ok ? "SUCCESS" : "FAILURE"),
         DateTime::Timecode().c_str()));
 
@@ -509,8 +638,6 @@ char * IngexRecorderImpl::RecordingFormat (
 
     framecount_t post_roll = (mxf_post_roll.undefined ? 0 : mxf_post_roll.samples);
 
-    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("IngexRecorderImpl::Stop(%d, %d)\n"),
-    //    stop_timecode, post_roll));
 
     // Create out parameter
     files = new ::CORBA::StringSeq;
@@ -524,6 +651,8 @@ char * IngexRecorderImpl::RecordingFormat (
         lo.comment = locators[i].comment;
         lo.colour = TranslateLocatorColour(locators[i].colour);
         lo.timecode = locators[i].timecode.samples;
+        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Locator \"%C\" position %d colour %d\n"),
+        //    lo.comment.c_str(), lo.timecode, lo.colour));
         locs.push_back(lo);
     }
 
@@ -536,7 +665,7 @@ char * IngexRecorderImpl::RecordingFormat (
 
         // Return the expected "out time"
         mxf_stop_timecode.undefined = false;
-        mxf_stop_timecode.edit_rate = mEditRate;
+        //mxf_stop_timecode.edit_rate = mEditRate;
         mxf_stop_timecode.samples = stop_timecode;
 
         // Return the filenames
@@ -592,9 +721,25 @@ void IngexRecorderImpl::DoStop(framecount_t timecode, framecount_t post_roll)
     }
 }
 
+/**
+Means of externally forcing a re-reading of config from database.
+*/
+void IngexRecorderImpl::UpdateConfig (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    const unsigned int max_inputs = IngexShm::Instance()->Channels();
+    const unsigned int max_tracks_per_input = 1 + IngexShm::Instance()->AudioTracksPerChannel();
+
+    UpdateFromDatabase(max_inputs, max_tracks_per_input);
+}
+
 void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
 {
-    ACE_DEBUG((LM_INFO, "IngexRecorderImpl::NotifyCompletion()\n"));
+    //ACE_DEBUG((LM_INFO, "IngexRecorderImpl::NotifyCompletion()\n"));
 
     if (!rec->mRecordingOK)
     {
@@ -608,10 +753,19 @@ void IngexRecorderImpl::NotifyCompletion(IngexRecorder * rec)
     }
     else
     {
-        mStatusDist.SendStatus("event", "recording completed");
+        ACE_DEBUG((LM_INFO, ACE_TEXT("Recording completed ok.\n")));
+        mStatusDist.SendStatus("event", "recording completed ok");
     }
 
     this->StartCopying(rec->mIndex);
+    
+    // rec is about to get deleted so make sure mpIngexRecorder isn't
+    // still pointing to it.  (This can happen if the recording
+    // stops itself.)
+    if (rec == mpIngexRecorder)
+    {
+        mpIngexRecorder = 0;
+    }
 }
 
 void IngexRecorderImpl::StartCopying(unsigned int index)
@@ -619,12 +773,10 @@ void IngexRecorderImpl::StartCopying(unsigned int index)
     mCopyManager.Command(RecorderSettings::Instance()->copy_command);
     mCopyManager.ClearSrcDest();
     std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
-    // Use reverse iterator to get required priority order.
-    // Eventually CopyManager and copy script should support priority as an argument.
-    // NB. the cast below is needed because of bug in Visual C++ 7.1
-    for (std::vector<EncodeParams>::const_reverse_iterator it = encodings.rbegin(); it != (std::vector<EncodeParams>::const_reverse_iterator) encodings.rend(); ++it)
+
+    for (std::vector<EncodeParams>::const_iterator it = encodings.begin(); it != encodings.end(); ++it)
     {
-        mCopyManager.AddSrcDest(it->dir, it->dest, it->copy_priority);
+        mCopyManager.AddSrcDest(it->dir, it->copy_dest, it->copy_priority);
     }
 
     mCopyManager.StartCopying(index);
@@ -632,6 +784,7 @@ void IngexRecorderImpl::StartCopying(unsigned int index)
 
 void IngexRecorderImpl::UpdateShmSourceNames()
 {
+    const unsigned int max_inputs = IngexShm::Instance()->Channels();
     try
     {
         prodauto::RecorderConfig * rc = 0;
@@ -641,7 +794,7 @@ void IngexRecorderImpl::UpdateShmSourceNames()
         }
         if (rc)
         {
-            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), mMaxInputs);
+            const unsigned int n_inputs = ACE_MIN((unsigned int)rc->recorderInputConfigs.size(), max_inputs);
 
             for (unsigned int i = 0; i < n_inputs; ++i)
             {

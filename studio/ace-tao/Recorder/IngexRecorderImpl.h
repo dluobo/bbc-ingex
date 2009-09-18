@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.h,v 1.6 2009/02/26 19:22:30 john_f Exp $
+ * $Id: IngexRecorderImpl.h,v 1.7 2009/09/18 16:11:55 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -48,16 +48,50 @@ public:
   // Destructor 
   virtual ~IngexRecorderImpl (void);
 
+  // Set/get parameters
+  void Name(const std::string & name) { mName = name; mCopyManager.RecorderName(mName); }
+  std::string Name() const { return mName; }
+  void FfmpegThreads(int n) { mFfmpegThreads = n; }
 
   // Initialisation
-  bool Init(const std::string & name, int ffmpeg_threads);
+  bool Init();
 
-  // Identity
-  const char * Name() const { return mName.c_str(); }
 
 // IDL operations
   virtual
+  ::ProdAuto::MxfDuration MaxPreRoll (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::ProdAuto::MxfDuration MaxPostRoll (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::ProdAuto::Rational EditRate (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
   char * RecordingFormat (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::ProdAuto::TrackList * Tracks (
       
     )
     throw (
@@ -96,12 +130,23 @@ public:
       ::CORBA::SystemException
     );
   
+  virtual
+  void UpdateConfig (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+
 	void NotifyCompletion(IngexRecorder * rec);
 
 public:
 // methods
     void GetGlobals(int & ffmpeg_threads);
 
+    int Fps() { return mFps; }
+    bool Df() { return mDf; }
+  
 private:
 // methods
 	void DoStop(framecount_t timecode, framecount_t post_roll);
@@ -119,6 +164,10 @@ private:
     CopyManager mCopyManager;
     std::string mHostname;
     prodauto::ProjectName mProjectName;
+
+    //ProdAuto::Rational mEditRate;
+    int mFps;
+    bool mDf;
 
 // static instance pointer
 	static IngexRecorderImpl * mInstance;
