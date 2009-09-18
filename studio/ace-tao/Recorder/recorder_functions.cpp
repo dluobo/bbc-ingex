@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.23 2009/06/08 10:47:35 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.24 2009/09/18 16:17:54 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -34,6 +34,8 @@
 #include "ffmpeg_encoder_av.h"
 #include "mjpeg_compress.h"
 #include "tc_overlay.h"
+#include "CodedFrameBuffer.h"
+#include "MtEncoder.h"
 
 #include "YUVlib/YUV_frame.h"
 #include "YUVlib/YUV_quarter_frame.h"
@@ -52,6 +54,7 @@
 #include <ace/Thread.h>
 #include <ace/OS_NS_unistd.h>
 
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 
@@ -59,9 +62,10 @@
 static ACE_Thread_Mutex avcodec_mutex;
 
 const bool THREADED_MJPEG = false;
+const bool MT_ENABLE = true;
 const bool DEBUG_NOWRITE = false;
+const bool SAVE_PACKAGE_DATA = true; // Write to database for non-MXF files
 #define USE_SOURCE   0 // Eventually will move to encoding a source, rather than a hardware input
-#define SAVE_PACKAGE_DATA 1 // Write to database for non-MXF files
 
 // Macro to log an error using both the ACE_DEBUG() macro and the
 // shared memory placeholder for error messages
@@ -70,6 +74,17 @@ const bool DEBUG_NOWRITE = false;
 #define LOG_RECORD_ERROR(fmt, args...) { \
     ACE_DEBUG((LM_ERROR, ACE_TEXT( fmt ), ## args)); \
     IngexShm::Instance()->InfoSetRecordError(channel_i, p_opt->index, quad_video, fmt, ## args); }
+
+
+// Local context only
+namespace
+{
+int64_t tv_diff_microsecs(const struct timeval * a, const struct timeval * b)
+{
+    int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
+    return diff;
+}
+}
 
 
 /**
@@ -93,6 +108,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     std::vector<bool> track_enables; // for tracks of sc
     std::string src_name;
     std::vector<unsigned int> channels_in_use; // hardware channels
+
+    CodedFrameBuffer coded_frame_buffer; // for multi-threaded encoding
+
 
 #if USE_SOURCE
     // Recording the source identified by p_opt->source_id
@@ -208,6 +226,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Start timecode passed as metadata to MXFWriter
     int start_tc = p_rec->mStartTimecode;
     int64_t start_position = start_tc;
+    Timecode start_timecode(start_tc, fps, df);
 
 #if 0
     // What if we add some days to start_position?
@@ -238,11 +257,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // video resolution name
     std::string resolution_name = DatabaseEnums::Instance()->ResolutionName(resolution);
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Resolution %d (%C)\n"), resolution, resolution_name.c_str()));
 
     // file format name
     std::string file_format_name = DatabaseEnums::Instance()->FileFormatName(file_format);
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("File format %d (%C)\n"), file_format, file_format_name.c_str()));
 
     // Encode parameters
     prodauto::Rational image_aspect = settings->image_aspect;
@@ -256,8 +273,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     bool bitc = p_opt->bitc;
 
     ACE_DEBUG((LM_INFO,
-        ACE_TEXT("start_record_thread(%C, start_tc=%C %C %C %C\n"),
-        src_name.c_str(), Timecode(start_tc, fps, df).Text(),
+        ACE_TEXT("start_record_thread(%C, start_tc=%C %C %C %C)\n"),
+        src_name.c_str(), start_timecode.Text(),
         file_format_name.c_str(), resolution_name.c_str(),
         (bitc ? "with BITC" : "")));
 
@@ -292,6 +309,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     enum {SD_422, SD_422_SHIFTED, SD_420, SD_420_SHIFTED, HD_422, ANY_422} codec_input_format = SD_422;
 
     std::string filename_extension;
+    bool mt_possible = false;
     switch (resolution)
     {
     // DV formats
@@ -390,24 +408,28 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120p;
+        mt_possible = true;
         break;
     case DNX185p_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185p;
+        mt_possible = true;
         break;
     case DNX120i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX120i;
+        mt_possible = true;
         break;
     case DNX185i_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         codec_input_format = HD_422;
         encoder = ENCODER_FFMPEG;
         ff_res = FF_ENCODER_RESOLUTION_DNX185i;
+        mt_possible = true;
         break;
     // H264
     case DMIH264_MATERIAL_RESOLUTION:
@@ -434,6 +456,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         ff_av_res = FF_ENCODER_RESOLUTION_MPEG4_MOV;
         mxf = false;
         raw = false;
+        filename_extension = ".mp4";
         break;
     case UNC_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
@@ -444,6 +467,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     default:
         break;
     }
+
 
     // Check which capture buffer has suitable format
     bool use_primary_video = true;
@@ -569,15 +593,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Image parameters
     int WIDTH = 0;
     int HEIGHT = 0;
+    int OFFSET_TO_FRAME_NUMBER = 0;
     if (use_primary_video)
     {
         WIDTH = IngexShm::Instance()->PrimaryWidth();
         HEIGHT = IngexShm::Instance()->PrimaryHeight();
+        OFFSET_TO_FRAME_NUMBER = IngexShm::Instance()->FrameNumberOffset();
     }
     else
     {
         WIDTH = IngexShm::Instance()->SecondaryWidth();
         HEIGHT = IngexShm::Instance()->SecondaryHeight();
+        OFFSET_TO_FRAME_NUMBER = IngexShm::Instance()->FrameNumberOffset()
+            - IngexShm::Instance()->SecondaryVideoOffset();
     }
     //const bool INTERLACE = IngexShm::Instance()->Interlace();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
@@ -618,7 +646,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // (video) filename
     std::ostringstream filename;
+    std::ostringstream creating_filename;
     filename << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident << filename_extension;
+    creating_filename << p_opt->dir << PATH_SEPARATOR << CREATING_SUBDIR << PATH_SEPARATOR << p_opt->file_ident << filename_extension;
 
     // Get project name
     prodauto::ProjectName project_name;
@@ -637,7 +667,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         rsp = sc->getSourcePackage();
     }
     // So, rsp is the SourcePackage to be recorded.
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourcePackage: %C\n"), rsp->name.c_str()));
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourceConfig: %C, SourcePackage: %C\n"), sc->name.c_str(), rsp->name.c_str()));
+    if (rsp->tracks.size() < sc->trackConfigs.size())
+    {
+        ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: SourcePackage has fewer tracks than SourcConfig!\n")));
+    }
 
     // track_enables correspond to tracks of sc/rsp
 
@@ -649,18 +683,36 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // check track enables.
     prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
     mp->uid = prodauto::generateUMID();
-#if 0
-    mp->name = p_opt->file_ident; // long-winded name
-#elif 0
-    mp->name = rsp->name; // tape name
-#elif 1
-    // tape name plus timecode
-    mp->name = rsp->name;
-    mp->name += '.';
-    mp->name += Timecode(start_tc, fps, df).TextNoSeparators();
-#else
-    mp->name = sc->name; // source (e.g. camera) name
-#endif
+
+    // Material package name (clip name in Avid)
+    switch (4)
+    {
+    case 1:
+        // tape name
+        mp->name = rsp->name;
+        break;
+    case 2:
+        // tape name plus timecode
+        mp->name = rsp->name;
+        mp->name += '.';
+        mp->name += start_timecode.TextNoSeparators();
+        break;
+    case 3:
+        // source (e.g. camera) name
+        mp->name = sc->name;
+        break;
+    case 4:
+        // source name plus timecode
+        mp->name = sc->name;
+        mp->name += '.';
+        mp->name += start_timecode.TextNoSeparators();
+        break;
+    default:
+        // long-winded name
+        mp->name = p_opt->file_ident;
+        break;
+    }
+
     mp->creationDate = now;
     mp->projectName = project_name;
 
@@ -684,6 +736,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     {
         //prodauto::Track * rsp_trk = rsp->tracks[i];
         prodauto::Track * rsp_trk = rsp->getTrack(i + 1);
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp_trk id %d name %C\n"), rsp_trk->id, rsp_trk->name.c_str()));
         if (track_enables[i])
         {
             // Get HardwareTrack based on SourceTrackConfig database id;
@@ -706,9 +759,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 mp_trk->editRate = FRAME_RATE;
             }
-            //ACE_DEBUG((LM_INFO, ACE_TEXT("Track %d, edit rate %d/%d\n"), i, mp_trk->editRate.numerator, mp_trk->editRate.denominator));
             mp_trk->number = rsp_trk->number;
             mp_trk->name = rsp_trk->name;
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Added %C track %C, edit rate %d/%d\n"),
+                (mp_trk->dataDef == SOUND_DATA_DEFINITION ? "Audio" : "Video"),
+                mp_trk->name.c_str(),
+                mp_trk->editRate.numerator, mp_trk->editRate.denominator));
 
             // File source package
             prodauto::SourcePackage * fp = 0;
@@ -856,16 +912,26 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     
     // Initialise ffmpeg encoder
     ffmpeg_encoder_t * ffmpeg_encoder = 0;
+    MtEncoder * mt_encoder = 0;
+    //bool mt_encode = MT_ENABLE && mt_possible;
     if (ENCODER_FFMPEG == encoder)
     {
-        // Prevent "insufficient thread locking around avcodec_open/close()"
-        ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
-
-        ffmpeg_encoder = ffmpeg_encoder_init(ff_res, ffmpeg_threads);
-        if (!ffmpeg_encoder)
+        if (MT_ENABLE && mt_possible)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
-            encoder = ENCODER_NONE;
+            mt_encoder = new MtEncoder(&coded_frame_buffer, &avcodec_mutex);
+            mt_encoder->Init(ff_res, ffmpeg_threads, OFFSET_TO_FRAME_NUMBER);
+        }
+        else
+        {
+            // Prevent "insufficient thread locking around avcodec_open/close()"
+            ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
+
+            ffmpeg_encoder = ffmpeg_encoder_init(ff_res, ffmpeg_threads);
+            if (!ffmpeg_encoder)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg encoder init failed.\n"), src_name.c_str()));
+                encoder = ENCODER_NONE;
+            }
         }
     }
     
@@ -909,7 +975,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ff_av_audio_channels_per_stream = 2;
             break;
         }
-        enc_av = ffmpeg_encoder_av_init(filename.str().c_str(), ff_av_res,
+        enc_av = ffmpeg_encoder_av_init(creating_filename.str().c_str(), ff_av_res,
             wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
         if (!enc_av)
         {
@@ -1052,13 +1118,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // This is the loop which records audio/video frames
     // ***************************************************
 
-    // Set lastsaved to make the record start at the target frame
+    // Set lastcoded/lastsaved to make the record start at the target frame
 
-    //int last_saved = start_frame[channel_i] - 1;
+    int lastcoded[MAX_CHANNELS];
     int lastsaved[MAX_CHANNELS];
     for (unsigned int i = 0; i < channels_in_use.size(); ++i)
     {
         unsigned int ch = channels_in_use[i];
+        lastcoded[ch] = start_frame[ch] - 1;
         lastsaved[ch] = start_frame[ch] - 1;
         ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, start_frame=%d\n"), ch, start_frame[ch]));
     }
@@ -1066,7 +1133,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Initialise last_tc which will be used to check for timecode discontinuities.
     // Timecode value from first track (usually video).
     HardwareTrack tc_hw = p_impl->TrackHwMap(mp_stc_dbids[0]);
-    framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastsaved[tc_hw.channel]);
+    framecount_t last_tc = IngexShm::Instance()->Timecode(tc_hw.channel, lastcoded[tc_hw.channel]);
     framecount_t initial_tc = last_tc + 1;
 
     // Update Record info
@@ -1097,10 +1164,22 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         for (std::vector<unsigned int>::const_iterator
             it = channels_in_use.begin(); it != channels_in_use.end(); ++it)
         {
-            while ((IngexShm::Instance()->LastFrame(*it) % ring_length) == (lastsaved[*it] % ring_length))
+            while (!finished_record && IngexShm::Instance()->LastFrame(*it) == lastcoded[*it])
             {
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C sleeping %d ms for channel %d\n"), src_name.c_str(), sleep_ms, *it));
                 ACE_OS::sleep(ACE_Time_Value(0, sleep_ms * 1000));
+
+                // Check heartbeat
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                struct timeval heartbeat;
+                IngexShm::Instance()->GetHeartbeat(&heartbeat);
+                int64_t diff = tv_diff_microsecs(&heartbeat, &now);
+                if (diff > 1000 * 1000)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared memory lost! Stopping recording.\n")));
+                    finished_record = true;
+                }
             }
         }
 
@@ -1109,7 +1188,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         for (unsigned int i = 0; i < channels_in_use.size(); ++i)
         {
             unsigned int ch = channels_in_use[i];
-            int ftc = (IngexShm::Instance()->LastFrame(ch) - lastsaved[ch] + ring_length) % ring_length;
+            int ftc = IngexShm::Instance()->LastFrame(ch) - lastcoded[ch];
             if (i == 0 || ftc < frames_to_code)
             {
                 frames_to_code = ftc;
@@ -1136,7 +1215,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             for (unsigned int i = 0; i < channels_in_use.size(); ++i)
             {
                 unsigned int ch = channels_in_use[i];
-                lastsaved[ch] += drop;
+                lastcoded[ch] += drop;
+                lastsaved[ch] += drop; // not exactly right but better than not incrememting it
             }
             p_opt->IncFramesDropped(drop);
             p_rec->NoteDroppedFrames();
@@ -1156,7 +1236,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             for (unsigned int i = 0; i < channels_in_use.size(); ++i)
             {
                 unsigned int ch = channels_in_use[i];
-                frame[ch] = (lastsaved[ch] + 1) % ring_length;
+                frame[ch] = lastcoded[ch] + 1;
                 //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Channel %d, Frame %d\n"), ch, frame[ch]));
             }
 
@@ -1193,6 +1273,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Set up all the input pointers
             std::vector<void *> p_input;
             void * p_inp_video = 0;
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("mp->tracks.size() = %u\n"), mp->tracks.size()));
             for (unsigned int i = 0; i < mp->tracks.size(); ++i)
             {
                 void * p = 0;
@@ -1216,6 +1297,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         p = IngexShm::Instance()->pVideoSec(hw.channel, frame[hw.channel]);
                     }
                     p_inp_video = p;
+                    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("set p_inp_video\n")));
                 }
                 else
                 {
@@ -1230,12 +1312,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             framecount_t tc_i = IngexShm::Instance()->Timecode(tc_hw.channel, frame[tc_hw.channel]);
 
             // Check for timecode irregularities
-            if (tc_i != last_tc + 1)
+            framecount_t tc_diff = tc_i - (last_tc + 1); // difference from expected value
+            //if (tc_diff != 0)
+            if (tc_diff > 1 || tc_diff < -1)
             {
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Timecode discontinuity: %d frames missing at frame=%d tc=%C\n"),
                     src_name.c_str(),
                     p_opt->index,
-                    tc_i - last_tc - 1,
+                    tc_diff,
                     frame[tc_hw.channel],
                     Timecode(tc_i, fps, df).Text()));
             }
@@ -1356,11 +1440,16 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 mixer.Mix(p_audio12, p_audio34, mixed_audio, audio_samples_per_frame);
             }
 
-            // Save browse audio
-            if (browse_audio)
+            //
+            // We now have everything ready for encoding.
+
+            // lastcoded really means last queued for encoding.
+            for (unsigned int i = 0; i < channels_in_use.size(); ++i)
             {
-                write_audio(fp_audio_browse, (uint8_t *)mixed_audio, audio_samples_per_frame * 2, 16, browse_audio_bits);
+                unsigned int ch = channels_in_use[i];
+                lastcoded[ch] = frame[ch];
             }
+            last_tc = tc_i;
 
 
             // encode to av formats
@@ -1402,13 +1491,23 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             }
 
 
+            // For next two, we aim in future to code in parallel threads.
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("p_inp_video = %@\n"), p_inp_video));
             uint8_t * p_enc_video = 0;
             int size_enc_video = 0;
+            int frame_index = frame[channel_i];
 
             // Encode with FFMPEG (IMX, DV, H264)
             if (ENCODER_FFMPEG == encoder && p_inp_video)
             {
-                size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)p_inp_video, &p_enc_video);
+                if (mt_encoder)
+                {
+                    mt_encoder->Encode(p_inp_video, frame_index);
+                }
+                else
+                {
+                    size_enc_video = ffmpeg_encoder_encode(ffmpeg_encoder, (uint8_t *)p_inp_video, &p_enc_video);
+                }
             }
 
             // Encode MJPEG
@@ -1427,6 +1526,30 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
             }
 
+            if ((ENCODER_FFMPEG == encoder || ENCODER_MJPEG == encoder) && !mt_encoder)
+            {
+                if (p_enc_video && size_enc_video)
+                {
+                    // Copy and queue frame for writing
+                    coded_frame_buffer.QueueFrame(p_enc_video, size_enc_video, frame_index);
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Queued frame %d for writing\n"), frame_index));
+                }
+                else
+                {
+                    // Queue a null  frame for writing
+                    coded_frame_buffer.QueueNullFrame(frame_index);
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("Queued null frame %d for writing\n"), frame_index));
+                }
+            }
+
+            // So now we have done or queued the encoding.
+            // Next the writing to disc.
+
+            // Write browse audio
+            if (browse_audio)
+            {
+                write_audio(fp_audio_browse, (uint8_t *)mixed_audio, audio_samples_per_frame * 2, 16, browse_audio_bits);
+            }
 
             // Write raw (non-MXF) tracks
             if (raw && !DEBUG_NOWRITE)
@@ -1487,7 +1610,36 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                         else if (encoder != ENCODER_NONE)
                         {
                             // write encoded video
-                            writer->writeSample(mp_trk->id, 1, p_enc_video, size_enc_video);
+                            // (potentially from threaded encoding)
+
+                            unsigned int frames_in_buffer = coded_frame_buffer.QueueSize();
+                            if (frames_in_buffer >= 25)
+                            {
+                                ACE_DEBUG((LM_WARNING, ACE_TEXT("CodedFrameBuffer contains %u frames\n"), frames_in_buffer));
+                            }
+                            else
+                            {
+                                ACE_DEBUG((LM_DEBUG, ACE_TEXT("CodedFrameBuffer contains %u frames\n"), frames_in_buffer));
+                            }
+                            int & last_saved_r = lastsaved[channel_i]; // Shouldn't really use channel_i
+                            const int & initial_frame_r = start_frame[channel_i];
+                            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Looking for frames starting from %d\n"), last_saved_r + 1));
+
+                            CodedFrame * cf = 0;
+                            while ( 0 != (cf = coded_frame_buffer.GetFrame(last_saved_r + 1)))
+                            {
+                                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Writing coded frame %d\n"), last_saved_r + 1));
+                                writer->writeSample(mp_trk->id, 1, (uint8_t *)cf->Data(), cf->Size());
+                                ++last_saved_r;
+                                if (cf->Error())
+                                {
+                                    Timecode error_timecode = start_timecode + (last_saved_r - initial_frame_r);
+                                    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C %C: Encode error on frame %d, timecode %C\n"),
+                                        src_name.c_str(), resolution_name.c_str(), last_saved_r, error_timecode.Text()));
+                                }
+                                delete cf;
+                            }
+                            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("No more frames found\n")));
                         }
                     }
                     catch (const prodauto::MXFWriterException & e)
@@ -1504,9 +1656,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             for (unsigned int i = 0; i < channels_in_use.size(); ++i)
             {
                 unsigned int ch = channels_in_use[i];
-                lastsaved[ch] = frame[ch];
+                lastcoded[ch] = frame[ch];
             }
-            last_tc = tc_i;
 
             IngexShm::Instance()->InfoSetFramesWritten(channel_i, p_opt->index, quad_video, p_opt->FramesWritten());
 
@@ -1541,6 +1692,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // End of main record loop
     // ************************
 
+
     // Update and close raw files
     for (unsigned int i = 0; i < mp->tracks.size(); ++i)
     {
@@ -1565,15 +1717,31 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         update_WAV_header(fp_audio_browse);
     }
 
-    // shutdown dvd encoder
+    // shutdown av encoder
     if (enc_av)
     {
         ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
 
         if (ffmpeg_encoder_av_close(enc_av) != 0)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: dvd_encoder_close() failed\n"), src_name.c_str()));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_av_close() failed\n"), src_name.c_str()));
         }
+    }
+
+    // move av file
+    if (enc_av)
+    {
+        if (rename(creating_filename.str().c_str(), filename.str().c_str()) != 0)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: file rename failed\n"), src_name.c_str()));
+        }
+    }
+
+    // cleanup mt_encoder
+    if (mt_encoder)
+    {
+        mt_encoder->Close();
+        delete mt_encoder;
     }
 
     // shutdown ffmpeg encoder
@@ -1620,6 +1788,25 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     user_comments.push_back(
         prodauto::UserComment(AVID_UC_LOCATION_NAME, location.c_str(), STATIC_COMMENT_POSITION, 0));
 
+    // Add a user comment for organisation
+    user_comments.push_back(
+        prodauto::UserComment(AVID_UC_ORGANISATION_NAME, "BBC", STATIC_COMMENT_POSITION, 0));
+
+    // Add a user comment for source
+    if (sc)
+    {
+        user_comments.push_back(
+            prodauto::UserComment(AVID_UC_SOURCE_NAME, sc->name.c_str(), STATIC_COMMENT_POSITION, 0));
+    }
+
+    // Debug user comments
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C: User comments...\n"), src_name.c_str(), resolution_name.c_str()));
+    for (std::vector<prodauto::UserComment>::const_iterator
+        it = user_comments.begin(); it != user_comments.end(); ++it)
+    {
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("  name=\"%C\" value=\"%C\" position=%d colour=%d\n"),
+            it->name.c_str(), it->value.c_str(), (int)it->position, it->colour));
+    }
 
     // Complete MXF writing and save packages to database
     if (mxf)
@@ -1643,8 +1830,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Store non-MXF recordings in database
-#if SAVE_PACKAGE_DATA
-    if (ENCODER_FFMPEG_AV == encoder && !quad_video)
+    if (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video)
     {
         // Update material package tracks with duration
         for (std::vector<prodauto::Track *>::iterator
@@ -1679,7 +1865,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         try
         {
             db = prodauto::Database::getInstance();
-            std::auto_ptr<prodauto::Transaction> transaction(db->getTransaction());
+            std::auto_ptr<prodauto::Transaction> transaction(db->getTransaction("SaveNonMXFPackages"));
         
             // Save the file source packages first because material package has
             // foreign keys referencing them.
@@ -1694,14 +1880,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving material package %C\n"), mp->name.c_str()));
             db->savePackage(mp, transaction.get());
 
-            transaction->commitTransaction();
+            transaction->commit();
         }
         catch (const prodauto::DBException & dbe)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
         }
     }
-#endif
 
     // Clean up packages
     for (std::vector<prodauto::SourcePackage *>::const_iterator
