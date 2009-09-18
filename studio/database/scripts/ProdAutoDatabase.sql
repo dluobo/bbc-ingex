@@ -156,6 +156,14 @@ CREATE TABLE VideoResolution
     CONSTRAINT vrn_pkey PRIMARY KEY (vrn_identifier)
 ) WITHOUT OIDS;
 
+CREATE TABLE TimecodeType
+(
+    tct_identifier INTEGER NOT NULL,
+    tct_name VARCHAR(256) NOT NULL,
+    CONSTRAINT tct_key UNIQUE (tct_name),
+    CONSTRAINT tct_pkey PRIMARY KEY (tct_identifier)
+) WITHOUT OIDS;
+
 
 CREATE SEQUENCE eds_id_seq;
 CREATE TABLE EssenceDescriptor
@@ -193,6 +201,10 @@ CREATE TABLE Package
     CONSTRAINT pkg_project_name_fkey FOREIGN KEY (pkg_project_name_id) REFERENCES ProjectName (pjn_identifier),
     CONSTRAINT pkg_pkey PRIMARY KEY (pkg_identifier)
 ) WITHOUT OIDS;
+
+-- [INDEX]
+CREATE INDEX index_pkg_identifier
+	ON package (pkg_identifier);
 
 
 CREATE SEQUENCE ucc_id_seq;
@@ -795,8 +807,99 @@ CREATE VIEW ProxyDefView AS
         pxd_identifier,
         ptd_track_id,
         psd_index;
-
         
+        
+        
+CREATE VIEW PackageChainView AS
+	SELECT 
+			material_pkg.pkg_identifier AS material_____pkg_identifier,
+			material_pkg.pkg_name AS material_____pkg_name,
+			material_pkg.pkg_creation_date AS material_____pkg_creation_date,
+			material_pkg.pkg_project_name_id AS material_____pkg_project_name_id,
+			material_pkg.pkg_descriptor_id AS material_____pkg_descriptor_id,
+			material_pkg.pkg_source_config_name AS material_____pkg_source_config_name,
+							
+			material_trk.trk_identifier AS material_____trk_identifier,
+			material_trk.trk_id AS material_____trk_id,
+			material_trk.trk_number AS material_____trk_number,
+			material_trk.trk_name AS material_____trk_name,
+			material_trk.trk_data_def AS material_____trk_data_def,
+			material_trk.trk_edit_rate AS material_____trk_edit_rate,
+			
+			material_scp.scp_identifier AS material_____scp_identifier,
+			material_scp.scp_length AS material_____scp_length,
+			material_scp.scp_position AS material_____scp_position,
+			material_scp.scp_source_package_uid AS material_____scp_source_package_uid,
+
+			file_pkg.pkg_identifier AS filesource_____pkg_identifier,
+			file_pkg.pkg_name AS filesource_____pkg_name,
+			file_pkg.pkg_creation_date AS filesource_____pkg_creation_date,
+			file_pkg.pkg_project_name_id AS filesource_____pkg_project_name_id,
+			file_pkg.pkg_descriptor_id AS filesource_____pkg_descriptor_id,
+			file_pkg.pkg_source_config_name AS filesource_____pkg_source_config_name,
+							
+			file_trk.trk_identifier AS filesource_____trk_identifier,
+			file_trk.trk_id AS filesource_____trk_id,
+			file_trk.trk_number AS filesource_____trk_number,
+			file_trk.trk_name AS filesource_____trk_name,
+			file_trk.trk_data_def AS filesource_____trk_data_def,
+			file_trk.trk_edit_rate AS filesource_____trk_edit_rate,
+			
+			file_scp.scp_identifier AS filesource_____scp_identifier,
+			file_scp.scp_length AS filesource_____scp_length,
+			file_scp.scp_position AS filesource_____scp_position,
+			file_scp.scp_source_package_uid AS filesource_____scp_source_package_uid,
+			
+			source_pkg.pkg_identifier AS tapesource_____pkg_identifier,
+			source_pkg.pkg_name AS tapesource_____pkg_name,
+			source_pkg.pkg_creation_date AS tapesource_____pkg_creation_date,
+			source_pkg.pkg_project_name_id AS tapesource_____pkg_project_name_id,
+			source_pkg.pkg_descriptor_id AS tapesource_____pkg_descriptor_id,
+			source_pkg.pkg_source_config_name AS tapesource_____pkg_source_config_name,
+							
+			source_trk.trk_identifier AS tapesource_____trk_identifier,
+			source_trk.trk_id AS tapesource_____trk_id,
+			source_trk.trk_number AS tapesource_____trk_number,
+			source_trk.trk_name AS tapesource_____trk_name,
+			source_trk.trk_data_def AS tapesource_____trk_data_def,
+			source_trk.trk_edit_rate AS tapesource_____trk_edit_rate,
+			
+			source_scp.scp_identifier AS tapesource_____scp_identifier,
+			source_scp.scp_length AS tapesource_____scp_length,
+			source_scp.scp_position AS tapesource_____scp_position,
+			source_scp.scp_source_package_uid AS tapesource_____scp_source_package_uid
+
+		FROM 
+			sourceclip AS	source_scp,
+			track AS		source_trk,
+			package AS		source_pkg,
+		
+			sourceclip AS	file_scp,
+			track AS 		file_trk,
+			package AS 		file_pkg,
+				
+			essencedescriptor AS 	descriptor,
+				
+			sourceclip AS	material_scp,
+			track AS 		material_trk,
+			package AS 		material_pkg
+						
+		WHERE
+			source_trk.trk_identifier = source_scp.scp_track_id AND
+			source_pkg.pkg_identifier = source_trk.trk_package_id AND
+		
+			file_scp.scp_source_package_uid = source_pkg.pkg_uid AND
+			file_trk.trk_identifier = file_scp.scp_track_id AND
+			file_pkg.pkg_identifier = file_trk.trk_package_id AND
+				
+			descriptor.eds_identifier = file_pkg.pkg_descriptor_id AND
+				
+			material_scp.scp_source_package_uid = file_pkg.pkg_uid AND
+			material_trk.trk_identifier = material_scp.scp_track_id AND
+			material_pkg.pkg_identifier = material_trk.trk_package_id
+
+        ORDER BY
+        	material_pkg.pkg_identifier;
 
         
 
@@ -885,6 +988,11 @@ INSERT INTO SourceConfigType (srt_identifier, srt_name) VALUES (1, 'Tape');
 INSERT INTO SourceConfigType (srt_identifier, srt_name) VALUES (2, 'LiveRecording');
 
 
+INSERT INTO TimecodeType (tct_identifier, tct_name) VALUES (1, 'LTC');
+INSERT INTO TimecodeType (tct_identifier, tct_name) VALUES (2, 'VITC');
+INSERT INTO TimecodeType (tct_identifier, tct_name) VALUES (3, 'Sys Time');
+
+
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (1, 'Raw');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (2, 'MXF');
 INSERT INTO FileFormat (fft_identifier, fft_name) VALUES (3, 'MOV');
@@ -912,6 +1020,7 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (18, 'H264-DMI');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (19, 'DVCPRO-HD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (20, 'DVD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MPEG4');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (50, 'VISION-CUTS');
 
 
 INSERT INTO RecorderParameterType (rpt_identifier, rpt_name) VALUES (1, 'Any');

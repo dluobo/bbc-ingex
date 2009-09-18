@@ -1,11 +1,8 @@
 project(prodautodbLib) {
   staticname = prodautodb
   sharedname = 
-  specific(vc71) {
-    includes += $(LIBODBCPP)/include
-  }
   specific(vc71,vc8,vc9) {
-    includes += $(LIBODBCPP)/include
+    includes += $(LIBPQXX)/include
     Debug::runtime_library = 3
     Release::runtime_library = 2
   }

@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.h,v 1.3 2009/03/19 18:08:47 john_f Exp $
+ * $Id: Logging.h,v 1.4 2009/09/18 16:50:11 philipn Exp $
  *
  * Logging facility
  *
@@ -33,14 +33,18 @@
 
 // eg. PA_LOGTHROW(ProdAutoException, ("Something failed with error %d", 1));
 #define PA_LOGTHROW(extype, params) \
+{ \
     prodauto::Logging::error params; \
     prodauto::Logging::error(", near %s:%d\n", __FILE__, __LINE__); \
-    throw extype params;
+    throw extype params; \
+}
 
 // eg. PA_LOG(warning, ("Something might be wrong here %d", 1));
 #define PA_LOG(type, params) \
+{ \
     prodauto::Logging::type params; \
-    prodauto::Logging::type(", near %s:%d\n", __FILE__, __LINE__);
+    prodauto::Logging::type(", near %s:%d\n", __FILE__, __LINE__); \
+}
 
 
 

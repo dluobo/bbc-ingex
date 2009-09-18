@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.cpp,v 1.1 2007/09/11 14:08:40 stuart_hc Exp $
+ * $Id: Utilities.cpp,v 1.2 2009/09/18 16:50:11 philipn Exp $
  *
  * General utilities
  *
@@ -49,8 +49,81 @@ using namespace std;
 using namespace prodauto;
 
 
-// Generates UMIDs that are supported by older Avid products, eg. Protools v5.3.1 on a Mac with OS9
+// MobID generation code following the same algorithm as implemented in the AAF SDK
 UMID prodauto::generateUMID()
+{
+    UMID umid;
+    uint32_t major, minor;
+    static uint32_t last_part2 = 0;
+    static Mutex m;
+
+    major = (uint32_t)time(NULL);
+#if defined(_WIN32)
+    minor = (uint32_t)GetTickCount();
+#else
+    struct tms tms_buf;
+    minor = (uint32_t)times(&tms_buf);
+    assert(minor != 0 && minor != (uint32_t)-1);
+#endif
+
+    {
+        // "time" function returns the time in seconds since the epoch and "times" function returns the 
+        // number of clock ticks since some arbitrary time instant. 
+        // A clock tick was found to be 1/100 th of a second. UMIDs are generated at a greater rate by 
+        // multiple threads and therefore a mutex is required areound the counter that ensures that the 
+        // UMID minor value is unique
+        LOCK_SECTION(m);
+        
+        if (last_part2 >= minor)
+        {
+            minor = last_part2 + 1;
+        }
+            
+        last_part2 = minor;
+    }
+
+    umid.octet0 = 0x06;
+    umid.octet1 = 0x0a;
+    umid.octet2 = 0x2b;
+    umid.octet3 = 0x34;
+    umid.octet4 = 0x01;
+    umid.octet5 = 0x01;
+    umid.octet6 = 0x01;
+    umid.octet7 = 0x01;
+    umid.octet8 = 0x01;
+    umid.octet9 = 0x01;
+    umid.octet10 = 0x0f; // material type not identified
+    umid.octet11 = 0x00; // no method specified for material and instance number generation
+    umid.octet12 = 0x13;
+    umid.octet13 = 0x00;
+    umid.octet14 = 0x00;
+    umid.octet15 = 0x00;
+
+    umid.octet24 = 0x06;
+    umid.octet25 = 0x0e;
+    umid.octet26 = 0x2b;
+    umid.octet27 = 0x34;
+    umid.octet28 = 0x7f;
+    umid.octet29 = 0x7f;
+    umid.octet30 = (uint8_t)(42 & 0x7f); // company specific prefix = 42
+    umid.octet31 = (uint8_t)((42 >> 7L) | 0x80);  //* company specific prefix = 42
+    
+    umid.octet16 = (uint8_t)((major >> 24) & 0xff);
+    umid.octet17 = (uint8_t)((major >> 16) & 0xff);
+    umid.octet18 = (uint8_t)((major >> 8) & 0xff);
+    umid.octet19 = (uint8_t)(major & 0xff);
+    
+    umid.octet20 = (uint8_t)(((uint16_t)(minor & 0xFFFF) >> 8) & 0xff);
+    umid.octet21 = (uint8_t)((uint16_t)(minor & 0xFFFF) & 0xff);
+    
+    umid.octet22 = (uint8_t)(((uint16_t)((minor >> 16L) & 0xFFFF) >> 8) & 0xff);
+    umid.octet23 = (uint8_t)((uint16_t)((minor >> 16L) & 0xFFFF) & 0xff);
+
+    return umid;
+}
+
+// Generates UMIDs that are supported by older Avid products, eg. Protools v5.3.1 on a Mac with OS9
+UMID prodauto::generateLegacyUMID()
 {
     UMID umid;
     uint32_t major, minor;
@@ -321,57 +394,6 @@ string prodauto::getTimestampString(Timestamp timestamp)
     return timestampStr;
 }
 
-// Note: assumption is that ODBC Timestamp processing is bypassed and the value
-// is saved as a string type
-string prodauto::getODBCTimestamp(Timestamp timestamp)
-{
-    return getTimestampString(timestamp);
-}
-
-string prodauto::getODBCInterval(Interval interval)
-{
-    string intervalStr;
-    char valStr[7];
-    
-    if (interval.year > 0)
-    {
-        sprintf(valStr, " %d", interval.year);
-        intervalStr.append(valStr).append(" year");
-    }
-    if (interval.month > 0)
-    {
-        sprintf(valStr, " %u", interval.month);
-        intervalStr.append(valStr).append(" month");
-    }
-    if (interval.day > 0)
-    {
-        sprintf(valStr, " %u", interval.day);
-        intervalStr.append(valStr).append(" day");
-    }
-    if (interval.hour > 0)
-    {
-        sprintf(valStr, " %u", interval.hour);
-        intervalStr.append(valStr).append(" hour");
-    }
-    if (interval.min > 0)
-    {
-        sprintf(valStr, " %u", interval.min);
-        intervalStr.append(valStr).append(" minute");
-    }
-    if (interval.sec > 0)
-    {
-        sprintf(valStr, " %u", interval.sec);
-        intervalStr.append(valStr).append(" second");
-    }
-    
-    if (intervalStr.size() == 0)
-    {
-        intervalStr.append(" 0 second");
-    }
-    
-    return intervalStr;
-}
-
 
 
 Date prodauto::generateDateNow()
@@ -399,23 +421,46 @@ string prodauto::getDateString(Date date)
     return dateStr;
 }
 
-Date prodauto::getDateFromODBC(string dateFromODBC)
+string prodauto::getIntervalString(Interval interval)
 {
-    Date date;
-    int data[3];
+    string interval_str;
+    char valStr[7];
     
-    int result;
-    if ((result = sscanf(dateFromODBC.c_str(), "%d-%d-%d",
-        &data[0], &data[1], &data[2])) != 3)
+    if (interval.year > 0)
     {
-        PA_LOGTHROW(ProdAutoException, ("Failed to parse database date\n"));
+        sprintf(valStr, " %d", interval.year);
+        interval_str.append(valStr).append(" year");
+    }
+    if (interval.month > 0)
+    {
+        sprintf(valStr, " %u", interval.month);
+        interval_str.append(valStr).append(" month");
+    }
+    if (interval.day > 0)
+    {
+        sprintf(valStr, " %u", interval.day);
+        interval_str.append(valStr).append(" day");
+    }
+    if (interval.hour > 0)
+    {
+        sprintf(valStr, " %u", interval.hour);
+        interval_str.append(valStr).append(" hour");
+    }
+    if (interval.min > 0)
+    {
+        sprintf(valStr, " %u", interval.min);
+        interval_str.append(valStr).append(" minute");
+    }
+    if (interval.sec > 0)
+    {
+        sprintf(valStr, " %u", interval.sec);
+        interval_str.append(valStr).append(" second");
     }
     
-    date.year = data[0];
-    date.month = data[1];
-    date.day = data[2];
-
-    return date;
+    if (interval_str.empty())
+        interval_str.append(" 0 second");
+    
+    return interval_str;
 }
 
 vector<string> prodauto::getScriptReferences(string refsString)

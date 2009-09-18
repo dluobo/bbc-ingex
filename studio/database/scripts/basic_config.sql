@@ -19,6 +19,7 @@ INSERT INTO sourceconfig VALUES (100, 'VT1', 2, NULL, 10);
 INSERT INTO sourceconfig VALUES (101, 'VT2', 2, NULL, 10);
 INSERT INTO sourceconfig VALUES (102, 'VT3', 2, NULL, 10);
 INSERT INTO sourceconfig VALUES (103, 'VT4', 2, NULL, 10);
+INSERT INTO sourceconfig VALUES (104, 'Mixer Out', 2, NULL, 10);
 
 SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 
@@ -27,26 +28,33 @@ SELECT setval('scf_id_seq', max(scf_identifier)) FROM sourceconfig;
 -- sourcetrackconfig
 --
 
+-- VT1
 INSERT INTO sourcetrackconfig VALUES (200, 1, 1, 'V',  1, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (201, 2, 1, 'A1', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (202, 3, 2, 'A2', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (203, 4, 3, 'A3', 2, '(25,1)', 10800000, 100);
 INSERT INTO sourcetrackconfig VALUES (204, 5, 4, 'A4', 2, '(25,1)', 10800000, 100);
+-- VT2
 INSERT INTO sourcetrackconfig VALUES (210, 1, 1, 'V',  1, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (211, 2, 1, 'A1', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (212, 3, 2, 'A2', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (213, 4, 3, 'A3', 2, '(25,1)', 10800000, 101);
 INSERT INTO sourcetrackconfig VALUES (214, 5, 4, 'A4', 2, '(25,1)', 10800000, 101);
+-- VT3
 INSERT INTO sourcetrackconfig VALUES (220, 1, 1, 'V',  1, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (221, 2, 1, 'A1', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (222, 3, 2, 'A2', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (223, 4, 3, 'A3', 2, '(25,1)', 10800000, 102);
 INSERT INTO sourcetrackconfig VALUES (224, 5, 4, 'A4', 2, '(25,1)', 10800000, 102);
+-- VT4
 INSERT INTO sourcetrackconfig VALUES (230, 1, 1, 'V',  1, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (231, 2, 1, 'A1', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (232, 3, 2, 'A2', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (233, 4, 3, 'A3', 2, '(25,1)', 10800000, 103);
 INSERT INTO sourcetrackconfig VALUES (234, 5, 4, 'A4', 2, '(25,1)', 10800000, 103);
+-- Mixer Out
+INSERT INTO sourcetrackconfig VALUES (240, 1, 1, 'V',  1, '(25,1)', 10800000, 104);
+
 
 SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
 
@@ -57,6 +65,7 @@ SELECT setval('sct_id_seq', max(sct_identifier)) FROM sourcetrackconfig;
 
 INSERT INTO recorder VALUES (1, 'Ingex', NULL);
 INSERT INTO recorder VALUES (2, 'Ingex-HD', NULL);
+INSERT INTO recorder VALUES (3, 'Ingex-Router', NULL);
 
 SELECT setval('rer_id_seq', max(rer_identifier)) FROM recorder;
 
@@ -69,6 +78,7 @@ INSERT INTO recorderconfig VALUES (10, 'Ingex-MXF', 1);
 INSERT INTO recorderconfig VALUES (11, 'Ingex-Quicktime', 1);
 INSERT INTO recorderconfig VALUES (20, 'Ingex-HD-MXF', 2);
 INSERT INTO recorderconfig VALUES (21, 'Ingex-HD-Quicktime', 2);
+INSERT INTO recorderconfig VALUES (30, 'Ingex-Router-StudioA', 3);
 
 SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
 
@@ -79,7 +89,7 @@ SELECT setval('rec_id_seq', max(rec_identifier)) FROM recorderconfig;
 
 UPDATE recorder SET rer_conf_id=10 WHERE rer_identifier = 1;
 UPDATE recorder SET rer_conf_id=20 WHERE rer_identifier = 2;
-
+UPDATE recorder SET rer_conf_id=30 WHERE rer_identifier = 3;
 
 --
 -- recorderinputconfig
@@ -109,11 +119,16 @@ INSERT INTO recorderinputconfig VALUES (211, 2, 'Input 1', 21);
 INSERT INTO recorderinputconfig VALUES (212, 3, 'Input 2', 21);
 INSERT INTO recorderinputconfig VALUES (213, 4, 'Input 3', 21);
 
+-- Ingex-Router-StudioA
+INSERT INTO recorderinputconfig VALUES (300, 1, 'Input 0', 30);
+
+
 SELECT setval('ric_id_seq', max(ric_identifier)) FROM recorderinputconfig;
 
 
 --
 -- recorderinputtrackconfig
+-- rtc_identifier | rtc_index | rtc_track_number | rtc_recorder_input_id | rtc_source_id | rtc_source_track_id
 --
 
 -- Ingex-MXF
@@ -204,6 +219,10 @@ INSERT INTO recorderinputtrackconfig VALUES (532, 3, 2, 213, 103, 3);
 INSERT INTO recorderinputtrackconfig VALUES (533, 4, 0, 213, NULL, NULL);
 INSERT INTO recorderinputtrackconfig VALUES (534, 5, 0, 213, NULL, NULL);
 
+-- Ingex-Router-StudioA
+INSERT INTO recorderinputtrackconfig VALUES (600, 1, 1, 300, 104, 1);
+
+
 SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
 
 
@@ -211,7 +230,7 @@ SELECT setval('rtc_id_seq', max(rtc_identifier)) FROM recorderinputtrackconfig;
 -- multicameraclipdef
 --
 
-INSERT INTO multicameraclipdef VALUES (10, 'multi-camera clip');
+INSERT INTO multicameraclipdef VALUES (10, 'StudioA multicam');
 
 SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 
@@ -221,6 +240,7 @@ SELECT setval('mcd_id_seq', max(mcd_identifier)) FROM multicameraclipdef;
 --
 
 -- multi-camera tracks
+-- mct_identifier | mct_index | mct_track_number | mct_multi_camera_def_id
 INSERT INTO multicameratrackdef VALUES (1, 1, 1, 10);
 INSERT INTO multicameratrackdef VALUES (2, 2, 1, 10);
 INSERT INTO multicameratrackdef VALUES (3, 3, 2, 10);
@@ -230,6 +250,7 @@ SELECT setval('mct_id_seq', max(mct_identifier)) FROM multicameratrackdef;
 
 --
 -- multicameraselectordef
+-- mcs_identifier | mcs_index | mcs_multi_camera_track_def_id | mcs_source_id | mcs_source_track_id
 --
 
 INSERT INTO multicameraselectordef VALUES (100, 1, 1, 100, 1);
@@ -261,7 +282,9 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (13, 'ENCODE1_DIR', '/video/mxf_online/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (14, 'ENCODE1_DEST', '/store/mxf_online/', 1);
+    VALUES (14, 'ENCODE1_COPY_DEST', '/store/mxf_online/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (15, 'ENCODE1_COPY_PRIORITY', '1', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (20, 'ENCODE2_RESOLUTION', '8', 1);
@@ -272,7 +295,9 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (23, 'ENCODE2_DIR', '/video/mxf_offline/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (24, 'ENCODE2_DEST', '/store/mxf_offline/', 1);
+    VALUES (24, 'ENCODE2_COPY_DEST', '/store/mxf_offline/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (25, 'ENCODE2_COPY_PRIORITY', '2', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (30, 'QUAD_RESOLUTION', '0', 1);
@@ -283,7 +308,9 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (33, 'QUAD_DIR', '/video/browse/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (34, 'QUAD_DEST', '', 1);
+    VALUES (34, 'QUAD_COPY_DEST', '', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (35, 'QUAD_COPY_PRIORITY', '3', 1);
 
 --
 -- Ingex-MXF
@@ -305,7 +332,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/mxf_online/', 1, 10);
+    VALUES ('ENCODE1_COPY_DEST', '/store/mxf_online/', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '8', 1, 10);
@@ -316,7 +345,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_DIR', '/video/mxf_offline/', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/mxf_offline/', 1, 10);
+    VALUES ('ENCODE2_COPY_DEST', '/store/mxf_offline/', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 10);
@@ -327,7 +358,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_DIR', '/video/browse/', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_DEST', '', 1, 10);
+    VALUES ('QUAD_COPY_DEST', '', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_PRIORITY', '3', 1, 10);
 
 --
 -- Ingex-Quicktime
@@ -349,7 +382,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/dv/', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/dv/', 1, 11);
+    VALUES ('ENCODE1_COPY_DEST', '/store/dv/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '0', 1, 11);
@@ -360,7 +395,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_DIR', '/video/dv/', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/dv/', 1, 11);
+    VALUES ('ENCODE2_COPY_DEST', '/store/dv/', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 11);
@@ -371,7 +408,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_DIR', '/video/browse/', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_DEST', '', 1, 11);
+    VALUES ('QUAD_COPY_DEST', '', 1, 11);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_PRIORITY', '3', 1, 11);
 
 --
 -- Ingex-HD-MXF
@@ -393,7 +432,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/mxf_online/', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/mxf_online/', 1, 20);
+    VALUES ('ENCODE1_COPY_DEST', '/store/mxf_online/', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '8', 1, 20);
@@ -404,7 +445,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_DIR', '/video/mxf_offline/', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/mxf_offline/', 1, 20);
+    VALUES ('ENCODE2_COPY_DEST', '/store/mxf_offline/', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 20);
@@ -415,7 +458,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_DIR', '/video/browse/', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_DEST', '', 1, 20);
+    VALUES ('QUAD_COPY_DEST', '', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_PRIORITY', '3', 1, 20);
 
 --
 -- Ingex-HD-Quicktime
@@ -437,7 +482,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_DIR', '/video/dv/', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_DEST', '/store/dv/', 1, 21);
+    VALUES ('ENCODE1_COPY_DEST', '/store/dv/', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 21);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '0', 1, 21);
@@ -448,7 +495,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_DIR', '/video/dv/', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE2_DEST', '/store/dv/', 1, 21);
+    VALUES ('ENCODE2_COPY_DEST', '/store/dv/', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 21);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 21);
@@ -459,7 +508,9 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_DIR', '/video/browse/', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('QUAD_DEST', '', 1, 21);
+    VALUES ('QUAD_COPY_DEST', '', 1, 21);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('QUAD_COPY_PRIORITY', '3', 1, 21);
 
 
 

@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.h,v 1.1 2007/09/11 14:08:43 stuart_hc Exp $
+ * $Id: Utilities.h,v 1.2 2009/09/18 16:50:11 philipn Exp $
  *
  * General utilities
  *
@@ -24,8 +24,10 @@
 #define __PRODAUTO_UTILITIES_H__
 
 
+#include <vector>
+#include <string>
+
 #include "DataTypes.h"
-#include <odbc++/types.h>
 
 
 namespace prodauto
@@ -33,6 +35,7 @@ namespace prodauto
 
  
 UMID generateUMID();
+UMID generateLegacyUMID();
 UMID getUMID(std::string umidStr);
 std::string getUMIDString(UMID umid);
 
@@ -41,13 +44,11 @@ Timestamp generateTimestampStartToday();
 Timestamp generateTimestampStartTomorrow();
 Timestamp getTimestampFromODBC(std::string timestampFromODBC);
 std::string getTimestampString(Timestamp timestamp);
-std::string getODBCTimestamp(Timestamp timestamp);
-
-std::string getODBCInterval(Interval interval);
 
 Date generateDateNow();
 std::string getDateString(Date date);
-Date getDateFromODBC(std::string dateFromODBC);
+
+std::string getIntervalString(Interval interval);
 
 std::vector<std::string> getScriptReferences(std::string refsString);
 std::string getScriptReferencesString(std::vector<std::string> refs);

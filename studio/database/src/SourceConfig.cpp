@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.3 2009/05/14 10:48:25 john_f Exp $
+ * $Id: SourceConfig.cpp,v 1.4 2009/09/18 16:50:11 philipn Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -98,7 +98,7 @@ void SourceConfig::setSourcePackage(string name)
     // use a transaction to get exclusive access to the source packages, preventing
     // other threads or processes interferring
     Database* database = Database::getInstance();
-    auto_ptr<Transaction> transaction(database->getTransaction());
+    auto_ptr<Transaction> transaction(database->getTransaction("SourceConfig_SetSourcePackage"));
     database->lockSourcePackages(transaction.get());
     
     
@@ -107,7 +107,7 @@ void SourceConfig::setSourcePackage(string name)
     if (_sourcePackage != 0)
     {
         // got it
-        transaction->commitTransaction();
+        transaction->commit();
         return;
     }
 
@@ -158,7 +158,7 @@ void SourceConfig::setSourcePackage(string name)
     // save new source packages to the database
     
     database->savePackage(newSourcePackage.get(), transaction.get());
-    transaction->commitTransaction();
+    transaction->commit();
     
     _sourcePackage = newSourcePackage.release();
 }

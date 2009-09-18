@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.cpp,v 1.1 2008/09/03 14:28:21 john_f Exp $
+ * $Id: DatabaseEnums.cpp,v 1.2 2009/09/18 16:50:11 philipn Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -41,6 +41,7 @@ DatabaseEnums::DatabaseEnums()
         {
             db->loadResolutionNames(mResolutionNames);
             db->loadFileFormatNames(mFileFormatNames);
+            db->loadTimecodeNames(mTimecodeNames);
         }
     }
     catch (const prodauto::DBException & dbe)
@@ -76,3 +77,37 @@ std::string DatabaseEnums::FileFormatName(int file_format)
         return("");
     }
 }
+
+// data def
+std::string DatabaseEnums::DataDefName(int data_def)
+{
+    const char * name;
+    switch (data_def)
+    {
+    case PICTURE_DATA_DEFINITION:
+        name = PICTURE_DATA_DEFINITION_NAME;
+        break;
+    case SOUND_DATA_DEFINITION:
+        name = SOUND_DATA_DEFINITION_NAME;
+        break;
+    default:
+        name = "Unknown";
+        break;
+    }
+    return name;
+}
+
+// timecode
+std::string DatabaseEnums::TimecodeName(int tc)
+{
+    std::map<int, std::string>::const_iterator it = mTimecodeNames.find(tc);
+    if (it != mTimecodeNames.end())
+    {
+        return it->second;
+    }
+    else
+    {
+        return("");
+    }
+}
+

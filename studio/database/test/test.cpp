@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.7 2009/04/16 18:29:46 john_f Exp $
+ * $Id: test.cpp,v 1.8 2009/09/18 16:50:11 philipn Exp $
  *
  * Tests the database library
  *
@@ -899,11 +899,6 @@ static void test_transcode()
         VectorGuard<Transcode> transcodes;
         transcodes.get() = database->loadTranscodes(TRANSCODE_STATUS_NOTSTARTED);
 
-        // test loading all transcodes 2
-        vector<int> statuses;
-        statuses.push_back(TRANSCODE_STATUS_NOTSTARTED);
-        transcodes.get() = database->loadTranscodes(statuses);
-
         
         // find the transcode entry matching the material package
         Transcode* existTranscode = 0;  // reference to transcode in allTranscode
@@ -969,32 +964,34 @@ static void test_transcode()
 
 static void usage(const char* prog)
 {
-    fprintf(stderr, "Usage: %s [<dns> <username> <password>]\n", prog);
+    fprintf(stderr, "Usage: %s [<hostname> <dbname> <username> <password>]\n", prog);
 }
 
 
 int main(int argc, const char* argv[])
 {
-    string dns = "prodautodb";
+    string hostname = "localhost";
+    string dbname = "prodautodb";
     string username = "bamzooki";
     string password = "bamzooki";
     
-    if (argc != 1 && argc != 4)
+    if (argc != 1 && argc != 5)
     {
         usage(argv[0]);
         return 1;
     }
     
-    if (argc == 4)
+    if (argc == 5)
     {
-        dns = argv[1];
-        username = argv[2];
-        password = argv[3];
+        hostname = argv[1];
+        dbname = argv[2];
+        username = argv[3];
+        password = argv[4];
     }
     
     try
     {
-        Database::initialise(dns, username, password, 1, MAX_CONNECTIONS);
+        Database::initialise(hostname, dbname, username, password, 1, MAX_CONNECTIONS);
     }
     catch (DBException& ex)
     {

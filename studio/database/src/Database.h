@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.10 2009/05/21 10:50:05 john_f Exp $
+ * $Id: Database.h,v 1.11 2009/09/18 16:50:11 philipn Exp $
  *
  * Provides access to the data in the database
  *
@@ -28,12 +28,8 @@
 #include <string>
 #include <cstring>
 
-#include <odbc++/connection.h>
-#include <odbc++/resultset.h>
-
 #include "DatabaseEnums.h"
 #include "Threads.h"
-#include "Connection.h"
 #include "Transaction.h"
 #include "Recorder.h"
 #include "RouterConfig.h"
@@ -47,8 +43,6 @@
 #include "MCClipDef.h"
 #include "Transcode.h"
 
-// TODO: getting source session without recorder config, eg. for non-recorder apps
-
 
 
 namespace prodauto
@@ -58,87 +52,93 @@ namespace prodauto
 class Database
 {
 public:
-    friend class Connection;
+    friend class Transaction;
 
 public:
-    static void initialise(std::string dsn, std::string username, std::string password,
-        unsigned int initialConnections, unsigned int maxConnections);
-
+    static void initialise(std::string hostname, std::string dbname, std::string username, std::string password,
+                           unsigned int initialConnections, unsigned int maxConnections);
     static void close();
 
     static Database* getInstance();
+    
+private:
+    static Database *_instance;
+    static Mutex _databaseMutex;
 
-    Connection* getConnection(bool isTransaction = false);
-    // calls getConnection(true) and casts to Transaction
-    Transaction* getTransaction();
+
+public:    
+    Transaction* getTransaction(std::string name = "");
 
 
-    std::map<long, std::string> loadLiveRecordingLocations();
+    // live recording locations
+    
+    std::map<long, std::string> loadLiveRecordingLocations(Transaction *transaction = 0);
+    long saveLiveRecordingLocation(std::string name, Transaction *transaction = 0);
 
 
 
     // Configurations
 
-    Recorder* loadRecorder(std::string name);
-    void saveRecorder(Recorder* recorder, Transaction* transaction = 0);
+    Recorder* loadRecorder(std::string name, Transaction *transaction = 0);
+    void saveRecorder(Recorder *recorder, Transaction *transaction = 0);
     // the source configs referenced by a recorder config will not be deleted
-    void deleteRecorder(Recorder* recorder, Transaction* transaction = 0);
+    void deleteRecorder(Recorder *recorder, Transaction *transaction = 0);
 
-    SourceConfig* loadSourceConfig(long databaseID);
-    void saveSourceConfig(SourceConfig* config, Transaction* transaction = 0);
-    void deleteSourceConfig(SourceConfig* config, Transaction* transaction = 0);
+    SourceConfig* loadSourceConfig(long databaseID, Transaction *transaction = 0);
+    SourceConfig* loadSourceConfig(std::string name, bool assume_exists = true, Transaction *transaction = 0);
+    void saveSourceConfig(SourceConfig *config, Transaction *transaction = 0);
+    void deleteSourceConfig(SourceConfig *config, Transaction *transaction = 0);
 
-    std::vector<RouterConfig*> loadAllRouterConfigs();
-    RouterConfig* loadRouterConfig(std::string name);
+    std::vector<RouterConfig*> loadAllRouterConfigs(Transaction *transaction = 0);
+    RouterConfig* loadRouterConfig(std::string name, Transaction *transaction = 0);
 
 
     // Multi-camera clip definitions
 
-    std::vector<MCClipDef*> loadAllMultiCameraClipDefs();
-    MCClipDef * loadMultiCameraClipDef(const std::string & name);
-    void saveMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction = 0);
-    void deleteMultiCameraClipDef(MCClipDef* mcClipDef, Transaction* transaction = 0);
+    std::vector<MCClipDef*> loadAllMultiCameraClipDefs(Transaction *transaction = 0);
+    MCClipDef* loadMultiCameraClipDef(std::string name, bool assumeExists = true, Transaction *transaction = 0);
+    void saveMultiCameraClipDef(MCClipDef *mcClipDef, Transaction *transaction = 0);
+    void deleteMultiCameraClipDef(MCClipDef *mcClipDef, Transaction *transaction = 0);
 
     // Multi-camera cuts (Director's cut)
-    std::vector<MCCut *> loadAllMultiCameraCuts();
-    std::vector<MCCut *> loadMultiCameraCuts(MCTrackDef * mcTrackDef,
-        Date startDate, int64_t startTimecode, Date endDate, int64_t endTimecode);
-    void saveMultiCameraCut(MCCut * mcCut, Transaction * transaction = 0);
+    std::vector<MCCut*> loadAllMultiCameraCuts(Transaction *transaction = 0);
+    std::vector<MCCut*> loadMultiCameraCuts(MCTrackDef *mc_track_def, Date start_date, int64_t start_timecode,
+                                             Date end_date, int64_t end_timecode, Transaction *transaction = 0);
+    void saveMultiCameraCut(MCCut *mc_cut, Transaction *transaction = 0);
 
 
     // Editorial
 
-    std::vector<Series*> loadAllSeries();
+    std::vector<Series*> loadAllSeries(Transaction *transaction = 0);
 
-    void loadProgrammesInSeries(Series* series);
-    void saveSeries(Series* series, Transaction* transaction = 0);
-    void deleteSeries(Series* series, Transaction* transaction = 0);
+    void loadProgrammesInSeries(Series *series, Transaction *transaction = 0);
+    void saveSeries(Series *series, Transaction *transaction = 0);
+    void deleteSeries(Series *series, Transaction *transaction = 0);
 
-    void loadItemsInProgramme(Programme* programme);
-    void saveProgramme(Programme* programme, Transaction* transaction = 0);
-    void deleteProgramme(Programme* programme, Transaction* transaction = 0);
-    void updateItemsOrder(Programme* programme, Transaction* transaction = 0);
+    void loadItemsInProgramme(Programme *programme, Transaction *transaction = 0);
+    void saveProgramme(Programme *programme, Transaction *transaction = 0);
+    void deleteProgramme(Programme *programme, Transaction *transaction = 0);
+    void updateItemsOrder(Programme *programme, Transaction *transaction = 0);
 
-    void loadTakesInItem(Item* item);
-    void saveItem(Item* item, Transaction* transaction = 0);
-    void deleteItem(Item* item, Transaction* transaction = 0);
+    void loadTakesInItem(Item *item, Transaction *transaction = 0);
+    void saveItem(Item *item, Transaction *transaction = 0);
+    void deleteItem(Item *item, Transaction *transaction = 0);
 
-    void saveTake(Take* take, Transaction* transaction = 0);
-    void deleteTake(Take* take, Transaction* transaction = 0);
+    void saveTake(Take *take, Transaction *transaction = 0);
+    void deleteTake(Take *take, Transaction *transaction = 0);
 
 
 
     // Transcode
 
-    std::vector<Transcode*> loadTranscodes(int status);
-    std::vector<Transcode*> loadTranscodes(std::vector<int>& statuses);
+    std::vector<Transcode*> loadTranscodes(int status, Transaction *transaction = 0);
 
-    void saveTranscode(Transcode* transcode, Transaction* transaction = 0);
-    void deleteTranscode(Transcode* transcode, Transaction* transaction = 0);
+    void saveTranscode(Transcode *transcode, Transaction *transaction = 0);
+    void deleteTranscode(Transcode *transcode, Transaction *transaction = 0);
 
-    int resetTranscodeStatus(int fromStatus, int toStatus, Transaction* transaction = 0);
+    int resetTranscodeStatus(int from_status, int to_status, Transaction *transaction = 0);
 
-    int deleteTranscodes(std::vector<int>& statuses, Interval timeBeforeNow, Transaction* transaction = 0);
+    int deleteTranscodes(int status, Interval time_before_now, Transaction *transaction = 0);
 
 
 
@@ -148,82 +148,103 @@ public:
 
     // loads or creates a project name
     // Note: an exception is thrown if name is empty
-    ProjectName loadOrCreateProjectName(std::string name);
-    std::vector<ProjectName> loadProjectNames();
-    void deleteProjectName(ProjectName* projectName);
+    ProjectName loadOrCreateProjectName(std::string name, Transaction *transaction = 0);
+    std::vector<ProjectName> loadProjectNames(Transaction *transaction = 0);
+    void deleteProjectName(ProjectName *projectName, Transaction *transaction = 0);
 
     // returns 0 if source package not in database
-    SourcePackage* loadSourcePackage(std::string name);
-    SourcePackage* loadSourcePackage(std::string name, Transaction* transaction = 0);
-    void lockSourcePackages(Transaction* transaction);
+    SourcePackage* loadSourcePackage(std::string name, Transaction *transaction = 0);
+    void lockSourcePackages(Transaction *transaction);
 
-    Package* loadPackage(long databaseID);
-    // assumeExists == true means an exception will be thrown if it doesn't exist,
-    // assumeExists == false will return 0 if the package doesn't exist
-    Package* loadPackage(UMID packageUID, bool assumeExists = true);
-    void savePackage(Package* package, Transaction* transaction = 0);
-    void deletePackage(Package* package, Transaction* transaction = 0);
+    Package* loadPackage(long databaseID, Transaction *transaction = 0);
+    // assume_exists == true means an exception will be thrown if it doesn't exist,
+    // assume_exists == false will return 0 if the package doesn't exist
+    Package* loadPackage(UMID packageUID, bool assume_exists = true, Transaction *transaction = 0);
+    void savePackage(Package *package, Transaction *transaction = 0);
+    void deletePackage(Package *package, Transaction *transaction = 0);
     
     //delete every package id in supplied array
-    void deletePackageChain(Package* package, Transaction* transaction = 0);
+    void deletePackageChain(Package *package, Transaction *transaction = 0);
 
     //do package references exist?
-    bool packageRefsExist(Package* package, Transaction* transaction = 0);
+    bool packageRefsExist(Package *package, Transaction *transaction = 0);
 
     // returns 1 on success and sets both sourcePackage and sourceTrack, else
     // -1 if source package is not present, -2 if track is not present
     int loadSourceReference(UMID sourcePackageUID, uint32_t sourceTrackID,
-        Package** sourcePackage, Track** sourceTrack);
+        Package **sourcePackage, Track **sourceTrack, Transaction *transaction = 0);
 
     // load all packages in the reference chain
-    void loadPackageChain(Package* topPackage, PackageSet* packages);
-    void loadPackageChain(long databaseID, Package** topPackage, PackageSet* packages);
+    void loadPackageChain(Package *topPackage, PackageSet *packages, Transaction *transaction = 0);
+    void loadPackageChain(long databaseID, Package **topPackage, PackageSet *packages, Transaction *transaction = 0);
 
     // load all material packages (plus reference chain) referencing file packages
     // where after <= material package creation date < before
-    void loadMaterial(Timestamp& after, Timestamp& before, MaterialPackageSet* topPackages,
-        PackageSet* packages);
+    void loadMaterial(Timestamp& after, Timestamp& before, MaterialPackageSet *topPackages,
+        PackageSet *packages, Transaction *transaction = 0);
 
     // load all material packages (plus reference chain) referencing file packages
     // where material package has user comment name/value
-    void loadMaterial(std::string ucName, std::string ucValue, MaterialPackageSet* topPackages, PackageSet* packages);
+    void loadMaterial(std::string ucName, std::string ucValue, MaterialPackageSet *topPackages, PackageSet *packages,
+        Transaction *transaction = 0);
 
     // load material packages based on list of material package database IDs
-    void loadMaterial(const std::vector<long> & packageIDs, MaterialPackageSet * topPackages, PackageSet * packages);
+    void loadMaterial(const std::vector<long> & packageIDs, MaterialPackageSet *topPackages, PackageSet *packages,
+        Transaction *transaction = 0);
 
     // enumerations
-    void loadResolutionNames(std::map<int, std::string> & resolution_names);
-    void loadFileFormatNames(std::map<int, std::string> & file_format_names);
+    void loadResolutionNames(std::map<int, std::string> & resolution_names, Transaction *transaction = 0);
+    void loadFileFormatNames(std::map<int, std::string> & file_format_names, Transaction *transaction = 0);
+    void loadTimecodeNames(std::map<int, std::string> & timecode_names, Transaction *transaction = 0);
 
     // recording location
-    std::string loadLocationName(long databaseID);
+    std::string loadLocationName(long databaseID, Transaction *transaction = 0);
 
 protected:
-    Database(std::string dsn, std::string username, std::string password,
-        unsigned int initialConnections, unsigned int maxConnections);
+    Database(std::string hostname, std::string dbname, std::string username, std::string password,
+             unsigned int initialConnections, unsigned int maxConnections);
     ~Database();
 
-    // called by Connection when destructing
-    void returnConnection(Connection* connection);
+    // called by Transaction when destructing
+    void returnConnection(Transaction *transaction);
 
 private:
-    void checkVersion();
-    void loadPackage(Connection* connection, odbc::ResultSet* result, Package** package);
-    long getNextDatabaseID(Connection* connection, std::string sequenceName);
+    pqxx::connection* openConnection(std::string hostname, std::string dbname, std::string username,
+                                     std::string password);
 
+    long loadNextId(std::string seq_name, Transaction *transaction = 0);
+    void checkVersion(Transaction *transaction = 0);
 
-    static Database* _instance;
-    static Mutex _databaseMutex;
+    void loadPackage(Transaction *transaction, const pqxx::result::tuple &tup, Package **package);
+    
+    long readId(const pqxx::result::field &field);
+    int readInt(const pqxx::result::field &field, int null_value);
+    int readEnum(const pqxx::result::field &field);
+    long readLong(const pqxx::result::field &field, long null_value);
+    int64_t readInt64(const pqxx::result::field &field, int64_t null_value);
+    bool readBool(const pqxx::result::field &field, bool null_value);
+    std::string readString(const pqxx::result::field &field);
+    Date readDate(const pqxx::result::field &field);
+    Timestamp readTimestamp(const pqxx::result::field &field);
+    Rational readRational(const pqxx::result::field &field1, const pqxx::result::field &field2);
+    UMID readUMID(const pqxx::result::field &field);
 
-    Mutex _getConnectionMutex;
+    std::string writeTimestamp(Timestamp value);
+    std::string writeDate(Date value);
+    std::string writeInterval(Interval value);
+    std::string writeUMID(UMID value);
 
-    std::vector<odbc::Connection*> _connectionPool;
-    std::vector<Connection*> _connectionsInUse;
-    std::string _dsn;
+private:
+    std::string _hostname;
+    std::string _dbname;
     std::string _username;
     std::string _password;
     int _numConnections;
     int _maxConnections;
+    
+    Mutex _connectionMutex;
+    std::vector<pqxx::connection*> _connectionPool;
+    std::vector<Transaction*> _transactionsInUse;
 };
 
 
@@ -233,5 +254,4 @@ private:
 
 
 #endif
-
 

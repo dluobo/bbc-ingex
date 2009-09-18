@@ -1,9 +1,12 @@
 /*
- * $Id: Transaction.h,v 1.1 2007/09/11 14:08:40 stuart_hc Exp $
+ * $Id: Transaction.h,v 1.2 2009/09/18 16:50:11 philipn Exp $
  *
  * A database transaction
  *
- * Copyright (C) 2006  Philip de Nier <philipn@users.sourceforge.net>
+ * Copyright (C) 2009 British Broadcasting Corporation
+ * All Rights Reserved
+ *
+ * Author: Philip de Nier
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,7 +27,12 @@
 #define __PRODAUTO_TRANSACTION_H__
 
 
-#include "Connection.h"
+#include <string>
+#include <vector>
+
+#include <pqxx/pqxx>
+
+#include "DatabaseObject.h"
 
 
 namespace prodauto
@@ -32,37 +40,32 @@ namespace prodauto
 
 class Database;
 
-
-class Transaction : public Connection
+class Transaction : public pqxx::work
 {
 public:
     friend class Database;
     
 public:
-    virtual ~Transaction();
+    Transaction(Database *database, pqxx::connection *conn, std::string name);
+    virtual ~Transaction() throw();
     
-    virtual void commit();
-    virtual void rollback();
+    void commit(); // overrides pqxx::work::commit()
+    void abort(); // overrides pqxx::work::abort()
     
-    void commitTransaction();
-
-protected:
-    Transaction(Database* database, odbc::Connection* odbcConnection);
-
+    void registerCommitListener(long tentative_database_id, DatabaseObject *obj);
+    long tentativeDatabaseID(DatabaseObject *obj);
+    
+private:
+    Database *_database;
+    pqxx::connection *_conn;
+    
+    std::vector<std::pair<long, DatabaseObject*> > _commitListeners;
 };
 
 
 
 };
-
-
-
-
-
-
-
 
 
 #endif
-
 

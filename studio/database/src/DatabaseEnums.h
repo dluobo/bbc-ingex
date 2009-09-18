@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.6 2009/04/16 18:15:21 john_f Exp $
+ * $Id: DatabaseEnums.h,v 1.7 2009/09/18 16:50:11 philipn Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -24,10 +24,12 @@
 #define __PRODAUTO_DATABASEENUMS_H__
 
 
-// these must match the database values
+// These must match the database values!
 
 #define PICTURE_DATA_DEFINITION             1
+#define PICTURE_DATA_DEFINITION_NAME        "Video"
 #define SOUND_DATA_DEFINITION               2
+#define SOUND_DATA_DEFINITION_NAME          "Audio"
 
 #define RAW_FILE_FORMAT_TYPE                1
 #define MXF_FILE_FORMAT_TYPE                2
@@ -57,12 +59,13 @@
 #define DNX185i_MATERIAL_RESOLUTION         17
 #define DMIH264_MATERIAL_RESOLUTION         18
 #define DVCPROHD_MATERIAL_RESOLUTION        19
-
 #define DVD_MATERIAL_RESOLUTION             20
 #define MPEG4_MATERIAL_RESOLUTION           21
+#define CUTS_MATERIAL_RESOLUTION            50
 
-#define TAPE_SOURCE_CONFIG_TYPE             1 
-#define LIVE_SOURCE_CONFIG_TYPE             2 
+// Debatable whether source config should have a type.
+#define TAPE_SOURCE_CONFIG_TYPE             1
+#define LIVE_SOURCE_CONFIG_TYPE             2
 
 #define UNSPECIFIED_TAKE_RESULT             1
 #define GOOD_TAKE_RESULT                    2
@@ -72,6 +75,8 @@
 
 #define LTC_PARAMETER_VALUE                 1
 #define VITC_PARAMETER_VALUE                2
+#define TIME_PARAMETER_VALUE                3
+
 
 #define PROXY_STATUS_INCOMPLETE             1
 #define PROXY_STATUS_COMPLETE               2
@@ -113,6 +118,8 @@ public:
     }
     std::string ResolutionName(int resolution);
     std::string FileFormatName(int file_format);
+    std::string DataDefName(int data_def);
+    std::string TimecodeName(int tc);
 protected:
     // Protect constructors to force use of Instance()
     DatabaseEnums();
@@ -124,6 +131,7 @@ private:
     // local copies of name tables
     std::map<int, std::string> mResolutionNames;
     std::map<int, std::string> mFileFormatNames;
+    std::map<int, std::string> mTimecodeNames;
 };
 
 #endif
