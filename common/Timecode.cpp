@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.4 2009/06/12 17:50:01 john_f Exp $
+ * $Id: Timecode.cpp,v 1.5 2009/09/18 15:05:30 philipn Exp $
  *
  * Class to hold a Timecode
  *
@@ -186,6 +186,9 @@ void Timecode::UpdateHoursMinsEtc()
         mSeconds = frames / mFramesPerSecond;
         mFrames = frames % mFramesPerSecond;
     }
+
+    // Prevent hours exceeding one day
+    mHours %= 24;
 }
 
 void Timecode::UpdateFramesSinceMidnight()
@@ -216,7 +219,14 @@ then be const.
 void Timecode::UpdateText()
 {
     // Full text representation
-    sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
+    if (mDropFrame)
+    {
+        sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
+    }
+    else
+    {
+        sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
+    }
 
     // No separators version
     sprintf(mTextNoSeparators,"%02d%02d%02d%02d", mHours, mMinutes, mSeconds, mFrames);
@@ -327,7 +337,18 @@ values change.
 */
 void Duration::UpdateText()
 {
-    // Text representation doesn't include frames
+#if 1
+    // Full string including frames
+    if (mDropFrame)
+    {
+        sprintf(mText,"%02d:%02d:%02d;%02d", mHours, mMinutes, mSeconds, mFrames);
+    }
+    else
+    {
+        sprintf(mText,"%02d:%02d:%02d:%02d", mHours, mMinutes, mSeconds, mFrames);
+    }
+#else
+    // Shorter version without frames
     if (mHours == 0)
     {
         sprintf(mText,"%02d:%02d", mMinutes, mSeconds);
@@ -336,6 +357,7 @@ void Duration::UpdateText()
     {
         sprintf(mText,"%d:%02d:%02d", mHours, mMinutes, mSeconds);
     }
+#endif
 }
 
 /**
