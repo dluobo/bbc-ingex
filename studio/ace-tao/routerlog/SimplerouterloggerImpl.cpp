@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.cpp,v 1.13 2009/05/01 13:39:03 john_f Exp $
+ * $Id: SimplerouterloggerImpl.cpp,v 1.14 2009/09/18 16:22:17 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -22,11 +22,15 @@
  * 02110-1301, USA.
  */
 
+#include "integer_types.h"
+
 #include <ace/Log_Msg.h>
 
 #include <sstream>
+#include <map>
 
 #include "SimplerouterloggerImpl.h"
+#include "routerloggerApp.h"
 #include "FileUtils.h"
 #include "ClockReader.h"
 #include "EasyReader.h"
@@ -34,16 +38,40 @@
 #include "Timecode.h"
 #include "quartzRouter.h"
 #include "CutsDatabase.h"
-#include "routerloggerApp.h"
+#include "RecorderSettings.h"
 
 #include "Database.h"
 #include "DBException.h"
 
-//#ifdef WIN32
-//const std::string RECORD_DIR = "C:\\TEMP\\RouterLogs\\";
-//#else
-//const std::string RECORD_DIR = "/var/tmp/RouterLogs/";
-//#endif
+// We only record one "track"
+const unsigned int max_inputs = 1;
+const unsigned int max_tracks_per_input = 1;
+
+const bool USE_PROJECT_SUBDIR = true;
+
+// Path separator.  It would be different for Windows.
+const char PATH_SEPARATOR = '/';
+
+// Format in cut recording file
+const char * const mccut_fmt = "<McCut ClipName=\"%s\" SelectorIndex=\"%d\" "
+                "Date=\"%d-%02d-%02d\" Position=\"%"PRId64"\" EditRate=\"%d/%d\"/>\n";
+
+
+namespace
+{
+void clean_filename(std::string & filename)
+{
+    const std::string allowed_chars = ".0123456789abcdefghijklmnopqrstuvwxyz_-ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const char replacement_char = '_';
+
+    size_t pos;
+    while (std::string::npos != (pos = filename.find_first_not_of(allowed_chars)))
+    {
+        filename.replace(pos, 1, 1, replacement_char);
+    }
+}
+};
+
 
 // Constructor for Vt struct
 Vt::Vt(unsigned int rd, const std::string & n)
@@ -56,7 +84,7 @@ Vt::Vt(unsigned int rd, const std::string & n)
 
 // Implementation skeleton constructor
 SimplerouterloggerImpl::SimplerouterloggerImpl (void)
-: mpFile(0), mpCutsDatabase(0), mMixDestination(0), mMcTrackId(0), mLastSelectorIndex(0), mSaving(false)
+: mpFile(0), mpCutsDatabase(0), mCopyManager(CopyMode::NEW), mRecIndex(0), mMixDestination(0), mMcTrackId(0), mLastSelectorIndex(0), mSaving(false)
 {
 }
 
@@ -75,25 +103,24 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
         name.c_str(), mc_clip_name.c_str(), mix_dest));
     bool ok = true;
 
-    // Assume 25 fps
-    mEditRate.numerator   = 25;
-    mEditRate.denominator = 1;
+    // Setup CopyManager
+    mCopyManager.RecorderName(name);
 
     // Setup pre-roll
     mMaxPreRoll.undefined = false;
-    mMaxPreRoll.edit_rate = mEditRate;
-    mMaxPreRoll.samples = 0;
+    mMaxPreRoll.edit_rate = EDIT_RATE;
+    // Pre-roll is really zero but gui will use lowest when controlling
+    // more than one recorder so we make it 10.
+    mMaxPreRoll.samples = 10;
 
     // Setup post-roll
     mMaxPostRoll.undefined = true; // no limit to post-roll
-    mMaxPostRoll.edit_rate = mEditRate;
+    mMaxPostRoll.edit_rate = EDIT_RATE;
     mMaxPostRoll.samples = 0;
 
     // Base class initialisation
-    // Each channel has 1 video and 4 or 8 audio tracks
-    const unsigned int max_inputs = 1;
-    const unsigned int max_tracks_per_input = 1;
-    ok = ok && RecorderImpl::Init(name, max_inputs, max_tracks_per_input);
+    RecorderImpl::Init(name);
+    ok = ok && UpdateFromDatabase(max_inputs, max_tracks_per_input);
 
     // Setup format reply
     mFormat = "*ROUTER*";
@@ -138,6 +165,9 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
         }
     }
 
+    // Store whole multi-cam clip structure
+    mMcClipDef.reset(mc_clip_def);
+
     // Now find multi-cam track def we are recording cuts for.
     // We want the video track and assume it's the one with index == 1.
     prodauto::MCTrackDef * mc_track_def = 0;
@@ -172,8 +202,40 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
         }
     }
 
+    // Start copy process
+    this->StartCopying(0);
 
     return ok;
+}
+
+::ProdAuto::MxfDuration SimplerouterloggerImpl::MaxPreRoll (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    return mMaxPreRoll;
+}
+
+::ProdAuto::MxfDuration SimplerouterloggerImpl::MaxPostRoll (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    return mMaxPostRoll;
+}
+
+::ProdAuto::Rational SimplerouterloggerImpl::EditRate (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    return EDIT_RATE;
 }
 
 ::ProdAuto::TrackStatusList * SimplerouterloggerImpl::TracksStatus (
@@ -189,6 +251,8 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.timecode.samples = tc.FramesSinceMidnight();
     ts.timecode.undefined = 0;
+    ts.timecode.edit_rate.numerator = tc.EditRateNumerator();
+    ts.timecode.edit_rate.denominator = tc.EditRateDenominator();
 
     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("TracksStatus - timecode %C\n"), tc.Text()));
 
@@ -197,6 +261,9 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return tracks_status._retn();
 }
 
+/**
+  Start
+*/
 ::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Start (
     ::ProdAuto::MxfTimecode & start_timecode,
     const ::ProdAuto::MxfDuration & pre_roll,
@@ -214,7 +281,27 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
 
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C SimplerouterloggerImpl::Start()\n"), mName.c_str()));
 
-    //FileUtils::CreatePath(RECORD_DIR);
+    // Get current recorder settings
+    RecorderSettings * settings = RecorderSettings::Instance();
+    settings->Update(this->Recorder());
+
+    // Create any needed paths.
+    // NB. Paths need to be same as those used in recorder_fucntions.cpp
+    for (std::vector<EncodeParams>::iterator it = settings->encodings.begin();
+        it != settings->encodings.end(); ++it)
+    {
+        if (USE_PROJECT_SUBDIR)
+        {
+            std::string project_subdir = project;
+            clean_filename(project_subdir);
+            it->dir += PATH_SEPARATOR;
+            it->dir += project_subdir;
+            it->copy_dest += PATH_SEPARATOR;
+            it->copy_dest += project_subdir;
+        }
+
+        FileUtils::CreatePath(it->dir);
+    }
 
     // Calculate start timecode
     Timecode tc;
@@ -229,9 +316,33 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
         tc = start_timecode.samples - pre_roll.samples;
     }
 
+    // Generate filename for the recording
+    std::ostringstream ss;
+    
+    std::string date = DateTime::DateNoSeparators();
+    std::string tcode = tc.TextNoSeparators();
+
+    ss << date << "_" << tcode
+        << "_" << project
+        << "_" << this->Name()
+        << ".xml";
+
+    std::string filename = ss.str();
+    clean_filename(filename);
+
+    std::string pathname;
+    if (settings->encodings.size() > 0)
+    {
+        pathname = settings->encodings.begin()->dir;
+        pathname += PATH_SEPARATOR;
+    }
+    pathname += filename;
+
+    // Enable traffic control on copy process.
+    this->StopCopying(++mRecIndex);
 
     // Start saving to cuts database
-    StartSaving(tc);
+    StartSaving(tc, pathname);
 
     ProdAuto::TrackStatus & ts = mTracksStatus->operator[](0);
     ts.rec = 1;
@@ -246,6 +357,9 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     return ProdAuto::Recorder::SUCCESS;
 }
 
+/**
+  Stop
+*/
 ::ProdAuto::Recorder::ReturnCode SimplerouterloggerImpl::Stop (
     ::ProdAuto::MxfTimecode & mxf_stop_timecode,
     const ::ProdAuto::MxfDuration & mxf_post_roll,
@@ -282,9 +396,39 @@ bool SimplerouterloggerImpl::Init(const std::string & name, const std::string & 
     // TODO: Put the actual filename in here
     files->operator[](0) = CORBA::string_dup("filename.txt");
 
+    // Release traffic control on copy process.
+    this->StartCopying(mRecIndex);
+
     // Return
     return ProdAuto::Recorder::SUCCESS;
 }
+
+/**
+Means of externally forcing a re-reading of config from database.
+*/
+void SimplerouterloggerImpl::UpdateConfig (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+    UpdateFromDatabase(max_inputs, max_tracks_per_input);
+}
+
+::ProdAuto::TrackList * SimplerouterloggerImpl::Tracks (
+    
+  )
+  throw (
+    ::CORBA::SystemException
+  )
+{
+  // Add your implementation here
+    ProdAuto::TrackList_var tracks = mTracks;
+    return tracks._retn();
+}
+
+// Non-IDL stuff follows
 
 void SimplerouterloggerImpl::SetTimecodePort(std::string tcp)
 {
@@ -297,7 +441,7 @@ void SimplerouterloggerImpl::SetRouterPort(std::string rp)
 }
 
 
-void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
+void SimplerouterloggerImpl::StartSaving(const Timecode & tc, const std::string & filename)
 {
 #if 0
     unsigned int src_index = mpRouter->CurrentSrc(mMixDestination);
@@ -311,8 +455,6 @@ void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
     std::string deststring = "Mixer Out";
 #endif
 
-#if 0
-    // No longer using this format
     // Open file
     mpFile = ACE_OS::fopen (filename.c_str(), ACE_TEXT ("w+"));
 
@@ -322,14 +464,109 @@ void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
     }
     else
     {
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT ("filename ok %C\n"), filename.c_str()));
+        // Add header
+        ACE_OS::fprintf (mpFile, "<?xml version=\"1.0\" encoding =\"UTF-8\" standalone=\"no\"?>\n<root>\n");
 
-        // Write info at head of file
-        std::string tc = routerloggerApp::Instance()->Timecode();
-        ACE_OS::fprintf (mpFile, "Destination index = %d, name = %s\n", mMixDestination, deststring.c_str() );
-        ACE_OS::fprintf (mpFile, "%s start   source name = %s\n", tc.c_str(), mLastSrc.c_str() );
+        // First of all, find the SourceConfigs and Locations relevant to the multi-cam clip
+        std::map<std::string, prodauto::SourceConfig *> sc_map;
+        std::map<long, std::string> loc_map;
+        for (std::map<uint32_t, prodauto::MCTrackDef *>::const_iterator
+            trk_i = mMcClipDef->trackDefs.begin(); trk_i != mMcClipDef->trackDefs.end(); ++trk_i)
+        {
+            // multi-cam track
+            const prodauto::MCTrackDef * const & trk = trk_i->second;
+
+            for (std::map<uint32_t, prodauto::MCSelectorDef *>::const_iterator
+                sel_i = trk->selectorDefs.begin(); sel_i != trk->selectorDefs.end(); ++sel_i)
+            {
+                // multi-cam selector
+                const prodauto::MCSelectorDef * const & sel = sel_i->second;
+
+                // source config
+                prodauto::SourceConfig * sc = sel->sourceConfig;
+
+                // store in map
+                sc_map[sc->name] = sc;
+
+                // location
+                long loc_id = sc->recordingLocation;
+                try
+                {
+                    std::string loc_name = prodauto::Database::getInstance()->loadLocationName(loc_id);
+                    loc_map[loc_id] = loc_name;
+                }
+                catch (const prodauto::DBException & ex)
+                {
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+                }
+            }
+        }
+
+        // Write locations to XML
+        for (std::map<long, std::string>::const_iterator
+            it = loc_map.begin(); it != loc_map.end(); ++it)
+        {
+            ACE_OS::fprintf (mpFile, "<Location Name=\"%s\"/>\n", it->second.c_str());
+        }
+
+        // Write SourceConfigs to XML
+        for (std::map<std::string, prodauto::SourceConfig *>::const_iterator
+            it = sc_map.begin(); it != sc_map.end(); ++it)
+        {
+            const prodauto::SourceConfig * const & sc = it->second;
+            if (sc)
+            {
+                // source config
+                ACE_OS::fprintf (mpFile, "<SourceConfig Name=\"%s\" LocationName=\"%s\">\n",
+                    sc->name.c_str(), loc_map[sc->recordingLocation].c_str());
+
+                for (std::vector<prodauto::SourceTrackConfig *>::const_iterator
+                    stc_i = sc->trackConfigs.begin(); stc_i != sc->trackConfigs.end(); ++stc_i)
+                {
+                    // source config track
+                    const prodauto::SourceTrackConfig * const & stc = *stc_i;
+                    if (stc)
+                    {
+                        ACE_OS::fprintf (mpFile, "  <SourceTrackConfig Name=\"%s\" Id=\"%d\" Number=\"%d\" DataDef=\"%s\"/>\n",
+                            stc->name.c_str(), stc->id, stc->number,
+                            DatabaseEnums::Instance()->DataDefName(stc->dataDef).c_str());
+                    }
+                }
+
+                ACE_OS::fprintf (mpFile, "</SourceConfig>\n");
+            }
+        }
+
+        // Add multi-cam clip info
+        ACE_OS::fprintf (mpFile, "<McClip Name=\"%s\">\n", mMcClipDef->name.c_str());
+
+        for (std::map<uint32_t, prodauto::MCTrackDef *>::const_iterator
+            trk_i = mMcClipDef->trackDefs.begin(); trk_i != mMcClipDef->trackDefs.end(); ++trk_i)
+        {
+            // multi-cam track
+            const prodauto::MCTrackDef * const & trk = trk_i->second;
+            ACE_OS::fprintf (mpFile, "  <McTrack Index=\"%d\" Number=\"%d\">\n", trk->index, trk->number);
+
+            for (std::map<uint32_t, prodauto::MCSelectorDef *>::const_iterator
+                sel_i = trk->selectorDefs.begin(); sel_i != trk->selectorDefs.end(); ++sel_i)
+            {
+                // multi-cam selector
+                const prodauto::MCSelectorDef * const & sel = sel_i->second;
+
+                // source config
+                prodauto::SourceConfig * sc = sel->sourceConfig;
+
+                ACE_OS::fprintf (mpFile, "    <McSelector Index=\"%d\" SourceConfigName=\"%s\" SourceTrackConfigId=\"%d\"/>\n",
+                    sel->index,
+                    (sc ? sc->name.c_str() : ""),
+                    sel->sourceTrackID);
+            }
+
+            ACE_OS::fprintf (mpFile, "  </McTrack>\n");
+        }
+
+        ACE_OS::fprintf (mpFile, "</McClip>\n");
     }
-#endif
 
     // Open database file
     if (mpCutsDatabase)
@@ -354,21 +591,31 @@ void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
         date.month = month;
         date.day = day;
 
+        std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
+
+        mc_cut->mcTrackId = mMcTrackId;
+        mc_cut->mcSelectorIndex = mLastSelectorIndex;
+        mc_cut->cutDate = date;
+        mc_cut->position = tc.FramesSinceMidnight();
+        mc_cut->editRate = prodauto::g_palEditRate;
+
+        // Save to database
         try
         {
-            std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
-
-            mc_cut->mcTrackId = mMcTrackId;
-            mc_cut->mcSelectorIndex = mLastSelectorIndex;
-            mc_cut->cutDate = date;
-            mc_cut->position = tc.FramesSinceMidnight();
-            mc_cut->editRate = prodauto::g_palEditRate;
-
             prodauto::Database::getInstance()->saveMultiCameraCut(mc_cut.get());
         }
         catch (const prodauto::DBException & ex)
         {
             ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+        }
+
+        // Save to file
+        if (mpFile != 0)
+        {
+            ACE_OS::fprintf(mpFile, mccut_fmt,
+                mMcClipDef->name.c_str(), mc_cut->mcSelectorIndex,
+                mc_cut->cutDate.year, mc_cut->cutDate.month, mc_cut->cutDate.day,
+                mc_cut->position, mc_cut->editRate.numerator, mc_cut->editRate.denominator);
         }
     }
     
@@ -377,21 +624,18 @@ void SimplerouterloggerImpl::StartSaving(const Timecode & tc)
 
 void SimplerouterloggerImpl::StopSaving()
 {
-#if 0
-    // No longer using this format
-    // Put finish time at end of file and close
     if (mpFile)
     {
-        std::string tc = routerloggerApp::Instance()->Timecode();
-        ACE_OS::fprintf (mpFile, "%s end\n", tc.c_str() );
+        // Add footer
+        ACE_OS::fprintf (mpFile, "</root>\n");
 
+        // Close file
         if (ACE_OS::fclose (mpFile) == -1)
         {
             ACE_DEBUG((LM_DEBUG, ACE_TEXT ("problem closing file\n")));
         }
         mpFile = 0;
     }
-#endif
 
     if (mpCutsDatabase)
     {
@@ -462,22 +706,16 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
             mLastMonth = month;
             mLastDay = day;
 
-            //save if file is open
-            if (mpFile != 0)
+            if (mSaving)
             {
-                ACE_OS::fprintf (mpFile, "%s update  source index = %3d, name = %s\n", tc.c_str(), src, src_name.c_str() );
-            }
+                // Update database file
+                if (mpCutsDatabase)
+                {
+                    mpCutsDatabase->AppendEntry(src_name, tc, year, month, day);
+                }
 
-            // update database file
-            if (mpCutsDatabase)
-            {
-                mpCutsDatabase->AppendEntry(src_name, tc, year, month, day);
-            }
-
-            // write to main database
-            if (mSaving && mMcTrackId)
-            {
-                try
+                // Write to main database and to file
+                if (mMcTrackId)
                 {
                     std::auto_ptr<prodauto::MCCut> mc_cut(new prodauto::MCCut);
 
@@ -487,28 +725,50 @@ void SimplerouterloggerImpl::Observe(unsigned int src, unsigned int dest)
                     mc_cut->position = Timecode(tc.c_str()).FramesSinceMidnight();
                     mc_cut->editRate = prodauto::g_palEditRate;
 
-                    prodauto::Database::getInstance()->saveMultiCameraCut(mc_cut.get());
+                    // Write to database
+                    try
+                    {
+                        prodauto::Database::getInstance()->saveMultiCameraCut(mc_cut.get());
+                    }
+                    catch (const prodauto::DBException & ex)
+                    {
+                        ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
+                    }
+
+                    // Write to file
+                    if (mpFile)
+                    {
+                        ACE_OS::fprintf(mpFile, mccut_fmt,
+                            mMcClipDef->name.c_str(), mc_cut->mcSelectorIndex,
+                            mc_cut->cutDate.year, mc_cut->cutDate.month, mc_cut->cutDate.day,
+                            mc_cut->position, mc_cut->editRate.numerator, mc_cut->editRate.denominator);
+                    }
                 }
-                catch (const prodauto::DBException & ex)
-                {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Databse exception:\n  %C\n"), ex.getMessage().c_str()));
-                }
+
             }
         }
     }
 }
 
-::ProdAuto::TrackList * SimplerouterloggerImpl::Tracks (
-    
-  )
-  throw (
-    ::CORBA::SystemException
-  )
+void SimplerouterloggerImpl::StartCopying(unsigned int index)
 {
-  // Add your implementation here
-    ProdAuto::TrackList_var tracks = mTracks;
-    return tracks._retn();
+    mCopyManager.Command(RecorderSettings::Instance()->copy_command);
+    mCopyManager.ClearSrcDest();
+    std::vector<EncodeParams> & encodings = RecorderSettings::Instance()->encodings;
+
+    for (std::vector<EncodeParams>::const_iterator it = encodings.begin(); it != encodings.end(); ++it)
+    {
+        mCopyManager.AddSrcDest(it->dir, it->copy_dest, it->copy_priority);
+    }
+
+    mCopyManager.StartCopying(index);
 }
+
+void SimplerouterloggerImpl::StopCopying(unsigned int index)
+{
+    mCopyManager.StopCopying(index);
+}
+
 
 
 

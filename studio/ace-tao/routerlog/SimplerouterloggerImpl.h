@@ -1,5 +1,5 @@
 /*
- * $Id: SimplerouterloggerImpl.h,v 1.10 2009/05/01 13:39:03 john_f Exp $
+ * $Id: SimplerouterloggerImpl.h,v 1.11 2009/09/18 16:22:17 john_f Exp $
  *
  * Servant class for RouterRecorder.
  *
@@ -36,6 +36,9 @@
 #include "RouterObserver.h"
 #include "RouterDestination.h"
 #include "Timecode.h"
+#include "CopyManager.h"
+
+const ProdAuto::Rational EDIT_RATE = { 25 , 1 }; // Assume 25 fps
 
 class Vt
 {
@@ -73,6 +76,30 @@ public:
 
   void SetRouterPort(std::string rp);
 
+  
+  virtual
+  ::ProdAuto::MxfDuration MaxPreRoll (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::ProdAuto::MxfDuration MaxPostRoll (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+  
+  virtual
+  ::ProdAuto::Rational EditRate (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
   
   virtual
   ::ProdAuto::Recorder::ReturnCode Start (
@@ -114,24 +141,45 @@ public:
       ::CORBA::SystemException
     ); 
 
+  virtual
+  void UpdateConfig (
+      
+    )
+    throw (
+      ::CORBA::SystemException
+    );
+
 
     // From Observer base class
     void Observe(unsigned int src, unsigned int dest);
 
 
 private:
-    void StartSaving(const Timecode & tc);
+    // Methods
+    void StartSaving(const Timecode & tc, const std::string & filename);
     void StopSaving();
+    void StartCopying(unsigned int index);
+    void StopCopying(unsigned int index);
+
+    // Data
+    ProdAuto::MxfDuration mMaxPreRoll;
+    ProdAuto::MxfDuration mMaxPostRoll;
 
     FILE * mpFile;
     std::string mRouterPort;
     std::string mTimecodePort;
 
     CutsDatabase * mpCutsDatabase;
+    CopyManager mCopyManager;
+
+    unsigned int mRecIndex;
 
     unsigned int mMixDestination;
-    long mMcTrackId; // multi-cam track we are following
-    std::vector<Vt> mVts;  // eventually from database
+
+    std::auto_ptr<prodauto::MCClipDef> mMcClipDef; // multi-cam clip we are following
+    long mMcTrackId;         // multi-cam track id we are following
+
+    std::vector<Vt> mVts;   // eventually from database
 
     // Details of last relevant cut
     std::string mLastSrc;
