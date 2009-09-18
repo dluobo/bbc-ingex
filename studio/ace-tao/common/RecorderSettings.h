@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.5 2009/02/09 19:18:17 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.6 2009/09/18 15:53:04 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -54,7 +54,7 @@ struct EncodeParams
     Input::EnumType source;
     bool bitc;
     std::string dir;
-    std::string dest;
+    std::string copy_dest;
     int copy_priority;
 };
 
@@ -89,6 +89,7 @@ public:
 
     std::string mxf_subdir_creating;
     std::string mxf_subdir_failures;
+    std::string mxf_subdir_metadata;
 
 
 private:

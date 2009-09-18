@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.7 2009/04/16 17:54:34 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.8 2009/09/18 15:53:04 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -37,19 +37,22 @@ const int           ENCODE1_RESOLUTION      = MJPEG21_MATERIAL_RESOLUTION;
 const int           ENCODE1_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE1_BITC            = false;
 const char * const  ENCODE1_DIR             = "/video";
-const char * const  ENCODE1_DEST            = "/store";
+const char * const  ENCODE1_COPY_DEST            = "/store";
+const int           ENCODE1_COPY_PRIORITY   = 1;
 
 const int           ENCODE2_RESOLUTION      = 0;
 const int           ENCODE2_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE2_BITC            = false;
 const char * const  ENCODE2_DIR             = "/video";
-const char * const  ENCODE2_DEST            = "/store";
+const char * const  ENCODE2_COPY_DEST            = "/store";
+const int           ENCODE2_COPY_PRIORITY   = 2;
 
 const int           QUAD_RESOLUTION     = 0;
 const int           QUAD_FILE_FORMAT    = RAW_FILE_FORMAT_TYPE;
 const bool          QUAD_BITC           = true;
 const char * const  QUAD_DIR            = "/video";
-const char * const  QUAD_DEST           = "";
+const char * const  QUAD_COPY_DEST           = "";
+const int           QUAD_COPY_PRIORITY  = 3;
 
 const bool BROWSE_AUDIO = false;
 
@@ -60,6 +63,7 @@ const int BROWSE_AUDIO_BITS = 16;
 
 const char * const MXF_SUBDIR_CREATING = "Creating/";
 const char * const MXF_SUBDIR_FAILURES = "Failures/";
+const char * const MXF_SUBDIR_METADATA = "xml/";
 
 
 
@@ -87,7 +91,8 @@ RecorderSettings::RecorderSettings() :
     mxf_audio_bits(MXF_AUDIO_BITS),
     browse_audio_bits(BROWSE_AUDIO_BITS),
     mxf_subdir_creating(MXF_SUBDIR_CREATING),
-    mxf_subdir_failures(MXF_SUBDIR_FAILURES)
+    mxf_subdir_failures(MXF_SUBDIR_FAILURES),
+    mxf_subdir_metadata(MXF_SUBDIR_METADATA)
 {
 }
 
@@ -108,19 +113,22 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     int encode1_file_format;
     bool encode1_bitc;
     std::string encode1_dir;
-    std::string encode1_dest;
+    std::string encode1_copy_dest;
+    int encode1_copy_priority;
 
     int encode2_resolution;
     int encode2_file_format;
     bool encode2_bitc;
     std::string encode2_dir;
-    std::string encode2_dest;
+    std::string encode2_copy_dest;
+    int encode2_copy_priority;
 
     int quad_resolution;
     int quad_file_format;
     bool quad_bitc;
     std::string quad_dir;
-    std::string quad_dest;
+    std::string quad_copy_dest;
+    int quad_copy_priority;
 
     if (rc)
     {
@@ -132,19 +140,22 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         encode1_file_format = rc->getIntParam("ENCODE1_WRAPPING", ENCODE1_FILE_FORMAT);
         encode1_bitc = rc->getBoolParam("ENCODE1_BITC", ENCODE1_BITC);
         encode1_dir = rc->getStringParam("ENCODE1_DIR", ENCODE1_DIR);
-        encode1_dest = rc->getStringParam("ENCODE1_DEST", ENCODE1_DEST);
+        encode1_copy_dest = rc->getStringParam("ENCODE1_COPY_DEST", ENCODE1_COPY_DEST);
+        encode1_copy_priority = rc->getIntParam("ENCODE1_COPY_PRIORITY", ENCODE1_COPY_PRIORITY);
 
         encode2_resolution = rc->getIntParam("ENCODE2_RESOLUTION", ENCODE2_RESOLUTION);
         encode2_file_format = rc->getIntParam("ENCODE2_WRAPPING", ENCODE2_FILE_FORMAT);
         encode2_bitc = rc->getBoolParam("ENCODE2_BITC", ENCODE2_BITC);
         encode2_dir = rc->getStringParam("ENCODE2_DIR", ENCODE2_DIR);
-        encode2_dest = rc->getStringParam("ENCODE2_DEST", ENCODE2_DEST);
+        encode2_copy_dest = rc->getStringParam("ENCODE2_COPY_DEST", ENCODE2_COPY_DEST);
+        encode2_copy_priority = rc->getIntParam("ENCODE2_COPY_PRIORITY", ENCODE2_COPY_PRIORITY);
 
         quad_resolution = rc->getIntParam("QUAD_RESOLUTION", QUAD_RESOLUTION);
         quad_file_format = rc->getIntParam("QUAD_WRAPPING", QUAD_FILE_FORMAT);
         quad_bitc = rc->getBoolParam("QUAD_BITC", QUAD_BITC);
         quad_dir = rc->getStringParam("QUAD_DIR", QUAD_DIR);
-        quad_dest = rc->getStringParam("QUAD_DEST", QUAD_DEST);
+        quad_copy_dest = rc->getStringParam("QUAD_COPY_DEST", QUAD_COPY_DEST);
+        quad_copy_priority = rc->getIntParam("QUAD_COPY_PRIORITY", QUAD_COPY_PRIORITY);
     }
     else
     {
@@ -156,19 +167,22 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         encode1_file_format = ENCODE1_FILE_FORMAT;
         encode1_bitc = ENCODE1_BITC;
         encode1_dir = ENCODE1_DIR;
-        encode1_dest = ENCODE1_DEST;
+        encode1_copy_dest = ENCODE1_COPY_DEST;
+        encode1_copy_priority = ENCODE1_COPY_PRIORITY;
 
         encode2_resolution = ENCODE2_RESOLUTION;
         encode2_file_format = ENCODE2_FILE_FORMAT;
         encode2_bitc = ENCODE2_BITC;
         encode2_dir = ENCODE2_DIR;
-        encode2_dest = ENCODE2_DEST;
+        encode2_copy_dest = ENCODE2_COPY_DEST;
+        encode2_copy_priority = ENCODE2_COPY_PRIORITY;
 
         quad_resolution = QUAD_RESOLUTION;
         quad_file_format = QUAD_FILE_FORMAT;
         quad_bitc = ENCODE2_BITC;
         quad_dir = QUAD_DIR;
-        quad_dest = QUAD_DEST;
+        quad_copy_dest = QUAD_COPY_DEST;
+        quad_copy_priority = QUAD_COPY_PRIORITY;
     }
 
     encodings.clear();
@@ -180,8 +194,8 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.source = Input::NORMAL;
         ep.bitc = encode1_bitc;
         ep.dir = encode1_dir;
-        ep.dest = encode1_dest;
-        ep.copy_priority = 2; // hard-coded for now
+        ep.copy_dest = encode1_copy_dest;
+        ep.copy_priority = encode1_copy_priority;
         encodings.push_back(ep);
     }
     if (encode2_resolution)
@@ -192,8 +206,8 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.source = Input::NORMAL;
         ep.bitc = encode2_bitc;
         ep.dir = encode2_dir;
-        ep.dest = encode2_dest;
-        ep.copy_priority = 1; // hard-coded for now
+        ep.copy_dest = encode2_copy_dest;
+        ep.copy_priority = encode2_copy_priority;
         encodings.push_back(ep);
     }
     if (quad_resolution)
@@ -204,8 +218,8 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.source = Input::QUAD;
         ep.bitc = quad_bitc;
         ep.dir = quad_dir;
-        ep.dest = quad_dest;
-        ep.copy_priority = 2; // hard-coded for now
+        ep.copy_dest = quad_copy_dest;
+        ep.copy_priority = quad_copy_priority;
         encodings.push_back(ep);
     }
 #if 0
@@ -217,7 +231,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.source = Input::NORMAL;
         ep.bitc = quad_bitc;
         ep.dir = quad_dir;
-        ep.dest = quad_dest;
+        ep.copy_dest = quad_copy_dest;
         encodings.push_back(ep);
     }
 #endif
