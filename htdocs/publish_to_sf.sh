@@ -4,10 +4,10 @@
 # or whether we need to use a SOCKS proxy
 case "$HOSTNAME" in
 	hobbes|max|hoyle)
-		TSOCKS=""
+		SOCKSIFY=""
 		;;
 	*)
-		TSOCKS=tsocks
+		SOCKSIFY=socksify
 	;;
 esac
 
@@ -24,8 +24,11 @@ case "$USER" in
 	david)
 		SF_USER=david_gk
 		;;
+	ingex)
+		SF_USER=john_f
+		;;
 	*)
-		echo "Add your sourceforge username to this script's switch statement"
+		echo "Add your sourceforge username to this script's switch statement!"
 		;;
 esac
 
@@ -33,4 +36,4 @@ esac
 set -x
 
 # Pass any script args straight to rsync command e.g. --dry-run
-$TSOCKS rsync -aiv --no-perms --executability --exclude publish_to_sf.sh --exclude '*.swp' --cvs-exclude $* . $SF_USER,ingex@web.sf.net:htdocs
+$SOCKSIFY rsync -aiv --no-perms --executability --exclude publish_to_sf.sh --exclude '*.swp' --cvs-exclude $* . $SF_USER,ingex@web.sf.net:htdocs
