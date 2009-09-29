@@ -1,5 +1,5 @@
 /*
- * $Id: ArchiveMXFReader.cpp,v 1.2 2009/04/16 17:52:48 john_f Exp $
+ * $Id: ArchiveMXFReader.cpp,v 1.3 2009/09/29 14:33:31 philipn Exp $
  *
  * 
  *
@@ -298,7 +298,7 @@ bool ArchiveMXFReader::seekToTimecode(Timecode vitc, Timecode ltc)
     int64_t originalPos = _position;
     DynamicByteArray workBytes(28);
     bool trySeekExtrapolate = true;
-    int64_t nextPos;
+    int64_t nextPos = 0;
     int cleanTimecodeCount = 0;
     Timecode currentVITC;
     Timecode currentLTC;

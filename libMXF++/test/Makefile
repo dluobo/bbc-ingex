@@ -1,19 +1,9 @@
-LIBMXF_DIR ?= ../../libMXF
-LIBMXFPP_DIR = ../libMXF++
-
-
-# we turn of checking for unused parameters (-Wno-unused-parameter) because we have
-# callbacks where the parameters are not always used
-CC = g++
-CFLAGS = -Wall -W  -Wno-unused-parameter -Werror -g -O2 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
-INCLUDES = -I$(LIBMXF_DIR)/lib/include -I../
-
-COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
-AR = ar cr
+TOPLEVEL = ..
+include $(TOPLEVEL)/vars.mk
 
 SOURCES = $(wildcard *.cpp)
-OBJECTS = $(subst .cpp,.o,$(SOURCES))
-DEPENDENCIES = $(subst .cpp,.d,$(SOURCES))
+OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
+DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
 
 .PHONY: all
@@ -26,26 +16,31 @@ libMXF.a:
 
 .PHONY: libMXF++.a
 libMXF++.a:
-	@cd $(LIBMXFPP_DIR) && $(MAKE) $@
+	@cd $(LIBMXFPP_DIR)/libMXF++ && $(MAKE) $@
 
 	
-test: libMXF.a libMXF++.a test.o
-	$(COMPILE) test.o -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR) -lMXF++ -lMXF -luuid -o $@
+test: libMXF.a libMXF++.a .objs/test.o
+	$(COMPILE) .objs/test.o -L$(LIBMXF_DIR)/lib -L$(LIBMXFPP_DIR)/libMXF++ -lMXF++ -lMXF $(UUIDLIB) -o $@
 
 
-%.d : %.cpp
+.deps/%.d : %.cpp
 	@echo Generating dependency file for $<; \
-	$(CC) $(CFLAGS) $(INCLUDES) -MM $< > $@.$$$$; \
-	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	mkdir -p .deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
-%.o: %.cpp
-	$(COMPILE) -c $< -o $@	
+.objs/%.o: %.cpp
+	@mkdir -p .objs
+	$(COMPILE) -c $(INCLUDES) $< -o $@
+
 	
 
 .PHONY: clean
 clean:
-	@rm -f *.d *.o *.a *~ test
+	@rm -f *~ *.a test
+	@rm -Rf .objs
+	@rm -Rf .deps
 	
 	
 ifneq "$(MAKECMDGOALS)" "clean"

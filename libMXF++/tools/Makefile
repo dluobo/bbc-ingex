@@ -1,12 +1,11 @@
-LIBMXF_DIR = ../../libMXF
-LIBMXFPP_DIR = ../libMXF++
-
+TOPLEVEL = ..
+include $(TOPLEVEL)/vars.mk
 
 .PHONY: all
 all: gen_metadata_classes
 	
 gen_metadata_classes: gen_metadata_classes.c
-	gcc -Wall -W  -Wno-unused-parameter -g -O2 -I$(LIBMXF_DIR)/lib/include gen_metadata_classes.c -L$(LIBMXF_DIR)/lib -lMXF -luuid -o gen_metadata_classes
+	$(BIN_PREFIX)gcc -Wall -W  -Wno-unused-parameter -g -O2 -I$(LIBMXF_DIR)/lib/include gen_metadata_classes.c -L$(LIBMXF_DIR)/lib -lMXF $(UUIDLIB) -o gen_metadata_classes
 	
 .PHONY: generate
 generate: gen_metadata_classes
