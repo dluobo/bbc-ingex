@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.24 2009/09/18 16:17:54 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.25 2009/10/12 15:15:32 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -22,6 +22,7 @@
  * 02110-1301, USA.
  */
 
+#include "integer_types.h"
 #include "IngexShm.h"
 #include "IngexRecorder.h"
 #include "IngexRecorderImpl.h"
@@ -40,15 +41,17 @@
 #include "YUVlib/YUV_frame.h"
 #include "YUVlib/YUV_quarter_frame.h"
 
-// prodautodb lib
+// prodauto database
 #include "Database.h"
 #include "DBException.h"
 #include "DatabaseEnums.h"
 #include "Utilities.h"
 #include "DataTypes.h"
+#include "OPAtomPackageCreator.h"
+#include "OP1APackageCreator.h"
 
-// prodautodb recordmxf
-#include "MXFWriter.h"
+// prodauto mxfwriter
+#include "MXFOPAtomWriter.h"
 #include "MXFWriterException.h"
 
 #include <ace/Thread.h>
@@ -81,10 +84,22 @@ namespace
 {
 int64_t tv_diff_microsecs(const struct timeval * a, const struct timeval * b)
 {
-    int64_t diff = (b->tv_sec - a->tv_sec) * 1000000 + b->tv_usec - a->tv_usec;
+    int64_t diff = (b->tv_sec - a->tv_sec) * INT64_C(1000000) + b->tv_usec - a->tv_usec;
     return diff;
 }
+
+std::string strip_path(const std::string & pathname)
+{
+    std::string filename = pathname;
+    size_t index = pathname.rfind(PATH_SEPARATOR);
+    if (index != std::string::npos)
+    {
+        filename = pathname.substr(index + 1);
+    }
+
+    return filename;
 }
+} // namespace
 
 
 /**
@@ -240,6 +255,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     //bool browse_audio = (channel_i == 0 && !quad_video && settings->browse_audio);
     bool browse_audio = false;
+    const bool browse_mp3 = true;
 
     // Get encode settings for this thread
     int resolution = p_opt->resolution;
@@ -248,11 +264,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // For DVD resolution we override the file format
     if (resolution == DVD_MATERIAL_RESOLUTION)
     {
-        file_format = RAW_FILE_FORMAT_TYPE;
+        file_format = MPG_FILE_FORMAT_TYPE;
     }
 
     bool mxf = (MXF_FILE_FORMAT_TYPE == file_format);
-    bool one_file_per_track = mxf;
     bool raw = !mxf;
 
     // video resolution name
@@ -458,6 +473,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         raw = false;
         filename_extension = ".mp4";
         break;
+    case MP3_MATERIAL_RESOLUTION:
+        pix_fmt = PIXFMT_422;
+        codec_input_format = ANY_422;
+        mxf = false;
+        raw = false;
+        browse_audio = true;
+        filename_extension = ".mp3";
+        break;
+    // Uncompressed
     case UNC_MATERIAL_RESOLUTION:
         pix_fmt = PIXFMT_422;
         codec_input_format = ANY_422;
@@ -593,19 +617,15 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Image parameters
     int WIDTH = 0;
     int HEIGHT = 0;
-    int OFFSET_TO_FRAME_NUMBER = 0;
     if (use_primary_video)
     {
         WIDTH = IngexShm::Instance()->PrimaryWidth();
         HEIGHT = IngexShm::Instance()->PrimaryHeight();
-        OFFSET_TO_FRAME_NUMBER = IngexShm::Instance()->FrameNumberOffset();
     }
     else
     {
         WIDTH = IngexShm::Instance()->SecondaryWidth();
         HEIGHT = IngexShm::Instance()->SecondaryHeight();
-        OFFSET_TO_FRAME_NUMBER = IngexShm::Instance()->FrameNumberOffset()
-            - IngexShm::Instance()->SecondaryVideoOffset();
     }
     //const bool INTERLACE = IngexShm::Instance()->Interlace();
     const int SIZE_420 = WIDTH * HEIGHT * 3/2;
@@ -628,6 +648,21 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
 
+    // Start with the SourcePackage being recording and 
+    // assume only one being recorded in this thread.
+    // (Not necessarily the case at the moment but it will be eventually.)
+    prodauto::SourcePackage * rsp = 0;
+    if (sc)
+    {
+        rsp = sc->getSourcePackage();
+    }
+    // So, rsp is the SourcePackage to be recorded.
+    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourceConfig: %C, SourcePackage: %C\n"), sc->name.c_str(), rsp->name.c_str()));
+    if (rsp->tracks.size() < sc->trackConfigs.size())
+    {
+        ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: SourcePackage has fewer tracks than SourcConfig!\n")));
+    }
+
     // Override file name extension for non-raw formats
     switch (file_format)
     {
@@ -645,81 +680,95 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // (video) filename
-    std::ostringstream filename;
-    std::ostringstream creating_filename;
-    filename << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident << filename_extension;
-    creating_filename << p_opt->dir << PATH_SEPARATOR << CREATING_SUBDIR << PATH_SEPARATOR << p_opt->file_ident << filename_extension;
+    std::ostringstream filename_prefix;
+    std::ostringstream creating_filename_prefix;
+    std::ostringstream creating_dir;
+    std::ostringstream destination_dir;
+    filename_prefix << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident;
+    creating_dir << p_opt->dir << PATH_SEPARATOR << CREATING_SUBDIR;
+    creating_filename_prefix << creating_dir.str() << PATH_SEPARATOR << p_opt->file_ident;
+    destination_dir << p_opt->dir;
 
     // Get project name
     prodauto::ProjectName project_name;
     std::vector<prodauto::UserComment> user_comments;
     p_rec->GetMetadata(project_name, user_comments); // user comments empty at the moment
 
-
-    // Create package data to go into database.
-
-    // Start with the SourcePackage being recording and 
-    // assume only one being recorded in this thread.
-    // (Not necessarily the case at the moment but it will be eventually.)
-    prodauto::SourcePackage * rsp = 0;
-    if (sc)
-    {
-        rsp = sc->getSourcePackage();
-    }
-    // So, rsp is the SourcePackage to be recorded.
-    ACE_DEBUG((LM_DEBUG, ACE_TEXT("SourceConfig: %C, SourcePackage: %C\n"), sc->name.c_str(), rsp->name.c_str()));
-    if (rsp->tracks.size() < sc->trackConfigs.size())
-    {
-        ACE_DEBUG((LM_WARNING, ACE_TEXT("Warning: SourcePackage has fewer tracks than SourcConfig!\n")));
-    }
-
-    // track_enables correspond to tracks of sc/rsp
-
-    prodauto::Timestamp now = prodauto::generateTimestampNow();
-
-    // Make a material package for this recording.
-    // The material package will only have the enabled tracks.
-    // After this we only use material package so no need to
-    // check track enables.
-    prodauto::MaterialPackage * mp = new prodauto::MaterialPackage();
-    mp->uid = prodauto::generateUMID();
-
     // Material package name (clip name in Avid)
+    std::string clip_name;
     switch (4)
     {
     case 1:
         // tape name
-        mp->name = rsp->name;
+        clip_name = rsp->name;
         break;
     case 2:
         // tape name plus timecode
-        mp->name = rsp->name;
-        mp->name += '.';
-        mp->name += start_timecode.TextNoSeparators();
+        clip_name = rsp->name;
+        clip_name += '.';
+        clip_name += start_timecode.TextNoSeparators();
         break;
     case 3:
         // source (e.g. camera) name
-        mp->name = sc->name;
+        clip_name = sc->name;
         break;
     case 4:
         // source name plus timecode
-        mp->name = sc->name;
-        mp->name += '.';
-        mp->name += start_timecode.TextNoSeparators();
+        clip_name = sc->name;
+        clip_name += '.';
+        clip_name += start_timecode.TextNoSeparators();
         break;
     default:
         // long-winded name
-        mp->name = p_opt->file_ident;
+        clip_name = p_opt->file_ident;
         break;
     }
 
-    mp->creationDate = now;
-    mp->projectName = project_name;
 
-    // File packages will be stored here
-    std::vector<prodauto::SourcePackage *> file_packages;
-    prodauto::SourcePackage * fp_one = 0;
+    // Create package data to go into database.
+    
+    prodauto::RecorderPackageCreator *package_creator;
+    
+    switch (file_format)
+    {
+    case MXF_FILE_FORMAT_TYPE:
+        package_creator = new prodauto::OPAtomPackageCreator(true);
+        break;
+    case MOV_FILE_FORMAT_TYPE:
+    case MPG_FILE_FORMAT_TYPE:
+        package_creator = new prodauto::OP1APackageCreator(true);
+        break;
+    case RAW_FILE_FORMAT_TYPE:
+    default:
+        package_creator = new prodauto::OPAtomPackageCreator(true);
+        break;
+    }
+    
+    package_creator->SetFileFormat(file_format);
+    package_creator->SetStartPosition(start_position);
+    package_creator->SetUserComments(user_comments);
+    package_creator->SetProjectName(project_name);
+    if (raw)
+    {
+        package_creator->SetFileLocationPrefix(filename_prefix.str());
+        package_creator->SetVideoFileLocationSuffix(filename_extension);
+        package_creator->SetAudioFileLocationSuffix(".wav");
+    }
+    else
+    {
+        package_creator->SetFileLocationPrefix(creating_filename_prefix.str());
+    }
+    package_creator->SetClipName(clip_name);
+    package_creator->SetImageAspectRatio(image_aspect);
+    package_creator->SetVideoResolutionID(resolution);
+    package_creator->SetAudioQuantBits(mxf_audio_bits);
+    
+    package_creator->CreatePackageGroup(sc, track_enables, prodauto::Database::getInstance()->getUMIDGenOffset());
+    
 
+    // Count audio tracks to be recorded
+    unsigned int num_audio_tracks = 0;
+    
     // For each track in mp, we keep a record of corresponding
     // hardware track.
     std::vector<HardwareTrack> mp_hw_trks;
@@ -728,128 +777,22 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // SourceTrackConfig database id
     std::vector<long> mp_stc_dbids;
 
-    // Count audio tracks to be recorded
-    unsigned int num_audio_tracks = 0;
-
-    // Go through the tracks.
-    for (unsigned int i = 0; i < rsp->tracks.size(); ++i)
+    for (size_t i = 0; i < sc->trackConfigs.size(); ++i)
     {
-        //prodauto::Track * rsp_trk = rsp->tracks[i];
-        prodauto::Track * rsp_trk = rsp->getTrack(i + 1);
-        ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp_trk id %d name %C\n"), rsp_trk->id, rsp_trk->name.c_str()));
         if (track_enables[i])
         {
             // Get HardwareTrack based on SourceTrackConfig database id;
             prodauto::SourceTrackConfig * stc = sc->trackConfigs[i];
             mp_stc_dbids.push_back(stc->getDatabaseID());
             mp_hw_trks.push_back(p_impl->TrackHwMap(stc->getDatabaseID()));
-
-            // Material package track
-            prodauto::Track * mp_trk = new prodauto::Track();
-            mp->tracks.push_back(mp_trk);
-
-            mp_trk->id = rsp_trk->id;
-            mp_trk->dataDef = rsp_trk->dataDef;
-            if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
+            
+            if (stc->dataDef == SOUND_DATA_DEFINITION)
             {
-                mp_trk->editRate = prodauto::g_audioEditRate;
-                ++num_audio_tracks;
+                num_audio_tracks++;
             }
-            else
-            {
-                mp_trk->editRate = FRAME_RATE;
-            }
-            mp_trk->number = rsp_trk->number;
-            mp_trk->name = rsp_trk->name;
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Added %C track %C, edit rate %d/%d\n"),
-                (mp_trk->dataDef == SOUND_DATA_DEFINITION ? "Audio" : "Video"),
-                mp_trk->name.c_str(),
-                mp_trk->editRate.numerator, mp_trk->editRate.denominator));
-
-            // File source package
-            prodauto::SourcePackage * fp = 0;
-            if (!one_file_per_track)
-            {
-                fp = fp_one;
-            }
-
-            if (!fp)
-            {
-                fp = new prodauto::SourcePackage();
-                file_packages.push_back(fp);
-
-                std::ostringstream name;
-                name << p_opt->file_ident << "_" << i;
-                fp->name = name.str();
-                fp->uid = prodauto::generateUMID();
-                fp->creationDate = now;
-                fp->projectName = project_name;
-                fp->sourceConfigName = sc->name;
-
-                // Create FileEssenceDescriptor
-                prodauto::FileEssenceDescriptor * fd = new prodauto::FileEssenceDescriptor();
-                fp->descriptor = fd;
-
-                fd->fileLocation = filename.str(); // should be track filename
-                fd->fileFormat = file_format;
-                fd->videoResolutionID = resolution;
-                fd->imageAspectRatio = image_aspect;
-                fd->audioQuantizationBits = mxf_audio_bits;
-
-                if (!one_file_per_track)
-                {
-                    fp_one = fp;
-                }
-            }
-
-            // Create the file package track
-            prodauto::Track * fp_trk = new prodauto::Track();
-            fp->tracks.push_back(fp_trk);
-
-            fp_trk->id = rsp_trk->id; // using same id as src track makes things easier later on
-            fp_trk->dataDef = rsp_trk->dataDef;
-            if (fp_trk->dataDef == SOUND_DATA_DEFINITION)
-            {
-                fp_trk->editRate = prodauto::g_audioEditRate;
-            }
-            else
-            {
-                fp_trk->editRate = FRAME_RATE;
-            }
-            //fp_trk->editRate = rsp_trk->editRate;
-            fp_trk->name = rsp_trk->name;
-            fp_trk->number = rsp_trk->number;
-
-            // Add SourceClip refering to source/track being recorded
-            fp_trk->sourceClip = new prodauto::SourceClip();
-            fp_trk->sourceClip->sourcePackageUID = rsp->uid;
-            fp_trk->sourceClip->sourceTrackID = rsp_trk->id;
-            if (rsp_trk->dataDef == PICTURE_DATA_DEFINITION)
-            {
-                fp_trk->sourceClip->position = start_position;
-                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp video track edit rate %d, position %d\n"),
-                //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
-            }
-            else
-            {
-                // Note that position is in terms of edit rate of the containing
-                // track, not the target track.
-                double audio_pos = start_position;
-                audio_pos /= FRAME_RATE.numerator;
-                audio_pos *= FRAME_RATE.denominator;
-                audio_pos *= fp_trk->editRate.numerator;
-                audio_pos /= fp_trk->editRate.denominator;
-                fp_trk->sourceClip->position = (int64_t) (audio_pos + 0.5);
-                //ACE_DEBUG((LM_DEBUG, ACE_TEXT("rsp audio track edit rate %d, position %d\n"),
-                //    rsp_trk->editRate.numerator, fp_trk->sourceClip->position));
-            }
-
-            // Add file package track as source clip of material package track
-            mp_trk->sourceClip = new prodauto::SourceClip();
-            mp_trk->sourceClip->sourcePackageUID = fp->uid;
-            mp_trk->sourceClip->sourceTrackID = fp_trk->id; // file package track id is same as source track id
         }
     }
+
 
 
     // Directories
@@ -858,28 +801,18 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     // Raw files
     std::vector<FILE *> fp_raw;
-    for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
     {
         FILE * fp = NULL;
-        prodauto::Track * mp_trk = mp->tracks[i];
+        prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
 
         if (raw)
         {
-            // Make filename
-            std::ostringstream fname;
-            if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
-            {
-                // We have already created the video filename
-                fname << filename.str();
-            }
-            else
-            {
-                fname << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident << "_" << mp_trk->name << ".wav";
-            }
             // Open file
-            if (NULL == (fp = fopen(fname.str().c_str(), "wb")))
+            std::string fname = package_creator->GetFileLocation(mp_trk->id);
+            if (NULL == (fp = fopen(fname.c_str(), "wb")))
             {
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), fname.str().c_str()));
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %C\n"), fname.c_str()));
             }
             // Write wav header if appropriate
             if (fp && mp_trk->dataDef == SOUND_DATA_DEFINITION)
@@ -892,23 +825,39 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     // Initialisation for browse audio
+    ffmpeg_encoder_t * ffmpeg_audio_encoder = 0;
     FILE * fp_audio_browse = NULL;
     if (browse_audio)
     {
         std::ostringstream fname;
-        fname << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident << ".wav";
-        const char * f = fname.str().c_str();
+        fname << p_opt->dir << PATH_SEPARATOR << p_opt->file_ident
+            << (browse_mp3 ? ".mp3" : ".wav");
 
-        if (NULL == (fp_audio_browse = fopen(f, "wb")))
+        if (NULL == (fp_audio_browse = fopen(fname.str().c_str(), "wb")))
         {
             browse_audio = false;
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), f));
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("Could not open %s\n"), fname.str().c_str()));
+        }
+        else if (browse_mp3)
+        {
+            // Prevent "insufficient thread locking around avcodec_open/close()"
+            ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
+
+            // Initialise ffmpeg audio encoder
+            ffmpeg_audio_encoder = ffmpeg_encoder_init(FF_ENCODER_RESOLUTION_MP3, 0);
+            if (!ffmpeg_audio_encoder)
+            {
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg audio encoder init failed.\n"), src_name.c_str()));
+                encoder = ENCODER_NONE;
+            }
         }
         else
         {
+            // Write WAV header
             writeWavHeader(fp_audio_browse, browse_audio_bits, 2);
         }
     }
+
     
     // Initialise ffmpeg encoder
     ffmpeg_encoder_t * ffmpeg_encoder = 0;
@@ -919,7 +868,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         if (MT_ENABLE && mt_possible)
         {
             mt_encoder = new MtEncoder(&coded_frame_buffer, &avcodec_mutex);
-            mt_encoder->Init(ff_res, ffmpeg_threads, OFFSET_TO_FRAME_NUMBER);
+            mt_encoder->Init(ff_res, ffmpeg_threads);
         }
         else
         {
@@ -975,7 +924,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             ff_av_audio_channels_per_stream = 2;
             break;
         }
-        enc_av = ffmpeg_encoder_av_init(creating_filename.str().c_str(), ff_av_res,
+        enc_av = ffmpeg_encoder_av_init(package_creator->GetFileLocation().c_str(), ff_av_res,
             wide_aspect, start_tc, ffmpeg_threads, ff_av_num_audio_streams, ff_av_audio_channels_per_stream);
         if (!enc_av)
         {
@@ -997,23 +946,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         try
         {
-            prodauto::MXFWriter * p = new prodauto::MXFWriter(
-                                            mp,
-                                            file_packages,
-                                            rsp,
-                                            false,
-                                            true, // is PAL
-                                            resolution,
-                                            image_aspect,
-                                            mxf_audio_bits,
-                                            start_position,
-                                            creating_path.str().c_str(),
-                                            destination_path.str().c_str(),
-                                            failures_path.str().c_str(),
-                                            p_opt->file_ident,
-                                            user_comments,
-                                            project_name
-                                            );
+            prodauto::MXFOPAtomWriter * p = new prodauto::MXFOPAtomWriter();
+            p->SetCreatingDirectory(creating_path.str());
+            p->SetDestinationDirectory(destination_path.str());
+            p->SetFailureDirectory(failures_path.str());
+            
+            p->PrepareToWrite(package_creator, false);
+
             writer.reset(p);
         }
         catch (const prodauto::DBException & dbe)
@@ -1031,30 +970,23 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // Store filenames for each track but only for first encoding (index == 0)
     if (p_opt->index == 0)
     {
-        for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
         {
-            //prodauto::Track * mp_trk = mp->tracks[i];
+            prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
 
-            std::string fname;
-            if (mxf)
-            {
-                unsigned int track = i + 1;
-                if (writer->trackIsPresent(track))
-                {
-                    fname = writer->getDestinationFilename(writer->getFilename(track));
-                }
-            }
-            else
-            {
-                fname = filename.str();
-            }
+            std::string pathname = package_creator->GetFileLocation(mp_trk->id);
+            // That includes creating path so we modify to destination path
+            std::string filename = strip_path(pathname);
+            pathname = p_opt->dir;
+            pathname += PATH_SEPARATOR;
+            pathname += filename;
 
             // Now need to find out which member of mTracks we are dealing with
             unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
-            p_rec->mFileNames[track_index] = fname;
+            p_rec->mFileNames[track_index] = pathname;
 
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_track %d filename \"%C\" track_index %d\n"),
-                src_name.c_str(), p_opt->index, i, fname.c_str(), track_index));
+                src_name.c_str(), p_opt->index, i, pathname.c_str(), track_index));
         }
     }
 
@@ -1079,15 +1011,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     }
 
     AudioMixer mixer;
-    if (channel_i == 0)
+    if (0 && MP3_MATERIAL_RESOLUTION == resolution)
+    {
+        // special for The Bottom Line
+        mixer.SetMix(AudioMixer::CH12L3R);
+    }
+    else
     {
         mixer.SetMix(AudioMixer::CH12);
         //mixer.SetMix(AudioMixer::COMMENTARY3);
         //mixer.SetMix(AudioMixer::COMMENTARY4);
-    }
-    else
-    {
-        mixer.SetMix(AudioMixer::ALL);
+        //mixer.SetMix(AudioMixer::ALL);
     }
 
     // Buffer to receive quad-split video
@@ -1273,11 +1207,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Set up all the input pointers
             std::vector<void *> p_input;
             void * p_inp_video = 0;
-            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("mp->tracks.size() = %u\n"), mp->tracks.size()));
-            for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+            int * p_frame_number = 0;
+            //ACE_DEBUG((LM_DEBUG, ACE_TEXT("package_creator->GetMaterialPackage()->tracks.size() = %u\n"), package_creator->GetMaterialPackage()->tracks.size()));
+            for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
             {
                 void * p = 0;
-                prodauto::Track * mp_trk = mp->tracks[i];
+                prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
 #if 1
                 // Just to be slightly more efficient, avoid
                 // accessing the TrackHwMap in this loop.
@@ -1298,6 +1233,8 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     }
                     p_inp_video = p;
                     //ACE_DEBUG((LM_DEBUG, ACE_TEXT("set p_inp_video\n")));
+                    NexusFrameData * nfd = IngexShm::Instance()->pFrameData(hw.channel, frame[hw.channel]);
+                    p_frame_number = &(nfd->frame_number);
                 }
                 else
                 {
@@ -1464,9 +1401,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 else if (ff_av_audio_channels_per_stream == 1)
                 {
                     unsigned int astream_i = 0;
-                    for (unsigned int i = 0; i < mp->tracks.size() && astream_i < ff_av_num_audio_streams; ++i)
+                    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size() && astream_i < ff_av_num_audio_streams; ++i)
                     {
-                        prodauto::Track * mp_trk = mp->tracks[i];
+                        prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                         if (PICTURE_DATA_DEFINITION == mp_trk->dataDef)
                         {
                             result |= ffmpeg_encoder_av_encode_video(enc_av, (uint8_t *)p_inp_video);
@@ -1502,7 +1439,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 if (mt_encoder)
                 {
-                    mt_encoder->Encode(p_inp_video, frame_index);
+                    mt_encoder->Encode(p_inp_video, p_frame_number, frame_index);
                 }
                 else
                 {
@@ -1542,24 +1479,42 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 }
             }
 
-            // So now we have done or queued the encoding.
-            // Next the writing to disc.
-
-            // Write browse audio
+            // Encode and write browse audio
             if (browse_audio)
             {
-                write_audio(fp_audio_browse, (uint8_t *)mixed_audio, audio_samples_per_frame * 2, 16, browse_audio_bits);
+                if (browse_mp3)
+                {
+                    uint8_t * p_enc_audio = 0;
+                    int size_enc_audio = ffmpeg_encoder_encode_audio(ffmpeg_audio_encoder, audio_samples_per_frame, mixed_audio, &p_enc_audio);
+                    if (size_enc_audio > 0)
+                    {
+                        size_t n = fwrite(p_enc_audio, size_enc_audio, 1, fp_audio_browse);
+                        if (n == 0)
+                        {
+                            ACE_DEBUG((LM_ERROR, ACE_TEXT("Browse audio file write error!\n")));
+                            fclose(fp_audio_browse);
+                            fp_audio_browse = NULL;
+                        }
+                    }
+                }
+                else
+                {
+                    write_audio(fp_audio_browse, (uint8_t *)mixed_audio, audio_samples_per_frame * 2, 16, browse_audio_bits);
+                }
             }
+            
+            // So now we have done or queued the encoding.
+  	        // Next the writing to disc.
 
             // Write raw (non-MXF) tracks
             if (raw && !DEBUG_NOWRITE)
             {
-                for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+                for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
                 {
                     if (fp_raw.size() > i && fp_raw[i] != NULL)
                     {
                         FILE * & fp = fp_raw[i];
-                        prodauto::Track * & mp_trk = mp->tracks[i];
+                        prodauto::Track * & mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                         if (mp_trk->dataDef == PICTURE_DATA_DEFINITION)
                         {
                             // Video
@@ -1592,20 +1547,20 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             // Write MXF tracks
             if (mxf && !DEBUG_NOWRITE)
             {
-                for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+                for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
                 {
-                    prodauto::Track * mp_trk = mp->tracks[i];
+                    prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                     try
                     {
                         if (SOUND_DATA_DEFINITION == mp_trk->dataDef)
                         {
                             // write pcm audio
-                            writer->writeSample(mp_trk->id, audio_samples_per_frame, (uint8_t *)p_input[i], audio_samples_per_frame * 2);
+                            writer->WriteSamples(mp_trk->id, audio_samples_per_frame, (uint8_t *)p_input[i], audio_samples_per_frame * 2);
                         }
                         else if (encoder == ENCODER_UNC)
                         {
                             // write uncompressed video
-                            writer->writeSample(mp_trk->id, 1, (uint8_t *)p_inp_video, SIZE_422);
+                            writer->WriteSamples(mp_trk->id, 1, (uint8_t *)p_inp_video, SIZE_422);
                         }
                         else if (encoder != ENCODER_NONE)
                         {
@@ -1629,7 +1584,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                             while ( 0 != (cf = coded_frame_buffer.GetFrame(last_saved_r + 1)))
                             {
                                 ACE_DEBUG((LM_DEBUG, ACE_TEXT("Writing coded frame %d\n"), last_saved_r + 1));
-                                writer->writeSample(mp_trk->id, 1, (uint8_t *)cf->Data(), cf->Size());
+                                writer->WriteSamples(mp_trk->id, 1, (uint8_t *)cf->Data(), cf->Size());
                                 ++last_saved_r;
                                 if (cf->Error())
                                 {
@@ -1694,12 +1649,12 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
 
     // Update and close raw files
-    for (unsigned int i = 0; i < mp->tracks.size(); ++i)
+    for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
     {
         FILE * fp = fp_raw[i];
         if (fp != NULL)
         {
-            prodauto::Track * mp_trk = mp->tracks[i];
+            prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
             if (mp_trk->dataDef == SOUND_DATA_DEFINITION)
             {
                 update_WAV_header(fp);
@@ -1714,7 +1669,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
     if (browse_audio)
     {
-        update_WAV_header(fp_audio_browse);
+        if (!browse_mp3)
+  	    {
+            update_WAV_header(fp_audio_browse);
+        }
     }
 
     // shutdown av encoder
@@ -1731,10 +1689,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     // move av file
     if (enc_av)
     {
-        if (rename(creating_filename.str().c_str(), filename.str().c_str()) != 0)
-        {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: file rename failed\n"), src_name.c_str()));
-        }
+        package_creator->RelocateFile(destination_dir.str());
     }
 
     // cleanup mt_encoder
@@ -1755,6 +1710,17 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
         }
     }
 
+    // shutdown ffmpeg audio encoder
+    if (ffmpeg_audio_encoder)
+    {
+        ACE_Guard<ACE_Thread_Mutex> guard(avcodec_mutex);
+    
+        if (ffmpeg_encoder_close(ffmpeg_audio_encoder) != 0)
+        {
+            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C: ffmpeg_encoder_close() failed\n"), src_name.c_str()));
+        }
+    }
+    
     // shutdown MJPEG encoder
     if (mj_encoder)
     {
@@ -1792,13 +1758,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     user_comments.push_back(
         prodauto::UserComment(AVID_UC_ORGANISATION_NAME, "BBC", STATIC_COMMENT_POSITION, 0));
 
-    // Add a user comment for source
-    if (sc)
-    {
-        user_comments.push_back(
-            prodauto::UserComment(AVID_UC_SOURCE_NAME, sc->name.c_str(), STATIC_COMMENT_POSITION, 0));
-    }
-
+    package_creator->UpdateUserComments(user_comments);
+    package_creator->UpdateProjectName(project_name);
+    
     // Debug user comments
     ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C %C: User comments...\n"), src_name.c_str(), resolution_name.c_str()));
     for (std::vector<prodauto::UserComment>::const_iterator
@@ -1808,14 +1770,14 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             it->name.c_str(), it->value.c_str(), (int)it->position, it->colour));
     }
 
-    // Complete MXF writing and save packages to database
+    // Complete MXF writing
     if (mxf)
     {
         try
         {
             ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C record thread %d completing MXF save\n"), src_name.c_str(), p_opt->index));
-            //writer->completeAndSaveToDatabase();
-            writer->completeAndSaveToDatabase(user_comments, project_name);
+            
+            writer->CompleteWriting(false);
         }
         catch (const prodauto::DBException & e)
         {
@@ -1828,73 +1790,46 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             p_rec->NoteFailure();
         }
     }
-
-    // Store non-MXF recordings in database
-    if (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video)
+    
+    // Update durations for non-MXF files
+    if (!mxf)
     {
-        // Update material package tracks with duration
-        for (std::vector<prodauto::Track *>::iterator
-            it = mp->tracks.begin(); it != mp->tracks.end(); ++it)
-        {
-            prodauto::Track * mt = *it;
-
-            if (mt->dataDef == PICTURE_DATA_DEFINITION)
-            {
-                mt->sourceClip->length = p_opt->FramesWritten();
-            }
-            else
-            {
-                double audio_len = p_opt->FramesWritten();
-                audio_len /= FRAME_RATE.numerator;
-                audio_len *= FRAME_RATE.denominator;
-                audio_len *= mt->editRate.numerator;
-                audio_len /= mt->editRate.denominator;
-                mt->sourceClip->position = (uint64_t) (audio_len + 0.5);
-            }
-        }
-
-        // Add user comments to material package
-        for (std::vector<prodauto::UserComment>::const_iterator
-            it = user_comments.begin(); it != user_comments.end(); ++it)
-        {
-            mp->addUserComment(it->name, it->value, it->position, it->colour);
-        }
-
-        // Now save packages in database
-        prodauto::Database * db = 0;
-        try
-        {
-            db = prodauto::Database::getInstance();
-            std::auto_ptr<prodauto::Transaction> transaction(db->getTransaction("SaveNonMXFPackages"));
+        package_creator->UpdateDuration(p_opt->FramesWritten());
+    }
+    
+    // Store recordings in database
+    try
+    {
+        if (mxf || (SAVE_PACKAGE_DATA && ENCODER_FFMPEG_AV == encoder && !quad_video))
+            package_creator->SaveToDatabase();
         
-            // Save the file source packages first because material package has
-            // foreign keys referencing them.
-            for (std::vector<prodauto::SourcePackage *>::const_iterator
-                it = file_packages.begin(); it != file_packages.end(); ++it)
-            {
-                prodauto::SourcePackage * fp = *it;
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving file package %C\n"), fp->name.c_str()));
-                db->savePackage(fp, transaction.get());
-            }
-            // Now save material package
-            ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saving material package %C\n"), mp->name.c_str()));
-            db->savePackage(mp, transaction.get());
-
-            transaction->commit();
-        }
-        catch (const prodauto::DBException & dbe)
+        ACE_DEBUG((LM_DEBUG, ACE_TEXT("Saved package group '%C' to database\n"), package_creator->GetMaterialPackage()->name.c_str()));
+    }
+    catch (const prodauto::DBException & dbe)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+    }
+    
+    // Store updated filenames for each track but only for first encoding (index == 0)
+    if (p_opt->index == 0)
+    {
+        for (unsigned int i = 0; i < package_creator->GetMaterialPackage()->tracks.size(); ++i)
         {
-            ACE_DEBUG((LM_ERROR, ACE_TEXT("Database Exception: %C\n"), dbe.getMessage().c_str()));
+            prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
+
+            std::string fname = package_creator->GetFileLocation(mp_trk->id);
+
+            // Now need to find out which member of mTracks we are dealing with
+            unsigned int track_index = p_impl->TrackIndexMap(mp_stc_dbids[i]);
+            p_rec->mFileNames[track_index] = fname;
+
+            ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d mp_track %d filename \"%C\" track_index %d\n"),
+                src_name.c_str(), p_opt->index, i, fname.c_str(), track_index));
         }
     }
 
     // Clean up packages
-    for (std::vector<prodauto::SourcePackage *>::const_iterator
-        it = file_packages.begin(); it != file_packages.end(); ++it)
-    {
-        delete *it;
-    }
-    delete mp;
+    delete package_creator;
 
     // All done
     ACE_DEBUG((LM_INFO, ACE_TEXT("%C record thread %d exiting\n"), src_name.c_str(), p_opt->index));
