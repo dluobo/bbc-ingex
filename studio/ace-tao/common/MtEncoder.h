@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.h,v 1.1 2009/06/12 17:41:02 john_f Exp $
+ * $Id: MtEncoder.h,v 1.2 2009/10/12 15:07:45 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -37,8 +37,8 @@ public:
     MtEncoder(CodedFrameBuffer * cfb, ACE_Thread_Mutex * mutex);
     virtual ~MtEncoder();
 
-    void Init(ffmpeg_encoder_resolution_t res, int num_threads, int offset_to_frame_number);
-    void Encode(void * p_video, int index);
+    void Init(ffmpeg_encoder_resolution_t res, int num_threads);
+    void Encode(void * p_video, int * p_framenum, int index);
     void Close();
     virtual int svc();
 
@@ -48,7 +48,6 @@ private:
     ffmpeg_encoder_resolution_t mRes;
     int mNumThreads;
     int mShutdown;
-    int mOffsetToFrameNumber;
 };
 
 

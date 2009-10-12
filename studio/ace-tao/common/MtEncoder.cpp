@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.1 2009/06/12 17:41:02 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.2 2009/10/12 15:07:45 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -31,7 +31,7 @@ const int DEFAULT_NUM_THREADS = 3;
 
 MtEncoder::MtEncoder(CodedFrameBuffer * cfb, ACE_Thread_Mutex * mutex)
 : ACE_Task<ACE_MT_SYNCH>(),
-  mpCodedFrameBuffer(cfb), mpAvcodecMutex(mutex), mShutdown(0), mOffsetToFrameNumber(0)
+  mpCodedFrameBuffer(cfb), mpAvcodecMutex(mutex), mShutdown(0)
 {
 }
 
@@ -40,7 +40,7 @@ MtEncoder::~MtEncoder()
     wait();
 }
 
-void MtEncoder::Init(ffmpeg_encoder_resolution_t res, int num_threads, int offset_to_frame_number)
+void MtEncoder::Init(ffmpeg_encoder_resolution_t res, int num_threads)
 {
     mRes = res;
     if (num_threads < 1)
@@ -48,14 +48,13 @@ void MtEncoder::Init(ffmpeg_encoder_resolution_t res, int num_threads, int offse
         num_threads = DEFAULT_NUM_THREADS;
     }
     mNumThreads = num_threads;
-    mOffsetToFrameNumber = offset_to_frame_number;
     //this->activate(THR_NEW_LWP | THR_DETACHED | THR_INHERIT_SCHED, num_threads);
     this->activate(THR_NEW_LWP | THR_JOINABLE | THR_INHERIT_SCHED, num_threads);
 }
 
-void MtEncoder::Encode(void * p_video, int index)
+void MtEncoder::Encode(void * p_video, int * p_framenum, int index)
 {
-    FramePackage * fp = new FramePackage(p_video, index);
+    FramePackage * fp = new FramePackage(p_video, p_framenum, index);
     MessageBlock * mb = new MessageBlock(fp);
     putq(mb);
 }
@@ -89,7 +88,7 @@ int MtEncoder::svc()
 
         if (n == -1)
         {
-        // could be terminated due to task shutdown;
+            // could be terminated due to task shutdown;
             mShutdown = 1;
         }
         else if (ACE_Message_Block::MB_DATA != mb->msg_type())
@@ -107,11 +106,14 @@ int MtEncoder::svc()
 
             // Encode the frame.
             uint8_t * p_enc_video = 0;
-            int size_enc_video = ffmpeg_encoder_encode(enc, (uint8_t *)fp->FrameData(), &p_enc_video);
+            int size_enc_video = ffmpeg_encoder_encode(enc, (uint8_t *)fp->VideoData(), &p_enc_video);
 
             // Check the frame was still in memory
             bool err = false;
+            int frame_number_in_memory = * fp->FrameNumber();
+            /*
             int frame_number_in_memory = * (int *) ((uint8_t *)fp->FrameData() + mOffsetToFrameNumber);
+            */
             if (frame_number_in_memory != fp->Index())
             {
                 err = true;

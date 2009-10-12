@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.2 2009/06/15 11:30:17 john_f Exp $
+ * $Id: Package.cpp,v 1.3 2009/10/12 15:07:45 john_f Exp $
  *
  * Container for arbitrary data.
  *
@@ -76,8 +76,8 @@ FramePackage::FramePackage()
 }
 
 // constuctor makes package containing frame data
-FramePackage::FramePackage(void * p_video, int index)
-: Package(), mFrameData(p_video), mIndex(index)
+FramePackage::FramePackage(void * p_video, int * p_framenum, int index)
+: Package(), mpVideoData(p_video), mpFrameNumber(p_framenum), mIndex(index)
 {
 }
 

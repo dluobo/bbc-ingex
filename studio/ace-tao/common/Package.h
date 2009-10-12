@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.2 2009/06/15 11:30:17 john_f Exp $
+ * $Id: Package.h,v 1.3 2009/10/12 15:07:45 john_f Exp $
  *
  * Container for arbitrary data.
  *
@@ -67,13 +67,15 @@ class FramePackage : public Package
 {
     public:
         FramePackage();
-        FramePackage(void * p_video, int index);
+        FramePackage(void * p_video, int * p_framenum, int index);
         virtual ~FramePackage();
-        void * FrameData() { return mFrameData; }
+        void * VideoData() { return mpVideoData; }
+        int * FrameNumber() { return mpFrameNumber; }
         int Index() { return mIndex; }
 
     private:
-        void * mFrameData;
+        void * mpVideoData;
+        int * mpFrameNumber;
         int mIndex;
 };
 
