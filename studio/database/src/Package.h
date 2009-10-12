@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.6 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Package.h,v 1.7 2009/10/12 15:44:55 philipn Exp $
  *
  * A MXF/AAF Package
  *
@@ -103,6 +103,7 @@ public:
     virtual PackageType getType() = 0;
 
     void addUserComment(std::string, std::string value, int64_t position, int colour);
+    void addUserComments(std::vector<UserComment> &userComments);
     std::vector<UserComment> getUserComments(std::string name); 
     std::vector<UserComment> getUserComments();
     void clearUserComments();
@@ -130,6 +131,8 @@ public:
     virtual PackageType getType() { return MATERIAL_PACKAGE; }
 
     virtual std::string toString();
+    
+    int op;
 };
 
 

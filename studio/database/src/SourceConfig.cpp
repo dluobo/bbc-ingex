@@ -1,5 +1,5 @@
 /*
- * $Id: SourceConfig.cpp,v 1.4 2009/09/18 16:50:11 philipn Exp $
+ * $Id: SourceConfig.cpp,v 1.5 2009/10/12 15:44:56 philipn Exp $
  *
  * Live recording or tape Source configuration
  *
@@ -114,7 +114,7 @@ void SourceConfig::setSourcePackage(string name)
     // create a new one    
     
     auto_ptr<SourcePackage> newSourcePackage(new SourcePackage());
-    newSourcePackage->uid = generateUMID();
+    newSourcePackage->uid = generateUMID(database->getUMIDGenOffset());
     newSourcePackage->name = name;
     newSourcePackage->creationDate = generateTimestampNow();
     if (type == TAPE_SOURCE_CONFIG_TYPE)

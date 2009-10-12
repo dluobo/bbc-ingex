@@ -1,5 +1,5 @@
 /*
- * $Id: Database.h,v 1.11 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Database.h,v 1.12 2009/10/12 15:44:54 philipn Exp $
  *
  * Provides access to the data in the database
  *
@@ -68,7 +68,12 @@ private:
 
 public:    
     Transaction* getTransaction(std::string name = "");
-
+    
+    
+    // UMID generation offset
+    
+    uint32_t getUMIDGenOffset() { return _umidGenOffset; }
+    
 
     // live recording locations
     
@@ -155,6 +160,7 @@ public:
     // returns 0 if source package not in database
     SourcePackage* loadSourcePackage(std::string name, Transaction *transaction = 0);
     void lockSourcePackages(Transaction *transaction);
+    SourcePackage * createSourcePackage(const std::string & name, const SourceConfig * sc, int type, const std::string & spool, int64_t origin, Transaction * transaction = 0);
 
     Package* loadPackage(long databaseID, Transaction *transaction = 0);
     // assume_exists == true means an exception will be thrown if it doesn't exist,
@@ -168,6 +174,7 @@ public:
 
     //do package references exist?
     bool packageRefsExist(Package *package, Transaction *transaction = 0);
+
 
     // returns 1 on success and sets both sourcePackage and sourceTrack, else
     // -1 if source package is not present, -2 if track is not present
@@ -214,11 +221,13 @@ private:
 
     long loadNextId(std::string seq_name, Transaction *transaction = 0);
     void checkVersion(Transaction *transaction = 0);
+    void loadUMIDGenerationOffset(Transaction *transaction = 0);
 
     void loadPackage(Transaction *transaction, const pqxx::result::tuple &tup, Package **package);
     
     long readId(const pqxx::result::field &field);
     int readInt(const pqxx::result::field &field, int null_value);
+    unsigned int readUInt(const pqxx::result::field &field, unsigned int null_value);
     int readEnum(const pqxx::result::field &field);
     long readLong(const pqxx::result::field &field, long null_value);
     int64_t readInt64(const pqxx::result::field &field, int64_t null_value);
@@ -245,6 +254,8 @@ private:
     Mutex _connectionMutex;
     std::vector<pqxx::connection*> _connectionPool;
     std::vector<Transaction*> _transactionsInUse;
+    
+    uint32_t _umidGenOffset;
 };
 
 

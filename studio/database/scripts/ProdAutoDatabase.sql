@@ -156,12 +156,22 @@ CREATE TABLE VideoResolution
     CONSTRAINT vrn_pkey PRIMARY KEY (vrn_identifier)
 ) WITHOUT OIDS;
 
+
 CREATE TABLE TimecodeType
 (
     tct_identifier INTEGER NOT NULL,
     tct_name VARCHAR(256) NOT NULL,
     CONSTRAINT tct_key UNIQUE (tct_name),
     CONSTRAINT tct_pkey PRIMARY KEY (tct_identifier)
+) WITHOUT OIDS;
+
+
+CREATE TABLE OperationalPattern
+(
+    opp_identifier INTEGER NOT NULL,
+    opp_name VARCHAR(256) NOT NULL,
+    CONSTRAINT opp_key UNIQUE (opp_name),
+    CONSTRAINT opp_pkey PRIMARY KEY (opp_identifier)
 ) WITHOUT OIDS;
 
 
@@ -195,10 +205,12 @@ CREATE TABLE Package
     pkg_project_name_id INTEGER,
     pkg_descriptor_id INTEGER DEFAULT NULL, -- SourcePackage only
     pkg_source_config_name VARCHAR(256) DEFAULT NULL, -- file SourcePackage only
+    pkg_op_id INTEGER DEFAULT NULL, -- MaterialPackage only
     CONSTRAINT pkg_uid_key UNIQUE (pkg_uid),
     CONSTRAINT pkg_descriptor_fkey FOREIGN KEY (pkg_descriptor_id) REFERENCES EssenceDescriptor (eds_identifier)
         ON DELETE SET NULL,
     CONSTRAINT pkg_project_name_fkey FOREIGN KEY (pkg_project_name_id) REFERENCES ProjectName (pjn_identifier),
+    CONSTRAINT pkg_op_fkey FOREIGN KEY (pkg_op_id) REFERENCES OperationalPattern (opp_identifier),
     CONSTRAINT pkg_pkey PRIMARY KEY (pkg_identifier)
 ) WITHOUT OIDS;
 
@@ -818,6 +830,7 @@ CREATE VIEW PackageChainView AS
 			material_pkg.pkg_project_name_id AS material_____pkg_project_name_id,
 			material_pkg.pkg_descriptor_id AS material_____pkg_descriptor_id,
 			material_pkg.pkg_source_config_name AS material_____pkg_source_config_name,
+			material_pkg.pkg_op_id AS material_____pkg_op_id,
 							
 			material_trk.trk_identifier AS material_____trk_identifier,
 			material_trk.trk_id AS material_____trk_id,
@@ -960,6 +973,18 @@ $$ LANGUAGE plpgsql;
 
 
 ------------------------------------
+-- UMID Generation Offset Value
+------------------------------------
+
+-- increment must be >> the number of system clock ticks per second
+-- Windows: clock tick resolution is 10 to 16 ms (~100 ticks per second)
+-- Linux: clock tick resolution ~ 10 ms (~100 ticks per second)
+
+CREATE SEQUENCE ugo_offset_seq INCREMENT BY 10000 MINVALUE 0 MAXVALUE 4294967295 CYCLE;
+
+
+
+------------------------------------
 -- DATA
 ------------------------------------
 
@@ -977,6 +1002,10 @@ INSERT INTO TakeResult (tkr_identifier, tkr_name) VALUES (3, 'NotGood');
 
 INSERT INTO DataDefinition (ddf_identifier, ddf_name) VALUES (1, 'Picture');
 INSERT INTO DataDefinition (ddf_identifier, ddf_name) VALUES (2, 'Sound');
+
+
+INSERT INTO OperationalPattern (opp_identifier, opp_name) VALUES (1, 'OP-Atom');
+INSERT INTO OperationalPattern (opp_identifier, opp_name) VALUES (2, 'OP-1A');
 
 
 INSERT INTO EssenceDescriptorType (edt_identifier, edt_name) VALUES (1, 'File');
@@ -1020,6 +1049,7 @@ INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (18, 'H264-DMI');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (19, 'DVCPRO-HD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (20, 'DVD');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (21, 'MPEG4');
+INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (22, 'MP3');
 INSERT INTO VideoResolution (vrn_identifier, vrn_name) VALUES (50, 'VISION-CUTS');
 
 

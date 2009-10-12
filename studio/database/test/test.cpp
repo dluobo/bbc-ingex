@@ -1,5 +1,5 @@
 /*
- * $Id: test.cpp,v 1.8 2009/09/18 16:50:11 philipn Exp $
+ * $Id: test.cpp,v 1.9 2009/10/12 15:44:56 philipn Exp $
  *
  * Tests the database library
  *
@@ -726,6 +726,7 @@ static MaterialPackage* create_material_package(UMID uid, Timestamp now)
     materialPackage->name = "Test material package";
     materialPackage->creationDate = now;
     materialPackage->projectName = create_project_name(g_testProjectName);
+    materialPackage->op = OPERATIONAL_PATTERN_ATOM;
     
     track = new Track();
     materialPackage->tracks.push_back(track);
@@ -756,7 +757,7 @@ static void test_package()
 
     try
     {
-        UMID uid = generateUMID();
+        UMID uid = generateUMID(database->getUMIDGenOffset());
         Timestamp now = generateTimestampNow();
         now.qmsec = 10;
         
@@ -825,12 +826,13 @@ static void test_package()
 
         
         // load material associated with tagged value
-        UMID uid2 = generateUMID();
+        UMID uid2 = generateUMID(database->getUMIDGenOffset());
         materialPackageInDB = auto_ptr<MaterialPackage>(create_material_package(uid2, now));
 
         MaterialHolder material;
         database->loadMaterial("testname", "testvalue", &material.topPackages, &material.packages);
         CHECK(material.topPackages.size() == 1);
+        CHECK((*material.topPackages.begin())->op == OPERATIONAL_PATTERN_ATOM);
         
         
         // load a source reference
@@ -890,7 +892,7 @@ static void test_transcode()
     try
     {
         // create a material package, which should create an entry in the transcode table
-        UMID uid = generateUMID();
+        UMID uid = generateUMID(database->getUMIDGenOffset());
         Timestamp now = generateTimestampNow();
         materialPackageInDB = auto_ptr<MaterialPackage>(create_material_package(uid, now));
 

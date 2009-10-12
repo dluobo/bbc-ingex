@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.cpp,v 1.2 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Utilities.cpp,v 1.3 2009/10/12 15:44:56 philipn Exp $
  *
  * General utilities
  *
@@ -50,37 +50,41 @@ using namespace prodauto;
 
 
 // MobID generation code following the same algorithm as implemented in the AAF SDK
-UMID prodauto::generateUMID()
+UMID prodauto::generateUMID(uint32_t offset)
 {
     UMID umid;
     uint32_t major, minor;
     static uint32_t last_part2 = 0;
-    static Mutex m;
+    static Mutex minor_mutex;
 
+    // the time() function returns the time in seconds since the epoch and times() function
+    // returns the number of clock ticks since some arbitrary time instant.
     major = (uint32_t)time(NULL);
 #if defined(_WIN32)
     minor = (uint32_t)GetTickCount();
 #else
     struct tms tms_buf;
     minor = (uint32_t)times(&tms_buf);
-    assert(minor != 0 && minor != (uint32_t)-1);
+    assert(minor != (uint32_t)-1);
 #endif
 
+    // Add an offset to the minor value for this process.
+    // Each process that accesses the same Ingex database will read a different UMID generation offset
+    // from the database. This ensures that processes running on the same machine, which share the same
+    // system time (times() above), will not produce the same minor value
+    minor += offset;
+    
+    // A clock tick was found to be 1/100 th of a second. UMIDs are generated at a greater rate by 
+    // multiple threads and therefore a mutex is required around the counter that ensures that the 
+    // UMID minor value is unique
+    minor_mutex.lock();
+    if (last_part2 >= minor)
     {
-        // "time" function returns the time in seconds since the epoch and "times" function returns the 
-        // number of clock ticks since some arbitrary time instant. 
-        // A clock tick was found to be 1/100 th of a second. UMIDs are generated at a greater rate by 
-        // multiple threads and therefore a mutex is required areound the counter that ensures that the 
-        // UMID minor value is unique
-        LOCK_SECTION(m);
-        
-        if (last_part2 >= minor)
-        {
-            minor = last_part2 + 1;
-        }
-            
-        last_part2 = minor;
+        minor = last_part2 + 1;
     }
+    last_part2 = minor;
+    minor_mutex.unlock();
+
 
     umid.octet0 = 0x06;
     umid.octet1 = 0x0a;
@@ -123,13 +127,15 @@ UMID prodauto::generateUMID()
 }
 
 // Generates UMIDs that are supported by older Avid products, eg. Protools v5.3.1 on a Mac with OS9
-UMID prodauto::generateLegacyUMID()
+UMID prodauto::generateLegacyUMID(uint32_t offset)
 {
     UMID umid;
     uint32_t major, minor;
     static uint32_t last_part2 = 0;
-    static Mutex m;
+    static Mutex minor_mutex;
     
+    // the time() function returns the time in seconds since the epoch and times() function
+    // returns the number of clock ticks since some arbitrary time instant.
     major = (uint32_t)time(NULL);
 #if defined(_WIN32)
     minor = (uint32_t)GetTickCount();
@@ -139,21 +145,23 @@ UMID prodauto::generateLegacyUMID()
     assert(minor != 0 && minor != (uint32_t)-1);
 #endif
 
+    // Add an offset to the minor value for this process.
+    // Each process that accesses the same Ingex database will read a different UMID generation offset
+    // from the database. This ensures that processes running on the same machine, which have the same
+    // system time (times() above), will not produce the same minor value
+    minor += offset;
+    
+    // A clock tick was found to be 1/100 th of a second. UMIDs are generated at a greater rate by 
+    // multiple threads and therefore a mutex is required areound the counter that ensures that the 
+    // UMID minor value is unique
+    minor_mutex.lock();
+    if (last_part2 >= minor)
     {
-        // "time" function returns the time in seconds since the epoch and "times" function returns the 
-        // number of clock ticks since some arbitrary time instant. 
-        // A clock tick was found to be 1/100 th of a second. UMIDs are generated at a greater rate by 
-        // multiple threads and therefore a mutex is required areound the counter that ensures that the 
-        // UMID minor value is unique
-        LOCK_SECTION(m);
-        
-        if (last_part2 >= minor)
-        {
-            minor = last_part2 + 1;
-        }
-            
-        last_part2 = minor;
+        minor = last_part2 + 1;
     }
+    last_part2 = minor;
+    minor_mutex.unlock();
+
 
     umid.octet0 = 0x06;
     umid.octet1 = 0x0c;
@@ -638,5 +646,31 @@ string prodauto::getFilename(string filePath)
     }
     
     return filePath;
+}
+
+int64_t prodauto::convertPosition(int64_t fromPosition, Rational fromEditRate, Rational toEditRate)
+{
+    double factor;
+    int64_t toPosition;
+
+    if (fromPosition <= 0 ||
+        fromEditRate == toEditRate ||
+        fromEditRate.numerator < 1 || fromEditRate.denominator < 1 ||
+        toEditRate.numerator < 1 || toEditRate.denominator < 1)
+    {
+        return fromPosition;
+    }
+
+    factor = toEditRate.numerator * fromEditRate.denominator /
+            (double)(toEditRate.denominator * fromEditRate.numerator);
+    toPosition = (int64_t)(fromPosition * factor + 0.5);
+
+    if (toPosition < 0)
+    {
+        // e.g. if length was the max value and the new rate is faster
+        return fromPosition;
+    }
+
+    return toPosition;
 }
 

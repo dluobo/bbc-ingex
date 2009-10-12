@@ -1,5 +1,5 @@
 /*
- * $Id: ProdAutoException.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: ProdAutoException.h,v 1.2 2009/10/12 15:44:56 philipn Exp $
  *
  * General exception class
  *
@@ -25,6 +25,19 @@
 
 #include <string>
 #include <cstdarg>
+#include <cassert>
+
+#if defined(NDEBUG)
+#define PA_ASSERT(cond) \
+    if (!(cond)) \
+    {\
+        PA_LOGTHROW(ProdAutoException, ("'%s' assertion failed", #cond)); \
+    }
+#else
+#define PA_ASSERT(cond) \
+    assert(cond)
+#endif
+
 
 
 namespace prodauto

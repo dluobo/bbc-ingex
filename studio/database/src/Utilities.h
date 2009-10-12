@@ -1,5 +1,5 @@
 /*
- * $Id: Utilities.h,v 1.2 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Utilities.h,v 1.3 2009/10/12 15:44:56 philipn Exp $
  *
  * General utilities
  *
@@ -34,8 +34,8 @@ namespace prodauto
 {
 
  
-UMID generateUMID();
-UMID generateLegacyUMID();
+UMID generateUMID(uint32_t offset);
+UMID generateLegacyUMID(uint32_t offset);
 UMID getUMID(std::string umidStr);
 std::string getUMIDString(UMID umid);
 
@@ -55,6 +55,8 @@ std::string getScriptReferencesString(std::vector<std::string> refs);
 
 // returns the file name given a full path
 std::string getFilename(std::string filePath);
+
+int64_t convertPosition(int64_t fromPosition, Rational fromEditRate, Rational toEditRate);
 
 
 // used to ensure Element pointers are freed if the vectors goes out of scope

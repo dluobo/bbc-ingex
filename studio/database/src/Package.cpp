@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.5 2009/05/14 10:48:25 john_f Exp $
+ * $Id: Package.cpp,v 1.6 2009/10/12 15:44:54 philipn Exp $
  *
  * A MXF/AAF Package
  *
@@ -138,7 +138,16 @@ Track* Package::getTrack(uint32_t id)
     
     return 0;
 }
-    
+ 
+void Package::addUserComments(vector<UserComment> &userComments)
+{
+    size_t i;
+    for (i = 0; i < userComments.size(); i++)
+    {
+        addUserComment(userComments[i].name, userComments[i].value, userComments[i].position, userComments[i].colour);
+    }
+}
+
 void Package::addUserComment(string name, string value, int64_t position, int colour)
 {
     vector<UserComment>::iterator iter;
@@ -204,7 +213,9 @@ void Package::cloneInPlace(UMID newUID, bool resetLengths)
 
 MaterialPackage::MaterialPackage()
 : Package() 
-{}
+{
+    op = 0;
+}
 
 MaterialPackage::~MaterialPackage()
 {}
@@ -214,6 +225,14 @@ string MaterialPackage::toString()
     stringstream packageStr;
     
     packageStr << "Material Package" << endl;
+    if (op == OPERATIONAL_PATTERN_ATOM)
+    {
+        packageStr << "OP-Atom" << endl;
+    }
+    else if (op == OPERATIONAL_PATTERN_1A)
+    {
+        packageStr << "OP-1A" << endl;
+    }
     packageStr << Package::toString() << endl;
 
     return packageStr.str();

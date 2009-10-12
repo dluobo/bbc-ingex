@@ -1,5 +1,5 @@
 /*
- * $Id: Database.cpp,v 1.12 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Database.cpp,v 1.13 2009/10/12 15:44:54 philipn Exp $
  *
  * Provides access to the data in the database
  *
@@ -962,7 +962,8 @@ const char* const LOAD_PACKAGE_SQL =
         pkg_project_name_id, \
         pjn_name, \
         pkg_descriptor_id, \
-        pkg_source_config_name \
+        pkg_source_config_name, \
+        pkg_op_id \
     FROM Package \
         LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier) \
     WHERE \
@@ -980,7 +981,8 @@ const char* const LOAD_PACKAGE_WITH_UMID_SQL =
         pkg_project_name_id, \
         pjn_name, \
         pkg_descriptor_id, \
-        pkg_source_config_name \
+        pkg_source_config_name, \
+        pkg_op_id \
     FROM Package \
         LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier) \
     WHERE \
@@ -1035,6 +1037,7 @@ const char* const LOAD_TRACKS_SQL =
     FROM Track \
     WHERE \
         trk_package_id = $1 \
+    ORDER BY trk_id \
 ";
 
 const char* const LOAD_SOURCE_CLIP_STMT = "load source clip";
@@ -1068,10 +1071,11 @@ const char* const INSERT_PACKAGE_SQL =
         pkg_creation_date, \
         pkg_project_name_id, \
         pkg_descriptor_id, \
-        pkg_source_config_name \
+        pkg_source_config_name, \
+        pkg_op_id \
     ) \
     VALUES \
-    ($1, $2, $3, $4, $5, $6, $7) \
+    ($1, $2, $3, $4, $5, $6, $7, $8) \
 ";
 
 const char* const UPDATE_PACKAGE_STMT = "update package";
@@ -1083,9 +1087,10 @@ const char* const UPDATE_PACKAGE_SQL =
         pkg_creation_date = $3, \
         pkg_project_name_id = $4, \
         pkg_descriptor_id = $5, \
-        pkg_source_config_name = $6 \
+        pkg_source_config_name = $6, \
+        pkg_op_id = $7 \
     WHERE \
-        pkg_identifier = $7 \
+        pkg_identifier = $8 \
 ";
 
 const char* const INSERT_PACKAGE_USER_COMMENT_STMT = "insert package user comment";
@@ -1362,6 +1367,7 @@ Database::Database(string hostname, string dbname, string username, string passw
     _password = password;
     _numConnections = 0;
     _maxConnections = maxConnections;
+    _umidGenOffset = 0;
     
     assert(initialConnections > 0 && maxConnections >= initialConnections);
 
@@ -1374,6 +1380,9 @@ Database::Database(string hostname, string dbname, string username, string passw
 
         // check compatibility with database
         checkVersion();
+        
+        // load the next UMID generation offset
+        loadUMIDGenerationOffset();
     }
     catch (exception &ex)
     {
@@ -3294,6 +3303,64 @@ void Database::deleteProjectName(ProjectName *project_name, Transaction *transac
     END_WORK("DeleteProjectName")
 }
 
+SourcePackage * Database::createSourcePackage(const std::string & name, const SourceConfig * sc, int type, const std::string & spool, int64_t origin, Transaction * transaction)
+{
+    auto_ptr<SourcePackage> newSourcePackage(new SourcePackage());
+
+    newSourcePackage->uid = generateUMID(_umidGenOffset);
+    newSourcePackage->name = sc->name;
+    newSourcePackage->creationDate = generateTimestampNow();
+
+    if (type == TAPE_ESSENCE_DESC_TYPE)
+    {
+        TapeEssenceDescriptor * tapeEssDesc = new TapeEssenceDescriptor();
+        newSourcePackage->descriptor = tapeEssDesc;
+        tapeEssDesc->spoolNumber = spool;
+    }
+    else if (type == LIVE_ESSENCE_DESC_TYPE)
+    {
+        LiveEssenceDescriptor * liveEssDesc = new LiveEssenceDescriptor();
+        newSourcePackage->descriptor = liveEssDesc;
+        liveEssDesc->recordingLocation = sc->recordingLocation;
+    }
+    else
+    {
+        // Shouldn't be here.
+        // This method is only for tape or live source packages.
+        newSourcePackage->descriptor = 0;
+    }
+
+    
+    
+    // create source package tracks
+    
+    for (vector<SourceTrackConfig*>::const_iterator it = sc->trackConfigs.begin(); it != sc->trackConfigs.end(); ++it)
+    {
+        SourceTrackConfig * sourceTrackConfig = *it;
+
+        Track * track = new Track();
+        newSourcePackage->tracks.push_back(track);
+        
+        track->id = sourceTrackConfig->id;
+        track->number = sourceTrackConfig->number;
+        track->name = sourceTrackConfig->name;
+        track->editRate = sourceTrackConfig->editRate;
+        track->dataDef = sourceTrackConfig->dataDef;
+        track->origin = origin; // passed in
+
+        track->sourceClip = new SourceClip();
+        track->sourceClip->sourcePackageUID = g_nullUMID;
+        track->sourceClip->sourceTrackID = 0;
+        track->sourceClip->length = sourceTrackConfig->length;
+        track->sourceClip->position = 0;
+    }
+
+
+    // Save it to database
+
+    return newSourcePackage.release();
+}
+
 SourcePackage* Database::loadSourcePackage(string name, Transaction* transaction)
 {
     Transaction *ts = transaction;
@@ -3453,6 +3520,8 @@ void Database::loadPackage(Transaction *transaction, const result::tuple &tup, P
         }
 
         source_package->descriptor->wasLoaded(readId(res[0][0]));
+    } else {
+        material_package->op = readEnum(tup[8]);
     }
 
 
@@ -3524,12 +3593,12 @@ void Database::savePackage(Package *package, Transaction *transaction)
         long next_package_database_id;
         long next_descriptor_database_id = 0;
 
+        SourcePackage *source_package = dynamic_cast<SourcePackage*>(package);
+        MaterialPackage *material_package = dynamic_cast<MaterialPackage*>(package);
 
         // save the source package essence descriptor
 
         if (package->getType() == SOURCE_PACKAGE) {
-            SourcePackage *source_package = dynamic_cast<SourcePackage*>(package);
-
             if (!source_package->descriptor->isPersistent()) {
                 next_descriptor_database_id = loadNextId("eds_id_seq", ts);
                 
@@ -3685,8 +3754,9 @@ void Database::savePackage(Package *package, Transaction *transaction)
                 (writeTimestamp(package->creationDate))
                 (COND_NUM_PARAM(package->projectName.isPersistent(), package->projectName.getDatabaseID()))
                 (COND_NUM_PARAM(package->getType() == SOURCE_PACKAGE, next_descriptor_database_id))
-                (COND_STR_PARAM(package->getType() == SOURCE_PACKAGE,
-                                (dynamic_cast<SourcePackage*>(package))->sourceConfigName)).exec();
+                (COND_STR_PARAM(package->getType() == SOURCE_PACKAGE, source_package->sourceConfigName))
+                (COND_NUM_PARAM(package->getType() == MATERIAL_PACKAGE && material_package->op != 0,
+                                material_package->op)).exec();
         } else {
             next_package_database_id = package->getDatabaseID();
             
@@ -3696,8 +3766,9 @@ void Database::savePackage(Package *package, Transaction *transaction)
                 (writeTimestamp(package->creationDate))
                 (COND_NUM_PARAM(package->projectName.isPersistent(), package->projectName.getDatabaseID()))
                 (COND_NUM_PARAM(package->getType() == SOURCE_PACKAGE, next_descriptor_database_id))
-                (COND_STR_PARAM(package->getType() == SOURCE_PACKAGE,
-                                (dynamic_cast<SourcePackage*>(package))->sourceConfigName))
+                (COND_STR_PARAM(package->getType() == SOURCE_PACKAGE, source_package->sourceConfigName))
+                (COND_NUM_PARAM(package->getType() == MATERIAL_PACKAGE && material_package->op != 0,
+                                material_package->op))
                 (next_package_database_id).exec();
         }
 
@@ -4592,7 +4663,8 @@ connection* Database::openConnection(string hostname, string dbname, string user
             ("varchar", prepare::treat_string)
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
-            ("varchar", prepare::treat_string);
+            ("varchar", prepare::treat_string)
+            ("integer", prepare::treat_direct);
 
         conn->prepare(UPDATE_PACKAGE_STMT, UPDATE_PACKAGE_SQL)
             ("varchar", prepare::treat_string)
@@ -4601,6 +4673,7 @@ connection* Database::openConnection(string hostname, string dbname, string user
             ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct)
             ("varchar", prepare::treat_string)
+            ("integer", prepare::treat_direct)
             ("integer", prepare::treat_direct);
 
         conn->prepare(INSERT_PACKAGE_USER_COMMENT_STMT, INSERT_PACKAGE_USER_COMMENT_SQL)
@@ -4764,6 +4837,26 @@ void Database::checkVersion(Transaction *transaction)
     END_WORK("CheckVersion")
 }
 
+void Database::loadUMIDGenerationOffset(Transaction *transaction)
+{
+    Transaction *ts = transaction;
+    auto_ptr<Transaction> local_ts;
+    if (!ts) {
+        local_ts = auto_ptr<Transaction>(getTransaction("LoadNextUMIDGenerationOffset"));
+        ts = local_ts.get();
+    }
+    
+    START_WORK
+    {
+        result res(ts->exec("SELECT nextval('ugo_offset_seq')"));
+        if (res.empty())
+            PA_LOGTHROW(DBException, ("Failed to get next UMID generation offset"));
+
+        _umidGenOffset = readUInt(res[0][0], 0);
+    }
+    END_WORK("LoadNextUMIDGenerationOffset")
+}
+
 long Database::readId(const result::field &field)
 {
     long result;
@@ -4779,6 +4872,18 @@ long Database::readId(const result::field &field)
 int Database::readInt(const result::field &field, int null_value)
 {
     int result;
+
+    if (field.is_null())
+        return null_value;
+
+    field.to(result);
+    
+    return result;
+}
+
+unsigned int Database::readUInt(const result::field &field, unsigned int null_value)
+{
+    unsigned int result;
 
     if (field.is_null())
         return null_value;

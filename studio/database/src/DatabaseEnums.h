@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseEnums.h,v 1.7 2009/09/18 16:50:11 philipn Exp $
+ * $Id: DatabaseEnums.h,v 1.8 2009/10/12 15:44:54 philipn Exp $
  *
  * Defines enumerated data values matching those in the database
  *
@@ -31,6 +31,9 @@
 #define SOUND_DATA_DEFINITION               2
 #define SOUND_DATA_DEFINITION_NAME          "Audio"
 
+#define OPERATIONAL_PATTERN_ATOM            1
+#define OPERATIONAL_PATTERN_1A              2
+
 #define RAW_FILE_FORMAT_TYPE                1
 #define MXF_FILE_FORMAT_TYPE                2
 #define MOV_FILE_FORMAT_TYPE                3
@@ -61,6 +64,7 @@
 #define DVCPROHD_MATERIAL_RESOLUTION        19
 #define DVD_MATERIAL_RESOLUTION             20
 #define MPEG4_MATERIAL_RESOLUTION           21
+#define MP3_MATERIAL_RESOLUTION             22
 #define CUTS_MATERIAL_RESOLUTION            50
 
 // Debatable whether source config should have a type.
