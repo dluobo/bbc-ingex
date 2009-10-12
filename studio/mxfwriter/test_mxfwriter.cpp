@@ -1,5 +1,5 @@
 /*
- * $Id: test_mxfwriter.cpp,v 1.9 2009/09/18 16:58:43 philipn Exp $
+ * $Id: test_mxfwriter.cpp,v 1.10 2009/10/12 15:52:10 philipn Exp $
  *
  * Tests the MXF writer
  *
@@ -30,9 +30,11 @@
 #include <sstream>
 
 
-#include "MXFWriter.h"
+#include "MXFOPAtomWriter.h"
 #include "MXFWriterException.h"
 #include "MXFUtils.h"
+
+#include <OPAtomPackageCreator.h>
 #include <Database.h>
 #include <Recorder.h>
 #include <Utilities.h>
@@ -53,12 +55,9 @@ using namespace prodauto;
 
 #define NUM_RECORDER_INPUTS         4
 
-//#define CREATING_FILE_PATH          "creating"
-//#define DESTINATION_FILE_PATH       "destination"
-//#define FAILURES_FILE_PATH          "failures"
-#define CREATING_FILE_PATH          ""
-#define DESTINATION_FILE_PATH       ""
-#define FAILURES_FILE_PATH          ""
+#define CREATING_FILE_PATH          "creating"
+#define DESTINATION_FILE_PATH       "destination"
+#define FAILURES_FILE_PATH          "failures"
 
 static const char* g_defaultRecorderName = "Ingex";
 static const char* g_defaultTapeNumberPrefix = "DPP";
@@ -111,6 +110,7 @@ typedef struct
     bool isPALProject;
     string dv50Filename;
     string mjpeg21Filename;
+    uint32_t umidGenOffset;
 } RecordData;
 
 
@@ -219,7 +219,6 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
             default:
                 assert(0);
                 return 0;
-                break;
         }
         state->position++;
         
@@ -240,12 +239,9 @@ static int read_next_mjpeg_image_data(FILE* file, MJPEGState* state,
     return 1;
 }
 
-
-
-void* start_record_routine(void* data)
+static void* start_record_routine(void* data)
 {
-    RecordData* recordData = (RecordData*)data;
-    RecorderInputConfig* inputConfig = recordData->recorder->getConfig()->getInputConfig(recordData->inputIndex);
+    RecordData* record_data = (RecordData*)data;
     int resolutionId;
     unsigned int videoFrame1Size;
     unsigned char videoData1[720*576*2];
@@ -257,13 +253,13 @@ void* start_record_routine(void* data)
     unsigned char* mjpegData;
     long mjpegDataSize;
 
-    if (recordData->dv50Filename.size() > 0)
+    if (record_data->dv50Filename.size() > 0)
     {
         // dv50 input
         resolutionId = DV50_MATERIAL_RESOLUTION;
-        videoFrame1Size = (recordData->isPALProject ? 288000 : 240000);
+        videoFrame1Size = (record_data->isPALProject ? 288000 : 240000);
         FILE* file;
-        if ((file = fopen(recordData->dv50Filename.c_str(), "r")) == NULL)
+        if ((file = fopen(record_data->dv50Filename.c_str(), "r")) == NULL)
         {
             perror("fopen");
             pthread_exit((void *) 0);
@@ -281,12 +277,12 @@ void* start_record_routine(void* data)
         videoFrame2Size = videoFrame1Size;
         memcpy(videoData2, videoData1, videoFrame2Size);
     }
-    else if (recordData->mjpeg21Filename.size() > 0)
+    else if (record_data->mjpeg21Filename.size() > 0)
     {
         // MJPEG 2:1 input
         resolutionId = MJPEG21_MATERIAL_RESOLUTION;
         FILE* file;
-        if ((file = fopen(recordData->mjpeg21Filename.c_str(), "r")) == NULL)
+        if ((file = fopen(record_data->mjpeg21Filename.c_str(), "r")) == NULL)
         {
             perror("fopen");
             pthread_exit((void *) 0);
@@ -342,7 +338,7 @@ void* start_record_routine(void* data)
     {
         // dummy essence data
         resolutionId = UNC_MATERIAL_RESOLUTION;
-        videoFrame1Size = (recordData->isPALProject ? 720 * 576 * 2 : 720 * 480 * 2);
+        videoFrame1Size = (record_data->isPALProject ? 720 * 576 * 2 : 720 * 480 * 2);
         memset(videoData1, 0, videoFrame1Size);
         videoFrame2Size = videoFrame1Size;
         memset(videoData2, 0, videoFrame2Size);
@@ -352,7 +348,7 @@ void* start_record_routine(void* data)
     memset(pcmData, 1, 1920 * 2);
     uint32_t pcmFrameSizeSeq[5];
     int pcmFrameSizeSeqSize;
-    if (recordData->isPALProject)
+    if (record_data->isPALProject)
     {
         pcmFrameSizeSeqSize = 1;
         pcmFrameSizeSeq[0] = 1920;
@@ -368,135 +364,97 @@ void* start_record_routine(void* data)
     }
     int numPCMSamples = 0;
     
-    printf("Starting... (%s)\n", recordData->filenamePrefix.c_str());
+    printf("Starting... (%s)\n", record_data->filenamePrefix.c_str());
     
     try
     {
-        // create writer for input (mask all except track 1,2,3)
-        Rational imageAspectRatio = g_16x9ImageAspect;
-        auto_ptr<MXFWriter> writer(new MXFWriter(
-            recordData->recorder->getConfig()->getInputConfig(recordData->inputIndex),
-            recordData->isPALProject, resolutionId, imageAspectRatio,
-            16, 0xffffffff, recordData->startPosition, recordData->creatingFilePath,
-            recordData->destinationFilePath, recordData->failuresFilePath,
-            recordData->filenamePrefix, recordData->userComments, 
-            recordData->projectName));
-    
-        int i;
-        int trackIndex;
+        RecorderInputConfig *input_config = record_data->recorder->getConfig()->getInputConfig(record_data->inputIndex);
+        PA_ASSERT(input_config->trackConfigs.size() > 0);
+        SourceConfig *source_config = input_config->trackConfigs[0]->sourceConfig;
+        PA_ASSERT(source_config);
+
+        OPAtomPackageCreator package_group(record_data->isPALProject);
+        package_group.SetStartPosition(record_data->startPosition);
+        package_group.SetUserComments(record_data->userComments);
+        package_group.SetProjectName(record_data->projectName);
+        package_group.SetFileLocationPrefix(record_data->filenamePrefix);
+        if (!record_data->dv50Filename.empty())
+            package_group.SetVideoResolutionID(DV50_MATERIAL_RESOLUTION);
+        else if (!record_data->mjpeg21Filename.empty())
+            package_group.SetVideoResolutionID(MJPEG21_MATERIAL_RESOLUTION);
+        else
+            package_group.SetVideoResolutionID(UNC_MATERIAL_RESOLUTION);
         
-#if defined(TEST_WRITE_SAMPLE_DATA)
-        // start the sample data for PCM
-        vector<RecorderInputTrackConfig*>::const_iterator trackIter;
-        for (trackIndex = 1, trackIter = inputConfig->trackConfigs.begin();
-            trackIter != inputConfig->trackConfigs.end();
-            trackIndex++, trackIter++)
-        {
-            RecorderInputTrackConfig* trackConfig = *trackIter;
-            
-            if (trackConfig->isConnectedToSource())
-            {
-                SourceTrackConfig* sourceTrackConfig = 
-                    trackConfig->sourceConfig->getTrackConfig(trackConfig->sourceTrackID);
-                if (sourceTrackConfig->dataDef == SOUND_DATA_DEFINITION)
-                {
-                    // start write pcm audio data
-                    writer->startSampleData(trackIndex);
-                }
-            }
-        }
-#endif
+        vector<bool> enabled_tracks;
+        enabled_tracks.assign(source_config->trackConfigs.size(), true);
+        
+        package_group.CreatePackageGroup(source_config, enabled_tracks, record_data->umidGenOffset);
+
+
+        auto_ptr<MXFOPAtomWriter> writer(new MXFOPAtomWriter());
+        writer->SetCreatingDirectory(record_data->creatingFilePath);
+        writer->SetDestinationDirectory(record_data->destinationFilePath);
+        writer->SetFailureDirectory(record_data->failuresFilePath);
+        
+        writer->PrepareToWrite(&package_group, false);
+
+        size_t i;
+        
         // write NUM_FRAMES of uncompressed video and audio
-        for (i = 0; i < NUM_FRAMES; i++)
+        int f;
+        for (f = 0; f < NUM_FRAMES; f++)
         {
-            vector<RecorderInputTrackConfig*>::const_iterator trackIter;
-            for (trackIndex = 1, trackIter = inputConfig->trackConfigs.begin();
-                trackIter != inputConfig->trackConfigs.end();
-                trackIndex++, trackIter++)
-            {
-                RecorderInputTrackConfig* trackConfig = *trackIter;
+            for (i = 0; i < source_config->trackConfigs.size(); i++) {
+                SourceTrackConfig *track_config = source_config->trackConfigs[i];
                 
-                if (trackConfig->isConnectedToSource())
+                if (track_config->dataDef == SOUND_DATA_DEFINITION)
                 {
-                    SourceTrackConfig* sourceTrackConfig = 
-                        trackConfig->sourceConfig->getTrackConfig(trackConfig->sourceTrackID);
-                    if (sourceTrackConfig->dataDef == SOUND_DATA_DEFINITION)
-                    {
 #if defined(TEST_WRITE_SAMPLE_DATA)
-                        // write pcm audio data
-                        writer->writeSampleData(trackIndex, pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
+                    // write pcm audio data
+                    writer->StartSampleData(i + 1);
+                    writer->WriteSampleData(i + 1, pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
+                    writer->EndSampleData(i + 1, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize]);
 #else
-                        writer->writeSample(trackIndex, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize], pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
+                    writer->WriteSamples(i + 1, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize], pcmData, pcmFrameSizeSeq[i % pcmFrameSizeSeqSize] * 2);
 #endif
-                        numPCMSamples += pcmFrameSizeSeq[i % pcmFrameSizeSeqSize];
-                    }
-                    else // PICTURE_DATA_DEFINITION
+                    numPCMSamples += pcmFrameSizeSeq[i % pcmFrameSizeSeqSize];
+                }
+                else // PICTURE_DATA_DEFINITION
+                {
+                    // write video data
+                    if (i % 2 == 0)
                     {
-                        // write video data
-                        if (i % 2 == 0)
-                        {
-                            writer->writeSample(trackIndex, 1, videoData1, videoFrame1Size);
-                        }
-                        else
-                        {
-                            writer->writeSample(trackIndex, 1, videoData2, videoFrame2Size);
-                        }
+                        writer->WriteSamples(i + 1, 1, videoData1, videoFrame1Size);
+                    }
+                    else
+                    {
+                        writer->WriteSamples(i + 1, 1, videoData2, videoFrame2Size);
                     }
                 }
             }
-    
         }
 
-#if defined(TEST_WRITE_SAMPLE_DATA)
-        // end the sample data for PCM
-        vector<RecorderInputTrackConfig*>::const_iterator trackIter;
-        for (trackIndex = 1, trackIter = inputConfig->trackConfigs.begin();
-            trackIter != inputConfig->trackConfigs.end();
-            trackIndex++, trackIter++)
-        {
-            RecorderInputTrackConfig* trackConfig = *trackIter;
-            
-            if (trackConfig->isConnectedToSource())
-            {
-                SourceTrackConfig* sourceTrackConfig = 
-                    trackConfig->sourceConfig->getTrackConfig(trackConfig->sourceTrackID);
-                if (sourceTrackConfig->dataDef == SOUND_DATA_DEFINITION)
-                {
-                    // end write pcm audio data
-                    writer->endSampleData(trackIndex, numPCMSamples);
-                }
-            }
-        }
-#endif        
 
         // complete the writing and save packages to database
-        writer->completeAndSaveToDatabase();
+        writer->CompleteWriting(true);
         
-        printf("Files created successfully:");
-        for (i = 0; i < 20; i++)
-        {
-            if (writer->trackIsPresent(i) && writer->wasSuccessfull(i))
-            {
-                printf("  %s", writer->getFilename(i).c_str());
-            }
-        }
-        printf("\n");
+        printf("Files created successfully\n");
     }
     catch (const ProdAutoException& ex)
     {
-        fprintf(stderr, "Failed to record (%s):\n  %s\n", recordData->filenamePrefix.c_str(), 
+        fprintf(stderr, "Failed to record (%s):\n  %s\n", record_data->filenamePrefix.c_str(), 
             ex.getMessage().c_str());
         pthread_exit((void *) 0);
         return NULL;
     }
     catch (...)
     {
-        fprintf(stderr, "Unknown exception thrown (%s)\n", recordData->filenamePrefix.c_str());
+        fprintf(stderr, "Unknown exception thrown (%s)\n", record_data->filenamePrefix.c_str());
         pthread_exit((void *) 0);
         return NULL;
     }
     
-    printf("Successfully completed and saved (%s)\n", recordData->filenamePrefix.c_str());
+    printf("Successfully completed and saved (%s)\n", record_data->filenamePrefix.c_str());
     
     pthread_exit((void *) 0);
 }
@@ -777,7 +735,7 @@ int main(int argc, const char* argv[])
         try
         {
             pthread_t thread[NUM_RECORD_THREADS];
-            RecordData recordData[NUM_RECORD_THREADS];
+            RecordData record_data[NUM_RECORD_THREADS];
             pthread_attr_t attr;
             int i, rc, status;
             
@@ -790,36 +748,37 @@ int main(int argc, const char* argv[])
                 stringstream prefix;
                 prefix << filenamePrefix << "_" << i; 
                 
-                recordData[i].startPosition = startPosition;
-                recordData[i].creatingFilePath = CREATING_FILE_PATH;
-                recordData[i].destinationFilePath = DESTINATION_FILE_PATH;
-                recordData[i].failuresFilePath = FAILURES_FILE_PATH;
-                recordData[i].filenamePrefix = prefix.str();
-                recordData[i].recorder = recorder.get();
-                recordData[i].inputIndex = 1 + (i % NUM_RECORDER_INPUTS);
-                recordData[i].userComments.push_back(UserComment(AVID_UC_COMMENTS_NAME, 
+                record_data[i].startPosition = startPosition;
+                record_data[i].creatingFilePath = CREATING_FILE_PATH;
+                record_data[i].destinationFilePath = DESTINATION_FILE_PATH;
+                record_data[i].failuresFilePath = FAILURES_FILE_PATH;
+                record_data[i].filenamePrefix = prefix.str();
+                record_data[i].recorder = recorder.get();
+                record_data[i].inputIndex = 1 + (i % NUM_RECORDER_INPUTS);
+                record_data[i].userComments.push_back(UserComment(AVID_UC_COMMENTS_NAME, 
                     "a test file", STATIC_COMMENT_POSITION, 0));
-                recordData[i].userComments.push_back(UserComment(AVID_UC_DESCRIPTION_NAME, 
+                record_data[i].userComments.push_back(UserComment(AVID_UC_DESCRIPTION_NAME, 
                     "an mxfwriter test file produced by test_mxfwriter", STATIC_COMMENT_POSITION, 0));
-                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                record_data[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
                     "event at position 0", 0, 1));
-                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                record_data[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
                     "event at position 1", 1, (i % 8) + 1));
-                recordData[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
+                record_data[i].userComments.push_back(UserComment(POSITIONED_COMMENT_NAME, 
                     "event at position 10000", 10000, 3));
-                recordData[i].projectName = projectName;
-                recordData[i].isPALProject = isPALProject;
+                record_data[i].projectName = projectName;
+                record_data[i].isPALProject = isPALProject;
+                record_data[i].umidGenOffset = Database::getInstance()->getUMIDGenOffset();
                 
                 if (dv50Filename != NULL)
                 {
-                    recordData[i].dv50Filename = dv50Filename;
+                    record_data[i].dv50Filename = dv50Filename;
                 }
                 else if (mjpeg21Filename != NULL)
                 {
-                    recordData[i].mjpeg21Filename = mjpeg21Filename;
+                    record_data[i].mjpeg21Filename = mjpeg21Filename;
                 }
                 
-                if (pthread_create(&thread[i], &attr, start_record_routine, (void *)(&recordData[i])))
+                if (pthread_create(&thread[i], &attr, start_record_routine, (void *)(&record_data[i])))
                 {
                     fprintf(stderr, "Failed to create record thread\n");
                     Database::close();

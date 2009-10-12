@@ -9,7 +9,11 @@ INCLUDES = -I. -I$(DATABASELIB_DIR) -I$(LIBMXF_DIR)/lib/include -I$(WRITEAVIDMXF
 COMPILE = $(CC) $(CFLAGS) $(INCLUDES)
 AR = ar cr
 
-SOURCES = $(wildcard *.cpp)
+SOURCES = MXFWriterException.cpp \
+	MXFUtils.cpp \
+	MXFWriter.cpp \
+	MXFOPAtomWriter.cpp \
+	test_mxfwriter.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
