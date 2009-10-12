@@ -1,5 +1,5 @@
 /*
- * $Id: FileUtils.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: FileUtils.cpp,v 1.2 2009/10/12 14:46:14 john_f Exp $
  *
  * File utilities.
  *
@@ -27,6 +27,7 @@
 #include <ace/OS_NS_sys_stat.h>
 #include <ace/OS_NS_string.h>
 #include <ace/OS_NS_errno.h>
+#include <ace/Log_Msg.h>
 
 #include <vector>
 #include <iostream>
@@ -128,7 +129,7 @@ bool FileUtils::CreatePath(const std::string & path)
         else if (ENOENT == ACE_OS::last_error())
         {
             // creating directory
-            std::cerr << "Creating: " << trial_path << std::endl;
+            //std::cerr << "Creating: " << trial_path << std::endl;
             result = (0 == ACE_OS::mkdir(trial_path.c_str(), dir_mode));
         }
         else
@@ -137,6 +138,10 @@ bool FileUtils::CreatePath(const std::string & path)
             result = false;
         }
         trial_path += delim;
+    }
+    if (!result)
+    {
+        ACE_DEBUG((LM_ERROR, ACE_TEXT("Failed to create %C\n"), trial_path.c_str()));
     }
 
     return result;
