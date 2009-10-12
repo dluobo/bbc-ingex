@@ -12,3 +12,11 @@ Extra packages produced by the Ingex team for convenience
   ffmpeg-h264-aac
   libodbc++
   dvsdriver
+
+To make the ffmpeg RPM...
+
+Put patches and ffmpeg-0.5.tar.bz2 in /usr/src/packages/SOURCES
+
+> rpmbuild -bb ffmpeg-DNxHD-h264-aac.spec
+
+
