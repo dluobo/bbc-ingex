@@ -1,5 +1,5 @@
 #
-# $Id: prodautodb.pm,v 1.3 2008/05/16 17:01:04 john_f Exp $
+# $Id: prodautodb.pm,v 1.4 2009/10/12 18:38:23 john_f Exp $
 #
 # 
 #
@@ -1713,9 +1713,11 @@ sub load_package
                 pkg_creation_date AS creation_date,
                 pkg_project_name_id AS project_name_id,
                 pjn_name AS project_name,
-                pkg_descriptor_id AS descriptor_id
+                pkg_descriptor_id AS descriptor_id,
+                opp_name AS op
             FROM Package
                 LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier)
+                LEFT OUTER JOIN OperationalPattern ON (pkg_op_id = opp_identifier)
             WHERE
                 pkg_identifier = ?
             ");

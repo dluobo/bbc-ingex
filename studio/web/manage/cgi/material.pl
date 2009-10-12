@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: material.pl,v 1.2 2008/09/03 15:32:39 john_f Exp $
+# $Id: material.pl,v 1.3 2009/10/12 18:35:40 john_f Exp $
 #
 # 
 #
@@ -267,6 +267,7 @@ sub get_page_content
             th([
                 "Index",
                 "Name",
+                "OP",
                 "Tracks",
                 "Start",
                 "End",
@@ -292,6 +293,7 @@ sub get_page_content
             my $duration; 
             
             $materialRow{"name"} = $mp->{"NAME"} || "";
+            $materialRow{"op"} = $mp->{"OP"} || "";
             $materialRow{"created"} = $mp->{"CREATION_DATE"} || "";
             
 
@@ -467,6 +469,7 @@ sub get_page_content
                     td([
                         $index + $start,
                         $materialRow->{"name"},
+                        $materialRow->{"op"},
                         $materialRow->{"tracks"} || "",
                         $materialRow->{"startTC"} || "",
                         $materialRow->{"endTC"} || "",
