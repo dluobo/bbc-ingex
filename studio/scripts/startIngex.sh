@@ -20,12 +20,12 @@ do
 done
 
 
-# File to store PIDs of the konsoles started here, so we can clsoe them later when stopping ingex with stopIngex.sh
+# File to store PIDs of the konsoles started here, so we can close them later when stopping ingex with stopIngex.sh
 KONSOLE_PIDS="/tmp/ingexPIDs.txt"
 
 # Set defaults for Ingex processes and parameters
 # These can be overidden by ~/ingex.conf or /etc/ingex.conf
-INGEX_DIR="/home/ingex/ap-workspace/ingex"
+declare -x INGEX_DIR="/home/ingex/ap-workspace/ingex"
 
 CAPTURE=1
 MULTICAST=0
@@ -58,7 +58,7 @@ HD_CAPTURE_OPTIONS=""
 HD_RECORDERS="Ingex-HD"
 
 # HD Quad player options
-HD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s"
+HD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --pixel-aspect 1:1 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s"
 
 # Default SD Capture options
 SD_CAPTURE_CHANNELS=4
@@ -72,8 +72,40 @@ SD_CAPTURE_OPTIONS=""
 SD_RECORDERS="Ingex"
 
 # SD Quad player options
-SD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p"
+SD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --pixel-aspect 1:1 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p"
 
+# Transfer (copy) options
+# Set COPY_FTP_SERVER to be the hostname of your ftp server, 
+# otherwise the transfer will be done by file copying.
+COPY_FTP_SERVER=
+#COPY_FTP_SERVER='yourFTPserver'
+COPY_FTP_USER='ingex'
+COPY_FTP_PASSWORD='ingex'
+
+# Priority 1 files (usually the offline quality) can also be copied to a second destination, typically a local USB drive. Put the destination here to activate this (e.g. /video_removeable which might link to your usb drive)
+#COPY_EXTRA_DEST='/video_removeable'
+COPY_EXTRA_DEST=
+
+# **** end of transfer options ****
+
+
+# ***** Multicasting *****
+# Set the multicast address and first port to use. The same address will 
+# be used for all channels (on this PC) but the port number will increment
+MULTICAST_ADDR='239.255.1.1'
+MULTICAST_FIRST_PORT=2000
+
+# Set size of down-scaled image. Suggest 360x288 for an mpeg stream or 240x192 
+# for simple down-scaling 
+#MULTICAST_SIZE='240x192'
+MULTICAST_SIZE='360x288'
+
+# For an mpeg transport stream set the next parameter to 1, for image scaling
+# only set it to zero. Set your desired mpeg bitrate (kb/s) too.
+MULTICAST_MPEG_TS=1
+MULTICAST_MPEG_BIT_RATE='1000'
+
+# **** end of multicast options ****
 
 # ********** There are no options to edit below this line *************
 #**********************************************************************
@@ -103,7 +135,7 @@ routerlogger_path="$INGEX_DIR/studio/ace-tao/routerlog/"
 run_routerLogger="./run_routerlogger.sh"
 
 # assemble the database arguments 
-DB_PARAMS=$(echo "--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PASS")
+DB_PARAMS="--dbhost $DB_HOST --dbname $DB_NAME --dbuser $DB_USER --dbpass $DB_PASS"
 
 # Check to see if capture is already running. If it is, check with the user to avoid restarting by mistake
 ABORT=0
@@ -184,6 +216,9 @@ else
 
 fi
 
+# export some settings, so other scripts can pick them up if necessary
+declare -x INGEX_CHANNELS=${CAPTURE_CHANNELS}
+
 # get the pids of existing windows
 PIDS=`pidof konsole`
 
@@ -222,21 +257,37 @@ tab=$(dcop $capture_window konsole currentSession)
 if [ $CAPTURE -ge 1 ] ; then
   dcop $capture_window $tab renameSession Capture
   dcop $capture_window $tab sendSession "cd $capture_path"
-  dcop $capture_window $tab sendSession "sudo ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -mt $CAPTURE_TIMECODE -rt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
+  dcop $capture_window $tab sendSession "sudo ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   tab=
 fi
 
+# ** multicasting **
 if [ $MULTICAST -ge 1 ] ; then
   if [ -z $tab ] ; then
     tab=$(dcop $capture_window konsole newSession)
     sleep 1
   fi
+  # Prepare options. If mpeg transport stream, set -t option and bitrate
+  if [ $MULTICAST_MPEG_TS -ge 1 ] ; then
+    OPTIONS="-t -b ${MULTICAST_MPEG_BIT_RATE}"
+  fi
+  OPTIONS="${OPTIONS} -s ${MULTICAST_SIZE}"
+
   dcop $capture_window $tab renameSession Multicast
   dcop $capture_window $tab sendSession "cd $scripts_path"
-  dcop $capture_window $tab sendSession "./start_multicast.sh"
+
+  CHAN=0
+  PORT=$MULTICAST_FIRST_PORT
+  while [ "$CHAN" -lt "$CHANNELS" ] ; do
+    #echo "Starting multicast channel ${CHAN}"
+    dcop $capture_window $tab sendSession "$MULTICAST -c ${CHAN} -q ${OPTIONS} ${MULTICAST_ADDR}:${PORT} &"
+    let CHAN=$CHAN+1
+    let PORT=$PORT+1
+  done
   tab=
 fi
 
+# ** Transfer **
 if [ $TRANSFER -ge 1 ] ; then
   if [ -z $tab ] ; then
     tab=$(dcop $capture_window konsole newSession)
@@ -244,8 +295,15 @@ if [ $TRANSFER -ge 1 ] ; then
   fi
   dcop $capture_window $tab renameSession Copy
   dcop $capture_window $tab sendSession "cd $xfer_path"
-  dcop $capture_window $tab sendSession "./xferserver.pl"
-  #dcop $capture_window $tab sendSession "./xferserver.pl -f 'ingexserver ingex ingex'"
+  if [ -n "${COPY_EXTRA_DEST}" ] ; then
+    EXTRA_DEST="-e ${COPY_EXTRA_DEST}"
+  fi
+  if [ -z "${COPY_FTP_SERVER}" ] ; then
+    dcop $capture_window $tab sendSession "./xferserver.pl ${EXTRA_DEST}"
+  else
+    FTP_OPTIONS="${COPY_FTP_SERVER} ${COPY_FTP_USER} ${COPY_FTP_PASSWORD}" 
+    dcop $capture_window $tab sendSession "./xferserver.pl ${EXTRA_DEST} -f $FTP_OPTIONS"
+  fi
   tab=
 fi
 
