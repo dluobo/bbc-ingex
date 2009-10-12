@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder.c,v 1.7 2009/09/18 16:25:20 philipn Exp $
+ * $Id: ffmpeg_encoder.c,v 1.8 2009/10/12 16:21:52 john_f Exp $
  *
  * Encode uncompressed video to DV using libavcodec
  *
@@ -97,7 +97,7 @@ typedef struct
     int audio_samples_per_output_frame;
     short * audio_inbuf;
     int audio_inbuf_size;
-    int audio_inbuf_offset;
+    int audio_inbuf_wroffset;
     uint8_t * audio_outbuf;
     int audio_outbuf_size;
     // video
@@ -195,6 +195,7 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         break;
     default:
         codec_id = 0;
+        codec_type = 0;
     }
 
     encoder->codec = avcodec_find_encoder(codec_id);
@@ -471,6 +472,13 @@ extern ffmpeg_encoder_t * ffmpeg_encoder_init(ffmpeg_encoder_resolution_t res, i
         /* coded frame size */
         encoder->audio_outbuf_size = 2 * 960; // enough for 2 audio frames at 320 kbit/s
 
+        /* allocate audio input buffer */
+        encoder->audio_inbuf = av_malloc(encoder->audio_inbuf_size);
+        encoder->audio_inbuf_wroffset = 0;
+
+        /* allocate audio (coded) output buffer */
+        encoder->audio_outbuf = av_malloc(encoder->audio_outbuf_size);
+
         /* prepare codec */
         if (avcodec_open(encoder->codec_context, encoder->codec) < 0)
         {
@@ -583,29 +591,43 @@ extern int ffmpeg_encoder_encode_audio (ffmpeg_encoder_t * in_encoder, int num_s
         /*
         Audio comes in in video frames (num_samples e.g. 1920) but may be encoded
         as MPEG frames (1152 samples) so we need to buffer.
-        NB. audio_inbuf_offset is in terms of 16-bit samples, hence the
+        */
+        /*
+        NB. audio_inbuf_wroffset is in terms of 16-bit samples, hence the
         rather confusing pointer arithmetic.
         */
-        //fprintf (stderr, "audio_inbuf_offset = %d, num_samples = %d, num_channels = %d\n", aenc->audio_inbuf_offset, num_samples, nch);
-        memcpy (aenc->audio_inbuf + aenc->audio_inbuf_offset, p_audio, num_samples * 2 * nch);
-        aenc->audio_inbuf_offset += (num_samples * nch);
+
+        // Copy input samples to audio_inbuf.
+        memcpy (aenc->audio_inbuf + aenc->audio_inbuf_wroffset, p_audio, num_samples * 2 * nch);
+        aenc->audio_inbuf_wroffset += (num_samples * nch);
+
+        // If we have enough samples to code, code them.
         int diff;
-        while ((diff = aenc->audio_inbuf_offset - (aenc->audio_samples_per_output_frame * nch)) >= 0)
+        while ((diff = aenc->audio_inbuf_wroffset - (aenc->audio_samples_per_output_frame * nch)) >= 0)
         {
-            int s = avcodec_encode_audio(aenc->codec_context, aenc->audio_outbuf + size, aenc->audio_outbuf_size - size, p_audio);
+            //fprintf (stderr, "samples available to code = %d, i.e. %d per channel\n", aenc->audio_inbuf_wroffset, aenc->audio_inbuf_wroffset / nch);
+            // You don't get any feedback from this function but it appears to consume audio_samples_per_output_frame
+            // of input each time you call it.
+            int s = avcodec_encode_audio(aenc->codec_context, aenc->audio_outbuf + size, aenc->audio_outbuf_size - size, aenc->audio_inbuf);
             if (s < 0)
             {
                 fprintf(stderr, "error compressing audio!\n");
                 return -1;
             }
+            else
+            {
+                //fprintf (stderr, "produced %d bytes of encoded audio\n", s);
+            }
             size += s;
 
-            /* shift samples in input buffer */
+            /* Shift samples in input buffer.
+               The number to shift is diff, i.e. those exceeding what we can code at the moment. */
             memmove (aenc->audio_inbuf, aenc->audio_inbuf + (aenc->audio_samples_per_output_frame * nch), diff * 2);
-            aenc->audio_inbuf_offset -= (aenc->audio_samples_per_output_frame * nch);
+            aenc->audio_inbuf_wroffset -= (aenc->audio_samples_per_output_frame * nch);
         }
     }
 
+    //fprintf (stderr, "returning size=%d\n", size);
     return size;
 }
 
