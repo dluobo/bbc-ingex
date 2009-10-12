@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.24 2009/09/18 16:35:05 philipn Exp $
+ * $Id: dvs_sdi.c,v 1.25 2009/10/12 15:11:46 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
+#define __STDC_CONSTANT_MACROS
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <string.h>
@@ -89,16 +90,21 @@ int             sec_width = 0, sec_height = 0;
 int             frame_rate_numer = 0, frame_rate_denom = 0;
 int             element_size = 0, dma_video_size = 0, dma_total_size = 0;
 static int      audio_offset = 0, audio_size = 0, audio_pair_size = 0;
+
+int             frame_data_offset = 0;
+
+/*
 int             ltc_offset = 0, vitc_offset = 0;
 int             sys_time_offset = 0, tick_offset = 0, signal_ok_offset = 0;
 int             num_aud_samp_offset = 0;
 int             frame_number_offset = 0;
+*/
+
 CaptureFormat   video_format = Format422PlanarYUV;
 CaptureFormat   video_secondary_format = FormatNone;
 static int verbose = 0;
 static int verbose_channel = -1;    // which channel to show when verbose is on
 static int audio8ch = 0;
-static int anc_tc = 0;              // read timecodes from RP188/RP196 ANC data
 static int test_avsync = 0;
 static uint8_t *video_work_area[MAX_CHANNELS];
 static int benchmark = 0;
@@ -110,13 +116,15 @@ static int aes_routing = 0;
 pthread_mutex_t m_log = PTHREAD_MUTEX_INITIALIZER;      // logging mutex to prevent intermixing logs
 
 // Recover timecode type is the type of timecode to use to generate dummy frames
+/*
 typedef enum {
     RecoverVITC,
     RecoverLTC
 } RecoverTimecodeType;
+*/
 
-static NexusTimecode master_type = NexusTC_None;    // by default do not use master timecode
-static int master_channel = 0;                      // channel with master timecode source (default channel 0)
+static NexusTimecode timecode_type = NexusTC_VITC;   // default timecode is VITC
+static int master_channel = -1;                      // default is no master timecode distribution
 
 // The mutex m_master_tc guards all access to master_tc and master_tod variables
 pthread_mutex_t m_master_tc = PTHREAD_MUTEX_INITIALIZER;
@@ -124,7 +132,7 @@ static int master_tc = 0;               // timecode as integer
 static int64_t master_tod = 0;          // gettimeofday value corresponding to master_tc
 
 // When generating dummy frames, use LTC differences to calculate how many frames
-static RecoverTimecodeType recover_timecode_type = RecoverLTC;
+//static NexusTimecode recover_timecode_type = RecoverLTC;
 
 static uint8_t *no_video_frame = NULL;              // captioned black frame saying "NO VIDEO"
 static uint8_t *no_video_secondary_frame = NULL;    // captioned black frame saying "NO VIDEO"
@@ -495,7 +503,7 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->sec_video_format = video_secondary_format;
     p_control->sec_width = sec_width;
     p_control->sec_height = sec_height;
-    p_control->master_tc_type = master_type;
+    p_control->default_tc_type = timecode_type;
     p_control->master_tc_channel = master_channel;
 
     p_control->audio12_offset = audio_offset;
@@ -510,6 +518,11 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     }
     p_control->audio_size = audio_size;
 
+    p_control->sec_video_offset = dma_video_size + audio_size;
+
+    p_control->frame_data_offset = frame_data_offset;
+
+    /*
     p_control->vitc_offset = vitc_offset;
     p_control->ltc_offset = ltc_offset;
     p_control->sys_time_offset = sys_time_offset;
@@ -517,7 +530,7 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     p_control->signal_ok_offset = signal_ok_offset;
     p_control->num_aud_samp_offset = num_aud_samp_offset;
     p_control->frame_number_offset = frame_number_offset;
-    p_control->sec_video_offset = dma_video_size + audio_size;
+    */
 
     p_control->source_name_update = 0;
     if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0) {
@@ -671,7 +684,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // Do this first in order to mark video as changed before we start to change it.
     // We can't actually set the frame number now because the audio DMA will overwrite it.
     int frame_number = 0;
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + frame_number_offset, &frame_number, sizeof(int));
+    NexusFrameData * nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe + 1) % ring_len) + frame_data_offset);
+    nfd->frame_number = frame_number;
 
     uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
     uint8_t *dma_dest = vid_dest;
@@ -714,7 +728,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     // Get current time-of-day time and this chan's current hw clock.
     int current_tick;
-    unsigned int h_clock, l_clock;
+    uint32_t h_clock;
+    uint32_t l_clock;
     SV_CHECK( sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock) );
     int64_t tod = gettimeofday64();
 
@@ -725,9 +740,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // I found that as well, except for the 10th or 11th frame (when the FIFO
     // first wraps round?), when it jumps back in time a lot. Using pbuffer
     // means I don't have to pass a sv_fifo_bufferinfo to putbuffer.
-    int64_t cur_clock = (int64_t)h_clock * 0x100000000LL + l_clock;
-    int64_t rec_clock = (int64_t)bufferinfo.clock_high * 0x100000000LL + bufferinfo.clock_low;
+    int64_t cur_clock = (int64_t)h_clock * INT64_C(0x100000000) + l_clock;
+    int64_t rec_clock = (int64_t)bufferinfo.clock_high * INT64_C(0x100000000) + bufferinfo.clock_low;
     int64_t clock_diff = cur_clock - rec_clock;
+    // The frame was captured clock_diff ago
     int64_t tod_rec = tod - clock_diff;
 
     if (video_format == Format422PlanarYUV || video_format == Format422PlanarYUVShifted)
@@ -825,137 +841,301 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         }
     }
 
+    // The various timecodes...
+
+    // SMPTE-12M LTC and VITC\n");
+    int ltc_tc = pbuffer->timecode.ltc_tc;
+    int vitc1_tc = pbuffer->timecode.vitc_tc;
+    int vitc2_tc = pbuffer->timecode.vitc_tc2;
+    // "DLTC" and "DVITC" timecodes from RP188/RP196 ANC data
+    int vitc1_anc = pbuffer->anctimecode.dvitc_tc[0];
+    int vitc2_anc = pbuffer->anctimecode.dvitc_tc[1];
+    int ltc_anc = pbuffer->anctimecode.dltc_tc;
+
+
     // Handle buggy field order (can happen with misconfigured camera)
     // Incorrect field order causes vitc_tc and vitc2 to be swapped.
     // If the high bit is set on vitc use vitc2 instead.
-    int vitc_to_use = anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc;
-    if ((unsigned)vitc_to_use >= 0x80000000) {
-        vitc_to_use = anc_tc ? pbuffer->anctimecode.dvitc_tc[1] : pbuffer->timecode.vitc_tc2;
-        if (verbose) {
+    int vitc_tc;
+    if ((unsigned)vitc1_tc >= 0x80000000 && (unsigned)vitc2_tc < 0x80000000)
+    {
+        vitc_tc = vitc2_tc;
+        if (1) //(verbose)
+        {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc, vitc_to_use);
+            logFF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_tc, vitc2_tc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
     }
-    int vitc_as_int = dvs_tc_to_int(vitc_to_use);
-    int orig_vitc_as_int = vitc_as_int;
+    else
+    {
+        vitc_tc = vitc1_tc;
+    }
+    int vitc_anc;
+    if ((unsigned)vitc1_anc >= 0x80000000 && (unsigned)vitc2_anc < 0x80000000)
+    {
+        vitc_anc = vitc2_anc;
+        if (1) //(verbose)
+        {
+            PTHREAD_MUTEX_LOCK( &m_log )
+            logFF("chan %d: 1st dvitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_anc, vitc2_anc);
+            PTHREAD_MUTEX_UNLOCK( &m_log )
+        }
+    }
+    else
+    {
+        vitc_anc = vitc1_anc;
+    }
 
     // A similar check must be done for LTC since the field
     // flag is occasionally set when the fifo call returns
-    int ltc_to_use = anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc;
-    if ((unsigned)ltc_to_use >= 0x80000000) {
-        ltc_to_use = (unsigned)(anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc) & 0x7fffffff;
-        if (verbose) {
+    if ((unsigned)ltc_tc >= 0x80000000)
+    {
+        if (1) //(verbose)
+        {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit (0x%08x)\n", chan, anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc, ltc_to_use);
+            logFF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_tc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
+        ltc_tc = (unsigned)ltc_tc & 0x7fffffff;
     }
-    int ltc_as_int = dvs_tc_to_int(ltc_to_use);
+    if ((unsigned)ltc_anc >= 0x80000000)
+    {
+        if (1) //(verbose)
+        {
+            PTHREAD_MUTEX_LOCK( &m_log )
+            logFF("chan %d: dltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_anc);
+            PTHREAD_MUTEX_UNLOCK( &m_log )
+        }
+        ltc_anc = (unsigned)ltc_anc & 0x7fffffff;
+    }
+
+    // Optionally mask off irrelevant bits in the timecodes.
+    // NB not sure where drop-frame flag is.
+    if (0)
+    {
+        vitc_tc &= 0x3f7f7f3f;
+        ltc_tc &= 0x3f7f7f3f;
+        vitc_anc &= 0x3f7f7f3f;
+        ltc_anc &= 0x3f7f7f3f;
+    }
+
+    // Convert timecodes to frames since midnight
+    int vitc_as_int = dvs_tc_to_int(vitc_tc);
+    int ltc_as_int = dvs_tc_to_int(ltc_tc);
+    int dvitc_as_int = dvs_tc_to_int(vitc_anc);
+    int dltc_as_int = dvs_tc_to_int(ltc_anc);
+
+    int orig_vitc_as_int = vitc_as_int;
     int orig_ltc_as_int = ltc_as_int;
 
     // If enabled, handle master timecode distribution
     int derived_tc = 0;
     int64_t diff_to_master = 0;
-    if (master_type != NexusTC_None) {
+    if (master_channel >= 0) {
         if (chan == master_channel) {
             // Store timecode and time-of-day the frame was recorded in shared variable
             PTHREAD_MUTEX_LOCK( &m_master_tc )
-            master_tc = (master_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
+            switch (timecode_type)
+            {
+            case NexusTC_LTC:
+                master_tc = ltc_as_int;
+                break;
+            case NexusTC_VITC:
+                master_tc = vitc_as_int;
+                break;
+            case NexusTC_DLTC:
+                master_tc = dltc_as_int;
+                break;
+            case NexusTC_DVITC:
+                master_tc = dvitc_as_int;
+                break;
+            default:
+                master_tc = vitc_as_int;
+                break;
+            }
             master_tod = tod_rec;
             PTHREAD_MUTEX_UNLOCK( &m_master_tc )
         }
         else {
             derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
 
-            // Save calculated timecode
-            if (master_type == NexusTC_LTC)
+            switch (timecode_type)
+            {
+            case NexusTC_LTC:
                 ltc_as_int = derived_tc;
-            else
+                break;
+            case NexusTC_VITC:
                 vitc_as_int = derived_tc;
+                break;
+            case NexusTC_DLTC:
+                dltc_as_int = derived_tc;
+                break;
+            case NexusTC_DVITC:
+                dvitc_as_int = derived_tc;
+                break;
+            default:
+                vitc_as_int = derived_tc;
+                break;
+            }
         }
     }
 
     // Lookup last frame's timecodes to calculate timecode discontinuity
     int last_vitc = 0;
     int last_ltc = 0;
-    if (pc->lastframe > -1) {       // Only process discontinuity when not the first frame
-        last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
-        last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+    int last_dvitc = 0;
+    int last_dltc = 0;
+
+    // Only process discontinuity when not the first frame
+    if (pc->lastframe > -1)
+    {
+        NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
+        last_vitc = last_nfd->vitc;
+        last_ltc = last_nfd->ltc;
+        last_dvitc = last_nfd->dvitc;
+        last_dltc = last_nfd->dltc;
 
         // Check number of frames to recover if any
         // A maximum of 50 frames will be recovered.
-        int recover_diff = (recover_timecode_type == RecoverVITC) ? vitc_as_int - last_vitc : ltc_as_int - last_ltc;
-        if (recover_from_video_loss && recover_diff > 1 && recover_diff < 52) {
-            logTF("chan %d: Need to recover %d frames\n", chan, recover_diff);
+        int diff;
+        switch (timecode_type)
+        {
+        case NexusTC_LTC:
+            diff = ltc_as_int - last_ltc;
+            break;
+        case NexusTC_VITC:
+            diff = vitc_as_int - last_vitc;
+            break;
+        case NexusTC_DLTC:
+            diff = dltc_as_int - last_dltc;
+            break;
+        case NexusTC_DVITC:
+            diff = dvitc_as_int - last_dvitc;
+            break;
+        default:
+            diff = vitc_as_int - last_vitc;
+            break;
+        }
+        // We expect diff to be 1 frame
+        int missing = diff - 1;
 
-            vitc_as_int += recover_diff - 1;
-            ltc_as_int += recover_diff - 1;
+        if (recover_from_video_loss && missing > 0 && missing <= 50)
+        {
+            logTF("chan %d: Need to recover %d frames\n", chan, missing);
 
-            // Increment pc->lastframe by amount to avoid discontinuity
-            pc->lastframe += recover_diff - 1;
+            /* These should not be adjusted
+            vitc_as_int += missing;
+            ltc_as_int += missing;
+            dvitc_as_int += missing;
+            dltc_as_int += missing;
+            */
+
+            // Increment pc->lastframe by amount to avoid discontinuity.
+            // Future frames will go in correct place in buffer
+            pc->lastframe += missing;
 
             // Ideally we would copy the dma transferred frame into its correct position
             // but this needs testing.
             //uint8_t *tmp_frame = (uint8_t*)malloc(width*height*2);
             //memcpy(tmp_frame, vid_dest, width*height*2);
             //free(tmp_frame);
+
             logTF("chan %d: Recovered.  lastframe=%d ltc=%d\n", chan, pc->lastframe, ltc_as_int);
         }
     }
 
-    // Copy timecode into last 4 bytes of element_size
-    // This is a bit sneaky but saves maintaining a separate ring buffer
-    // Also copy LTC just before VITC timecode as int.
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &vitc_as_int, sizeof(int));
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &ltc_as_int, sizeof(int));
+    // Copy frame data such as timecodes to the end of the ring element.
+    // This is a bit sneaky but saves maintaining a separate ring buffer.
+    // Note that pc->lastframe may have been incremented above so we
+    // re-calculate the pointer to NexusFrameData
+    nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe + 1) % ring_len) + frame_data_offset);
 
-    // Copy "frame" tick (tick / 2) into unused area at end of element_size
+    // LTC and VITC bits
+    nfd->vitc_bits = vitc_tc;
+    nfd->ltc_bits = ltc_tc;
+    nfd->dvitc_bits = vitc_tc;
+    nfd->dltc_bits = ltc_tc;
+    // LTC and VITC as frame count
+    nfd->vitc = vitc_as_int;
+    nfd->ltc = ltc_as_int;
+    nfd->dvitc = dvitc_as_int;
+    nfd->dltc = dltc_as_int;
+
+    // "frame" tick (tick / 2)
     int frame_tick = pbuffer->control.tick / 2;
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &frame_tick, sizeof(int));
+    nfd->tick = frame_tick;
 
     // Set signal_ok flag
-    *(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 1;
+    nfd->signal_ok = 1;
+
 
     // Set number of audio samples captured into ring element (not constant for NTSC)
     // audio[0].size is total size in bytes of 2 channels of 32bit samples
     int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + num_aud_samp_offset, &num_audio_samples, sizeof(int));
+    nfd->num_aud_samp = num_audio_samples;
 
     // Get info structure for statistics
     sv_fifo_info info;
     SV_CHECK(sv_fifo_status(sv, poutput, &info));
 
+    // store timestamp of when frame was captured (microseconds since 1970)
+    nfd->timestamp = tod_rec;
+
     // sys_time uses system clock as timecode source (tod_rec is in microsecs since 1970)
-    int64_t sys_time_microsec = tod_rec - (today_midnight_time() * 1000000LL);
+    int64_t sys_time_microsec = tod_rec - (today_midnight_time() * INT64_C(1000000));
     // compute sys_time timecode as int number of frames since midnight
-    int sys_time = (int)(sys_time_microsec * frame_rate_numer / (1000000LL * frame_rate_denom));
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + sys_time_offset, &sys_time, sizeof(int));
+    int sys_time = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+    nfd->systc = sys_time;
 
     // Timecode error occurs when difference is not exactly 1
     // or (around midnight) not exactly -2159999
     // (ignore the first frame captured when lastframe is -1)
     int vitc_diff = vitc_as_int - last_vitc;
     int ltc_diff = ltc_as_int - last_ltc;
-    int tc_err = (vitc_diff != 1 && vitc_diff != -2159999
-        && ltc_diff != 1 && ltc_diff != -2159999) && pc->lastframe != -1;
+    int dvitc_diff = dvitc_as_int - last_dvitc;
+    int dltc_diff = dltc_as_int - last_dltc;
+
+    int tc_diff;
+    switch (timecode_type)
+    {
+    case NexusTC_VITC:
+        tc_diff = vitc_diff;
+        break;
+    case NexusTC_LTC:
+        tc_diff = ltc_diff;
+        break;
+    case NexusTC_DVITC:
+        tc_diff = dvitc_diff;
+        break;
+    case NexusTC_DLTC:
+        tc_diff = dltc_diff;
+        break;
+    default:
+        tc_diff = 1;
+    }
+    int tc_err = (tc_diff != 1 && tc_diff != 2159999 && pc->lastframe != -1); // NB. 2159999 assumes 25 fps
 
     // log timecode discontinuity if any, or give verbose log of specified chan
     if (tc_err || (verbose && chan == verbose_channel)) {
         PTHREAD_MUTEX_LOCK( &m_log )
-        logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc_tc=%8x vitc_tc2=%8x ltc=%8x tc_int=%d ltc_int=%d last_vitc=%d vitc_diff=%d %s ltc_diff=%d %s\n",
+        logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x vitc_diff=%d%s ltc_diff=%d%s dvitc_diff=%d%s dltc_diff=%d%s\n",
         chan, pc->lastframe, pbuffer->control.tick / 2,
         info.dropped,
-        anc_tc ? pbuffer->anctimecode.dvitc_tc[0] : pbuffer->timecode.vitc_tc,
-        anc_tc ? pbuffer->anctimecode.dvitc_tc[1] : pbuffer->timecode.vitc_tc2,
-        anc_tc ? pbuffer->anctimecode.dltc_tc : pbuffer->timecode.ltc_tc,
-        vitc_as_int,
-        ltc_as_int,
-        last_vitc,
+        vitc1_tc,
+        vitc2_tc,
+        ltc_tc,
+        vitc1_anc,
+        vitc2_anc,
+        ltc_anc,
         vitc_diff,
         vitc_diff != 1 ? "!" : "",
         ltc_diff,
-        ltc_diff != 1 ? "!" : "");
+        ltc_diff != 1 ? "!" : "",
+        dvitc_diff,
+        dvitc_diff != 1 ? "!" : "",
+        dltc_diff,
+        dltc_diff != 1 ? "!" : "");
         PTHREAD_MUTEX_UNLOCK( &m_log )
     }
 
@@ -986,7 +1166,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     // Set frame number
     frame_number = pc->lastframe + 1;
-    memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + frame_number_offset, &frame_number, sizeof(int));
+    nfd->frame_number = frame_number;
 
     // signal frame is now ready
     PTHREAD_MUTEX_LOCK( &pc->m_lastframe )
@@ -1018,17 +1198,20 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
         // subsequent dummy frames will increment by 1
         int last_vitc = derive_timecode_from_master(tod_tc_read, NULL);
         int last_ltc = derive_timecode_from_master(tod_tc_read, NULL);
+        int last_dvitc = derive_timecode_from_master(tod_tc_read, NULL);
+        int last_dltc = derive_timecode_from_master(tod_tc_read, NULL);
 
         int i;
         for (i = 0; i < num_dummy_frames; i++) {
             // Read ring buffer info
             int                 ring_len = p_control->ringlen;
             NexusBufCtl         *pc = &(p_control->channel[chan]);
+            NexusFrameData * nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe + 1) % ring_len) + frame_data_offset);
 
             // Set frame number
             // Do this first in order to mark video as changed before we start to change it.
             int frame_number = pc->lastframe + 1;
-            memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + frame_number_offset, &frame_number, sizeof(int));
+            nfd->frame_number = frame_number;
 
             // dummy video frame
             uint8_t *vid_dest = ring[chan] + element_size * ((pc->lastframe+1) % ring_len);
@@ -1054,26 +1237,35 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
             // write silent 4 channels of 32bit audio
             memset(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + audio_offset, 0, 1920*4*4);
 
+            NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
             // Increment timecode by 1 for dummy frames after the first
             if (i > 0) {
                 if (pc->lastframe >= 0) {
-                    last_vitc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + vitc_offset);
-                    last_ltc = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + ltc_offset);
+                    last_vitc = last_nfd->vitc;
+                    last_ltc = last_nfd->ltc;
+                    last_dvitc = last_nfd->dvitc;
+                    last_dltc = last_nfd->dltc;
                 }
                 last_vitc++;
                 last_ltc++;
+                last_dvitc++;
+                last_dltc++;
             }
             int last_ftk = 0;
             if (pc->lastframe >= 0) {
-                last_ftk = *(int *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + tick_offset);
+                last_ftk = last_nfd->tick;
             }
             last_ftk++;
-            memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + vitc_offset, &last_vitc, sizeof(int));
-            memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + ltc_offset, &last_ltc, sizeof(int));
-            memcpy(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + tick_offset, &last_ftk, sizeof(int));
+
+            nfd->vitc = last_vitc;
+            nfd->ltc = last_ltc;
+            nfd->dvitc = last_dvitc;
+            nfd->dltc = last_dltc;
+            nfd->tick = last_ftk;
+            //TODO nfd->systc
 
             // Indicate we've got a bad video signal
-            *(int *)(ring[chan] + element_size * ((pc->lastframe+1) % ring_len) + signal_ok_offset) = 0;
+            nfd->signal_ok = 0;
 
             if (verbose)
             {
@@ -1115,7 +1307,7 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
 
             // update time-of-day the timecodes were read
             PTHREAD_MUTEX_LOCK( &m_master_tc )
-            master_tc = (master_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
+            master_tc = (timecode_type == NexusTC_LTC) ? ltc_as_int : vitc_as_int;
             master_tod = tod_tc_read;
             PTHREAD_MUTEX_UNLOCK( &m_master_tc )
         }
@@ -1280,11 +1472,8 @@ static void usage_exit(void)
     fprintf(stderr, "                         trilevel  - analog trilevel sync [default for HD modes]\n");
     fprintf(stderr, "                         internal  - freerunning\n");
     fprintf(stderr, "                         external  - sync to incoming SDI signal\n");
-    fprintf(stderr, "    -mt <master tc type> type of master channel timecode to use: VITC, LTC, OFF\n");
-    fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7\n");
-    fprintf(stderr, "    -rt <recover type>   timecode type to calculate missing frames to recover: VITC, LTC\n");
-    fprintf(stderr, "    -anctc               read \"DLTC\" and \"DVITC\" timecodes from RP188/RP196 ANC data\n");
-    fprintf(stderr, "                         instead of SMPTE-12M LTC and VITC\n");
+    fprintf(stderr, "    -tt <tc type>        preferred type of timecode to use: VITC, LTC, DVITC, DLTC, SYS [default VITC]\n");
+    fprintf(stderr, "    -mc <master ch>      channel to use as timecode master: 0..7 [default -1 i.e. no master]\n");
     fprintf(stderr, "    -c <max channels>    maximum number of channels to use for capture\n");
     fprintf(stderr, "    -m <max memory MiB>  maximum memory to use for ring buffers in MiB\n");
     fprintf(stderr, "    -a8                  use 8 audio tracks per video channel\n");
@@ -1352,19 +1541,20 @@ int main (int argc, char ** argv)
             logfiledir = argv[n+1];
             n++;
         }
-        else if (strcmp(argv[n], "-mt") == 0)
+        else if (strcmp(argv[n], "-tt") == 0)
         {
-            if (argc <= n+1)
+            if (argc <= n+1) {
                 usage_exit();
+            }
 
             if (strcmp(argv[n+1], "VITC") == 0) {
-                master_type = NexusTC_VITC;
+                timecode_type = NexusTC_VITC;
             }
             else if (strcmp(argv[n+1], "LTC") == 0) {
-                master_type = NexusTC_LTC;
+                timecode_type = NexusTC_LTC;
             }
-            else if (strcmp(argv[n+1], "OFF") == 0 || strcmp(argv[n+1], "None") == 0) {
-                master_type = NexusTC_None;
+            else if (strcmp(argv[n+1], "SYS") == 0) {
+                timecode_type = NexusTC_SYSTEM;
             }
             else {
                 usage_exit();
@@ -1377,13 +1567,14 @@ int main (int argc, char ** argv)
                 usage_exit();
 
             if (sscanf(argv[n+1], "%d", &master_channel) != 1 ||
-                master_channel > 7 || master_channel < 0)
+                master_channel > 7)
             {
-                fprintf(stderr, "-mc requires channel number from 0..7\n");
+                fprintf(stderr, "-mc requires channel number from 0..7 or -1 for no master\n");
                 return 1;
             }
             n++;
         }
+        /*
         else if (strcmp(argv[n], "-rt") == 0)
         {
             if (argc <= n+1)
@@ -1400,10 +1591,7 @@ int main (int argc, char ** argv)
             }
             n++;
         }
-        else if (strcmp(argv[n], "-anctc") == 0)
-        {
-            anc_tc = 1;
-        }
+        */
         else if (strcmp(argv[n], "-m") == 0)
         {
             if (sscanf(argv[n+1], "%lld", &opt_max_memory) != 1) {
@@ -1606,14 +1794,16 @@ int main (int argc, char ** argv)
         return 1;
     }
 
-    if (master_type == NexusTC_None)
+    if (master_channel < 0) {
         logTF("Master timecode not used\n");
-    else
+    }
+    else {
         logTF("Master timecode type is %s using channel %d\n",
-                master_type == NexusTC_VITC ? "VITC" : "LTC", master_channel);
+            nexus_timecode_type_name(timecode_type), master_channel);
+    }
 
     logTF("Using %s to determine number of frames to recover when video re-aquired\n",
-            recover_timecode_type == RecoverVITC ? "VITC" : "LTC");
+            nexus_timecode_type_name(timecode_type));
 
     if (audio8ch)
     {
@@ -1884,10 +2074,12 @@ int main (int argc, char ** argv)
     }
     audio_offset = dma_video_size;
 
-    // Max audio_size (8ch) is 0x10000 = 65536
-    // 1920 * 4 * 8 = 61440
-    // audio_size is greater than 1920 * 4 * (4 or 8)
+    // Max audio_size (8ch) is 0x10000      = 65536
+    // Max audio data (8ch) is 1920 * 4 * 8 = 61440
     // so we use the spare bytes at end for timecode and other data
+    frame_data_offset = audio_offset + audio_size - sizeof(NexusFrameData);
+
+    /*
     vitc_offset         = audio_offset + audio_size - 1 * sizeof(int);
     ltc_offset          = audio_offset + audio_size - 2 * sizeof(int);
     sys_time_offset     = audio_offset + audio_size - 3 * sizeof(int);
@@ -1895,6 +2087,7 @@ int main (int argc, char ** argv)
     signal_ok_offset    = audio_offset + audio_size - 5 * sizeof(int);
     num_aud_samp_offset = audio_offset + audio_size - 6 * sizeof(int);
     frame_number_offset = audio_offset + audio_size - 7 * sizeof(int);
+    */
 
     // An element in the ring buffer contains: video(4:2:2) + audio + video(4:2:0)
     dma_total_size = dma_video_size     // video frame as captured by dma transfer

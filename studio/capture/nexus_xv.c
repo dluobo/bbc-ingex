@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_xv.c,v 1.4 2009/02/26 19:24:52 john_f Exp $
+ * $Id: nexus_xv.c,v 1.5 2009/10/12 15:11:46 john_f Exp $
  *
  * Utility to display current video frame on X11 display.
  *
@@ -31,7 +31,7 @@
 #include <inttypes.h>
 
 #include <signal.h>
-#include <unistd.h>	
+#include <unistd.h> 
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
@@ -68,12 +68,12 @@ int verbose = 1;
 
 static int XVideoGetPort( Display *p_display,
                           int32_t i_chroma,
-						  int i_requested_adaptor)		// -1 for autoscan
+                          int i_requested_adaptor)      // -1 for autoscan
 {
     XvAdaptorInfo *p_adaptor;
     unsigned int i;
     int i_adaptor;
-	unsigned int i_num_adaptors;
+    unsigned int i_num_adaptors;
     int i_selected_port;
 
     switch( XvQueryExtension( p_display, &i, &i, &i, &i, &i ) )
@@ -148,7 +148,7 @@ static int XVideoGetPort( Display *p_display,
             XvAttribute     *p_attr;
             int             i_attr, i_num_attributes;
 
-			/* Matching chroma? */
+            /* Matching chroma? */
             if( p_formats[ i_format ].id != i_chroma )
             {
                 continue;
@@ -175,8 +175,8 @@ static int XVideoGetPort( Display *p_display,
             }
 
             /* If we found a port, print information about it */
-			if (verbose)
-	            fprintf( stderr, "adaptor %i, port %i, format 0x%x (%4.4s) %s\n",
+            if (verbose)
+                fprintf( stderr, "adaptor %i, port %i, format 0x%x (%4.4s) %s\n",
                      i_adaptor, i_selected_port, p_formats[ i_format ].id,
                      (char *)&p_formats[ i_format ].id,
                      ( p_formats[ i_format ].format == XvPacked ) ?
@@ -244,18 +244,18 @@ static void XVideoReleasePort( Display *p_display, int i_port )
 
 static char *framesToStr(int tc, char *s)
 {
-	int frames = tc % 25;
-	int hours = (int)(tc / (60 * 60 * 25));
-	int minutes = (int)((tc - (hours * 60 * 60 * 25)) / (60 * 25));
-	int seconds = (int)((tc - (hours * 60 * 60 * 25) - (minutes * 60 * 25)) / 25);
+    int frames = tc % 25;
+    int hours = (int)(tc / (60 * 60 * 25));
+    int minutes = (int)((tc - (hours * 60 * 60 * 25)) / (60 * 25));
+    int seconds = (int)((tc - (hours * 60 * 60 * 25) - (minutes * 60 * 25)) / 25);
 
-	if (tc < 0 || frames < 0 || hours < 0 || minutes < 0 || seconds < 0
-		|| hours > 59 || minutes > 59 || seconds > 59 || frames > 24)
-		sprintf(s, "             ");
-		//sprintf(s, "* INVALID *  ");
-	else
-		sprintf(s, "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames);
-	return s;
+    if (tc < 0 || frames < 0 || hours < 0 || minutes < 0 || seconds < 0
+        || hours > 59 || minutes > 59 || seconds > 59 || frames > 24)
+        sprintf(s, "             ");
+        //sprintf(s, "* INVALID *  ");
+    else
+        sprintf(s, "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames);
+    return s;
 }
 
 static void usage_exit(void)
@@ -264,247 +264,253 @@ static void usage_exit(void)
     fprintf(stderr, "\n");
     fprintf(stderr, "    -c channel view video on given channel [default 0]\n");
     fprintf(stderr, "    -p         view primary video [default secondary]\n");
-	exit(1);
+    exit(1);
 }
 
 extern int main(int argc, char *argv[])
 {
-	int				shm_id, control_id;
-	uint8_t			*ring[MAX_CHANNELS];
-	NexusControl	*pctl = NULL;
-	int				channelnum = 0, sec_video = 1;
+    int             shm_id, control_id;
+    uint8_t         *ring[MAX_CHANNELS];
+    NexusControl    *pctl = NULL;
+    int             channelnum = 0, sec_video = 1;
 
-	int n;
-	for (n = 1; n < argc; n++)
-	{
-		if (strcmp(argv[n], "-q") == 0)
-		{
-			verbose = 0;
-		}
-		else if (strcmp(argv[n], "-c") == 0)
-		{
-			if (n+1 >= argc ||
-				sscanf(argv[n+1], "%d", &channelnum) != 1 ||
-				channelnum > 7 || channelnum < 0)
-			{
-				fprintf(stderr, "-c requires integer channel number {0...7}\n");
-				return 1;
-			}
-			n++;
-		}
-		else if (strcmp(argv[n], "-p") == 0)
-		{
-			sec_video = 0;
-		}
-		else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
-		{
-			usage_exit();
-		}
-	}
-
-
-	// If shared memory not found, sleep and try again
-	if (verbose) {
-		printf("Waiting for shared memory... ");
-		fflush(stdout);
-	}
-
-	while (1)
-	{
-		control_id = shmget(9, sizeof(*pctl), 0444);
-		if (control_id != -1)
-			break;
-		usleep(20 * 1000);
-	}
-
-	pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
-	if (verbose)
-		printf("connected to pctl\n");
-
-	if (verbose)
-		printf("  channels=%d elementsize=%d ringlen=%d\n",
-				pctl->channels,
-				pctl->elementsize,
-				pctl->ringlen);
-
-	if (channelnum+1 > pctl->channels)
-	{
-		printf("  channelnum not available\n");
-		return 1;
-	}
-
-	int i;
-	for (i = 0; i < pctl->channels; i++)
-	{
-		while (1)
-		{
-			shm_id = shmget(10 + i, pctl->elementsize, 0444);
-			if (shm_id != -1)
-				break;
-			usleep(20 * 1000);
-		}
-		ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
-		if (verbose)
-			printf("  attached to channel[%d]\n", i);
-	}
-
-	int yuv420_mode = 0;
-	int format_convert = 0;
-	int width, height;
-
-	if (sec_video) {
-		if (pctl->sec_video_format != Format420PlanarYUV &&
-			pctl->sec_video_format != Format420PlanarYUVShifted) {
-			format_convert = 1;
-			printf("Using software convert to UYVY from secondary format %s\n", nexus_capture_format_name(pctl->sec_video_format));
-		}
-		switch (pctl->sec_video_format) {
-			case Format420PlanarYUV:
-			case Format420PlanarYUVShifted:
-				yuv420_mode = 1;
-				break;
-			case FormatNone:
-				printf("No secondary video\n");
-				return 1;
-				break;
-			default:
-				break;
-		}
-		width = pctl->sec_width;
-		height = pctl->sec_height;
-	}
-	else {
-		if (pctl->pri_video_format != Format422UYVY) {
-			format_convert = 1;
-			printf("Using software convert to UYVY from primary format %s\n", nexus_capture_format_name(pctl->pri_video_format));
-		}
-		yuv420_mode = 0;
-		width = pctl->width;
-		height = pctl->height;
-	}
-	printf("Picture is %dx%d\n", width, height);
-
-	int						xvport;
-	Display					*display;
-	Window					window;
-	GC						gc;
-	XvImage					*yuv_image = NULL;
-	char					title_string[256] = {0};
-
-		if ((display = XOpenDisplay(NULL)) == NULL)
-		{
-			fprintf(stderr, "Cannot open Display.\n");
-			exit(1);
-		}
-	
-	    /* Check that we have access to an XVideo port providing this chroma	*/
-		/* Commonly supported chromas: YV12, I420, UYVY, YUY2					*/
-	    xvport = XVideoGetPort( display,
-				yuv420_mode ? X11_FOURCC('I','4','2','0') :
-							X11_FOURCC('U','Y','V','Y'),
-									-1);
-	    if ( xvport < 0 )
-	    {
-			fprintf(stderr, "Cannot find an xv port for requested chroma format\n");
-			exit(1);
-	    }
-	
-		/* Setup X parameters */
-		XSetWindowAttributes    x_attr;
-		x_attr.background_pixel = 0;
-		x_attr.backing_store = Always;
-		x_attr.event_mask = ExposureMask | StructureNotifyMask;
-	
-		window = XCreateWindow(display, DefaultRootWindow(display),
-					0, 0, width, height,
-					0, 0, InputOutput, 0,
-					CWBackingStore | CWBackPixel | CWEventMask, &x_attr);
-		snprintf(title_string, sizeof(title_string)-1, "Nexus Monitor Input %d", channelnum);
-		XStoreName(display, window, title_string);
-		XSelectInput(display, window, StructureNotifyMask);
-		XMapWindow(display, window);
-	
-		XEvent					event;
-		do {
-			XNextEvent(display, &event);
-		} while (event.type != MapNotify || event.xmap.event != window);
-	
-		gc = XCreateGC(display, window, 0, 0);
-
-		// Uncompressed video will be written into video_buffer[0] by libdv
-		XShmSegmentInfo			yuv_shminfo;
-		yuv_image = XvShmCreateImage(display, xvport,
-						yuv420_mode ? X11_FOURCC('I','4','2','0') : X11_FOURCC('U','Y','V','Y'),
-						0, width, height, &yuv_shminfo);
-		yuv_shminfo.shmid = shmget(IPC_PRIVATE, yuv_image->data_size,
-									IPC_CREAT | 0777);
-		yuv_image->data = (char*)shmat(yuv_shminfo.shmid, 0, 0);
-		yuv_shminfo.shmaddr = yuv_image->data;
-		yuv_shminfo.readOnly = False;
-	
-		if (!XShmAttach(display, &yuv_shminfo))
-		{
-			fprintf(stderr, "XShmAttach failed\n");
-			exit(1);
-		}
+    int n;
+    for (n = 1; n < argc; n++)
+    {
+        if (strcmp(argv[n], "-q") == 0)
+        {
+            verbose = 0;
+        }
+        else if (strcmp(argv[n], "-c") == 0)
+        {
+            if (n+1 >= argc ||
+                sscanf(argv[n+1], "%d", &channelnum) != 1 ||
+                channelnum > 7 || channelnum < 0)
+            {
+                fprintf(stderr, "-c requires integer channel number {0...7}\n");
+                return 1;
+            }
+            n++;
+        }
+        else if (strcmp(argv[n], "-p") == 0)
+        {
+            sec_video = 0;
+        }
+        else if (strcmp(argv[n], "-h") == 0 || strcmp(argv[n], "--help") == 0)
+        {
+            usage_exit();
+        }
+    }
 
 
-	NexusBufCtl *pc;
-	pc = &pctl->channel[channelnum];
-	int tc, ltc;
-	int last_saved = -1;
- 	int frame_size = width*height*2;
-	int video_offset = 0;
-	char tcstr[32], ltcstr[32];
-	if (yuv420_mode) {
-		frame_size = width*height*3/2;
-		video_offset = pctl->sec_video_offset;
-	}
+    // If shared memory not found, sleep and try again
+    if (verbose) {
+        printf("Waiting for shared memory... ");
+        fflush(stdout);
+    }
 
-	while (1)
-	{
-		if (last_saved == pc->lastframe)
-		{
-			usleep(20 * 1000);		// 0.020 seconds = 50 times a sec
-			continue;
-		}
+    while (1)
+    {
+        control_id = shmget(9, sizeof(*pctl), 0444);
+        if (control_id != -1)
+            break;
+        usleep(20 * 1000);
+    }
 
-		tc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
-							+ pctl->vitc_offset);
-		ltc = *(int*)(ring[channelnum] + pctl->elementsize *
-									(pc->lastframe % pctl->ringlen)
-							+ pctl->ltc_offset);
+    pctl = (NexusControl*)shmat(control_id, NULL, SHM_RDONLY);
+    if (verbose)
+        printf("connected to pctl\n");
 
-		uint8_t *in_video = ring[channelnum] + video_offset +
-									pctl->elementsize *
-									(pc->lastframe % pctl->ringlen);
+    if (verbose)
+        printf("  channels=%d elementsize=%d ringlen=%d\n",
+                pctl->channels,
+                pctl->elementsize,
+                pctl->ringlen);
 
-		if (format_convert) {
-			yuv422_to_uyvy(width, height, 0, in_video, (uint8_t*)yuv_image->data);
-		}
-		else {
-			memcpy(yuv_image->data, in_video, frame_size);
-		}
+    if (channelnum+1 > pctl->channels)
+    {
+        printf("  channelnum not available\n");
+        return 1;
+    }
 
-		XvShmPutImage(display, xvport, window, gc, yuv_image,
-						0, 0, yuv_image->width, yuv_image->height,
-						0, 0, yuv_image->width, yuv_image->height,
-						False);
-		XSync(display, False);
+    int i;
+    for (i = 0; i < pctl->channels; i++)
+    {
+        while (1)
+        {
+            shm_id = shmget(10 + i, pctl->elementsize, 0444);
+            if (shm_id != -1)
+                break;
+            usleep(20 * 1000);
+        }
+        ring[i] = (uint8_t*)shmat(shm_id, NULL, SHM_RDONLY);
+        if (verbose)
+            printf("  attached to channel[%d]\n", i);
+    }
 
-		if (verbose) {
-			printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
-					channelnum, pc->lastframe,
-					tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
-			fflush(stdout);
-		}
+    int yuv420_mode = 0;
+    int format_convert = 0;
+    int width, height;
 
-		last_saved = pc->lastframe;
-	}
+    if (sec_video) {
+        if (pctl->sec_video_format != Format420PlanarYUV &&
+            pctl->sec_video_format != Format420PlanarYUVShifted) {
+            format_convert = 1;
+            printf("Using software convert to UYVY from secondary format %s\n", nexus_capture_format_name(pctl->sec_video_format));
+        }
+        switch (pctl->sec_video_format) {
+            case Format420PlanarYUV:
+            case Format420PlanarYUVShifted:
+                yuv420_mode = 1;
+                break;
+            case FormatNone:
+                printf("No secondary video\n");
+                return 1;
+                break;
+            default:
+                break;
+        }
+        width = pctl->sec_width;
+        height = pctl->sec_height;
+    }
+    else {
+        if (pctl->pri_video_format != Format422UYVY) {
+            format_convert = 1;
+            printf("Using software convert to UYVY from primary format %s\n", nexus_capture_format_name(pctl->pri_video_format));
+        }
+        yuv420_mode = 0;
+        width = pctl->width;
+        height = pctl->height;
+    }
+    printf("Picture is %dx%d\n", width, height);
 
-	XVideoReleasePort(display, xvport);
+    int                     xvport;
+    Display                 *display;
+    Window                  window;
+    GC                      gc;
+    XvImage                 *yuv_image = NULL;
+    char                    title_string[256] = {0};
 
-	return 0;
+        if ((display = XOpenDisplay(NULL)) == NULL)
+        {
+            fprintf(stderr, "Cannot open Display.\n");
+            exit(1);
+        }
+    
+        /* Check that we have access to an XVideo port providing this chroma    */
+        /* Commonly supported chromas: YV12, I420, UYVY, YUY2                   */
+        xvport = XVideoGetPort( display,
+                yuv420_mode ? X11_FOURCC('I','4','2','0') :
+                            X11_FOURCC('U','Y','V','Y'),
+                                    -1);
+        if ( xvport < 0 )
+        {
+            fprintf(stderr, "Cannot find an xv port for requested chroma format\n");
+            exit(1);
+        }
+    
+        /* Setup X parameters */
+        XSetWindowAttributes    x_attr;
+        x_attr.background_pixel = 0;
+        x_attr.backing_store = Always;
+        x_attr.event_mask = ExposureMask | StructureNotifyMask;
+    
+        window = XCreateWindow(display, DefaultRootWindow(display),
+                    0, 0, width, height,
+                    0, 0, InputOutput, 0,
+                    CWBackingStore | CWBackPixel | CWEventMask, &x_attr);
+        snprintf(title_string, sizeof(title_string)-1, "Nexus Monitor Input %d", channelnum);
+        XStoreName(display, window, title_string);
+        XSelectInput(display, window, StructureNotifyMask);
+        XMapWindow(display, window);
+    
+        XEvent                  event;
+        do {
+            XNextEvent(display, &event);
+        } while (event.type != MapNotify || event.xmap.event != window);
+    
+        gc = XCreateGC(display, window, 0, 0);
+
+        // Uncompressed video will be written into video_buffer[0] by libdv
+        XShmSegmentInfo         yuv_shminfo;
+        yuv_image = XvShmCreateImage(display, xvport,
+                        yuv420_mode ? X11_FOURCC('I','4','2','0') : X11_FOURCC('U','Y','V','Y'),
+                        0, width, height, &yuv_shminfo);
+        yuv_shminfo.shmid = shmget(IPC_PRIVATE, yuv_image->data_size,
+                                    IPC_CREAT | 0777);
+        yuv_image->data = (char*)shmat(yuv_shminfo.shmid, 0, 0);
+        yuv_shminfo.shmaddr = yuv_image->data;
+        yuv_shminfo.readOnly = False;
+    
+        if (!XShmAttach(display, &yuv_shminfo))
+        {
+            fprintf(stderr, "XShmAttach failed\n");
+            exit(1);
+        }
+
+
+    NexusBufCtl *pc;
+    pc = &pctl->channel[channelnum];
+    int tc, ltc;
+    int last_saved = -1;
+    int frame_size = width*height*2;
+    int video_offset = 0;
+    char tcstr[32], ltcstr[32];
+    if (yuv420_mode) {
+        frame_size = width*height*3/2;
+        video_offset = pctl->sec_video_offset;
+    }
+
+    while (1)
+    {
+        if (last_saved == pc->lastframe)
+        {
+            usleep(20 * 1000);      // 0.020 seconds = 50 times a sec
+            continue;
+        }
+
+        NexusFrameData * nfd = (NexusFrameData *)(ring[channelnum] + pctl->elementsize * (pc->lastframe % pctl->ringlen) + pctl->frame_data_offset);
+
+        tc = nfd->vitc;
+        ltc = nfd->ltc;
+        /*
+        tc = *(int*)(ring[channelnum] + pctl->elementsize *
+                                    (pc->lastframe % pctl->ringlen)
+                            + pctl->vitc_offset);
+        ltc = *(int*)(ring[channelnum] + pctl->elementsize *
+                                    (pc->lastframe % pctl->ringlen)
+                            + pctl->ltc_offset);
+        */
+
+        uint8_t *in_video = ring[channelnum] + video_offset +
+                                    pctl->elementsize *
+                                    (pc->lastframe % pctl->ringlen);
+
+        if (format_convert) {
+            yuv422_to_uyvy(width, height, 0, in_video, (uint8_t*)yuv_image->data);
+        }
+        else {
+            memcpy(yuv_image->data, in_video, frame_size);
+        }
+
+        XvShmPutImage(display, xvport, window, gc, yuv_image,
+                        0, 0, yuv_image->width, yuv_image->height,
+                        0, 0, yuv_image->width, yuv_image->height,
+                        False);
+        XSync(display, False);
+
+        if (verbose) {
+            printf("\rcam%d lastframe=%d  tc=%10d  %s   ltc=%11d  %s ",
+                    channelnum, pc->lastframe,
+                    tc, framesToStr(tc, tcstr), ltc, framesToStr(ltc, ltcstr));
+            fflush(stdout);
+        }
+
+        last_saved = pc->lastframe;
+    }
+
+    XVideoReleasePort(display, xvport);
+
+    return 0;
 }
 
