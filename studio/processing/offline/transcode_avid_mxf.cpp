@@ -1,5 +1,5 @@
 /*
- * $Id: transcode_avid_mxf.cpp,v 1.11 2009/09/18 17:05:47 philipn Exp $
+ * $Id: transcode_avid_mxf.cpp,v 1.12 2009/10/12 18:48:51 john_f Exp $
  *
  * Transcodes Avid MXF files
  *
@@ -66,9 +66,10 @@ extern "C"
 #include <string>
 
 #include <Database.h>
-#include <MXFWriter.h>
+#include <MXFOPAtomWriter.h>
 #include <MXFWriterException.h>
 #include <MXFUtils.h>
+#include <OPAtomPackageCreator.h>
 #include <Utilities.h>
 #include <DBException.h>
 #include <Logging.h>
@@ -207,6 +208,22 @@ public:
     prodauto::PackageSet packages;
 
     map<prodauto::UMID, string> packageToFilepathMap;
+};
+
+class TranscodePackageGroup : public prodauto::PackageGroup
+{
+public:
+    TranscodePackageGroup(bool is_pal_project, int op)
+    : prodauto::PackageGroup(is_pal_project, op)
+    {
+    }
+    virtual ~TranscodePackageGroup()
+    {
+        // make package pointers null because they are owned by MaterialHolder
+        mMaterialPackage = 0;
+        mFileSourcePackages.clear();
+        mTapeSourcePackage = 0;
+    }
 };
 
     
@@ -610,19 +627,19 @@ static int receive_frame(mxfr::MXFReaderListener* listener, int trackIndex, uint
 
     if (stream->isVideo)
     {
-        transcode->mxfWriter->writeSample(stream->materialTrackID, 1, outputBuffer, outputBufferSize);    
+        transcode->mxfWriter->WriteSamples(stream->materialTrackID, 1, outputBuffer, outputBufferSize);    
     }
     else
     {
         // TODO: hardcoded num samples
         if (transcode->isPALProject)
         {
-            transcode->mxfWriter->writeSample(stream->materialTrackID, 48000/25, outputBuffer, outputBufferSize);
+            transcode->mxfWriter->WriteSamples(stream->materialTrackID, 48000/25, outputBuffer, outputBufferSize);
         }
         else
         {
             assert(false); // NTSC audio reading not yet supported in MXFReader
-            transcode->mxfWriter->writeSample(stream->materialTrackID, 48000/30, outputBuffer, outputBufferSize);
+            transcode->mxfWriter->WriteSamples(stream->materialTrackID, 48000/30, outputBuffer, outputBufferSize);
         }
     }
     
@@ -652,6 +669,7 @@ int get_stream(MaterialHolder& sourceMaterial, prodauto::UMID uid, vector<string
 
 int transcode_avid_mxf(Decoder* decoder,
                        vector<string>& inputFiles, 
+                       uint32_t umidGenOffset,
                        MaterialHolder& sourceMaterial,
                        string outputPrefix,
                        string creatingDirectory, 
@@ -665,12 +683,9 @@ int transcode_avid_mxf(Decoder* decoder,
     int i;
     int result;
     int eof;
-    prodauto::MaterialPackage* pa_materialPackage = 0;
-    prodauto::SourcePackage* pa_tapePackage = 0;
-    vector<prodauto::SourcePackage*> pa_filePackages;
+    TranscodePackageGroup *packageGroup = 0;
     mxfPosition startPosition = 0;
     uint32_t audioQuantizationBits = 16;
-    int videoResolutionID = MJPEG201_MATERIAL_RESOLUTION;
     prodauto::Rational imageAspectRatio = prodauto::g_4x3ImageAspect;
     prodauto::PackageSet::iterator iter1;
     vector<prodauto::SourcePackage*>::const_iterator iter2;
@@ -679,9 +694,14 @@ int transcode_avid_mxf(Decoder* decoder,
     transcode.decoder = decoder;
     transcode.isPALProject = true;
     
+
     // get material, file and tape source packages
+    
+    packageGroup = new TranscodePackageGroup(transcode.isPALProject, OPERATIONAL_PATTERN_ATOM);
+    
     CHK_OFAIL(sourceMaterial.sourceMaterialPackage->getType() == prodauto::MATERIAL_PACKAGE);
-    pa_materialPackage = dynamic_cast<prodauto::MaterialPackage*>(sourceMaterial.sourceMaterialPackage);
+    packageGroup->SetMaterialPackage(dynamic_cast<prodauto::MaterialPackage*>(sourceMaterial.sourceMaterialPackage));
+    
     for (iter1 = sourceMaterial.packages.begin(); iter1 != sourceMaterial.packages.end(); iter1++)
     {
         prodauto::Package* package = *iter1;
@@ -694,25 +714,27 @@ int transcode_avid_mxf(Decoder* decoder,
         
         if (sourcePackage->descriptor->getType() == FILE_ESSENCE_DESC_TYPE)
         {
-            pa_filePackages.push_back(sourcePackage);
+            packageGroup->AppendFileSourcePackage(sourcePackage);
         }
         else
         {
-            pa_tapePackage = sourcePackage;
+            packageGroup->SetTapeSourcePackage(sourcePackage, true);
         }
     }
     
     
     // modify existing packages to create the new material
     
-    // modify package id and recuresively set objects as not loaded
-    pa_materialPackage->cloneInPlace(prodauto::generateUMID(), true);
+    // modify package id and recursively set objects as not loaded
+    packageGroup->GetMaterialPackage()->cloneInPlace(prodauto::generateUMID(umidGenOffset), true);
 
     // modify the file source package UID and video resolution if appropriate; also get info
-    for (iter2 = pa_filePackages.begin(); iter2 != pa_filePackages.end(); iter2++)
+    for (iter2 = packageGroup->GetFileSourcePackages().begin();
+         iter2 != packageGroup->GetFileSourcePackages().end();
+         iter2++)
     {
         prodauto::SourcePackage* filePackage = *iter2;
-        prodauto::UMID newFilePackageUID = prodauto::generateUMID();
+        prodauto::UMID newFilePackageUID = prodauto::generateUMID(umidGenOffset);
         int streamIndex = get_stream(sourceMaterial, filePackage->uid, inputFiles);
         
         prodauto::FileEssenceDescriptor* fileDescriptor = dynamic_cast<prodauto::FileEssenceDescriptor*>(filePackage->descriptor);
@@ -737,7 +759,8 @@ int transcode_avid_mxf(Decoder* decoder,
             {
                 prodauto::Track* track = *iter5;
             
-                if (track->sourceClip != 0 && track->sourceClip->sourcePackageUID == pa_tapePackage->uid)
+                if (track->sourceClip != 0 &&
+                    track->sourceClip->sourcePackageUID == packageGroup->GetTapeSourcePackage()->uid)
                 {
                     startPosition = track->sourceClip->position;
                     if (track->editRate.numerator == 25 &&
@@ -763,7 +786,9 @@ int transcode_avid_mxf(Decoder* decoder,
         // find the track in the material package and modify the source clip
         // also set the materialTrackID for the stream
         vector<prodauto::Track*>::const_iterator iter3;
-        for (iter3 = pa_materialPackage->tracks.begin(); iter3 != pa_materialPackage->tracks.end(); iter3++)
+        for (iter3 = packageGroup->GetMaterialPackage()->tracks.begin();
+             iter3 != packageGroup->GetMaterialPackage()->tracks.end();
+             iter3++)
         {
             prodauto::Track* track = *iter3;
             
@@ -783,23 +808,26 @@ int transcode_avid_mxf(Decoder* decoder,
     {
         // create mxf writer
     
-        // TODO: MXFWriter should extract videoResolution, imageAspectRatio, audioQuantizationBits, startPosition
-        // from the file packages.
-        transcode.mxfWriter = new prodauto::MXFWriter(pa_materialPackage, 
-            pa_filePackages,
-            pa_tapePackage, 
-            false, 
-            transcode.isPALProject,
-            videoResolutionID,
-            imageAspectRatio,
-            audioQuantizationBits,
-            startPosition,
-            creatingDirectory,
-            destinationDirectory,
-            failureDirectory,
-            outputPrefix,
-            pa_materialPackage->getUserComments(),
-            pa_materialPackage->projectName); 
+        transcode.mxfWriter = new prodauto::MXFOPAtomWriter();
+
+        vector<prodauto::Track*>::const_iterator iter5;
+        for (iter5 = packageGroup->GetMaterialPackage()->tracks.begin();
+             iter5 != packageGroup->GetMaterialPackage()->tracks.end();
+             iter5++)
+        {
+            prodauto::Track *track = *iter5;
+            
+            string fileLocation = prodauto::OPAtomPackageCreator::CreateFileLocation(outputPrefix, ".mxf",
+                                                                                     track->dataDef, track->id,
+                                                                                     track->number);
+            packageGroup->UpdateFileLocation(track->id, fileLocation);
+        }
+        
+        transcode.mxfWriter->SetCreatingDirectory(creatingDirectory);
+        transcode.mxfWriter->SetDestinationDirectory(destinationDirectory);
+        transcode.mxfWriter->SetFailureDirectory(failureDirectory);
+        
+        transcode.mxfWriter->PrepareToWrite(packageGroup, true);
 
             
         // initialise transcode
@@ -862,7 +890,7 @@ int transcode_avid_mxf(Decoder* decoder,
         
         // complete writing
         
-        transcode.mxfWriter->completeAndSaveToDatabase();
+        transcode.mxfWriter->CompleteWriting(true);
     }
     catch (...)
     {
@@ -1528,9 +1556,9 @@ int main(int argc, const char* argv[])
                     prodauto::Logging::info("  Updated transcode status to STARTED\n");
                     
                     prodauto::Logging::info("  Performing transcode\n");
-                    if (transcode_avid_mxf(&decoder, inputFiles, sourceMaterial, 
-                        outputPrefix.c_str(), 
-                        creatingDirectory.c_str(), actualDestinationDirectory.c_str(), failureDirectory.c_str(),
+                    if (transcode_avid_mxf(&decoder, inputFiles, database.instance()->getUMIDGenOffset(),
+                        sourceMaterial, outputPrefix.c_str(), creatingDirectory.c_str(),
+                        actualDestinationDirectory.c_str(), failureDirectory.c_str(),
                         numFFMPEGThreads, inputVideoResolutionID, outputVideoResolutionID))
                     {
                         // update with success status      
