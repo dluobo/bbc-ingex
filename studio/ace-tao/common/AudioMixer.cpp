@@ -1,5 +1,5 @@
 /*
- * $Id: AudioMixer.cpp,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: AudioMixer.cpp,v 1.2 2009/10/12 14:42:40 john_f Exp $
  *
  * Simple class for mixing 4 audio tracks into 2 tracks.
  *
@@ -64,7 +64,7 @@ Specify the type of mix matrix you want.
 void AudioMixer::SetMix(EnumeratedMatrix matrix)
 {
     // Setup the mixing matrix.
-    switch(matrix)
+    switch (matrix)
     {
     case CH12:
         // Simply copy channels 1 and 2 to output
@@ -75,6 +75,17 @@ void AudioMixer::SetMix(EnumeratedMatrix matrix)
         m21 = 0.0;
         m22 = 1.0;
         m23 = 0.0;
+        m24 = 0.0;
+        break;
+    case CH12L3R:
+        // Channel 1 & 2 mixed to left, channel 3 to right e.g. for speaking clock
+        m11 = 0.707;
+        m12 = 0.707;
+        m13 = 0.0;
+        m14 = 0.0;
+        m21 = 0.0;
+        m22 = 0.0;
+        m23 = 1.0;
         m24 = 0.0;
         break;
     case COMMENTARY3:

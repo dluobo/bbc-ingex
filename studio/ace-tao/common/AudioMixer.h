@@ -1,5 +1,5 @@
 /*
- * $Id: AudioMixer.h,v 1.1 2007/09/11 14:08:32 stuart_hc Exp $
+ * $Id: AudioMixer.h,v 1.2 2009/10/12 14:42:41 john_f Exp $
  *
  * Simple class for mixing 4 audio tracks into 2 tracks.
  *
@@ -36,7 +36,7 @@ Audio mixer to mix from 4 channels to 2 channels.
 class AudioMixer
 {
 public:
-    enum EnumeratedMatrix { CH12, COMMENTARY3, COMMENTARY4, ALL };
+    enum EnumeratedMatrix { CH12, CH12L3R, COMMENTARY3, COMMENTARY4, ALL };
     AudioMixer();
     void SetMix(EnumeratedMatrix matrix);
     void Mix(const audio_sample32_t * in1,
