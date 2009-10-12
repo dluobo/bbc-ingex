@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorder.cpp,v 1.11 2009/09/18 16:14:13 john_f Exp $
+ * $Id: IngexRecorder.cpp,v 1.12 2009/10/12 15:16:16 john_f Exp $
  *
  * Class to manage an individual recording.
  *
@@ -325,6 +325,7 @@ void IngexRecorder::Setup(
     RecorderSettings * settings = RecorderSettings::Instance();
     settings->Update(mpImpl->Recorder());
 
+    /*
     switch (settings->timecode_mode)
     {
     case LTC_PARAMETER_VALUE:
@@ -339,6 +340,7 @@ void IngexRecorder::Setup(
         ACE_DEBUG((LM_ERROR, ACE_TEXT("Unexpected timecode mode\n")));
         break;
     }
+    */
 
     //unsigned int n_channels = IngexShm::Instance()->Channels();
     // Tracks per channel

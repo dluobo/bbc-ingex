@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.14 2009/09/18 16:11:55 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.15 2009/10/12 15:16:16 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -307,6 +307,7 @@ char * IngexRecorderImpl::RecordingFormat (
     edit_rate.denominator = IngexShm::Instance()->FrameRateDenominator();
 
     // Set timecode mode
+    /*
     RecorderSettings * settings = RecorderSettings::Instance();
     if (settings)
     {
@@ -323,6 +324,7 @@ char * IngexRecorderImpl::RecordingFormat (
             break;
         }
     }
+    */
 
 #if 1
     // Alternative to method below
