@@ -24,7 +24,7 @@ fi
 # assumption is that the audio is in shared mem 0
 
 # normal quad view
-$PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p
+$PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --pixel-aspect 1:1 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p
 
 # SD quad view 2 channels from secondary buffer
 #$PRERUN /usr/local/bin/player --disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s
