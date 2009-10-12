@@ -269,9 +269,7 @@ SELECT setval('mcs_id_seq', max(mcs_identifier)) FROM multicameraselectordef;
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (1, 'IMAGE_ASPECT', '16/9', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (2, 'TIMECODE_MODE', '1', 1);
-INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (3, 'COPY_COMMAND', '', 1);
+    VALUES (2, 'COPY_COMMAND', '', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (10, 'ENCODE1_RESOLUTION', '4', 1);
@@ -318,8 +316,6 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 10);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('TIMECODE_MODE', '1', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('COPY_COMMAND', '', 1, 10);
     
@@ -369,8 +365,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 11);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('TIMECODE_MODE', '1', 1, 11);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('COPY_COMMAND', '', 1, 11);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -419,8 +413,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('TIMECODE_MODE', '1', 1, 20);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('COPY_COMMAND', '', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
@@ -468,8 +460,6 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('IMAGE_ASPECT', '16/9', 1, 21);
-INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('TIMECODE_MODE', '1', 1, 21);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('COPY_COMMAND', '', 1, 21);
     
