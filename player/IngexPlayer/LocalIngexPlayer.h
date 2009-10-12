@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.h,v 1.14 2009/09/18 16:13:50 philipn Exp $
+ * $Id: LocalIngexPlayer.h,v 1.15 2009/10/12 16:06:27 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -147,7 +147,7 @@ public:
     void setSourceBufferSize(int size); /* default: 0 */
     void setEnableX11OSD(bool enable); /* default: true */
     void setSourceAspectRatio(Rational *aspect); /* default: 0 */
-    void setPixelAspectRatio(Rational *aspect); /* default: 0 */
+    void setPixelAspectRatio(Rational *aspect); /* default: 1/1 */
     void setMonitorAspectRatio(Rational *aspect); /* default: 4/3 */
     void setEnablePCAudio(bool enable); /* default: true */
     void setAudioDevice(int device); /* default: 0 */
@@ -178,7 +178,7 @@ public:
     /* same as getOutputType(), except it returns the actual output type if an auto type is used */
     /* eg. if X11_AUTO_OUTPUT is set then returns either X11_XV_OUTPUT or X11_OUTPUT */
     PlayerOutputType getActualOutputType();
-
+    
     
     /* functions inherited from IngexPlayer */
     virtual bool setX11WindowName(std::string name);
@@ -200,6 +200,7 @@ public:
     virtual bool setOSDScreen(OSDScreen screen);
     virtual bool nextOSDScreen();
     virtual bool setOSDTimecode(int index, int type, int subType);
+    virtual bool setOSDTimecodeDefaultSHM();
     virtual bool showProgressBar(bool show);
     virtual bool nextOSDTimecode();
     virtual bool switchNextVideo();
@@ -250,6 +251,9 @@ private:
     Configuration _nextConfig;
 
     PlayerOutputType _actualOutputType;
+    
+    TimecodeType _shmDefaultTCType;
+    TimecodeSubType _shmDefaultTCSubType;
 
     X11WindowInfo _windowInfo;
 

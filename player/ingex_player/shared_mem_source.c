@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.c,v 1.10 2009/09/18 16:16:24 philipn Exp $
+ * $Id: shared_mem_source.c,v 1.11 2009/10/12 16:06:30 philipn Exp $
  *
  *
  *
@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "shared_mem_source.h"
 #include "video_conversion.h"
@@ -34,7 +35,12 @@
 
 #if defined(DISABLE_SHARED_MEM_SOURCE)
 
-int shared_mem_open(const char *channel_name, double timeout, MediaSource** source)
+struct SharedMemSource
+{
+    int nothing;
+};
+
+int shms_open(const char *channel_name, double timeout, SharedMemSource** source)
 {
     return 0;
 }
@@ -52,8 +58,20 @@ int shared_mem_open(const char *channel_name, double timeout, MediaSource** sour
 #undef PTHREAD_MUTEX_UNLOCK
 #include <nexus_control.h>
 
-#define MAX_TRACKS      19
+#define MAX_TRACKS              19
 
+#define NUM_TIMECODE_TRACKS     (SYSTEM_TC_TRACK + 1)
+
+
+
+typedef enum
+{
+    LTC_TRACK = 0,
+    VITC_TRACK,
+    DLTC_TRACK,
+    DVITC_TRACK,
+    SYSTEM_TC_TRACK
+} TimecodeTrackType;
 
 typedef struct
 {
@@ -63,12 +81,15 @@ typedef struct
     int isDisabled;
 } TrackInfo;
 
-typedef struct
+struct SharedMemSource
 {
     MediaSource mediaSource;
     int channel;
     int primary;                    // boolean: primary video buffer or secondary
     CaptureFormat captureFormat;
+    
+    TimecodeType defaultTCType;
+    TimecodeSubType defaultTCSubType;
 
     TrackInfo tracks[MAX_TRACKS];
     int numTracks;
@@ -81,7 +102,7 @@ typedef struct
 
     char sourceName[64];
     int sourceNameUpdate;
-} SharedMemSource;
+};
 
 
 /* Contains the pctl and ring pointers for the shared mem connection */
@@ -165,63 +186,62 @@ static int shm_stream_is_disabled(void* data, int streamIndex)
     return source->tracks[streamIndex].isDisabled;
 }
 
-static uint8_t *rec_ring_video(SharedMemSource *source, int lastFrame)
+static const uint8_t *rec_ring_video(SharedMemSource *source, int lastFrame)
 {
-    int channel = source->channel;
-
-    int video_offset = 0;
-    if (! source->primary)
-        video_offset = conn.pctl->audio12_offset + conn.pctl->audio_size;
-
-    return conn.ring[channel] + video_offset +
-                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+    if (source->primary)
+        return nexus_primary_video(conn.pctl, conn.ring, source->channel, lastFrame);
+    else
+        return nexus_secondary_video(conn.pctl, conn.ring, source->channel, lastFrame);
 }
 
-static uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame)
+static const uint8_t *rec_ring_audio(SharedMemSource *source, int track, int lastFrame)
 {
-    int channel = source->channel;
-
-    // tracks 0 and 1 are mixed together at audio12_offset
     if (track == 0 || track == 1)
-        return conn.ring[channel] + conn.pctl->audio12_offset +
-                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+        return nexus_audio12(conn.pctl, conn.ring, source->channel, lastFrame);
 
-    // tracks 2 and 3 are mixed together at audio34_offset
     if (track == 2 || track == 3)
-        return conn.ring[channel] + conn.pctl->audio34_offset +
-                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+        return nexus_audio34(conn.pctl, conn.ring, source->channel, lastFrame);
 
-    // tracks 4 and 5 are mixed together at audio56_offset
     if (track == 4 || track == 5)
-        return conn.ring[channel] + conn.pctl->audio56_offset +
-                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+        return nexus_audio56(conn.pctl, conn.ring, source->channel, lastFrame);
 
-    // tracks 6 and 7 are mixed together at audio78_offset
-    return conn.ring[channel] + conn.pctl->audio78_offset +
-                conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen);
+    return nexus_audio78(conn.pctl, conn.ring, source->channel, lastFrame);
 }
 
 static int rec_ring_num_aud_samp(SharedMemSource *source, int track, int lastFrame)
 {
-    int channel = source->channel;
-
-    int offset = conn.pctl->num_aud_samp_offset;
-
-    return *(int *)(conn.ring[channel] + conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen) + offset);
+    return nexus_num_aud_samp(conn.pctl, conn.ring, source->channel, lastFrame);
 }
 
-static uint8_t *rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
+static int rec_ring_timecode(SharedMemSource *source, int track, int lastFrame)
 {
-    int channel = source->channel;
+    assert(track < NUM_TIMECODE_TRACKS);
+    TimecodeTrackType timecodeTrack = (TimecodeTrackType)track;
+    
+    NexusTimecode tc_type = NexusTC_VITC;
+    switch (timecodeTrack)
+    {
+        case LTC_TRACK:
+            tc_type = NexusTC_LTC;
+            break;
+        case VITC_TRACK:
+            tc_type = NexusTC_VITC;
+            break;
+        case DLTC_TRACK:
+            tc_type = NexusTC_DLTC;
+            break;
+        case DVITC_TRACK:
+            tc_type = NexusTC_DVITC;
+            break;
+        case SYSTEM_TC_TRACK:
+            tc_type = NexusTC_SYSTEM;
+            break;
+    }
 
-    int offset = conn.pctl->vitc_offset;       // VITC
-    if (track == 1)
-        offset = conn.pctl->ltc_offset;        // LTC
-
-    return conn.ring[channel] + conn.pctl->elementsize * (lastFrame % conn.pctl->ringlen) + offset;
+    return nexus_tc(conn.pctl, conn.ring, source->channel, lastFrame, tc_type);
 }
 
-static void dvsaudio32_to_16bitmono(int channel, int num_samples, uint8_t *buf32, uint8_t *buf16)
+static void dvsaudio32_to_16bitmono(int channel, int num_samples, const uint8_t *buf32, uint8_t *buf16)
 {
     int i;
     // A DVS audio buffer contains a mix of two 32bits-per-sample channels
@@ -250,13 +270,18 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
     int lastFrame;
     int waitCount = 0;
     const int sleepUSec = 100;
+    int updateCount = 0;
     int nameUpdated;
     int roundedFrameRate = get_rounded_frame_rate(&source->frameRate);
 
     /* Check nexus connection is good */
-    if (! nexus_connection_status(&conn, NULL, NULL))
+    if (!connected || !nexus_connection_status(&conn, NULL, NULL))
     {
-        nexus_disconnect_from_shared_mem(&conn);
+        if (connected)
+        {
+            nexus_disconnect_from_shared_mem(&conn);
+            connected = 0;
+        }
 
         /* Try to reconnect */
         if (! nexus_connect_to_shared_mem(100000, 0, 0, &conn))
@@ -265,17 +290,20 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             ml_log_info("Could not re-connect to shared mem - timeout\n");
             return -2;
         }
+        
+        connected = 1;
+        ml_log_info("Connected to shared memory\n");
     }
 
     /* wait a little while until a new frame is available in the ring buffer */
-    lastFrame = conn.pctl->channel[source->channel].lastframe - 1;
+    lastFrame = nexus_lastframe(conn.pctl, source->channel) - 1;
     waitCount = 0;
     while (lastFrame == source->prevLastFrame && waitCount < 60000 / sleepUSec)
     {
         usleep(sleepUSec);
         waitCount++;
 
-        lastFrame = conn.pctl->channel[source->channel].lastframe - 1;
+        lastFrame = nexus_lastframe(conn.pctl, source->channel) - 1;
     }
     if (lastFrame == source->prevLastFrame && waitCount >= 60000 / sleepUSec)
     {
@@ -286,25 +314,13 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
 
 
     /* check for updated source name */
+    
+    nexus_get_source_name(conn.pctl, source->channel, source->sourceName, sizeof(source->sourceName), &updateCount);
+    nameUpdated = (updateCount != source->sourceNameUpdate);
+    source->sourceNameUpdate = updateCount;
 
-    PTHREAD_MUTEX_LOCK(&conn.pctl->m_source_name_update);
-
-    nameUpdated = 0;
-    if (conn.pctl->source_name_update != source->sourceNameUpdate)
-    {
-        if (strcmp(conn.pctl->channel[source->channel].source_name, source->sourceName) != 0)
-        {
-            nameUpdated = 1;
-            strncpy(source->sourceName, conn.pctl->channel[source->channel].source_name, sizeof(source->sourceName) - 1);
-        }
-
-        source->sourceNameUpdate = conn.pctl->source_name_update;
-    }
-
-    PTHREAD_MUTEX_UNLOCK(&conn.pctl->m_source_name_update);
-
-    // Track numbers are hard-coded by setup code in shared_mem_open()
-    // 1 x video, numAudioTracks x audio, 2 x timecode
+    // Track numbers are hard-coded by setup code in shms_open()
+    // 1 x video, numAudioTracks x audio, NUM_TIMECODE_TRACKS x timecode, event
 
     for (i = 0; i < source->numTracks; i++)
     {
@@ -343,7 +359,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         /* copy data into buffer */
         if (track->streamInfo.type == PICTURE_STREAM_TYPE)
         {
-            unsigned char* data = rec_ring_video(source, lastFrame);
+            const uint8_t* data = rec_ring_video(source, lastFrame);
 
             if (source->captureFormat == Format422PlanarYUVShifted)
             {
@@ -404,7 +420,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
             int num_samples = rec_ring_num_aud_samp(source, i - 1, lastFrame);
 
             // Get a pointer to the correct DVS audio buffer
-            uint8_t *buf32 = rec_ring_audio(source, i - 1, lastFrame);
+            const uint8_t *buf32 = rec_ring_audio(source, i - 1, lastFrame);
 
             // determine which channel (0 or 1) of the DVS pair to use
             int pair_num = (i - 1) % 2;
@@ -414,8 +430,7 @@ static int shm_read_frame(void* data, const FrameInfo* frameInfo, MediaSourceLis
         }
 
         if (track->streamInfo.type == TIMECODE_STREAM_TYPE) {
-            int tc_as_int;
-            memcpy(&tc_as_int, rec_ring_timecode(source, i - (source->numAudioTracks + 1), lastFrame), sizeof(int));
+            int tc_as_int = rec_ring_timecode(source, i - (source->numAudioTracks + 1), lastFrame);
             // convert ts-as-int to Timecode
             Timecode tc;
             tc.isDropFrame = 0;
@@ -527,7 +542,7 @@ static void shm_close(void* data)
     SAFE_FREE(&source);
 }
 
-int shared_mem_open(const char* channel_name, double timeout, MediaSource** source)
+int shms_open(const char* channel_name, double timeout, SharedMemSource** source)
 {
     SharedMemSource* newSource = NULL;
     int channelNum;
@@ -537,6 +552,7 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
     int disable = 0;
     int i;
     char nameBuf[32];
+    TimecodeTrackType timecodeType;
 
     /* check channel number is within range */
     channelNum = atol(channel_name);
@@ -566,32 +582,36 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
         sprintf(title, "Shared Memory Video: channel %d secondary\n", channelNum);
     }
 
-    /* connect to shared memory */
-    if (! connected)
+    /* first disconnect from shared memory if connected */
+    if (connected)
     {
-        /* If timeout is negative, loop forever until shared mem connection made */
-        if (timeout < 0)
-        {
-            ml_log_info("Waiting for shared memory to appear...\n");
-            while (1)
-            {
-                if (nexus_connect_to_shared_mem(500000, 0, 0, &conn))
-                    break;
-            }
-        }
-        else
-        {
-            /* try to connect to shared mem within supplied timeout */
-            if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, 1, &conn))    /* convert timeout to microsec */
-            {
-                ml_log_error("Failed to connect to shared memory\n");
-                return 0;
-            }
-        }
-        connected = 1;
-        ml_log_info("Connected to shared memory\n");
+        nexus_disconnect_from_shared_mem(&conn);
+        connected = 0;
     }
-
+    
+    /* (re-)connect to shared memory */
+    /* If timeout is negative, loop forever until shared mem connection made */
+    if (timeout < 0)
+    {
+        ml_log_info("Waiting for shared memory to appear...\n");
+        while (1)
+        {
+            if (nexus_connect_to_shared_mem(500000, 0, 0, &conn))
+                break;
+        }
+    }
+    else
+    {
+        /* try to connect to shared mem within supplied timeout */
+        if (! nexus_connect_to_shared_mem(timeout * 1000000, 0, 1, &conn))    /* convert timeout to microsec */
+        {
+            ml_log_error("Failed to connect to shared memory\n");
+            return 0;
+        }
+    }
+    connected = 1;
+    ml_log_info("Connected to shared memory\n");
+    
 
     captureFormat = primary ? conn.pctl->pri_video_format : conn.pctl->sec_video_format;
 
@@ -639,6 +659,34 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
         {
             newSource->numAudioTracks += 2;
         }
+    }
+    
+    switch (conn.pctl->default_tc_type)
+    {
+        case NexusTC_LTC:
+            newSource->defaultTCType = SOURCE_TIMECODE_TYPE;
+            newSource->defaultTCSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+            break;
+        case NexusTC_VITC:
+            newSource->defaultTCType = SOURCE_TIMECODE_TYPE;
+            newSource->defaultTCSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
+            break;
+        case NexusTC_DLTC:
+            newSource->defaultTCType = SOURCE_TIMECODE_TYPE;
+            newSource->defaultTCSubType = DLTC_SOURCE_TIMECODE_SUBTYPE;
+            break;
+        case NexusTC_DVITC:
+            newSource->defaultTCType = SOURCE_TIMECODE_TYPE;
+            newSource->defaultTCSubType = DVITC_SOURCE_TIMECODE_SUBTYPE;
+            break;
+        case NexusTC_SYSTEM:
+            newSource->defaultTCType = SYSTEM_TIMECODE_TYPE;
+            newSource->defaultTCSubType = NO_TIMECODE_SUBTYPE;
+            break;
+        case NexusTC_DEFAULT:
+            newSource->defaultTCType = SOURCE_TIMECODE_TYPE;
+            newSource->defaultTCSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+            break;
     }
 
     newSource->frameRate.num = conn.pctl->frame_rate_numer;
@@ -728,31 +776,54 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
         newSource->numTracks++;
     }
 
-    /* timecode track 1 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 1"));
-    newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
-    newSource->numTracks++;
+    /* timecode tracks */
+    for (timecodeType = LTC_TRACK; timecodeType <= SYSTEM_TC_TRACK; timecodeType++)
+    {
+        CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
+        newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
+        newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
+        newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
+        newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
+        newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
+        newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
 
-    /* timecode track 2 */
-    CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
-    newSource->tracks[newSource->numTracks].streamInfo.type = TIMECODE_STREAM_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.format = TIMECODE_FORMAT;
-    newSource->tracks[newSource->numTracks].streamInfo.sourceId = sourceId;
-    newSource->tracks[newSource->numTracks].streamInfo.frameRate = newSource->frameRate;
-    newSource->tracks[newSource->numTracks].streamInfo.isHardFrameRate = 1;
-    newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
-    newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
-    CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE, "Shared Memory Timecode 2"));
-    newSource->tracks[newSource->numTracks].frameSize = sizeof(Timecode);
-    newSource->numTracks++;
+        switch (timecodeType)
+        {
+            case LTC_TRACK:
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
+                CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE,
+                    "Shared Memory LTC"));
+                break;
+            case VITC_TRACK:
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
+                CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE,
+                    "Shared Memory VITC"));
+                break;
+            case DLTC_TRACK:
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = DLTC_SOURCE_TIMECODE_SUBTYPE;
+                CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE,
+                    "Shared Memory DVITC"));
+                break;
+            case DVITC_TRACK:
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = DVITC_SOURCE_TIMECODE_SUBTYPE;
+                CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE,
+                    "Shared Memory DVITC"));
+                break;
+            case SYSTEM_TC_TRACK:
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeType = SYSTEM_TIMECODE_TYPE;
+                newSource->tracks[newSource->numTracks].streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
+                CHK_OFAIL(add_known_source_info(&newSource->tracks[newSource->numTracks].streamInfo, SRC_INFO_TITLE,
+                    "Shared Memory SYSTEM TC"));
+                break;
+        }
+
+        newSource->numTracks++;
+    }
+        
 
     /* event track */
     CHK_OFAIL(initialise_stream_info(&newSource->tracks[newSource->numTracks].streamInfo));
@@ -775,12 +846,25 @@ int shared_mem_open(const char* channel_name, double timeout, MediaSource** sour
     }
 
 
-    *source = &newSource->mediaSource;
+    *source = newSource;
     return 1;
 
 fail:
     shm_close(newSource);
     return 0;
+}
+
+MediaSource* shms_get_media_source(SharedMemSource* source)
+{
+    return &source->mediaSource;
+}
+
+int shms_get_default_timecode(SharedMemSource* source, TimecodeType* type, TimecodeSubType* subType)
+{
+    *type = source->defaultTCType;
+    *subType = source->defaultTCSubType;
+    
+    return 1;
 }
 
 

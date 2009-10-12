@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.17 2009/09/18 16:13:50 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.18 2009/10/12 16:06:27 philipn Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -497,7 +497,7 @@ LocalIngexPlayer::LocalIngexPlayer(IngexPlayerListenerRegistry* listenerRegistry
     _config.disableSDIOSD = false;
     _config.disableX11OSD = false;
     _config.sourceAspectRatio = (Rational){0, 1};
-    _config.pixelAspectRatio = (Rational){0, 1};
+    _config.pixelAspectRatio = (Rational){1, 1};
     _config.monitorAspectRatio = (Rational){4, 3};
     _config.scale = 1.0;
     _config.disablePCAudio = false;
@@ -832,6 +832,9 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
 
         // open the media sources
+        
+        _shmDefaultTCType = UNKNOWN_TIMECODE_TYPE;
+        _shmDefaultTCSubType = NO_TIMECODE_SUBTYPE;
 
         int videoStreamIndex = -1;
         bool videoChanged = false;
@@ -909,13 +912,16 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
 
                 case SHM_INPUT:
                 {
-                    if (!shared_mem_open(input.name.c_str(), 0, &mediaSource))
+                    SharedMemSource* shmSource = 0;
+                    if (!shms_open(input.name.c_str(), 0, &shmSource))
                     {
                         ml_log_error("Failed to open shared memory source '%s'\n", input.name.c_str());
                         opened.push_back(false);
                         inputsPresent.push_back(false);
                         continue;
                     }
+                    shms_get_default_timecode(shmSource, &_shmDefaultTCType, &_shmDefaultTCSubType);
+                    mediaSource = shms_get_media_source(shmSource);
                 }
                 break;
 
@@ -1391,6 +1397,13 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
             mc_seek(ply_get_media_control(newPlayState->mediaPlayer), startPosition, SEEK_SET, FRAME_PLAY_UNIT);
         }
 
+        // set timecode type to display if shared memory present
+        if (_shmDefaultTCType != UNKNOWN_TIMECODE_TYPE)
+        {
+            mc_set_osd_timecode(ply_get_media_control(newPlayState->mediaPlayer), 0, _shmDefaultTCType,
+                _shmDefaultTCSubType);
+        }
+        
 
         // start play thread
 
@@ -1884,6 +1897,35 @@ bool LocalIngexPlayer::setOSDTimecode(int index, int type, int subType)
         }
 
         mc_set_osd_timecode(ply_get_media_control(_playState->mediaPlayer), index, type, subType);
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool LocalIngexPlayer::setOSDTimecodeDefaultSHM()
+{
+    try
+    {
+        ReadWriteLockGuard guard(&_playStateRWLock, false);
+
+        if (!_playState)
+        {
+            return false;
+        }
+        if (_playState->hasStopped())
+        {
+            return false;
+        }
+
+        if (_shmDefaultTCType == UNKNOWN_TIMECODE_TYPE)
+        {
+            return false;
+        }
+        
+        mc_set_osd_timecode(ply_get_media_control(_playState->mediaPlayer), 0, _shmDefaultTCType, _shmDefaultTCSubType);
     }
     catch (...)
     {

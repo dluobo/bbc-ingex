@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.11 2009/03/25 13:53:18 john_f Exp $
+ * $Id: media_player.c,v 1.12 2009/10/12 16:06:29 philipn Exp $
  *
  *
  *
@@ -3698,17 +3698,23 @@ void ply_print_source_info(MediaPlayer* player)
                 printf(", ");
                 if (sources[i].streamInfo->timecodeType == SOURCE_TIMECODE_TYPE)
                 {
-                    if (sources[i].streamInfo->timecodeSubType == VITC_SOURCE_TIMECODE_SUBTYPE)
+                    switch (sources[i].streamInfo->timecodeSubType)
                     {
-                        printf("VITC");
-                    }
-                    else if (sources[i].streamInfo->timecodeSubType == LTC_SOURCE_TIMECODE_SUBTYPE)
-                    {
-                        printf("LTC");
-                    }
-                    else
-                    {
-                        printf("source");
+                        case VITC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("VITC");
+                            break;
+                        case LTC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("LTC");
+                            break;
+                        case DVITC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("DVITC");
+                            break;
+                        case DLTC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("DLTC");
+                            break;
+                        case NO_TIMECODE_SUBTYPE:
+                            printf("source");
+                            break;
                     }
                 }
                 else
@@ -3739,6 +3745,12 @@ void ply_print_source_info(MediaPlayer* player)
                             break;
                         case LTC_SOURCE_TIMECODE_SUBTYPE:
                             printf("LTC");
+                            break;
+                        case DVITC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("DVITC");
+                            break;
+                        case DLTC_SOURCE_TIMECODE_SUBTYPE:
+                            printf("DLTC");
                             break;
                         case NO_TIMECODE_SUBTYPE:
                             break;

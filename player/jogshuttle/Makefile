@@ -4,6 +4,7 @@ INCLUDES = -I.
 LIBS = -lpthread
 
 COMPILE = $(CC) -g $(CFLAGS)
+AR = ar cr
 
 
 SOURCES = JogShuttle.cpp test_JogShuttle.cpp
@@ -12,7 +13,7 @@ DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
 
 .PHONY: all
-all: test_JogShuttle
+all: libjogshuttle.a test_JogShuttle
 
 
 .deps/%.d : %.cpp
@@ -26,9 +27,13 @@ all: test_JogShuttle
 	@mkdir -p .objs
 	$(COMPILE) -c $(INCLUDES) $< -o $@
 
+	
+libjogshuttle.a: $(OBJECTS)
+	$(AR) $@ $(OBJECTS)
 
-test_JogShuttle: $(OBJECTS)
-	$(COMPILE) $(OBJECTS) $(LIBS) -o $@
+
+test_JogShuttle: libjogshuttle.a
+	$(COMPILE) -L. -ljogshuttle $(LIBS) -o $@
 
 
 

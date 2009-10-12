@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.19 2009/09/18 16:16:24 philipn Exp $
+ * $Id: player.c,v 1.20 2009/10/12 16:06:30 philipn Exp $
  *
  *
  *
@@ -714,6 +714,27 @@ static int parse_timecode_selection(const char* arg, int* tcIndex, int* tcType, 
         *tcSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
         return 1;
     }
+    else if (strncmp(arg, "DVITC.", strlen("DVITC.")) == 0 &&
+        sscanf(arg + strlen("DVITC."), "%d", tcIndex) == 1)
+    {
+        *tcType = SOURCE_TIMECODE_TYPE;
+        *tcSubType = DVITC_SOURCE_TIMECODE_SUBTYPE;
+        return 1;
+    }
+    else if (strncmp(arg, "DLTC.", strlen("DLTC.")) == 0 &&
+        sscanf(arg + strlen("DLTC."), "%d", tcIndex) == 1)
+    {
+        *tcType = SOURCE_TIMECODE_TYPE;
+        *tcSubType = DLTC_SOURCE_TIMECODE_SUBTYPE;
+        return 1;
+    }
+    else if (strncmp(arg, "SYS.", strlen("SYS.")) == 0 &&
+        sscanf(arg + strlen("SYS."), "%d", tcIndex) == 1)
+    {
+        *tcType = SYSTEM_TIMECODE_TYPE;
+        *tcSubType = NO_TIMECODE_SUBTYPE;
+        return 1;
+    }
 
     return 0;
 }
@@ -771,6 +792,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "                               CTS: control timecode\n");
     fprintf(stderr, "                               VITC: vertical interval timecode\n");
     fprintf(stderr, "                               LTC: linear timecode\n");
+    fprintf(stderr, "                               DVITC: digital vertical interval timecode\n");
+    fprintf(stderr, "                               DLTC: digital linear timecode\n");
+    fprintf(stderr, "                               SYS: system timecode\n");
     fprintf(stderr, "                           Examples:\n");
     fprintf(stderr, "                               ALL.3: show the 4th timecode stream\n");
     fprintf(stderr, "                               VITC.1: show the 2nd VITC timecode stream\n");
@@ -784,7 +808,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --force-d3-mxf           (Use only for MXF inputs using deprecated keys). Force the treatment of the MXF inputs to be BBC D3 MXF\n");
     fprintf(stderr, "  --mark-pse-fails         Add marks for PSE failures recorded in the D3 MXF file\n");
     fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the D3 MXF file\n");
-    fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default uses screen resolution and assumes a 4:3 monitor)\n");
+    fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
     fprintf(stderr, "  --scale <float>          Scale the video (currently only works for the X11 Xv extension output)\n");
@@ -818,6 +842,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "                               CTS: control timecode\n");
     fprintf(stderr, "                               VITC: vertical interval timecode\n");
     fprintf(stderr, "                               LTC: linear timecode\n");
+    fprintf(stderr, "                               DVITC: digital vertical interval timecode\n");
+    fprintf(stderr, "                               DLTC: digital linear timecode\n");
+    fprintf(stderr, "                               SYS: system timecode\n");
     fprintf(stderr, "                           Examples:\n");
     fprintf(stderr, "                               ALL.3: show the 4th timecode stream\n");
     fprintf(stderr, "                               VITC.1: show the 2nd VITC timecode stream\n");
@@ -907,13 +934,16 @@ int main(int argc, const char **argv)
     MultipleMediaSources* multipleSource = NULL;
     BufferedMediaSource* bufferedSource = NULL;
     MXFFileSource* mxfSource = NULL;
+    SharedMemSource* shmSource = NULL;
+    TimecodeType shmDefaultTimecodeType = UNKNOWN_TIMECODE_TYPE;
+    TimecodeSubType shmDefaultTimecodeSubType = NO_TIMECODE_SUBTYPE;
     int disableSDIOSD = 0;
     int disableX11OSD = 0;
     int logLevel = DEBUG_LOG_LEVEL;
     int forceD3MXFInput = 0;
     int markPSEFails = 0;
     int markVTRErrors = 0;
-    Rational pixelAspectRatio = {0, 0};
+    Rational pixelAspectRatio = {1, 1};
     Rational monitorAspectRatio = {0, 0};
     Rational sourceAspectRatio = {0, 0};
     float scale = 0.0;
@@ -2253,11 +2283,13 @@ int main(int argc, const char **argv)
                 break;
 
             case SHM_INPUT:
-                if (!shared_mem_open(inputs[i].shmSourceName, timeout, &mediaSource))
+                if (!shms_open(inputs[i].shmSourceName, timeout, &shmSource))
                 {
                     ml_log_error("Failed to open shared memory source\n");
                     goto fail;
                 }
+                shms_get_default_timecode(shmSource, &shmDefaultTimecodeType, &shmDefaultTimecodeSubType);
+                mediaSource = shms_get_media_source(shmSource);
                 break;
 
             case UDP_INPUT:
@@ -2825,6 +2857,10 @@ int main(int argc, const char **argv)
     if (startTimecodeIndex >= 0)
     {
         mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), startTimecodeIndex, startTimecodeType, startTimecodeSubType);
+    }
+    else if (shmDefaultTimecodeType != UNKNOWN_TIMECODE_TYPE)
+    {
+        mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), 0, shmDefaultTimecodeType, shmDefaultTimecodeSubType);
     }
 
 

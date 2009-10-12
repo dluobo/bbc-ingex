@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2009/10/12 16:06:27 philipn Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -42,7 +42,8 @@ DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
 SERVER_OBJECTS = $(SERVER_DIR)/.objs/JSONObject.o $(SERVER_DIR)/.objs/Utilities.o $(SERVER_DIR)/.objs/HTTPPlayerState.o
 
-JOGSHUTTLE_OBJECTS = $(JOGSHUTTLE_DIR)/.objs/JogShuttle.o
+LIBDIRS += -L$(JOGSHUTTLE_DIR)
+LIBS += -ljogshuttle
 
 
 
@@ -64,17 +65,14 @@ all: libHTTPPlayerClient.a test_HTTPPlayerClient
 $(SERVER_DIR)/.objs/%.o:
 	cd $(SERVER_DIR) && $(MAKE) $(addprefix .objs/,$(notdir $@))
 
-$(JOGSHUTTLE_DIR)/.objs/%.o:
-	cd $(JOGSHUTTLE_DIR) && $(MAKE) $(addprefix .objs/,$(notdir $@))
-
 
 libHTTPPlayerClient.a: $(OBJECTS) $(SERVER_OBJECTS)
 	$(AR) libHTTPPlayerClient.a $(OBJECTS) $(SERVER_OBJECTS)
 
 
 
-test_HTTPPlayerClient: .objs/test_HTTPPlayerClient.o libHTTPPlayerClient.a $(JOGSHUTTLE_OBJECTS)
-	$(CC) $(LIBDIRS) .objs/test_HTTPPlayerClient.o libHTTPPlayerClient.a $(LIBS) $(JOGSHUTTLE_OBJECTS) -o $@
+test_HTTPPlayerClient: .objs/test_HTTPPlayerClient.o libHTTPPlayerClient.a
+	$(CC) $(LIBDIRS) .objs/test_HTTPPlayerClient.o libHTTPPlayerClient.a $(LIBS) -o $@
 
 
 .PHONY: clean

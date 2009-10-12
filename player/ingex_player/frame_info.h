@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.9 2009/03/25 13:53:18 john_f Exp $
+ * $Id: frame_info.h,v 1.10 2009/10/12 16:06:29 philipn Exp $
  *
  *
  *
@@ -107,7 +107,9 @@ typedef enum
 {
     NO_TIMECODE_SUBTYPE = 0,
     VITC_SOURCE_TIMECODE_SUBTYPE,
-    LTC_SOURCE_TIMECODE_SUBTYPE
+    LTC_SOURCE_TIMECODE_SUBTYPE,
+    DVITC_SOURCE_TIMECODE_SUBTYPE,
+    DLTC_SOURCE_TIMECODE_SUBTYPE
 } TimecodeSubType;
 
 typedef struct

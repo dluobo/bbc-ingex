@@ -1,5 +1,5 @@
 /*
- * $Id: utils.c,v 1.4 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: utils.c,v 1.5 2009/10/12 16:06:30 philipn Exp $
  *
  *
  *
@@ -87,6 +87,14 @@ void print_timecode(TimecodeType type, TimecodeSubType subType, const Rational* 
     else if (subType == LTC_SOURCE_TIMECODE_SUBTYPE)
     {
         printf("-LTC");
+    }
+    else if (subType == DVITC_SOURCE_TIMECODE_SUBTYPE)
+    {
+        printf("-DVITC");
+    }
+    else if (subType == DLTC_SOURCE_TIMECODE_SUBTYPE)
+    {
+        printf("-DLTC");
     }
     printf("] ");
     if (is_pal_frame_rate(frameRate))

@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.10 2009/09/18 16:16:24 philipn Exp $
+ * $Id: on_screen_display.c,v 1.11 2009/10/12 16:06:29 philipn Exp $
  *
  *
  *
@@ -48,7 +48,9 @@
 #define SOURCE_TC_OVLY_IDX       2
 #define VITC_TC_OVLY_IDX         3
 #define LTC_TC_OVLY_IDX          4
-#define SYSTEM_TC_OVLY_IDX       5
+#define DVITC_TC_OVLY_IDX        5
+#define DLTC_TC_OVLY_IDX         6
+#define SYSTEM_TC_OVLY_IDX       7
 
 
 /* TODO: these will not work for all video resolutions */
@@ -828,6 +830,16 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             frameInfo->timecodes[osdd->state->timecodeIndex].timecodeSubType == LTC_SOURCE_TIMECODE_SUBTYPE)
         {
             tcTypeOvly = &osdd->timecodeTypeData.cs_ovly[LTC_TC_OVLY_IDX];
+        }
+        else if (frameInfo->timecodes[osdd->state->timecodeIndex].timecodeType == SOURCE_TIMECODE_TYPE &&
+            frameInfo->timecodes[osdd->state->timecodeIndex].timecodeSubType == DVITC_SOURCE_TIMECODE_SUBTYPE)
+        {
+            tcTypeOvly = &osdd->timecodeTypeData.cs_ovly[DVITC_TC_OVLY_IDX];
+        }
+        else if (frameInfo->timecodes[osdd->state->timecodeIndex].timecodeType == SOURCE_TIMECODE_TYPE &&
+            frameInfo->timecodes[osdd->state->timecodeIndex].timecodeSubType == DLTC_SOURCE_TIMECODE_SUBTYPE)
+        {
+            tcTypeOvly = &osdd->timecodeTypeData.cs_ovly[DLTC_TC_OVLY_IDX];
         }
         else if (frameInfo->timecodes[osdd->state->timecodeIndex].timecodeType == SOURCE_TIMECODE_TYPE)
         {
@@ -1768,7 +1780,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     }
 
     /* note: the order must match UNKNOWN_TC_OVLY_IDX, ... */
-    CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->timecodeTypeData, "?CSVLX",
+    CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->timecodeTypeData, "?CSVLvlX",
         "Ariel", 48 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
 
     CHK_ORET(init_timecode(&osdd->p_info, &osdd->timecodeTextData, "Ariel",

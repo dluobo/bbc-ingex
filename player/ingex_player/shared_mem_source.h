@@ -1,5 +1,5 @@
 /*
- * $Id: shared_mem_source.h,v 1.5 2009/03/19 17:43:40 john_f Exp $
+ * $Id: shared_mem_source.h,v 1.6 2009/10/12 16:06:30 philipn Exp $
  *
  *
  *
@@ -34,10 +34,13 @@ extern "C"
 #include "media_source.h"
 
 
-/* shared memory source */
+typedef struct SharedMemSource SharedMemSource;
 
-int shared_mem_open(const char *channel_name, double timeout, MediaSource** source);
 
+int shms_open(const char *channel_name, double timeout, SharedMemSource** source);
+MediaSource* shms_get_media_source(SharedMemSource* source);
+
+int shms_get_default_timecode(SharedMemSource* source, TimecodeType* type, TimecodeSubType* subType);
 
 
 
