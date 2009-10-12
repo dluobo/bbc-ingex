@@ -1,5 +1,5 @@
 /*
- * $Id: Timing.cpp,v 1.1 2008/07/08 16:23:30 philipn Exp $
+ * $Id: Timing.cpp,v 1.2 2009/10/12 16:09:18 philipn Exp $
  *
  * Provides sleep functions and timer using a monotonic system clock
  *
@@ -120,7 +120,7 @@ int64_t Timer::timeLeft()
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
 
-    int64_t remainder = _duration - SEC_IN_USEC * (now.tv_sec - _start.tv_sec) + (int64_t)(now.tv_nsec - _start.tv_nsec) / 1000;
+    int64_t remainder = _duration - (SEC_IN_USEC * (now.tv_sec - _start.tv_sec) + (int64_t)(now.tv_nsec - _start.tv_nsec) / 1000);
     
     return (remainder < 0) ? 0 : remainder;
 }
