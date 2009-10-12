@@ -1,7 +1,7 @@
 #!/usr/bin/perl -wT
 
 #
-# $Id: avidaaf.pl,v 1.4 2009/01/29 07:36:59 stuart_hc Exp $
+# $Id: avidaaf.pl,v 1.5 2009/10/12 18:35:09 john_f Exp $
 #
 # 
 #
@@ -215,8 +215,9 @@ elsif (defined param("Send1") || defined param("Send2"))
                     "-c $fromCreationDateStr" : # from creation date (timestamp)
                     join(" ", "-f $fromDateStr" . "S" . "$fromTimeStr", # from date and start timecode 
                         $fromCreationDateStr ? "" : "-t $toDateStr" . "S" . "$toTimeStr"), # to date and start timecode
-                "-d $ingexConfig{'db_odbc_dsn'}", # database DSN
-                "-u $ingexConfig{'db_user'}", # database user
+                "--dbhost $ingexConfig{'db_host'}", # database host
+                "--dbname $ingexConfig{'db_name'}", # database name
+                "--dbuser $ingexConfig{'db_user'}", # database user
                 "--dbpassword $ingexConfig{'db_password'}", # database password
                 ">$resultsFilename"
         )) == 0 or return_error_page("failed to export Avid AAF file");
