@@ -1,5 +1,5 @@
 /*
- * $Id: IndexTable.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: IndexTable.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
  *
  * 
  *
@@ -37,7 +37,7 @@ public:
     static bool isIndexTableSegment(const mxfKey* key);
     static IndexTableSegment* read(File* mxfFile, uint64_t segmentLen);
 
-    
+public:
     IndexTableSegment();
     IndexTableSegment(::MXFIndexTableSegment* cSegment);
     virtual ~IndexTableSegment();
@@ -82,7 +82,7 @@ public:
     
     ::MXFIndexTableSegment* getCIndexTableSegment() const { return _cSegment; }
 
-private:
+protected:
     ::MXFIndexTableSegment* _cSegment;
 };
 

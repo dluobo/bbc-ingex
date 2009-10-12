@@ -1,5 +1,5 @@
 /*
- * $Id: IndexTable.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: IndexTable.cpp,v 1.2 2009/10/12 15:30:25 philipn Exp $
  *
  * 
  *
@@ -150,7 +150,7 @@ void IndexTableSegment::setPosTableCount(uint8_t value)
 
 void IndexTableSegment::appendDeltaEntry(int8_t posTableIndex, uint8_t slice, uint32_t elementData)
 {
-    MXFPP_CHECK(mxf_add_delta_entry(_cSegment, posTableIndex, slice, elementData));
+    MXFPP_CHECK(mxf_default_add_delta_entry(NULL, 0, _cSegment, posTableIndex, slice, elementData));
 }
 
 void IndexTableSegment::appendIndexEntry(int8_t temporalOffset, int8_t keyFrameOffset, uint8_t flags, 
@@ -180,7 +180,7 @@ void IndexTableSegment::appendIndexEntry(int8_t temporalOffset, int8_t keyFrameO
             }
         }
     
-        MXFPP_CHECK(mxf_add_index_entry(_cSegment, temporalOffset, keyFrameOffset, flags, streamOffset,
+        MXFPP_CHECK(mxf_default_add_index_entry(NULL, 0, _cSegment, temporalOffset, keyFrameOffset, flags, streamOffset,
             cSliceOffset, cPosTable));
 
         delete [] cSliceOffset;

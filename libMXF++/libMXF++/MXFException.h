@@ -1,5 +1,5 @@
 /*
- * $Id: MXFException.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: MXFException.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
  *
  * 
  *
@@ -25,6 +25,7 @@
 
 
 #include <string>
+#include <cassert>
 
 
 namespace mxfpp
@@ -39,8 +40,13 @@ namespace mxfpp
         throw MXFException("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
     }
 
+#if defined(NDEBUG)
 #define MXFPP_ASSERT(cmd) \
     MXFPP_CHECK(cmd);
+#else
+#define MXFPP_ASSERT(cond) \
+    assert(cond)
+#endif
 
 
 class MXFException

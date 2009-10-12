@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: File.cpp,v 1.2 2009/10/12 15:30:25 philipn Exp $
  *
  * 
  *
@@ -186,6 +186,16 @@ void File::seek(int64_t position, int whence)
 void File::skip(uint64_t len)
 {
     MXFPP_CHECK(mxf_skip(_cFile, len));
+}
+
+int64_t File::size()
+{
+    return mxf_file_size(_cFile);
+}
+
+bool File::eof()
+{
+    return mxf_file_eof(_cFile);
 }
 
 

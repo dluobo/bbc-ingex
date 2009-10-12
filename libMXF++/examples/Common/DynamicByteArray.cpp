@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
+ * $Id: DynamicByteArray.cpp,v 1.3 2009/10/12 15:30:24 philipn Exp $
  *
  * 
  *
@@ -192,5 +192,9 @@ void DynamicByteArray::clear()
     }
 }
 
+unsigned char& DynamicByteArray::operator[](uint32_t index) const
+{
+    return _bytes[index];
+}
 
 

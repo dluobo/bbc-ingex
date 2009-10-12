@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: DynamicByteArray.h,v 1.2 2009/10/12 15:30:24 philipn Exp $
  *
  * 
  *
@@ -50,6 +50,7 @@ public:
 
     void clear();
 
+    unsigned char& operator[](uint32_t index) const;
     
 private:
     unsigned char* _bytes;

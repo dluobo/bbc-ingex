@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: File.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
  *
  * 
  *
@@ -59,6 +59,8 @@ public:
     int64_t tell();
     void seek(int64_t position, int whence);
     void skip(uint64_t len);
+    int64_t size();
+    bool eof();
 
     
     uint32_t write(unsigned char* data, uint32_t count);
