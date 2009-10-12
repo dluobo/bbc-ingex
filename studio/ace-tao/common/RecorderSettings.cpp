@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.cpp,v 1.8 2009/09/18 15:53:04 john_f Exp $
+ * $Id: RecorderSettings.cpp,v 1.9 2009/10/12 15:05:38 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -30,28 +30,35 @@
 // config cannot be read from the database.
 
 const prodauto::Rational    IMAGE_ASPECT    = prodauto::g_16x9ImageAspect;
-const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
+//const int                   TIMECODE_MODE   = LTC_PARAMETER_VALUE;
 const char * const          COPY_COMMAND    = "";
 
 const int           ENCODE1_RESOLUTION      = MJPEG21_MATERIAL_RESOLUTION;
 const int           ENCODE1_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE1_BITC            = false;
 const char * const  ENCODE1_DIR             = "/video";
-const char * const  ENCODE1_COPY_DEST            = "/store";
+const char * const  ENCODE1_COPY_DEST       = "/store";
 const int           ENCODE1_COPY_PRIORITY   = 1;
 
 const int           ENCODE2_RESOLUTION      = 0;
 const int           ENCODE2_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
 const bool          ENCODE2_BITC            = false;
 const char * const  ENCODE2_DIR             = "/video";
-const char * const  ENCODE2_COPY_DEST            = "/store";
+const char * const  ENCODE2_COPY_DEST       = "/store";
 const int           ENCODE2_COPY_PRIORITY   = 2;
+
+const int           ENCODE3_RESOLUTION      = 0;
+const int           ENCODE3_FILE_FORMAT     = MXF_FILE_FORMAT_TYPE;
+const bool          ENCODE3_BITC            = false;
+const char * const  ENCODE3_DIR             = "/video";
+const char * const  ENCODE3_COPY_DEST       = "/store";
+const int           ENCODE3_COPY_PRIORITY   = 3;
 
 const int           QUAD_RESOLUTION     = 0;
 const int           QUAD_FILE_FORMAT    = RAW_FILE_FORMAT_TYPE;
 const bool          QUAD_BITC           = true;
 const char * const  QUAD_DIR            = "/video";
-const char * const  QUAD_COPY_DEST           = "";
+const char * const  QUAD_COPY_DEST      = "";
 const int           QUAD_COPY_PRIORITY  = 3;
 
 const bool BROWSE_AUDIO = false;
@@ -83,7 +90,7 @@ RecorderSettings * RecorderSettings::Instance()
 // Constructor
 RecorderSettings::RecorderSettings() :
     image_aspect(IMAGE_ASPECT),
-    timecode_mode(TIMECODE_MODE),
+    //timecode_mode(TIMECODE_MODE),
     copy_command(COPY_COMMAND),
     browse_audio(BROWSE_AUDIO),
     mpeg2_bitrate(MPEG2_BITRATE),
@@ -123,6 +130,13 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     std::string encode2_copy_dest;
     int encode2_copy_priority;
 
+    int encode3_resolution;
+    int encode3_file_format;
+    bool encode3_bitc;
+    std::string encode3_dir;
+    std::string encode3_copy_dest;
+    int encode3_copy_priority;
+
     int quad_resolution;
     int quad_file_format;
     bool quad_bitc;
@@ -133,7 +147,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     if (rc)
     {
         image_aspect = rc->getRationalParam("IMAGE_ASPECT", IMAGE_ASPECT);
-        timecode_mode = rc->getIntParam("TIMECODE_MODE", TIMECODE_MODE);
+        //timecode_mode = rc->getIntParam("TIMECODE_MODE", TIMECODE_MODE);
         copy_command = rc->getStringParam("COPY_COMMAND", COPY_COMMAND);
 
         encode1_resolution = rc->getIntParam("ENCODE1_RESOLUTION", ENCODE1_RESOLUTION);
@@ -150,6 +164,13 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         encode2_copy_dest = rc->getStringParam("ENCODE2_COPY_DEST", ENCODE2_COPY_DEST);
         encode2_copy_priority = rc->getIntParam("ENCODE2_COPY_PRIORITY", ENCODE2_COPY_PRIORITY);
 
+        encode3_resolution = rc->getIntParam("ENCODE3_RESOLUTION", ENCODE3_RESOLUTION);
+        encode3_file_format = rc->getIntParam("ENCODE3_WRAPPING", ENCODE3_FILE_FORMAT);
+        encode3_bitc = rc->getBoolParam("ENCODE3_BITC", ENCODE3_BITC);
+        encode3_dir = rc->getStringParam("ENCODE3_DIR", ENCODE3_DIR);
+        encode3_copy_dest = rc->getStringParam("ENCODE3_COPY_DEST", ENCODE3_COPY_DEST);
+        encode3_copy_priority = rc->getIntParam("ENCODE3_COPY_PRIORITY", ENCODE3_COPY_PRIORITY);
+
         quad_resolution = rc->getIntParam("QUAD_RESOLUTION", QUAD_RESOLUTION);
         quad_file_format = rc->getIntParam("QUAD_WRAPPING", QUAD_FILE_FORMAT);
         quad_bitc = rc->getBoolParam("QUAD_BITC", QUAD_BITC);
@@ -160,7 +181,7 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
     else
     {
         image_aspect = IMAGE_ASPECT;
-        timecode_mode = TIMECODE_MODE;
+        //timecode_mode = TIMECODE_MODE;
         copy_command = COPY_COMMAND;
 
         encode1_resolution = ENCODE1_RESOLUTION;
@@ -177,9 +198,16 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         encode2_copy_dest = ENCODE2_COPY_DEST;
         encode2_copy_priority = ENCODE2_COPY_PRIORITY;
 
+        encode3_resolution = ENCODE3_RESOLUTION;
+        encode3_file_format = ENCODE3_FILE_FORMAT;
+        encode3_bitc = ENCODE3_BITC;
+        encode3_dir = ENCODE3_DIR;
+        encode3_copy_dest = ENCODE3_COPY_DEST;
+        encode3_copy_priority = ENCODE3_COPY_PRIORITY;
+
         quad_resolution = QUAD_RESOLUTION;
         quad_file_format = QUAD_FILE_FORMAT;
-        quad_bitc = ENCODE2_BITC;
+        quad_bitc = QUAD_BITC;
         quad_dir = QUAD_DIR;
         quad_copy_dest = QUAD_COPY_DEST;
         quad_copy_priority = QUAD_COPY_PRIORITY;
@@ -208,6 +236,18 @@ bool RecorderSettings::Update(prodauto::Recorder * rec)
         ep.dir = encode2_dir;
         ep.copy_dest = encode2_copy_dest;
         ep.copy_priority = encode2_copy_priority;
+        encodings.push_back(ep);
+    }
+    if (encode3_resolution)
+    {
+        EncodeParams ep;
+        ep.resolution = encode3_resolution;
+        ep.file_format = encode3_file_format;
+        ep.source = Input::NORMAL;
+        ep.bitc = encode3_bitc;
+        ep.dir = encode3_dir;
+        ep.copy_dest = encode3_copy_dest;
+        ep.copy_priority = encode3_copy_priority;
         encodings.push_back(ep);
     }
     if (quad_resolution)

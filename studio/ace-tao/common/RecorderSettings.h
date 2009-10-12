@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderSettings.h,v 1.6 2009/09/18 15:53:04 john_f Exp $
+ * $Id: RecorderSettings.h,v 1.7 2009/10/12 15:05:38 john_f Exp $
  *
  * Recorder Configuration.
  *
@@ -75,7 +75,7 @@ public:
 
     // Record Parameters
     prodauto::Rational image_aspect;
-    int timecode_mode;
+    //int timecode_mode;
     std::string copy_command;
 
     std::vector<EncodeParams> encodings;

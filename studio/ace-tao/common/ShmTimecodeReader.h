@@ -1,5 +1,5 @@
 /*
- * $Id: ShmTimecodeReader.h,v 1.1 2009/06/12 17:55:49 john_f Exp $
+ * $Id: ShmTimecodeReader.h,v 1.2 2009/10/12 15:06:30 john_f Exp $
  *
  * Timecode reader using Ingex shared memory as source.
  *
@@ -31,8 +31,10 @@ class ShmTimecodeReader : public TimecodeReader
 {
 public:
     ShmTimecodeReader();
+    /*
     enum TcEnum { LTC, VITC };
     void TcMode(TcEnum tc_mode);
+    */
     std::string Timecode();
 };
 

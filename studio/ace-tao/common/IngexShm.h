@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.h,v 1.2 2009/09/18 15:50:18 john_f Exp $
+ * $Id: IngexShm.h,v 1.3 2009/10/12 15:05:38 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -66,13 +66,7 @@ public:
         int frame = 0;
         if (channel_i < mChannels)
         {
-#ifndef _MSC_VER
-            PTHREAD_MUTEX_LOCK(&mpControl->channel[channel_i].m_lastframe)
-#endif
-            frame = mpControl->channel[channel_i].lastframe;
-#ifndef _MSC_VER
-            PTHREAD_MUTEX_UNLOCK(&mpControl->channel[channel_i].m_lastframe)
-#endif
+            frame = nexus_lastframe(mpControl, channel_i);
         }
         if (frame < 0)
         {
@@ -84,35 +78,22 @@ public:
     std::string SourceName(unsigned int channel_i);
     void SourceName(unsigned int channel_i, const std::string & name);
 
+    /*
     enum TcEnum { LTC, VITC };
-
     void TcMode(TcEnum mode) { mTcMode = mode; }
+    */
 
     int FrameRateNumerator() { if (mpControl) return mpControl->frame_rate_numer; else return 0; }
     int FrameRateDenominator() { if (mpControl) return mpControl->frame_rate_denom; else return 0; }
     void GetFrameRate(int & numerator, int & denominator);
     void GetFrameRate(int & fps, bool & df);
 
-    // In funtions below, you could check (channel < mChannels) first.
-
-    int32_t Timecode(unsigned int channel, unsigned int frame)
-    {
-        //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
-        uint8_t * p_tc = mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + (mTcMode == LTC ? mpControl->ltc_offset : mpControl->vitc_offset);
-        return * (int32_t *) p_tc;
-    }
-    int32_t CurrentTimecode(unsigned int channel)
-    {
-        return Timecode(channel, LastFrame(channel));
-    }
+    int32_t Timecode(unsigned int channel, unsigned int frame);
+    int32_t CurrentTimecode(unsigned int channel);
 
     bool SignalPresent(unsigned int channel)
     {
-        uint8_t * p_ok = mRing[channel]
-            + mpControl->elementsize * (LastFrame(channel) % mpControl->ringlen)
-            + mpControl->signal_ok_offset;
-        return 0 != * (int32_t *) p_ok;
+        return nexus_signal_ok(mpControl, mRing, channel, LastFrame(channel));
     }
 
     unsigned int Width() { return mpControl->width; }
@@ -125,53 +106,45 @@ public:
 
     int FrameNumber(unsigned int channel, unsigned int frame)
     {
-        void * p_framenumber = mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->frame_number_offset;
-        return * (int *) p_framenumber;
+        return nexus_frame_number(mpControl, mRing, channel, frame);
     }
 
-    int FrameNumberOffset() { return mpControl->frame_number_offset; }
+    // int FrameNumberOffset() { return mpControl->frame_number_offset; }
     int SecondaryVideoOffset() { return mpControl->sec_video_offset; }
 
     uint8_t * pVideoPri(int channel, int frame)
     {
-        return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen);
+        return (uint8_t *)nexus_primary_video(mpControl, mRing, channel, frame);
     }
-    //int sizeVideo422() { return mpControl->width*mpControl->height*2; }
 
     uint8_t * pVideoSec(unsigned int channel, unsigned int frame)
     {
-        return mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->sec_video_offset;
+        return (uint8_t *)nexus_secondary_video(mpControl, mRing, channel, frame);
     }
-    //unsigned int sizeVideoSec() { return  mpControl->width*mpControl->height*3/2; }
+
+    NexusFrameData * pFrameData(unsigned int channel, unsigned int frame)
+    {
+        return nexus_frame_data(mpControl, mRing, channel, frame);
+    }
 
     int32_t * pAudio12(unsigned int channel, unsigned int frame)
     {
-        return (int32_t *)
-            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->audio12_offset);
+        return (int32_t *)nexus_audio12(mpControl, mRing, channel, frame);
     }
 
     int32_t * pAudio34(unsigned int channel, unsigned int frame)
     {
-        return  (int32_t *)
-            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->audio34_offset);
+        return (int32_t *)nexus_audio34(mpControl, mRing, channel, frame);
     }
 
     int32_t * pAudio56(unsigned int channel, unsigned int frame)
     {
-        return (int32_t *)
-            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->audio56_offset);
+        return (int32_t *)nexus_audio56(mpControl, mRing, channel, frame);
     }
 
     int32_t * pAudio78(unsigned int channel, unsigned int frame)
     {
-        return  (int32_t *)
-            (mRing[channel] + mpControl->elementsize * (frame % mpControl->ringlen)
-            + mpControl->audio78_offset);
+        return (int32_t *)nexus_audio78(mpControl, mRing, channel, frame);
     }
 
     CaptureFormat PrimaryCaptureFormat()
@@ -236,7 +209,7 @@ private:
     unsigned int mAudioTracksPerChannel;
     uint8_t * mRing[MAX_CHANNELS];
     NexusControl * mpControl;
-    TcEnum mTcMode;
+    //TcEnum mTcMode;
     // static instance pointer
     static IngexShm * mInstance;
     // thread management

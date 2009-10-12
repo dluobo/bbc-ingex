@@ -1,5 +1,5 @@
 /*
- * $Id: IngexShm.cpp,v 1.2 2009/09/18 15:50:18 john_f Exp $
+ * $Id: IngexShm.cpp,v 1.3 2009/10/12 15:05:38 john_f Exp $
  *
  * Interface for reading audio/video data from shared memory.
  *
@@ -79,7 +79,7 @@ ACE_THR_FUNC_RETURN monitor_shm(void * p)
 }
 
 IngexShm::IngexShm()
-: mChannels(0), mAudioTracksPerChannel(0), mpControl(0), mTcMode(VITC), mActivated(false), mThreadId(0)
+: mChannels(0), mAudioTracksPerChannel(0), mpControl(0), /*mTcMode(VITC),*/ mActivated(false), mThreadId(0)
 {
     // Start thread to monitor and (re-)connect to shared memory
     mActivated = true;
@@ -183,6 +183,35 @@ void IngexShm::Attach()
     }
 }
 
+
+int32_t IngexShm::Timecode(unsigned int channel, unsigned int frame)
+{
+    //ACE_DEBUG((LM_DEBUG, ACE_TEXT("Timecode(%d, %d)\n"), channel, frame));
+    /*
+    NexusTimecode nexus_tc_type;
+    switch (mTcMode)
+    {
+    case LTC:
+        nexus_tc_type = NexusTC_LTC;
+        break;
+    case VITC:
+    default:
+        nexus_tc_type = NexusTC_VITC;
+        break;
+    }
+    */
+    
+    // Could check (channel < mChannels) first.
+    return (int32_t)nexus_tc(mpControl, mRing, channel, frame, NexusTC_DEFAULT);
+}
+
+int32_t IngexShm::CurrentTimecode(unsigned int channel)
+{
+    // Could check (channel < mChannels) first.
+    return Timecode(channel, LastFrame(channel));
+}
+
+
 std::string IngexShm::SourceName(unsigned int channel_i)
 {
     if (channel_i < mChannels)
@@ -199,17 +228,7 @@ void IngexShm::SourceName(unsigned int channel_i, const std::string & name)
 {
     if (channel_i < mChannels)
     {
-        // Set name
-        strncpy( mpControl->channel[channel_i].source_name, name.c_str(),
-            sizeof(mpControl->channel[channel_i].source_name));
-        // Signal the change
-#ifndef _MSC_VER
-        PTHREAD_MUTEX_LOCK(&mpControl->m_source_name_update)
-#endif
-        ++mpControl->source_name_update;
-#ifndef _MSC_VER
-        PTHREAD_MUTEX_UNLOCK(&mpControl->m_source_name_update)
-#endif
+        nexus_set_source_name(mpControl, channel_i, name.c_str());
     }
 }
 
