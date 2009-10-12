@@ -1,5 +1,5 @@
 /*
- * $Id: routerloggerApp.cpp,v 1.10 2009/09/18 16:26:32 john_f Exp $
+ * $Id: routerloggerApp.cpp,v 1.11 2009/10/12 15:59:10 john_f Exp $
  *
  * Router recorder application class.
  *
@@ -43,7 +43,7 @@
 
 const char * const USAGE =
     "Usage: Routerlogger.exe [-v] [-r <router port>] [-s]"
-    "[[-t <timecode port>] [-u] | [-l] | [-i]]"
+    "[[-t <timecode port>] [-u] | [-l]]"
     " [-n <name>] [-c <mc_clip_def_name>] [-f <db file>]"
     " [-d <name> -p <number>] [-m <MixerOut dest>]"
     " [-a <nameserver>]"
@@ -51,8 +51,7 @@ const char * const USAGE =
     " <CORBA options>\n"
     "    -s  router on TCP socket, router port in format host:port\n"
     "    -u  timecode reader on TCP socket, timecode port in format host:port\n"
-    "    -l  take LTC timecode from shared memory\n"
-    "    -i  take VITC timecode from shared memory\n"
+    "    -l  take timecode from shared memory\n"
     "    example CORBA options: -ORBDefaultInitRef corbaloc:iiop:192.168.1.1:8888\n"
     "    example nameserver: corbaloc:iiop:192.168.1.1:8888/NameService\n";
 
@@ -119,7 +118,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
     std::string tc_port;
     Transport::EnumType  tc_transport = Transport::SERIAL;
     bool tc_from_shm = false;
-    ShmTimecodeReader::TcEnum tc_mode = ShmTimecodeReader::LTC;
+    //ShmTimecodeReader::TcEnum tc_mode = ShmTimecodeReader::LTC;
 
     unsigned int debug_level = 2; // need level 3 for LM_DEBUG messages
 
@@ -161,12 +160,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
 
         case 'l':
             tc_from_shm = true;
-            tc_mode = ShmTimecodeReader::LTC;
-            break;
-        
-        case 'i':
-            tc_from_shm = true;
-            tc_mode = ShmTimecodeReader::VITC;
+            //tc_mode = ShmTimecodeReader::LTC;
             break;
         
         case 'n':
@@ -312,7 +306,7 @@ bool routerloggerApp::Init(int argc, char * argv[])
     ShmTimecodeReader * sr = dynamic_cast<ShmTimecodeReader *>(mpTcReader);
     if (sr)
     {
-        sr->TcMode(tc_mode);
+        //sr->TcMode(tc_mode);
     }
 
     // Initialise database connection
