@@ -1,0 +1,301 @@
+/*
+ * Copyright (C) 2009  British Broadcasting Corporation
+ * Author: Sean Casey <seantc@users.sourceforge.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
+
+/* ext tree node icon */
+.video {
+	background-image: url(/ingex/img/materials/take.gif) !important;
+}
+
+.toolbar {
+	width: 1000px;
+	height: 50px;
+}
+
+.container {
+	clear: left;
+	width: 1000px;
+	height: 300px;
+}
+
+.container2 {
+	width: 1000px;
+	height: 300px;
+}
+
+.tree {
+	left: 0;
+	float: left;
+	width: 800px;
+}
+
+.aafbasket {
+	left: 0;
+	float: left;
+	width: 800px;
+}
+
+.metadata {
+	background-color: #feffaf;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: small;
+	top: 0;
+	float: right;
+	width: 200px;
+	height: 300px;
+}
+
+.preview {
+	background-color: black;
+	color: white;
+	border-color: black;
+	width: 180px;
+	height: 180px;
+	position: relative;
+	left: 10px;
+	top: 10px;
+}
+
+.m_text {
+	position: relative;
+	left: 10px;
+	top: 10px;
+	width: 180px;
+	height: 280px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.materials_browser {
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: small;
+	width: 1000px;
+	border: 1px solid black;
+	padding: 5px;
+	background-color: #f6f6f6;
+}
+
+.aaf_selection {
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: small;
+	width: 1000px;
+	border: 1px solid black;
+	padding: 5px;
+	background-color: #f6f6f6;
+}
+
+.status_bar_src {
+	width: 1000px;
+	height: 20px;
+	border: none;
+	padding: 0px;
+	background-color: #feffaf;
+}
+
+.status_bar_dest {
+	width: 1000px;
+	height: 20px;
+	border: none;
+	padding: 0px;
+	background-color: #feffaf;
+}
+
+.aaf_log {
+	float: right;
+	top: 0;
+	width: 180px;
+	height: 100px;
+}
+
+
+/*--form layout--*/ 
+
+/* tabular style form layout */
+fieldset.table {
+	border: 1px solid black;
+	float: left;
+	clear: left;
+	width: 100%;
+	margin: 0 0 0.5em 0;
+	padding: 0;
+}
+
+fieldset.table th {
+	padding: 0px;
+}
+
+fieldset.table td {
+	padding: 0px;
+}
+
+fieldset.noborder {
+	clear: left;
+	border: 0;
+	margin: 0 0 0.5em 0;
+	padding: 0;
+}
+
+fieldset.table legend {
+	margin-left: 1em;
+	color: #000000;
+	font-weight: bold;
+}
+
+fieldset.table ol {
+	padding: 0em 1em 0 1em;
+	list-style: none;
+}
+
+fieldset.table li {
+	float: left;
+	clear: left;
+	width: 100%;
+	padding-bottom: 0.5em;
+}
+
+fieldset.table.submit {
+	border-style: none;
+}
+
+fieldset.table label {
+	float: left;
+	width: 150px;
+	margin-right: 1em;
+}
+
+fieldset.table .label_r {
+	float: left;
+	text-align: right;
+	width: 150px;
+	margin-right: 1em;
+}
+
+fieldset.table .item {
+	overflow: hidden;
+	float: left;
+	margin-right: 0.5em;
+}
+
+fieldset.table input.item {
+	border: 1px solid black;
+	width: 150px;
+}
+
+fieldset.table select.item {
+	/* fix for misaligned drop down menus - caused by ext? */
+	width: 154px;
+}
+
+fieldset.table .wide_item {
+	border: 1px solid black;
+	float: left;
+	width: 250px;
+}
+
+fieldset.table .short_item {
+	border: 1px solid black;
+	float: left;
+	width: 100px;
+}
+
+fieldset .var_container {
+	float: left;
+	margin-right: 0.5em;
+}
+
+fieldset .centre_container {
+	text-align: center;
+	width: 1000px;
+}
+
+
+
+/* specific form element formatting */
+.time_in {
+	border: 1px solid black;
+	width: 25px;
+}
+
+.period_in {
+	border: 1px;
+	margin-right: 5px;
+	width: 100px;
+	float: left;
+}
+
+.day_in {
+	border: 1px;
+	width: 100px;
+}
+
+.time {
+	width: 150px;
+	float: right;
+}
+
+.datetime {
+	border: 1px;
+	width: 270px;
+}
+
+/*--- input error notifiers ---*/
+.time_range_err {
+	float: left;
+	color: red;
+	visibility: hidden;
+}
+
+.filter_matches {
+	
+}
+
+.track_link_A {
+	background-color: #ff5555;
+	border: 1px;
+	margin-top: 2px;
+	margin-bottom: 2px;
+	width: 150px;
+}
+
+.track_link_V {
+	background-color: #55ff55;
+	border: 1px;
+	margin-top: 2px;
+	margin-bottom: 2px;
+	width: 150px;
+}
+
+/*--- ext multiselect d+d ---*/
+.x-dd-drag-ghost .x-tree-node-indent,.x-dd-drag-ghost .x-tree-ec-icon {
+	display: inline !important;
+}
+
+/*--- non-drag and drop interface ---*/
+.filter_container {
+	width: 55%;
+	padding-right: 5px;
+	float: left;
+}
+
+.export_container {
+	width: 44%;
+	padding-left: 5px;
+	float:left;
+}
