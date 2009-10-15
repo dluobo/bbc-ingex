@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.5 2009/09/18 16:10:15 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.6 2009/10/15 13:32:48 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -129,15 +129,15 @@ class EventList : public wxListView, wxThread //used wxListCtrl for a while beca
 		bool mCanEdit;
 		long mCurrentChunkInfo;
 		long mCurrentSelectedEvent;
-		wxXmlNode * mRecordingNode;
-		wxXmlNode * mPrevRecordingNode;
 		wxMutex mMutex;
 		wxString mProjectName;
 		unsigned int mRecordingNodeCount;
 		bool mChunking;
-		//vbls used in both contexts while thread is running
+		//vbls which need mutex protection to access
 		wxCondition * mCondition;
 		wxXmlNode * mRootNode;
+		wxXmlNode * mRecordingNode;
+		wxXmlNode * mPrevRecordingNode;
 		bool mRunThread;
 		bool mSyncThread;
 		bool mLoadEventFiles;
