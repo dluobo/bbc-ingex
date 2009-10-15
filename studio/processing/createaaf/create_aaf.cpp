@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.15 2009/09/18 17:05:47 philipn Exp $
+ * $Id: create_aaf.cpp,v 1.16 2009/10/15 15:33:41 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -478,7 +478,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --xml-command <string>         XML command file\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Notes:\n");
-    fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff' (PAL: ff ranges 1..24, NTSC: ff ranges 1..29 and is non-drop frame)\n");
+    fprintf(stderr, "* --from and --to form is 'yyyy-mm-ddShh:mm:ss:ff' (PAL: ff ranges 0..24, NTSC: ff ranges 0..29 and is non-drop frame)\n");
     fprintf(stderr, "* --from-cd form is 'yyyy-mm-ddThh:mm:ss'\n");
     fprintf(stderr, "* The default for --from is the start of today\n"); 
     fprintf(stderr, "* The default for --to is the start of tommorrow\n");
@@ -1078,79 +1078,87 @@ int main(int argc, const char* argv[])
     }
     
     
-    // remove any packages with an edit rate != the target edit rate and
+    // remove any packages with operational pattern != OP-Atom when creating AAF and
+    // an edit rate != the target edit rate and
     // go through the material package -> file package and remove any that reference
     // a file package with a non-zero videoResolutionID and !=  targetVideoResolutionID
     if (package_ids.size() == 0)
     {        
-            vector<prodauto::MaterialPackage *> packagesToErase;
-            MaterialPackageSet::const_iterator iter1;
-
-            for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
+        vector<prodauto::MaterialPackage *> packagesToErase;
+        MaterialPackageSet::const_iterator iter1;
+        
+        for (iter1 = material.topPackages.begin(); iter1 != material.topPackages.end(); iter1++)
+        {
+            MaterialPackage* topPackage = *iter1;
+        
+            // check operational pattern
+            if (!fcpxml && topPackage->op != OPERATIONAL_PATTERN_ATOM)
             {
-                MaterialPackage* topPackage = *iter1;
-        
-                // check package edit rate        
-                Rational packageEditRate = getVideoEditRate(topPackage, material.packages);
-                if (packageEditRate != targetEditRate && packageEditRate != g_nullRational)
-                {
-                    packagesToErase.push_back(topPackage);
-                    continue;
-                }
-        
-                // check video resolution IDs
-                vector<Track*>::const_iterator iter2;
-                for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
-                {
-                    Track* track = *iter2;
-                    
-                    SourcePackage dummy;
-                    dummy.uid = track->sourceClip->sourcePackageUID;
-                    PackageSet::iterator result = material.packages.find(&dummy);
-                    if (result != material.packages.end())
-                    {
-                        Package* package = *result;
-                        
-                        if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
-                        {
-                            continue;
-                        }
-                        SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
-                        if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
-                        {
-                            continue;
-                        }
-                        
-                        FileEssenceDescriptor* fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(
-                            sourcePackage->descriptor);
-                        if (fileDescriptor->videoResolutionID != 0 && 
-                            fileDescriptor->videoResolutionID != videoResolutionID)
-                        {
-                            // material package has wrong video resolution
-                            packagesToErase.push_back(topPackage);
-                            break; // break out of track loop
-                        }
-                    }
-        
-                }
-            }    
-            vector<prodauto::MaterialPackage *>::const_iterator it;
-            for (it = packagesToErase.begin(); it != packagesToErase.end(); it++)
-            {
-                material.topPackages.erase(*it);
+                packagesToErase.push_back(topPackage);
+                continue;
             }
             
-            if (verbose)
+            // check package edit rate        
+            Rational packageEditRate = getVideoEditRate(topPackage, material.packages);
+            if (packageEditRate != targetEditRate && packageEditRate != g_nullRational)
             {
-                if (packagesToErase.size() > 0)
-                {
-                    printf("Removed %zd clips from those loaded that did not match the video resolution\n", packagesToErase.size());
-                }
-                else
-                {
-                    printf("All clips either match the video resolution or are audio only\n");
-                }
+                packagesToErase.push_back(topPackage);
+                continue;
             }
+        
+            // check video resolution IDs
+            vector<Track*>::const_iterator iter2;
+            for (iter2 = topPackage->tracks.begin(); iter2 != topPackage->tracks.end(); iter2++)
+            {
+                Track* track = *iter2;
+                
+                SourcePackage dummy;
+                dummy.uid = track->sourceClip->sourcePackageUID;
+                PackageSet::iterator result = material.packages.find(&dummy);
+                if (result != material.packages.end())
+                {
+                    Package* package = *result;
+                    
+                    if (package->getType() != SOURCE_PACKAGE || package->tracks.size() == 0)
+                    {
+                        continue;
+                    }
+                    SourcePackage* sourcePackage = dynamic_cast<SourcePackage*>(package);
+                    if (sourcePackage->descriptor->getType() != FILE_ESSENCE_DESC_TYPE)
+                    {
+                        continue;
+                    }
+                    
+                    FileEssenceDescriptor* fileDescriptor = dynamic_cast<FileEssenceDescriptor*>(
+                        sourcePackage->descriptor);
+                    if (fileDescriptor->videoResolutionID != 0 && 
+                        fileDescriptor->videoResolutionID != videoResolutionID)
+                    {
+                        // material package has wrong video resolution
+                        packagesToErase.push_back(topPackage);
+                        break; // break out of track loop
+                    }
+                }
+        
+            }
+        }    
+        vector<prodauto::MaterialPackage *>::const_iterator it;
+        for (it = packagesToErase.begin(); it != packagesToErase.end(); it++)
+        {
+            material.topPackages.erase(*it);
+        }
+        
+        if (verbose)
+        {
+            if (packagesToErase.size() > 0)
+            {
+                printf("Removed %zd clips from those loaded that did not match the video resolution\n", packagesToErase.size());
+            }
+            else
+            {
+                printf("All clips either match the video resolution or are audio only\n");
+            }
+        }
     }
     // So we now have the relevant MaterialPackages in...    material.topPackages
     // and relevant SourcePackages in...                     material.packages
