@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.h,v 1.14 2009/09/18 16:10:16 john_f Exp $              *
+ *   $Id: ingexgui.h,v 1.15 2009/10/15 13:33:21 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -173,6 +173,7 @@ class IngexguiFrame : public wxFrame
 		TEXTCTRL_Description,
 		TREE,
 		BUTTON_JumpToTimecode,
+		BUTTON_TakeSnapshot,
 	};
 	private:
 	enum Stat
@@ -212,6 +213,7 @@ class IngexguiFrame : public wxFrame
 		void OnRefreshTimer(wxTimerEvent&);
 		void OnDeleteCue(wxCommandEvent&);
 		void OnJumpToTimecode(wxCommandEvent&);
+		void OnTakeSnapshot(wxCommandEvent&);
 		void OnPlayerEvent(wxCommandEvent&);
 		void OnRecorderGroupEvent(wxCommandEvent&);
 		void OnTimeposEvent(wxCommandEvent&);
@@ -263,6 +265,7 @@ class IngexguiFrame : public wxFrame
 		MyTextCtrl * mDescriptionCtrl;
 		wxButton * mPrevTakeButton, * mNextTakeButton;
 		wxButton * mJumpToTimecodeButton;
+		wxButton * mSnapshotButton;
 		wxButton * mDeleteCueButton;
 		DragButtonList * mPlaybackTrackSelector;
 		HelpDlg * mHelpDlg;

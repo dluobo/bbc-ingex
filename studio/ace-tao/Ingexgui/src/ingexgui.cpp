@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.18 2009/09/18 16:10:16 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.19 2009/10/15 13:33:21 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -144,6 +144,7 @@ BEGIN_EVENT_TABLE( IngexguiFrame, wxFrame )
 	EVT_BUTTON( BUTTON_PrevTake, IngexguiFrame::OnPrevTake )
 	EVT_BUTTON( BUTTON_NextTake, IngexguiFrame::OnNextTake )
 	EVT_BUTTON( BUTTON_JumpToTimecode, IngexguiFrame::OnJumpToTimecode )
+	EVT_BUTTON( BUTTON_TakeSnapshot, IngexguiFrame::OnTakeSnapshot )
 	EVT_BUTTON( BUTTON_DeleteCue, IngexguiFrame::OnDeleteCue )
 	EVT_COMMAND( wxID_ANY, wxEVT_PLAYER_MESSAGE, IngexguiFrame::OnPlayerEvent )
 	EVT_COMMAND( wxID_ANY, wxEVT_TREE_MESSAGE, IngexguiFrame::OnTreeEvent )
@@ -230,12 +231,10 @@ int IngexguiApp::FilterEvent(wxEvent& event)
 /// @param argc Command line argument count.
 /// @param argv Command line argument vector.
 IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
-	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mDescriptionControlHasFocus(false), mFilesModeSelectedTrack(0), mToday(wxDateTime::Today())
+	: wxFrame((wxFrame *)0, wxID_ANY, wxT("ingexgui")/*, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE | wxWANTS_CHARS* - this doesn't prevent cursor keys being lost, as hoped */), mStatus(STOPPED), mDescriptionControlHasFocus(false), mFilesModeSelectedTrack(0), mToday(wxDateTime::Today()), mLastPlayerMode(BUTTON_MENU_PlayRecordings)
 #ifndef DISABLE_SHARED_MEM_SOURCE
 , mLastNonEtoEPlayerMode(BUTTON_MENU_PlayRecordings)
 #endif
-
-
 {
 	//logging
 	wxLog::SetActiveTarget(new wxLogStream(new ofstream(wxDateTime::Now().Format(wxT("ingexguiLog-%y%m%d-%H%M%S")).mb_str(*wxConvCurrent))));
@@ -502,6 +501,8 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	sizer2dH->Add(mNextTakeButton, 0, wxALL, CONTROL_BORDER);
 	mJumpToTimecodeButton = new wxButton(eventPanel, BUTTON_JumpToTimecode, wxT("Jump to Timecode"));
 	sizer2dH->Add(mJumpToTimecodeButton, 0, wxALL, CONTROL_BORDER);
+	mSnapshotButton = new wxButton(eventPanel, BUTTON_TakeSnapshot, wxT("Take Snapshot"));
+	sizer2dH->Add(mSnapshotButton, 0, wxALL, CONTROL_BORDER);
 	sizer2dH->AddStretchSpacer();
 	mDeleteCueButton = new wxButton(eventPanel, BUTTON_DeleteCue, wxT("Delete Cue Point"));
 	sizer2dH->Add(mDeleteCueButton, 0, wxALL, CONTROL_BORDER);
@@ -567,14 +568,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 	mRecorderGroup->StartGettingRecorders(); //safe to let it generate events now that everything has been created (events will be processed if any dialogue is visible, such as the saved preferences warnings above)
 
 	ResetToDisconnected();
-	if (mEventList->GetItemCount()) {
-		mLastPlayerMode = BUTTON_MENU_PlayRecordings;
-		EnablePlayer();
-	}
-	else {
-		EnablePlayer(false); //sets up menu states
-		mLastPlayerMode = wxID_HIGHEST; //no known mode so will load the player if button is pressed
-	}
 	SetStatus(STOPPED);
 }
 
@@ -841,10 +834,15 @@ void IngexguiFrame::OnRecord( wxCommandEvent& WXUNUSED( event ) )
 		//clear everything away because we're starting again
 		ClearLog(); //resets player
 	}
+#ifdef DISABLE_SHARED_MEM_SOURCE //no E to E mode
 	else if (!GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked()) {
-#ifndef DISABLE_SHARED_MEM_SOURCE
-		mLastPlayerModeBeforeRec = mLastPlayerMode;
-		if (BUTTON_MENU_EtoE == mLastPlayerMode) {
+		//Stop the player
+		mPlayer->Reset();
+	}
+#else //E to E mode available
+	mLastPlayerModeBeforeRec = mLastPlayerMode;
+	if (!GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked()) {
+		if (BUTTON_MENU_EtoE == mLastPlayerMode) { //don't need to change mode
 			if (PAUSED == mStatus) {
 				//start playback as button to do this is not available during recording
 				mPlayer->Play();
@@ -853,12 +851,10 @@ void IngexguiFrame::OnRecord( wxCommandEvent& WXUNUSED( event ) )
 		else { //not in E to E mode
 			//switch to E to E mode
 			wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, BUTTON_MENU_EtoE);
-			AddPendingEvent(menuEvent);
+			OnPlayerMode(menuEvent); //will not be paused
 		}
-#else
-		mPlayer->Reset();
-#endif
 	}
+#endif
 	ProdAuto::MxfTimecode now;
 	mTimepos->GetTimecode(&now);
 	Log(wxT("Record button pressed @ ") + Timepos::FormatTimecode(now));
@@ -1252,10 +1248,10 @@ void IngexguiFrame::OnStop( wxCommandEvent& WXUNUSED( event ) )
 		mRecorderGroup->Stop(now, mDescriptionCtrl->GetLineText(0).Trim(false).Trim(true), mEventList->GetLocators());
 		SetStatus(RUNNING_DOWN);
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		//restore player mode before recording
-		if (!GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked() && BUTTON_MENU_EtoE != mLastPlayerModeBeforeRec) { //second check avoids pointless and visible reload of player
+		//restore the player mode that existed before recording
+		if (!GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked()) {
 			wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, mLastPlayerModeBeforeRec);
-			AddPendingEvent(menuEvent);
+			OnPlayerMode(menuEvent);
 		}
 #endif
 	}
@@ -1419,7 +1415,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 #ifndef DISABLE_SHARED_MEM_SOURCE
 				mLastPlayerModeBeforeRec = mLastPlayerMode;
 				wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, BUTTON_MENU_EtoE);
-				AddPendingEvent(menuEvent);
+				OnPlayerMode(menuEvent);
 #else
 				mPlayer->Reset();
 #endif
@@ -1501,6 +1497,9 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 						//need to reload the player as more files have appeared
 						UpdatePlayerAndEventControls(true);
 #ifndef DISABLE_SHARED_MEM_SOURCE
+					}
+					else if (mPlayer->AtMaxForwardSpeed()) { //in EtoE and playing (won't be paused; could be stopped)
+						SetStatus(PLAYING); //would otherwise continue to be in stop mode, as player is not being reloaded so no player event will be generated
 					}
 #endif
 				}
@@ -1658,48 +1657,61 @@ void IngexguiFrame::OnTreeEvent(wxCommandEvent& event)
 }
 
 /// Responds to the player enable/disable menu requests, by telling the player and updating button states and menu items.
+/// If built with shared memory support, recording, enabling and player wasn't in E to E mode, switches player to E to E mode
+/// Otherwise, assumes player mode hasn't changed, so does not update anything else.
 void IngexguiFrame::OnPlayerDisable(wxCommandEvent& WXUNUSED( event ))
 {
 	bool enabled = !GetMenuBar()->FindItem(MENU_PlayerDisable)->IsChecked();
-	mPlayer->Enable(enabled);
-	GetMenuBar()->FindItem(MENU_PlayerType)->Enable(enabled);
-	GetMenuBar()->FindItem(MENU_PlayerOSD)->Enable(enabled);
-	//press buttons
-	if (enabled) {
-		if (mLastPlayerMode == BUTTON_MENU_PlayFiles) {
-			mPlayFilesButton->SetValue(true);
-			mPlayFilesButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
 #ifndef DISABLE_SHARED_MEM_SOURCE
-			mLastNonEtoEPlayerMode = BUTTON_MENU_PlayFiles;
+	if (enabled && (RECORDING == mStatus || RUNNING_UP == mStatus) && BUTTON_MENU_EtoE != mLastPlayerMode) { //recording but not running down - other player modes are allowed in the running down state
+		//switch to E to E as this is the only mode allowed during recording
+		wxCommandEvent menuEvent(wxEVT_COMMAND_MENU_SELECTED, BUTTON_MENU_EtoE);
+		OnPlayerMode(menuEvent); //this will call the current method again but won't cause an infinite loop as mLastPlayerMode will have been changed
+	}
+	else {
 #endif
+		mPlayer->Enable(enabled);
+		GetMenuBar()->FindItem(MENU_PlayerType)->Enable(enabled);
+		GetMenuBar()->FindItem(MENU_PlayerOSD)->Enable(enabled);
+		//press buttons
+		if (enabled) {
+			if (BUTTON_MENU_PlayFiles == mLastPlayerMode) {
+				mPlayFilesButton->SetValue(true);
+				mPlayFilesButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
+#ifndef DISABLE_SHARED_MEM_SOURCE
+				mLastNonEtoEPlayerMode = BUTTON_MENU_PlayFiles;
+#endif
+			}
+#ifndef DISABLE_SHARED_MEM_SOURCE
+			else if (BUTTON_MENU_EtoE == mLastPlayerMode) {
+				mEtoEButton->SetValue(true);
+				mEtoEButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
+			}
+#endif
+			else { //play recordings
+				mPlayRecordingsButton->SetValue(true);
+#ifndef DISABLE_SHARED_MEM_SOURCE
+				mLastNonEtoEPlayerMode = BUTTON_MENU_PlayRecordings;
+#endif
+			}
+		}
+		//release buttons
+		if (!enabled || BUTTON_MENU_PlayFiles != mLastPlayerMode) {
+			mPlayFilesButton->SetValue(false);
+			mPlayFilesButton->SetBackgroundColour(wxNullColour);
 		}
 #ifndef DISABLE_SHARED_MEM_SOURCE
-		else if (mLastPlayerMode == BUTTON_MENU_EtoE) {
-			mEtoEButton->SetValue(true);
-			mEtoEButton->SetBackgroundColour(BUTTON_WARNING_COLOUR);
+		if (!enabled || BUTTON_MENU_EtoE != mLastPlayerMode) {
+			mEtoEButton->SetValue(false);
+			mEtoEButton->SetBackgroundColour(wxNullColour);
 		}
 #endif
-		else { //play recordings
-			mPlayRecordingsButton->SetValue(true);
-#ifndef DISABLE_SHARED_MEM_SOURCE
-			mLastNonEtoEPlayerMode = BUTTON_MENU_PlayRecordings;
-#endif
+		if (!enabled || BUTTON_MENU_PlayRecordings != mLastPlayerMode) {
+			mPlayRecordingsButton->SetValue(false);
 		}
-	}
-	//release buttons
-	if (!enabled || BUTTON_MENU_PlayFiles != mLastPlayerMode) {
-		mPlayFilesButton->SetValue(false);
-		mPlayFilesButton->SetBackgroundColour(wxNullColour);
-	}
 #ifndef DISABLE_SHARED_MEM_SOURCE
-	if (!enabled || BUTTON_MENU_EtoE != mLastPlayerMode) {
-		mEtoEButton->SetValue(false);
-		mEtoEButton->SetBackgroundColour(wxNullColour);
 	}
 #endif
-	if (!enabled || BUTTON_MENU_PlayRecordings != mLastPlayerMode) {
-		mPlayRecordingsButton->SetValue(false);
-	}
 }
 
 /// Responds to an "Open" menu command.
@@ -1743,7 +1755,7 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 }
 
 /// Responds to a player mode button being pressed or shortcut menu item being selected: E to E, files or recordings
-/// Undoes the change if a button is being released (as buttons are wired like radio buttons)
+/// If it is a button being released, undoes the change if a button is being released (as buttons are wired like radio buttons)
 /// Otherwise, enables player if disabled, and updates the selector buttons
 void IngexguiFrame::OnPlayerMode(wxCommandEvent & event)
 {
@@ -1772,7 +1784,7 @@ void IngexguiFrame::OnPlayerMode(wxCommandEvent & event)
 ///	RUNNING_UP: Waiting for recorders to respond to record commands.
 ///	RUNNING_DOWN: Waiting for recorders to respond to stop commands.
 ///	PAUSED
-//	UNKNOWN: Waiting for a response from a recorder.
+///	UNKNOWN: Waiting for a response from a recorder.
 void IngexguiFrame::SetStatus(Stat status)
 {
 	bool changed = false;
@@ -1799,7 +1811,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_Stop)->Enable(false);
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
-			EnableButtonReliably(mPlayRecordingsButton, mEventList->GetItemCount());
+			EnableButtonReliably(mPlayRecordingsButton);
 			EnableButtonReliably(mPlayFilesButton, mFileModeMxfFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			mChunkingDlg->RunFrom();
 			break;
@@ -1886,7 +1898,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
-			EnableButtonReliably(mPlayRecordingsButton, mEventList->GetItemCount());
+			EnableButtonReliably(mPlayRecordingsButton);
 			EnableButtonReliably(mPlayFilesButton, mFileModeMxfFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 		case PLAYING_BACKWARDS:
@@ -1905,7 +1917,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			mStopButton->SetToolTip(wxT(""));
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mTree->EnableChanges();
-			EnableButtonReliably(mPlayRecordingsButton, mEventList->GetItemCount());
+			EnableButtonReliably(mPlayRecordingsButton);
 			EnableButtonReliably(mPlayFilesButton, mFileModeMxfFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 		case PAUSED:
@@ -1924,7 +1936,7 @@ void IngexguiFrame::SetStatus(Stat status)
 			GetMenuBar()->FindItem(MENU_SetProjectName)->Enable();
 			mStopButton->SetToolTip(wxT(""));
 			mTree->EnableChanges();
-			EnableButtonReliably(mPlayRecordingsButton, mEventList->GetItemCount());
+			EnableButtonReliably(mPlayRecordingsButton);
 			EnableButtonReliably(mPlayFilesButton, mFileModeMxfFiles.GetCount() || !mFileModeMovFile.IsEmpty());
 			break;
 	}
@@ -1992,6 +2004,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 			mNextTakeButton->Disable();
 			GetMenuBar()->FindItem(MENU_NextTake)->Enable(false);
 			mJumpToTimecodeButton->Disable();
+			mSnapshotButton->Disable();
 			GetMenuBar()->FindItem(MENU_Up)->SetText(wxT("Move to start of file\tUP")); // TODO: this function to be deprecated - replace with line below for later versions of wx (somewhere between 2.8.4 and 2.8.9)
 	//		GetMenuBar()->FindItem(MENU_Up)->SetItemLabel(wxT("Move to start of file\tUP"));
 			GetMenuBar()->FindItem(MENU_Down)->SetText(wxT("Move to end of file\tDOWN")); // TODO: this function to be deprecated - replace with line below for later versions of wx (somewhere between 2.8.4 and 2.8.9)
@@ -2068,6 +2081,8 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 				}
 				//"Jump To Timecode" button
 				mJumpToTimecodeButton->Enable(!IsRecording() && mEventList->GetCurrentChunkInfo());
+				//"Take Screenshot" button
+				mSnapshotButton->Enable(PAUSED == mStatus);
 			}
 			else {
 				//empty list
@@ -2079,6 +2094,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 				GetMenuBar()->FindItem(MENU_Down)->Enable(false);
 				mDeleteCueButton->Disable();
 				mJumpToTimecodeButton->Disable();
+				mSnapshotButton->Disable();
 				mEventList->CanEdit(false);
 				mPlayProjectNameCtrl->SetLabel(wxT(""));
 				mPlayer->Reset();
@@ -2291,6 +2307,26 @@ void IngexguiFrame::OnJumpToTimecode(wxCommandEvent & WXUNUSED(event))
 			wxMessageDialog msg(this, wxT("Timecode ") + Timepos::FormatTimecode(dlg.GetTimecode()) + wxT(" not found."), wxT("Timecode Not Found"));
 			msg.ShowModal();
 		}
+	}
+}
+
+/// Responds to the Take Snapshot button being pressed by doing just that
+void IngexguiFrame::OnTakeSnapshot(wxCommandEvent & WXUNUSED(event))
+{
+	std::string fileName = mPlayer->GetCurrentFileName();
+//wxString name = wxString(fileName.c_str(), *wxConvCurrent);
+	if (!fileName.empty()) {
+		unsigned long offset = mPlayer->GetLatestFrameDisplayed();
+		wxExecute(wxString::Format(wxT("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m "), offset) + wxString(fileName.c_str(), *wxConvCurrent), wxEXEC_SYNC);
+ 		wxExecute(wxT("dd if=/tmp/ingexgui_screenshot0.raw of=/tmp/ingexgui_screenshot0_trimmed.raw bs=720 skip=32"), wxEXEC_SYNC); //ffmpeg -topcrop doesn't work
+		wxExecute(wxT("ffmpeg -y -f rawvideo -pix_fmt uyvy422 -s 720x574 -i /tmp/ingexgui_screenshot0_trimmed.raw -s 1024x576 /tmp/snapshot.jpg")); //574 as single-pixel black line at bottom (so we're losing one pixel); aspect ratio not quite right
+//cmd.Printf(wxT("--start %ld -m %s"), offset, fileName.c_str());
+//cmd.Printf(wxT("--start %ld -m %s"), offset, wxString(fileName.c_str(), *wxConvCurrent).wc_str(*wxConvCurrent)));
+//		wxExecute(wxString((const char *) printf("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m %s\n", offset, fileName.c_str()), *wxConvCurrent));
+//std::string cmd = printf("--start %ld -m %s", offset, filename.c_str());
+//std::cerr << cmd.mb_str(*wxConvCurrent) << "\n";
+//		wxExecute(wxString((const char *) printf("player --exit-at-end --disable-shuttle --raw-out /tmp/ingexgui_screenshot%%d.raw --start %ld --clip-duration 1 -m %s\n", offset, fileName.c_str()), *wxConvCurrent));
+//dd if=/tmp/ingexgui_screenshot0.raw bs=720 skip=32 | ffmpeg -y -f rawvideo -pix_fmt uyvy422 -s 720x574 -i - -s 1024x576 pic.jpg
 	}
 }
 

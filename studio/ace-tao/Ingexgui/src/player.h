@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.h,v 1.11 2009/09/18 16:10:16 john_f Exp $                *
+ *   $Id: player.h,v 1.12 2009/10/15 13:33:22 john_f Exp $                *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -122,6 +122,8 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		bool AtMaxReverseSpeed();
 		void MuteAudio(const bool);
 		void AudioFollowsVideo(const bool);
+		unsigned long GetLatestFrameDisplayed();
+		std::string GetCurrentFileName();
 	private:
 		bool Start(std::vector<std::string> * = 0, std::vector<std::string> * = 0, prodauto::PlayerInputType = prodauto::MXF_INPUT, int64_t = 0, std::vector<int64_t> * = 0, unsigned int = 0, unsigned int = 0, bool = false, bool = false);
 		void SetWindowName(const wxString & name = wxT(""));
@@ -164,6 +166,7 @@ class Player : public wxEvtHandler, prodauto::LocalIngexPlayer
 		bool mChunkAfter;
 		PlayerEventType mChunkLinking;
 		bool mSetOSDType;
+		std::string mCurrentFileName;
 		DECLARE_EVENT_TABLE()
 };
 

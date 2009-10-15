@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.14 2009/09/18 17:24:21 john_f Exp $              *
+ *   $Id: player.cpp,v 1.15 2009/10/15 13:33:22 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -42,9 +42,6 @@ BEGIN_EVENT_TABLE( Player, wxEvtHandler )
 	EVT_SOCKET( wxID_ANY, Player::OnSocketEvent )
 END_EVENT_TABLE()
 
-Rational zero = {0, 0};
-Rational fourthirds = {4, 3};
-
 /// Creates the player, but does not display it.
 /// Player must be deleted explicitly or a traffic control notification will be missed.
 /// @param handler The handler where events will be sent.
@@ -56,14 +53,16 @@ LocalIngexPlayer(&mListenerRegistry),
 mOSDtype(displayType), mEnabled(enabled), mOK(false), mMode(PlayerMode::STOP), mSpeed(0), mMuted(false), mOpeningSocket(false),
 mPrevTrafficControl(true) //so that it can be switched off
 {
-    setOutputType(outputType);
-    setNumAudioLevelMonitors(4);
+	setOutputType(outputType);
+	setNumAudioLevelMonitors(4);
+	Rational unity = {1, 1};
+	setPixelAspectRatio(&unity);
 
 	mListener = new Listener(this, &mListenerRegistry); //registers with the player
 	mFilePollTimer = new wxTimer(this, wxID_ANY);
 	SetNextHandler(handler);
 	mDesiredTrackName = ""; //display the quad split by default
-  	mSocket = new wxSocketClient();
+	mSocket = new wxSocketClient();
 	mSocket->SetEventHandler(*this);
 	mSocket->SetNotify(wxSOCKET_CONNECTION_FLAG);
 	TrafficControl(false); //in case it has just been restarted after crashing and leaving traffic control on
@@ -305,7 +304,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 
 /// Displays the file corresponding to the given track (which is assumed to have been loaded) and titles the window appropriately.
 /// @param id The track ID - 0 for quad split.
-/// @param remember Save the track name (or that fact that it's a quad split) in order to try to select it when new filesets are loaded
+/// @param remember Save the track name (or the fact that it's a quad split) in order to try to select it when new filesets are loaded
 void Player::SelectTrack(const int id, const bool remember)
 {
 //std::cerr << "Player Select Track" << std::endl;
@@ -340,6 +339,12 @@ void Player::SelectTrack(const int id, const bool remember)
 		}
 		else {
 			switchVideo(id);
+			if (id) { //not quad split
+				mCurrentFileName = mFileNames[id - 1]; //-1 to offset for quad split
+			}
+			else {
+				mCurrentFileName.clear(); //don't handle quad split for now
+			}
 		}
 		SetWindowName(title);
 	}
@@ -807,6 +812,18 @@ void Player::TrafficControl(const bool state, const bool synchronous)
 			mOpeningSocket = true;
 		}
 	}
+}
+
+/// Returns the filename of the currently selected track; empty string if quad split
+std::string Player::GetCurrentFileName()
+{
+	return mCurrentFileName;
+}
+
+/// Returns the frame offset of the latest frame to be displayed
+unsigned long Player::GetLatestFrameDisplayed()
+{
+	return mPreviousFrameDisplayed;
 }
 
 /***************************************************************************
