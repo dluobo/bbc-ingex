@@ -1,5 +1,5 @@
 /*
- * $Id: DataModel.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: DataModel.cpp,v 1.2 2009/10/22 16:36:37 philipn Exp $
  *
  * 
  *
@@ -163,4 +163,8 @@ bool DataModel::isSubclassOf(const mxfKey* setKey, const mxfKey* parentSetKey)
     return mxf_is_subclass_of(_cDataModel, setKey, parentSetKey) != 0;
 }
 
+bool DataModel::isSubclassOf(const MetadataSet* set, const mxfKey* parentSetKey)
+{
+    return isSubclassOf(set->getKey(), parentSetKey);
+}
 

@@ -1,5 +1,5 @@
 /*
- * $Id: DataModel.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: DataModel.h,v 1.2 2009/10/22 16:36:37 philipn Exp $
  *
  * 
  *
@@ -67,6 +67,7 @@ private:
     ::MXFSetDef* _cSetDef;
 };
 
+class MetadataSet;
 
 class DataModel
 {
@@ -93,6 +94,7 @@ public:
     ItemType* getItemDefType(unsigned int typeId);
     
     bool isSubclassOf(const mxfKey* setKey, const mxfKey* parentSetKey);
+    bool isSubclassOf(const MetadataSet* set, const mxfKey* parentSetKey);
 
     
     ::MXFDataModel* getCDataModel() const { return _cDataModel; }

@@ -1,5 +1,5 @@
 /*
- * $Id: MetadataSet.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: MetadataSet.h,v 1.2 2009/10/22 16:36:37 philipn Exp $
  *
  * 
  *
@@ -242,8 +242,8 @@ public:
     void attachAvidUserComment(std::string name, std::string value);
     
     
-    
     ::MXFMetadataSet* getCMetadataSet() const { return _cMetadataSet; }
+    const mxfKey* getKey() const { return &_cMetadataSet->key; }
     
 protected:
     MetadataSet(HeaderMetadata* headerMetadata, ::MXFMetadataSet* metadataSet);
