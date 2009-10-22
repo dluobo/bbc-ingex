@@ -28,9 +28,9 @@ public:
 
 
     // write essence data samples
-    virtual void WriteSamples(uint32_t mp_track_id, uint32_t num_samples, uint8_t *data, uint32_t data_size) = 0;
+    virtual void WriteSamples(uint32_t mp_track_id, uint32_t num_samples, const uint8_t *data, uint32_t data_size) = 0;
     virtual void StartSampleData(uint32_t mp_track_id) = 0;
-    virtual void WriteSampleData(uint32_t mp_track_id, uint8_t *data, uint32_t data_size) = 0;
+    virtual void WriteSampleData(uint32_t mp_track_id, const uint8_t *data, uint32_t data_size) = 0;
     virtual void EndSampleData(uint32_t mp_track_id, uint32_t num_samples) = 0;
     
 
