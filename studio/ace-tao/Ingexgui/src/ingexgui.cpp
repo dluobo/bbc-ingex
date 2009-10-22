@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.19 2009/10/15 13:33:21 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.20 2009/10/22 14:47:24 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -569,6 +569,7 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	ResetToDisconnected();
 	SetStatus(STOPPED);
+	EnablePlayer(); //presses PlayRecordings button
 }
 
 /// Responds to an application close event by closing, preventing closure or seeking confirmation, depending on the circumstances.
@@ -1318,7 +1319,7 @@ void IngexguiFrame::OnTimeposEvent(wxCommandEvent& event)
 	delete (ProdAuto::MxfTimecode *) event.GetClientData();
 }
 
-/// Responds to an event (cue point) being selected.
+/// Responds to an event (cue point, start, chunk start or stop point) being selected.
 /// Updates controls and informs player.
 /// @param event The command event.
 void IngexguiFrame::OnEventSelection(wxListEvent& WXUNUSED(event))
@@ -1481,11 +1482,12 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 					msg += wxT("\n\"") + wxString(fileList[i], *wxConvCurrent) + wxT("\"");
 				}
 				Log(msg);
-				if ((RecorderGroupCtrl::STOPPED == (RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) && (STOPPED != mStatus)) {
-					//use the first returned timecode as the stop position
-					mTimepos->Stop(((RecorderData *) event.GetClientData())->GetTimecode());
-					ProdAuto::MxfTimecode tc = ((RecorderData *) event.GetClientData())->GetTimecode();
-					mEventList->AddEvent(EventList::STOP, &tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription()); //will not add more than one
+				bool firstStopped = (RecorderGroupCtrl::STOPPED == (RecorderGroupCtrl::RecorderGroupCtrlEventType) event.GetId()) && (STOPPED != mStatus);
+				if (firstStopped) {
+					//Stop
+					ProdAuto::MxfTimecode tc = ((RecorderData *) event.GetClientData())->GetTimecode(); //use the first returned timecode as the stop position
+					mTimepos->Stop(tc);
+					mEventList->AddEvent(EventList::STOP, &tc, mTimepos->GetFrameCount(), mRecorderGroup->GetCurrentDescription());
 					SetStatus(STOPPED);
 				}
 				//Add the recorded files to the take info (do this after AddEvent so mEventList knows if it's a chunk or not and therefore which ChunkInfo to add it to)
@@ -1495,7 +1497,7 @@ void IngexguiFrame::OnRecorderGroupEvent(wxCommandEvent& event) {
 					if (BUTTON_MENU_EtoE != mLastPlayerModeBeforeRec) { //avoid unneccessary and visible EtoE reload
 #endif
 						//need to reload the player as more files have appeared
-						UpdatePlayerAndEventControls(true);
+						UpdatePlayerAndEventControls(true, false, !firstStopped); //force required as chunk may not have changed; reset frame offset if first to stop
 #ifndef DISABLE_SHARED_MEM_SOURCE
 					}
 					else if (mPlayer->AtMaxForwardSpeed()) { //in EtoE and playing (won't be paused; could be stopped)
@@ -1747,10 +1749,9 @@ void IngexguiFrame::OnPlayerOpenFile(wxCommandEvent & event )
 		}
 	}
 	if (opened) {
-		mFileModeFrameOffset = 0; //new files so old value inappropriate
 		mLastPlayerMode = BUTTON_MENU_PlayFiles;
 		EnablePlayer(); //might be disabled; update button states
-		UpdatePlayerAndEventControls(true); //force reload
+		UpdatePlayerAndEventControls(true); //force reload and clear frame offset
 	}
 }
 
@@ -1763,7 +1764,7 @@ void IngexguiFrame::OnPlayerMode(wxCommandEvent & event)
 		if (event.GetId() != mLastPlayerMode) {
 			mLastPlayerMode = event.GetId();
 			EnablePlayer(); //updates button states
-			UpdatePlayerAndEventControls(true); //force player reload as changing mode
+			UpdatePlayerAndEventControls(true, false, true); //force player reload as changing mode, even if chunk hasn't changed, but don't reset frame offset
 		}
 		else {
 			EnablePlayer();
@@ -1950,9 +1951,9 @@ void IngexguiFrame::SetStatus(Stat status)
 }
 
 /// Updates player and various controls.
-/// @param forceLoad Force player to load new material (which will never happen in file mode, and which will only happen if selected chunk has changed in recordings mode, otherwise).
+/// @param forceLoad Force player to load new material (which would never happen in file or E to E mode, and which would only happen if selected chunk has changed in recordings mode, otherwise) and reset recordings or file mode frame offset as appropriate, unless forceOffset is set.
 /// @param forceCueJump Force player to jump to current cue point if in recordings mode (which will only happen if selected chunk has changed, otherwise).
-/// @param forceOffset Force player to jump to mRecordingModeFrameOffset if in recordings mode.
+/// @param forceOffset Prevent player from resetting recordings or file mode frame offset value when forceLoad is set or the chunk has changed (in recordings mode).
 /// If a new valid take has been selected in the event list, updates the playback notebook page and loads the player with the new files.
 /// If a new cue point has been selected in the event list, or if force is true, instruct player to jump to this cue point.
 void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCuePoint, bool forceOffset)
@@ -1978,6 +1979,9 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 		}
 		if (mPlayFilesButton->GetValue()) { //File Mode
 			if (forceLoad) {
+				if (!forceOffset) {
+					mFileModeFrameOffset = 0;
+				}
 				//load player with file mode data
 				std::vector<std::string> fileNames;
 				std::vector<std::string> trackNames;
@@ -2018,7 +2022,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 				ChunkInfo * currentChunkInfo = mEventList->GetCurrentChunkInfo();
 				if (currentChunkInfo && currentChunkInfo->GetFiles()->GetCount()) { //the chunk is complete and there are at least some files available
 					if (mEventList->SelectedChunkHasChanged() || forceLoad) { //a new chunk
-						if (!forceLoad && !forceOffset) { //not returning to previous situation
+						if (!forceOffset) {
 							mRecordingModeFrameOffset = 0;
 						}
 						//update playback tracks notebook page
@@ -2032,7 +2036,7 @@ void IngexguiFrame::UpdatePlayerAndEventControls(bool forceLoad, bool forceNewCu
 					else if (mEventList->SelectedEventHasChanged() || forceNewCuePoint) { //a different selected event
 						mPlayer->JumpToCue(mEventList->GetFirstSelected() - currentChunkInfo->GetStartIndex());
 					}
-					else if (forceOffset) { //a different offset
+					else if (forceOffset) { //a different offset but the same chunk and not forced reload
 						mPlayer->JumpToFrame(mRecordingModeFrameOffset);
 					}
 				}
@@ -2301,7 +2305,7 @@ void IngexguiFrame::OnJumpToTimecode(wxCommandEvent & WXUNUSED(event))
 	JumpToTimecodeDlg dlg(this, mTimepos->GetDefaultEditRate());
 	if (wxID_OK == dlg.ShowModal()) {
 		if (mEventList->JumpToTimecode(dlg.GetTimecode(), mRecordingModeFrameOffset)) { //timecode found, chunk selected and offset set
-			UpdatePlayerAndEventControls(false, false, true); //force a frame offset
+			UpdatePlayerAndEventControls(false, false, true); //doesn't need to reload if chunk hasn't changed, but force a frame offset because we've just set one
 		}
 		else {
 			wxMessageDialog msg(this, wxT("Timecode ") + Timepos::FormatTimecode(dlg.GetTimecode()) + wxT(" not found."), wxT("Timecode Not Found"));
