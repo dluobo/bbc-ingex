@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.h,v 1.2 2009/10/12 15:30:24 philipn Exp $
+ * $Id: DynamicByteArray.h,v 1.3 2009/10/22 16:35:50 philipn Exp $
  *
  * 
  *
@@ -46,6 +46,7 @@ public:
     
     void grow(uint32_t size);
     void allocate(uint32_t size);
+    void minAllocate(uint32_t min_size);
     void reallocate(uint32_t size);
 
     void clear();

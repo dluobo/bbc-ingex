@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.cpp,v 1.3 2009/10/12 15:30:24 philipn Exp $
+ * $Id: DynamicByteArray.cpp,v 1.4 2009/10/22 16:35:50 philipn Exp $
  *
  * 
  *
@@ -76,7 +76,7 @@ void DynamicByteArray::append(unsigned char* bytes, uint32_t size)
         throw MXFException("Cannot append byte array data to a copy\n");
     }
     
-    grow(_size + size - _allocatedSize);
+    grow(size);
 
     memcpy(_bytes + _size, bytes, size);
     _size += size;
@@ -149,6 +149,12 @@ void DynamicByteArray::allocate(uint32_t size)
     _bytes = new unsigned char[size];
     _allocatedSize = size;
 }    
+
+void DynamicByteArray::minAllocate(uint32_t min_size)
+{
+    if (_allocatedSize < min_size)
+        allocate(min_size);
+}
 
 void DynamicByteArray::reallocate(uint32_t size)
 {
