@@ -1,6 +1,6 @@
 INSTALL_DIR ?= /usr/local
 
-INGEX_DIR = ../../
+INGEX_DIR = ../..
 LIBMXF_DIR = $(INGEX_DIR)/libMXF
 LIBMXFPP_DIR = $(INGEX_DIR)/libMXF++
 DATABASE_DIR = $(INGEX_DIR)/studio/database/src
@@ -10,7 +10,8 @@ INCLUDES = -I. \
 		   -I$(LIBMXFPP_DIR) \
 		   -I$(LIBMXF_DIR)/lib/include \
 		   -I$(DATABASE_DIR)
-LIB_DIRS = -L$(LIBMXFPP_DIR)/libMXF++ \
+LIB_DIRS = -L. \
+		   -L$(LIBMXFPP_DIR)/libMXF++ \
 		   -L$(LIBMXF_DIR)/lib \
 		   -L$(DATABASE_DIR)
 LIBS = -lprodautodb -lpq -lpqxx \
@@ -20,16 +21,37 @@ CFLAGS = -Wall -W -Wno-unused-parameter -Werror -g -O2 -D_FILE_OFFSET_BITS=64 \
 
 CC = g++
 COMPILE = $(CC) $(CFLAGS)
+AR = ar cr
 
 
-SOURCES = TaggedValue.cpp IngexMXFInfo.cpp import_mxf_info.cpp
+SOURCES = IngexMXFInfo.cpp import_mxf_info.cpp
 OBJECTS = $(patsubst %.cpp,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.cpp,.deps/%.d,$(SOURCES))
 
+LIBOBJECTS = $(OBJECTS)
+LIBOBJECTS -= .objs/import_mxf_info.o
+
 
 .PHONY: all
-all: import_mxf_info
+all: libingexmxfinfo.a import_mxf_info
 
+
+.PHONY: libMXF.a
+libMXF.a:
+	@cd $(LIBMXF_DIR)/lib && $(MAKE) $@
+
+.PHONY: libMXF++.a
+libMXF++.a:
+	@cd $(LIBMXFPP_DIR)/libMXF++ && $(MAKE) $@
+
+.PHONY: libprodautodb.a
+libprodautodb.a:
+	@cd $(DATABASE_DIR) && $(MAKE) $@
+
+
+libingexmxfinfo.a: $(LIBOBJECTS)
+	$(AR) $@ $(LIBOBJECTS)
+	
 
 
 .deps/%.d : %.cpp
@@ -45,8 +67,8 @@ all: import_mxf_info
 
 
 
-import_mxf_info: $(OBJECTS)
-	$(COMPILE) $(LIB_DIRS) $(OBJECTS) $(LIBS) -o $@
+import_mxf_info: libMXF.a libMXF++.a libprodautodb.a libingexmxfinfo.a .objs/import_mxf_info.o
+	$(COMPILE) .objs/import_mxf_info.o $(LIB_DIRS) -lingexmxfinfo $(LIBS) -o $@
 
 
 .PHONY: install
