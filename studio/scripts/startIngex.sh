@@ -58,7 +58,7 @@ HD_CAPTURE_OPTIONS=""
 HD_RECORDERS="Ingex-HD"
 
 # HD Quad player options
-HD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --pixel-aspect 1:1 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s"
+HD_QUAD_OPTIONS="--disable-shuttle --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0s --shm-in 1s"
 
 # Default SD Capture options
 SD_CAPTURE_CHANNELS=4
@@ -72,7 +72,7 @@ SD_CAPTURE_OPTIONS=""
 SD_RECORDERS="Ingex"
 
 # SD Quad player options
-SD_QUAD_OPTIONS="--disable-shuttle --show-tc LTC.0 --audio-lineup -18 --audio-mon 2 --pixel-aspect 1:1 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p"
+SD_QUAD_OPTIONS="--disable-shuttle --audio-lineup -18 --audio-mon 2 --source-aspect 16:9 --quad-split --hide-progress-bar --shm-in 0p --shm-in 1p --shm-in 2p --shm-in 3p"
 
 # Transfer (copy) options
 # Set COPY_FTP_SERVER to be the hostname of your ftp server, 
