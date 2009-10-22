@@ -1,5 +1,5 @@
 /*
- * $Id: raw_file_sink.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: raw_file_sink.c,v 1.6 2009/10/22 14:00:36 john_f Exp $
  *
  *
  *
@@ -115,18 +115,25 @@ static int rms_accept_stream(void* data, const StreamInfo* streamInfo)
 {
     /* TODO: add option to set what the raw file sink should accept */
 
-    /* make sure that the picture is UYVY */
+    /* make sure that the picture is UYVY/UYVY-10bit/YUV422/YUV420/YUV411/YUV444 */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
-        streamInfo->format != UYVY_FORMAT)
+        streamInfo->format != UYVY_FORMAT &&
+        streamInfo->format != UYVY_10BIT_FORMAT &&
+        streamInfo->format != YUV422_FORMAT &&
+        streamInfo->format != YUV420_FORMAT &&
+        streamInfo->format != YUV411_FORMAT &&
+        streamInfo->format != YUV444_FORMAT)
     {
         return 0;
     }
+    
     /* make sure the sound is PCM */
-    else if (streamInfo->type == SOUND_STREAM_TYPE &&
+    if (streamInfo->type == SOUND_STREAM_TYPE &&
         streamInfo->format != PCM_FORMAT)
     {
         return 0;
     }
+    
     return 1;
 }
 
