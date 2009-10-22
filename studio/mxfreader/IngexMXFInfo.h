@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.h,v 1.1 2009/09/18 17:29:30 john_f Exp $
+ * $Id: IngexMXFInfo.h,v 1.2 2009/10/22 15:15:56 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -30,14 +30,13 @@
 
 #include <string>
 
-#include <Package.h>
+#include <PackageGroup.h>
 
 #include <mxf/mxf_types.h>
 
 namespace mxfpp {
+    class HeaderMetadata;
     class DataModel;
-    class File;
-    class Partition;
     class GenericPackage;
     class MaterialPackage;
     class SourcePackage;
@@ -56,23 +55,30 @@ public:
         FILE_OPEN_ERROR = -2,
         NO_HEADER_PARTITION = -3,
         NOT_OP_ATOM = -4,
+        HEADER_ERROR = -5,
+        UNKNOWN_PROJECT_EDIT_RATE = -6
     } ReadResult;
     
 public:
     static ReadResult read(std::string filename, IngexMXFInfo **info);
+    static ReadResult read(std::string filename, mxfUL *essence_container_label,
+                           mxfpp::HeaderMetadata *header_metadata, mxfpp::DataModel *data_model,
+                           IngexMXFInfo **info);
+    static std::string errorToString(ReadResult result);
 
 public:
     ~IngexMXFInfo();
+    
+    std::string getFilename() const { return _filename; }
+    
+    prodauto::PackageGroup* getPackageGroup() const { return _package_group; }
 
-    prodauto::MaterialPackage* getMaterialPackage() { return _material_package; }
-    prodauto::SourcePackage* getFileSourcePackage() { return _file_source_package; }
-    prodauto::SourcePackage* getTapeSourcePackage() { return _tape_source_package; }
-    
-    prodauto::Rational getProjectEditRate() { return _project_edit_rate; }
-    std::string getProjectName() { return _project_name; }
-    
 private:
-    IngexMXFInfo(std::string filename, mxfpp::File *mxf_file, mxfpp::Partition *header_partition);
+    IngexMXFInfo(std::string filename, mxfUL *essence_container_label, mxfpp::HeaderMetadata *header_metadata,
+                 mxfpp::DataModel *data_model);
+    
+    
+    bool extractProjectEditRate(mxfpp::GenericPackage *mxf_package, prodauto::Rational *project_edit_rate);
     
     void extractPackageInfo(mxfpp::GenericPackage *mxf_package, mxfUL *essence_container_label);
     void extractMaterialPackageInfo(mxfpp::MaterialPackage *mxf_package);
@@ -84,18 +90,14 @@ private:
     std::string getStringTaggedValue(std::vector<TaggedValue*>& tagged_values, std::string name);
 
     int getVideoResolutionId(mxfUL *container_label, mxfUL *picture_essence_coding, int32_t avid_resolution_id);
+    
+    prodauto::SourcePackage* getCurrentFileSourcePackage();
 
 private:
     std::string _filename;
+    prodauto::PackageGroup *_package_group;
     
     mxfpp::DataModel *_data_model;
-    
-    prodauto::MaterialPackage *_material_package;
-    prodauto::SourcePackage *_file_source_package;
-    prodauto::SourcePackage *_tape_source_package;
-    
-    prodauto::Rational _project_edit_rate;
-    std::string _project_name;
 };
 
 

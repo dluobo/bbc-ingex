@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.1 2009/09/18 17:29:30 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.2 2009/10/22 15:15:56 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -29,11 +29,7 @@
 //   tape source package spoolNumber
 // Source code improvements:
 //   add avid extensions data model header file to AvidHeaderMetadata
-//   add function to get the mxf metadata set key
 //   move Avid user comments and attributes to libMXF
-//   add TaggedValue to libMXF
-//   add subclass function taking metadata set to DataModel
-//   missing last character in function get_indirect_string in mxf_avid.c (i < strSize) and not strSize - 1
 
 
 #include <stdio.h>
@@ -42,11 +38,15 @@
 #include <memory>
 
 #include <libMXF++/MXF.h>
+#include <libMXF++/extensions/TaggedValue.h>
+
 #include <mxf/mxf_avid.h>
+
 #include <Package.h>
+#include <Logging.h>
+#include <ProdAutoException.h>
 
 #include "IngexMXFInfo.h"
-#include "TaggedValue.h"
 
 using namespace mxfpp;
 using namespace std;
@@ -55,13 +55,13 @@ using namespace std;
 
 #define ASSERT_CHECK(cmd) \
     if (!(cmd)) { \
-        mxf_log_error("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
+        prodauto::Logging::error("'%s' failed, at %s:%d\n", #cmd, __FILE__, __LINE__); \
         throw FAILED; \
     }
 
 // these colors match the colors defined in studio/database/src/DatabaseEnums.h and
 // AvidRGBColor in libMXF/examples/writeavidmxf/package_definitions.h
-static const RGBColor g_rgbColors[] =
+static const RGBColor g_rgb_colors[] =
 {
     {65534, 65535, 65535}, // white
     {41471, 12134, 6564 }, // red
@@ -72,6 +72,19 @@ static const RGBColor g_rgbColors[] =
     {52428, 13107, 52428}, // magenta
     {0    , 0    , 0    }  // black
 };
+
+static const char *g_error_strings[] =
+{
+    "success",
+    "general error",
+    "could not open for reading",
+    "no header partition found",
+    "file is not OP-Atom",
+    "error reading header metadata",
+    "unknown project edit rate",
+};
+
+
 
 
 
@@ -108,15 +121,15 @@ void convert_color(const RGBColor *color, int *db_color)
     float min_diff = -1;
     int min_diff_index = 0;
     
-    assert(sizeof(g_rgbColors) / sizeof(RGBColor) == 8);
+    assert(sizeof(g_rgb_colors) / sizeof(RGBColor) == 8);
     assert(USER_COMMENT_BLACK_COLOUR - USER_COMMENT_WHITE_COLOUR == 7);
     
     // choose the color that has minimum difference to a known color
     
     for (i = 0; i < 8; i++) {
-        diff[i] = ((float)(color->red - g_rgbColors[i].red) * (float)(color->red - g_rgbColors[i].red) +
-                   (float)(color->green - g_rgbColors[i].green) * (float)(color->green - g_rgbColors[i].green) +
-                   (float)(color->blue - g_rgbColors[i].blue) * (float)(color->blue - g_rgbColors[i].blue)) / 3.0;
+        diff[i] = ((float)(color->red - g_rgb_colors[i].red) * (float)(color->red - g_rgb_colors[i].red) +
+                   (float)(color->green - g_rgb_colors[i].green) * (float)(color->green - g_rgb_colors[i].green) +
+                   (float)(color->blue - g_rgb_colors[i].blue) * (float)(color->blue - g_rgb_colors[i].blue)) / 3.0;
     }
     
     for (i = 0; i < 8; i++) {
@@ -137,12 +150,22 @@ IngexMXFInfo::ReadResult IngexMXFInfo::read(string filename, IngexMXFInfo **info
     ReadResult result = SUCCESS;
     File *mxf_file = 0;
     Partition *header_partition = 0;
+    AvidHeaderMetadata *header_metadata = 0;
+    DataModel *data_model = 0;
+    mxfKey key;
+    uint8_t llen;
+    uint64_t len;
+    vector<mxfUL> container_labels;
 
-    try {
+    try
+    {
         // open the file
-        try {
+        try
+        {
             mxf_file = File::openRead(filename);
-        } catch (...) {
+        }
+        catch (...)
+        {
             throw FILE_OPEN_ERROR;
         }
         
@@ -150,94 +173,174 @@ IngexMXFInfo::ReadResult IngexMXFInfo::read(string filename, IngexMXFInfo **info
         header_partition = Partition::findAndReadHeaderPartition(mxf_file);
         if (!header_partition)
             throw NO_HEADER_PARTITION;
-    
+
         if (!is_op_atom(header_partition->getOperationalPattern()))
             throw NOT_OP_ATOM;
+
+        // essence container label
+        container_labels = header_partition->getEssenceContainers();
+        ASSERT_CHECK(container_labels.size() == 1);
+
+        // initialise data model with Avid extensions
+        data_model = new DataModel();
+        header_metadata = new AvidHeaderMetadata(data_model);
+        TaggedValue::registerObjectFactory(header_metadata);
+
+        // move to the header metadata and read it
+        mxf_file->readNextNonFillerKL(&key, &llen, &len);
+        if (!mxf_is_header_metadata(&key))
+            throw HEADER_ERROR;
+        header_metadata->read(mxf_file, header_partition, &key, llen, len);
         
-        // file is now assumed to be ok for extracting info
-        *info = new IngexMXFInfo(filename, mxf_file, header_partition);
         
-    } catch (ReadResult &error) {
+        result = read(filename, &container_labels[0], header_metadata, data_model, info);
+    }
+    catch (ReadResult &error)
+    {
         result = error;
-    } catch (...) {
+    }
+    catch (...)
+    {
         result = FAILED;
     }
 
     delete header_partition;
+    delete header_metadata;
+    delete data_model;
     delete mxf_file;
     
     return result;
 }
 
+IngexMXFInfo::ReadResult IngexMXFInfo::read(string filename, mxfUL *essence_container_label,
+                                            HeaderMetadata *header_metadata, DataModel *data_model,
+                                            IngexMXFInfo **info)
+{
+    ReadResult result = SUCCESS;
 
-IngexMXFInfo::IngexMXFInfo(string filename, File *mxf_file, Partition *header_partition)
+    try
+    {
+        *info = new IngexMXFInfo(filename, essence_container_label, header_metadata, data_model);
+    }
+    catch (ReadResult &error)
+    {
+        result = error;
+    }
+    catch (...)
+    {
+        result = FAILED;
+    }
+
+    return result;
+}
+
+string IngexMXFInfo::errorToString(ReadResult result)
+{
+    size_t index = (size_t)(-1 * (int)result);
+    PA_ASSERT(index < sizeof(g_error_strings) / sizeof(char*));
+    
+    return g_error_strings[index];
+}
+
+
+
+IngexMXFInfo::IngexMXFInfo(string filename, mxfUL *essence_container_label, HeaderMetadata *header_metadata,
+                           DataModel *data_model)
 {
     _filename = filename;
-    _data_model = 0;
-    _material_package = 0;
-    _file_source_package = 0;
-    _tape_source_package = 0;
+    _data_model = data_model;
+    _package_group = 0;
     
     
-    AvidHeaderMetadata *header_metadata = 0;
-    mxfKey key;
-    uint8_t llen;
-    uint64_t len;
-    vector<mxfUL> container_labels;
-    
-    try {
-         container_labels = header_partition->getEssenceContainers();
-         ASSERT_CHECK(container_labels.size() == 1);
-        
-        // initialise data model with Avid extensions
-        _data_model = new DataModel();
-        header_metadata = new AvidHeaderMetadata(_data_model);
-        
-        TaggedValue::registerObjectFactory(header_metadata);
-
-        // move to header metadata and read it
-        mxf_file->readNextNonFillerKL(&key, &llen, &len);
-        if (!mxf_is_header_metadata(&key))
-            throw FAILED;
-        
-        header_metadata->read(mxf_file, header_partition, &key, llen, len);
-        
-        
+    try
+    {
         Preface *preface = header_metadata->getPreface();
         ContentStorage *content = preface->getContentStorage();
         vector<GenericPackage*> packages = content->getPackages();
 
-        // preface info
-        if (preface->haveItem(&MXF_ITEM_K(Preface, ProjectName)))
-            _project_name = preface->getStringItem(&MXF_ITEM_K(Preface, ProjectName));
-        if (preface->haveItem(&MXF_ITEM_K(Preface, ProjectEditRate)))
-            convert_rational(preface->getRationalItem(&MXF_ITEM_K(Preface, ProjectEditRate)), &_project_edit_rate);
+        // determine the project edit rate
+        prodauto::Rational project_edit_rate;
+        if (preface->haveItem(&MXF_ITEM_K(Preface, ProjectEditRate))) {
+            convert_rational(preface->getRationalItem(&MXF_ITEM_K(Preface, ProjectEditRate)), &project_edit_rate);
+        } else {
+            // get the project edit rate from a video track in the material package or tape source package
+            project_edit_rate = prodauto::g_palEditRate; // default to PAL if no video tracks present
+            vector<GenericPackage*>::iterator package_iter;
+            for (package_iter = packages.begin(); package_iter != packages.end(); package_iter++) {
+                if (extractProjectEditRate(*package_iter, &project_edit_rate))
+                    break;
+            }
+        }
+        
+        bool is_pal_project;
+        if (project_edit_rate == prodauto::g_palEditRate)
+            is_pal_project = true;
+        else if (project_edit_rate == prodauto::g_ntscEditRate)
+            is_pal_project = false;
+        else
+            throw UNKNOWN_PROJECT_EDIT_RATE;
+        
+        _package_group = new prodauto::PackageGroup(is_pal_project, OPERATIONAL_PATTERN_ATOM);
         
         
         // extract package info
         vector<GenericPackage*>::iterator package_iter;
         for (package_iter = packages.begin(); package_iter != packages.end(); package_iter++)
-            extractPackageInfo(*package_iter, &container_labels[0]);
-        
-        delete header_metadata;
-        delete _data_model;
-        _data_model = 0;
-        
-    } catch (...) {
-        delete _material_package;
-        delete _file_source_package;
-        delete _tape_source_package;
-        delete header_metadata;
-        delete _data_model;
+            extractPackageInfo(*package_iter, essence_container_label);
+    }
+    catch (...)
+    {
+        delete _package_group;
         throw;
     }
 }
 
 IngexMXFInfo::~IngexMXFInfo()
 {
-    delete _material_package;
-    delete _file_source_package;
-    delete _tape_source_package;
+    delete _package_group;
+}
+
+bool IngexMXFInfo::extractProjectEditRate(mxfpp::GenericPackage *mxf_package, prodauto::Rational *project_edit_rate)
+{
+    // check that it is a material or tape source package
+    MaterialPackage *mp = dynamic_cast<MaterialPackage*>(mxf_package);
+    SourcePackage *sp = dynamic_cast<SourcePackage*>(mxf_package);
+    if (!mp && !sp) {
+        return false;
+    } else if (sp) {
+        if (!sp->haveDescriptor() ||
+            !_data_model->isSubclassOf(sp->getDescriptor(), &MXF_SET_K(TapeDescriptor)))
+        {
+            return false;
+        }
+    }
+
+    vector<GenericTrack*> mxf_tracks = mxf_package->getTracks();
+    Track *mxf_track;
+    Sequence *mxf_sequence;
+    int data_def;
+    vector<GenericTrack*>::iterator track_iter;
+    for (track_iter = mxf_tracks.begin(); track_iter != mxf_tracks.end(); track_iter++) {
+        // a timeline track
+        mxf_track = dynamic_cast<Track*>(*track_iter);
+        if (!mxf_track)
+            continue;
+
+        // containing a sequence
+        mxf_sequence = dynamic_cast<Sequence*>(mxf_track->getSequence());
+        if (!mxf_sequence)
+            continue;
+
+        // which is picture
+        convert_data_def(mxf_sequence->getDataDefinition(), &data_def);
+        if (data_def != PICTURE_DATA_DEFINITION)
+            continue;
+        
+        convert_rational(mxf_track->getEditRate(), project_edit_rate);
+        return true;
+    }
+    
+    return false;
 }
 
 void IngexMXFInfo::extractPackageInfo(GenericPackage *mxf_package, mxfUL *essence_container_label)
@@ -256,23 +359,23 @@ void IngexMXFInfo::extractPackageInfo(GenericPackage *mxf_package, mxfUL *essenc
         if (!sp->haveDescriptor())
             return;
         
-        if (_data_model->isSubclassOf(&sp->getDescriptor()->getCMetadataSet()->key, &MXF_SET_K(TapeDescriptor)))
+        if (_data_model->isSubclassOf(sp->getDescriptor(), &MXF_SET_K(TapeDescriptor)))
             is_tape_sp = true;
-        else if (_data_model->isSubclassOf(&sp->getDescriptor()->getCMetadataSet()->key, &MXF_SET_K(FileDescriptor)))
+        else if (_data_model->isSubclassOf(sp->getDescriptor(), &MXF_SET_K(FileDescriptor)))
             is_file_sp = true;
         else
             return;
     }
     
     if (is_mp) {
-        _material_package = new prodauto::MaterialPackage();
-        db_package = _material_package;
+        _package_group->SetMaterialPackage(new prodauto::MaterialPackage());
+        db_package = _package_group->GetMaterialPackage();
     } else if (is_file_sp) {
-        _file_source_package = new prodauto::SourcePackage();
-        db_package = _file_source_package;
+        _package_group->AppendFileSourcePackage(new prodauto::SourcePackage());
+        db_package = getCurrentFileSourcePackage();
     } else {
-        _tape_source_package = new prodauto::SourcePackage();
-        db_package = _tape_source_package;
+        _package_group->SetTapeSourcePackage(new prodauto::SourcePackage(), true);
+        db_package = _package_group->GetTapeSourcePackage();
     }
     
     // extract general package info
@@ -367,6 +470,9 @@ void IngexMXFInfo::extractMaterialPackageInfo(MaterialPackage *mxf_package)
     RGBColor mxf_color;
     int color;
     
+    // op atom
+    _package_group->GetMaterialPackage()->op = OPERATIONAL_PATTERN_ATOM;
+    
     // extract positioned user comments from the DM event track
     
     mxf_tracks = mxf_package->getTracks();
@@ -411,7 +517,7 @@ void IngexMXFInfo::extractMaterialPackageInfo(MaterialPackage *mxf_package)
                 color = USER_COMMENT_RED_COLOUR;
             }
 
-            _material_package->addUserComment(POSITIONED_COMMENT_NAME, comment, position, color);
+            _package_group->GetMaterialPackage()->addUserComment(POSITIONED_COMMENT_NAME, comment, position, color);
         }
     }
 }
@@ -430,16 +536,17 @@ void IngexMXFInfo::extractFileSourcePackageInfo(SourcePackage *mxf_package, mxfU
     mxf_descriptor = dynamic_cast<FileDescriptor*>(mxf_package->getDescriptor());
     
     descriptor = new prodauto::FileEssenceDescriptor();
-    _file_source_package->descriptor = descriptor;
+    getCurrentFileSourcePackage()->descriptor = descriptor;
     
     descriptor->fileLocation = _filename;
     descriptor->fileFormat = MXF_FILE_FORMAT_TYPE;
     
-    vector<prodauto::UserComment> source_comments = _material_package->getUserComments(AVID_UC_SOURCE_NAME);
+    vector<prodauto::UserComment> source_comments =
+        _package_group->GetMaterialPackage()->getUserComments(AVID_UC_SOURCE_NAME);
     if (!source_comments.empty())
-        _file_source_package->sourceConfigName = source_comments[0].value;
+        getCurrentFileSourcePackage()->sourceConfigName = source_comments[0].value;
     else
-        mxf_log_warn("Missing Avid '%s' (source config name) user comment\n", AVID_UC_SOURCE_NAME);
+        prodauto::Logging::warning("Missing Avid '%s' (source config name) user comment\n", AVID_UC_SOURCE_NAME);
     
     mxf_picture_descriptor = dynamic_cast<GenericPictureEssenceDescriptor*>(mxf_descriptor);
     mxf_sound_descriptor = dynamic_cast<GenericSoundEssenceDescriptor*>(mxf_descriptor);
@@ -468,7 +575,7 @@ void IngexMXFInfo::extractTapeSourcePackageInfo(SourcePackage *mxf_package)
     prodauto::TapeEssenceDescriptor *descriptor;
 
     descriptor = new prodauto::TapeEssenceDescriptor();
-    _tape_source_package->descriptor = descriptor;
+    _package_group->GetTapeSourcePackage()->descriptor = descriptor;
 }
 
 vector<TaggedValue*> IngexMXFInfo::getPackageAttributes(GenericPackage *mxf_package)
@@ -675,4 +782,8 @@ int IngexMXFInfo::getVideoResolutionId(mxfUL *container_label, mxfUL *picture_es
     }
 }
 
+prodauto::SourcePackage* IngexMXFInfo::getCurrentFileSourcePackage()
+{
+    return _package_group->GetFileSourcePackages().back();
+}
 
