@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:32 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2009/10/22 16:37:31 philipn Exp $
 #
 # Makefile for building the examples
 #
@@ -28,12 +28,14 @@ all:
 	$(MAKE) -C ArchiveMXFReader $@
 	$(MAKE) -C ArchiveMXFWriter $@
 	$(MAKE) -C AvidClipWriter $@
+	$(MAKE) -C OPAtomReader $@
 
 .PHONY: install
 install:
 	$(MAKE) -C ArchiveMXFReader $@
 	$(MAKE) -C ArchiveMXFWriter $@
 	$(MAKE) -C AvidClipWriter $@
+	$(MAKE) -C OPAtomReader $@
 
 .PHONY: clean
 clean:
@@ -42,3 +44,4 @@ clean:
 	$(MAKE) -C ArchiveMXFReader $@
 	$(MAKE) -C ArchiveMXFWriter $@
 	$(MAKE) -C AvidClipWriter $@
+	$(MAKE) -C OPAtomReader $@

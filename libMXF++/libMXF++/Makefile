@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2009/10/22 16:37:31 philipn Exp $
 #
 # Makefile for building libMXF++
 #
@@ -36,7 +36,11 @@ MD_BASE_SOURCES = $(wildcard metadata/base/*.cpp)
 MD_BASE_OBJECTS = $(patsubst metadata/base/%.cpp,metadata/base/.objs/%.o,$(MD_BASE_SOURCES))
 MD_BASE_DEPENDENCIES = $(patsubst metadata/base/%.cpp,metadata/base/.deps/%.d,$(MD_BASE_SOURCES))
 
-ALL_OBJECTS = $(OBJECTS) $(MD_OBJECTS) $(MD_BASE_OBJECTS)
+EXT_SOURCES = $(wildcard extensions/*.cpp)
+EXT_OBJECTS = $(patsubst extensions/%.cpp,extensions/.objs/%.o,$(EXT_SOURCES))
+EXT_DEPENDENCIES = $(patsubst extensions/%.cpp,extensions/.deps/%.d,$(EXT_SOURCES))
+
+ALL_OBJECTS = $(OBJECTS) $(MD_OBJECTS) $(MD_BASE_OBJECTS) $(EXT_OBJECTS)
 
 
 .PHONY: all
@@ -87,6 +91,18 @@ metadata/base/.objs/%.o: metadata/base/%.cpp
 	$(COMPILE) -c $(INCLUDES) $< -o $@	
 
 
+extensions/.deps/%.d : extensions/%.cpp
+	@echo Generating dependency file for $<; \
+	mkdir -p extensions/.deps; \
+	$(COMPILE) $(INCLUDES) -MM $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\.objs/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+extensions/.objs/%.o: extensions/%.cpp
+	@mkdir -p extensions/.objs
+	$(COMPILE) -c $(INCLUDES) $< -o $@	
+	
+	
 .PHONY: install
 install: libMXF++.a
 	mkdir -p $(INSTALL_PREFIX)/lib
@@ -95,6 +111,7 @@ install: libMXF++.a
 	cp *.h $(INSTALL_PREFIX)/include/libMXF++/
 	cp metadata/*.h $(INSTALL_PREFIX)/include/libMXF++/metadata/
 	cp metadata/base/*.h $(INSTALL_PREFIX)/include/libMXF++/metadata/base/
+	cp extensions/*.h $(INSTALL_PREFIX)/include/libMXF++/extensions/
 
 .PHONY: uninstall
 uninstall:
@@ -112,6 +129,8 @@ clean:
 	@rm -Rf metadata/.deps
 	@rm -Rf metadata/base/.objs
 	@rm -Rf metadata/base/.deps
+	@rm -Rf extensions/.objs
+	@rm -Rf extensions/.deps
 
 
 ifneq "$(MAKECMDGOALS)" "clean"
