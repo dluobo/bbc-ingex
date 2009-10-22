@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: Logging.cpp,v 1.2 2009/10/22 13:52:26 john_f Exp $
  *
  * Logging facility
  *
@@ -66,7 +66,7 @@ void Logging::error(const char* format, ...)
     
     va_list ap;
     va_start(ap, format);
-    instance->iverror(format, ap);
+    instance->iverror(0, format, ap);
     va_end(ap);
 }
 
@@ -79,10 +79,10 @@ void Logging::warning(const char* format, ...)
     {
         return;
     }
-    
+
     va_list ap;
     va_start(ap, format);
-    instance->ivwarning(format, ap);
+    instance->ivwarning(0, format, ap);
     va_end(ap);
 }
 
@@ -98,7 +98,7 @@ void Logging::info(const char* format, ...)
     
     va_list ap;
     va_start(ap, format);
-    instance->ivinfo(format, ap);
+    instance->ivinfo(0, format, ap);
     va_end(ap);
 }
 
@@ -114,19 +114,22 @@ void Logging::debug(const char* format, ...)
     
     va_list ap;
     va_start(ap, format);
-    instance->ivdebug(format, ap);
+    instance->ivdebug(0, format, ap);
     va_end(ap);
 }
 
-void Logging::verror(const char* format, va_list ap)
+void Logging::perror(const char* prefix, const char* format, ...)
 {
     LOCK_SECTION(_loggingMutex);
     Logging* instance = getInstance();
     
-    instance->iverror(format, ap);
+    va_list ap;
+    va_start(ap, format);
+    instance->iverror(prefix, format, ap);
+    va_end(ap);
 }
 
-void Logging::vwarning(const char* format, va_list ap)
+void Logging::pwarning(const char* prefix, const char* format, ...)
 {
     LOCK_SECTION(_loggingMutex);
     Logging* instance = getInstance();
@@ -136,10 +139,13 @@ void Logging::vwarning(const char* format, va_list ap)
         return;
     }
     
-    instance->ivwarning(format, ap);
+    va_list ap;
+    va_start(ap, format);
+    instance->ivwarning(prefix, format, ap);
+    va_end(ap);
 }
 
-void Logging::vinfo(const char* format, va_list ap)
+void Logging::pinfo(const char* prefix, const char* format, ...)
 {
     LOCK_SECTION(_loggingMutex);
     Logging* instance = getInstance();
@@ -149,10 +155,13 @@ void Logging::vinfo(const char* format, va_list ap)
         return;
     }
     
-    instance->ivinfo(format, ap);
+    va_list ap;
+    va_start(ap, format);
+    instance->ivinfo(prefix, format, ap);
+    va_end(ap);
 }
 
-void Logging::vdebug(const char* format, va_list ap)
+void Logging::pdebug(const char* prefix, const char* format, ...)
 {
     LOCK_SECTION(_loggingMutex);
     Logging* instance = getInstance();
@@ -162,7 +171,77 @@ void Logging::vdebug(const char* format, va_list ap)
         return;
     }
     
-    instance->ivdebug(format, ap);
+    va_list ap;
+    va_start(ap, format);
+    instance->ivdebug(prefix, format, ap);
+    va_end(ap);
+}
+
+void Logging::verror(const char* format, va_list ap)
+{
+    verror(0, format, ap);
+}
+
+void Logging::vwarning(const char* format, va_list ap)
+{
+    vwarning(0, format, ap);
+}
+
+void Logging::vinfo(const char* format, va_list ap)
+{
+    vinfo(0, format, ap);
+}
+
+void Logging::vdebug(const char* format, va_list ap)
+{
+    vdebug(0, format, ap);
+}
+
+void Logging::verror(const char* prefix, const char* format, va_list ap)
+{
+    LOCK_SECTION(_loggingMutex);
+    Logging* instance = getInstance();
+    
+    instance->iverror(prefix, format, ap);
+}
+
+void Logging::vwarning(const char* prefix, const char* format, va_list ap)
+{
+    LOCK_SECTION(_loggingMutex);
+    Logging* instance = getInstance();
+    
+    if (instance->_level < LOG_LEVEL_WARNING)
+    {
+        return;
+    }
+    
+    instance->ivwarning(prefix, format, ap);
+}
+
+void Logging::vinfo(const char* prefix, const char* format, va_list ap)
+{
+    LOCK_SECTION(_loggingMutex);
+    Logging* instance = getInstance();
+    
+    if (instance->_level < LOG_LEVEL_INFO)
+    {
+        return;
+    }
+    
+    instance->ivinfo(prefix, format, ap);
+}
+
+void Logging::vdebug(const char* prefix, const char* format, va_list ap)
+{
+    LOCK_SECTION(_loggingMutex);
+    Logging* instance = getInstance();
+    
+    if (instance->_level < LOG_LEVEL_DEBUG)
+    {
+        return;
+    }
+    
+    instance->ivdebug(prefix, format, ap);
 }
 
 Logging* Logging::getInstance()
@@ -189,24 +268,35 @@ void Logging::setLogLevel(LogLevel level)
     _level = level;
 }
 
-void Logging::iverror(const char* format, va_list ap)
+void Logging::iverror(const char* prefix, const char* format, va_list ap)
 {
+    if (prefix)
+        fprintf(stderr, prefix);
+    fprintf(stderr, "ERROR: ");
     vfprintf(stderr, format, ap);
 }
 
-void Logging::ivwarning(const char* format, va_list ap)
+void Logging::ivwarning(const char* prefix, const char* format, va_list ap)
 {
+    if (prefix)
+        fprintf(stdout, prefix);
+    fprintf(stdout, "Warning: ");
     vfprintf(stdout, format, ap);
 }
 
-void Logging::ivinfo(const char* format, va_list ap)
+void Logging::ivinfo(const char* prefix, const char* format, va_list ap)
 {
+    if (prefix)
+        fprintf(stdout, prefix);
+    fprintf(stdout, "Info: ");
     vfprintf(stdout, format, ap);
 }
 
-void Logging::ivdebug(const char* format, va_list ap)
+void Logging::ivdebug(const char* prefix, const char* format, va_list ap)
 {
+    if (prefix)
+        fprintf(stdout, prefix);
+    fprintf(stdout, "Debug: ");
     vfprintf(stdout, format, ap);
 }
-    
 

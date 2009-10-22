@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.h,v 1.4 2009/09/18 16:50:11 philipn Exp $
+ * $Id: Logging.h,v 1.5 2009/10/22 13:52:26 john_f Exp $
  *
  * Logging facility
  *
@@ -31,19 +31,19 @@
 #include "Threads.h"
 
 
-// eg. PA_LOGTHROW(ProdAutoException, ("Something failed with error %d", 1));
+// eg. PA_LOGTHROW(ProdAutoException, ("Something failed with error %d\n", 1));
 #define PA_LOGTHROW(extype, params) \
 { \
     prodauto::Logging::error params; \
-    prodauto::Logging::error(", near %s:%d\n", __FILE__, __LINE__); \
+    prodauto::Logging::error(" near %s:%d\n", __FILE__, __LINE__); \
     throw extype params; \
 }
 
-// eg. PA_LOG(warning, ("Something might be wrong here %d", 1));
+// eg. PA_LOG(warning, ("Something might be wrong here %d\n", 1));
 #define PA_LOG(type, params) \
 { \
     prodauto::Logging::type params; \
-    prodauto::Logging::type(", near %s:%d\n", __FILE__, __LINE__); \
+    prodauto::Logging::type(" near %s:%d\n", __FILE__, __LINE__); \
 }
 
 
@@ -74,10 +74,20 @@ public:
     static void info(const char* format, ...);
     static void debug(const char* format, ...);
 
+    static void perror(const char* prefix, const char* format, ...);
+    static void pwarning(const char* prefix, const char* format, ...);
+    static void pinfo(const char* prefix, const char* format, ...);
+    static void pdebug(const char* prefix, const char* format, ...);
+
     static void verror(const char* format, va_list ap);
     static void vwarning(const char* format, va_list ap);
     static void vinfo(const char* format, va_list ap);
     static void vdebug(const char* format, va_list ap);
+
+    static void verror(const char* prefix, const char* format, va_list ap);
+    static void vwarning(const char* prefix, const char* format, va_list ap);
+    static void vinfo(const char* prefix, const char* format, va_list ap);
+    static void vdebug(const char* prefix, const char* format, va_list ap);
 
 
     virtual ~Logging();
@@ -89,10 +99,10 @@ protected:
 
     virtual void setLogLevel(LogLevel level);
 
-    virtual void iverror(const char* format, va_list ap);
-    virtual void ivwarning(const char* format, va_list ap);
-    virtual void ivinfo(const char* format, va_list ap);
-    virtual void ivdebug(const char* format, va_list ap);
+    virtual void iverror(const char* prefix, const char* format, va_list ap);
+    virtual void ivwarning(const char* prefix, const char* format, va_list ap);
+    virtual void ivinfo(const char* prefix, const char* format, va_list ap);
+    virtual void ivdebug(const char* prefix, const char* format, va_list ap);
 
 private:
     static std::auto_ptr<Logging> _instance;
