@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.25 2009/10/12 15:11:46 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.26 2009/10/22 13:47:37 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -163,6 +163,30 @@ static int64_t gettimeofday64(void)
     gettimeofday(&tv, NULL);
     int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
     return tod;
+}
+
+static int init_process_shared_mutex(pthread_mutex_t *mutex)
+{
+    pthread_mutexattr_t attr;
+    if (pthread_mutexattr_init(&attr) != 0) {
+        fprintf(stderr, "Failed to initialize mutex attribute\n");
+        return 0;
+    }
+    
+    // set pshared to PTHREAD_PROCESS_SHARED to allow other processes to use the mutex
+    if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED) != 0) {
+        fprintf(stderr, "Failed to set pshared mutex attribute to PTHREAD_PROCESS_SHARED\n");
+        return 0;
+    }
+    
+    if (pthread_mutex_init(mutex, &attr) != 0) {
+        fprintf(stderr, "Mutex init error\n");
+        return 0;
+    }
+    
+    pthread_mutexattr_destroy(&attr);
+    
+    return 1;
 }
 
 static void cleanup_shared_mem(void)
@@ -533,10 +557,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     */
 
     p_control->source_name_update = 0;
-    if (pthread_mutex_init(&p_control->m_source_name_update, NULL) != 0) {
-        fprintf(stderr, "Mutex init error\n");
+    if (!init_process_shared_mutex(&p_control->m_source_name_update))
         return 0;
-    }
 
     // Allocate multiple element ring buffers containing video + audio + tc
     //
@@ -577,8 +599,8 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
         p_control->channel[i].source_name[sizeof(p_control->channel[i].source_name) - 1] = '\0';
 
         // initialise mutex in shared memory
-        if (pthread_mutex_init(&p_control->channel[i].m_lastframe, NULL) != 0)
-            fprintf(stderr, "Mutex init error\n");
+        if (!init_process_shared_mutex(&p_control->channel[i].m_lastframe))
+            return 0;
 
         // Set ring frames to black - too slow!
         // memset(ring[i], 0x80, element_size * ring_len);
@@ -1184,9 +1206,12 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
     // Use this chan's internal tick counter to determine when and
     // how many frames to fabricate
     if (verbose > 1)
+    {
         logTF("chan: %d frame_tick=%d tick_last_dummy_frame=%d\n", chan, current_frame_tick, tick_last_dummy_frame);
+    }
 
-    if (tick_last_dummy_frame == -1 || current_frame_tick - tick_last_dummy_frame > 0) {
+    if (tick_last_dummy_frame == -1 || current_frame_tick - tick_last_dummy_frame > 0)
+    {
         // Work out how many frames to make
         int num_dummy_frames;
         if (tick_last_dummy_frame == -1)
@@ -1196,13 +1221,21 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 
         // first dummy frame will get the closest timecode to the master timecode
         // subsequent dummy frames will increment by 1
-        int last_vitc = derive_timecode_from_master(tod_tc_read, NULL);
-        int last_ltc = derive_timecode_from_master(tod_tc_read, NULL);
-        int last_dvitc = derive_timecode_from_master(tod_tc_read, NULL);
-        int last_dltc = derive_timecode_from_master(tod_tc_read, NULL);
+        int last_tc = derive_timecode_from_master(tod_tc_read, NULL);
+        int last_vitc = last_tc;
+        int last_ltc = last_tc;
+        int last_dvitc = last_tc;
+        int last_dltc = last_tc;
 
-        int i;
-        for (i = 0; i < num_dummy_frames; i++) {
+        // sys_time uses system clock as timecode source (tod_tc_read is in microsecs since 1970)
+        int64_t sys_time_microsec = tod_tc_read - (today_midnight_time() * INT64_C(1000000));
+        // compute sys_time timecode as int number of frames since midnight
+        int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+        int last_systc = sys_tc;
+
+
+        for (int i = 0; i < num_dummy_frames; i++)
+        {
             // Read ring buffer info
             int                 ring_len = p_control->ringlen;
             NexusBufCtl         *pc = &(p_control->channel[chan]);
@@ -1239,20 +1272,26 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
 
             NexusFrameData * last_nfd = (NexusFrameData *)(ring[chan] + element_size * ((pc->lastframe) % ring_len) + frame_data_offset);
             // Increment timecode by 1 for dummy frames after the first
-            if (i > 0) {
-                if (pc->lastframe >= 0) {
+            if (i > 0)
+            {
+                if (pc->lastframe >= 0)
+                {
+                // Don't think these lines will make any difference
                     last_vitc = last_nfd->vitc;
                     last_ltc = last_nfd->ltc;
                     last_dvitc = last_nfd->dvitc;
                     last_dltc = last_nfd->dltc;
+                    last_systc = last_nfd->systc;
                 }
                 last_vitc++;
                 last_ltc++;
                 last_dvitc++;
                 last_dltc++;
+                last_systc++;
             }
             int last_ftk = 0;
-            if (pc->lastframe >= 0) {
+            if (pc->lastframe >= 0)
+            {
                 last_ftk = last_nfd->tick;
             }
             last_ftk++;
@@ -1261,8 +1300,10 @@ static int write_dummy_frames(sv_handle *sv, int chan, int current_frame_tick, i
             nfd->ltc = last_ltc;
             nfd->dvitc = last_dvitc;
             nfd->dltc = last_dltc;
+            nfd->systc = last_systc;
             nfd->tick = last_ftk;
-            //TODO nfd->systc
+
+            nfd->timestamp = tod_tc_read;
 
             // Indicate we've got a bad video signal
             nfd->signal_ok = 0;
@@ -1290,7 +1331,8 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
     int tick_last_dummy_frame = -1;
 
     // Poll until we get a good video signal for at least required_good_frames
-    while (1) {
+    while (1)
+    {
         int                 current_tick;
         unsigned int        h_clock, l_clock;
         sv_timecode_info    timecodes;
@@ -1301,7 +1343,8 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
         int64_t tod_tc_read = gettimeofday64();
 
         // Keep master timecode ticking over when video signal is not present
-        if (chan == master_channel) {
+        if (chan == master_channel)
+        {
             int ltc_as_int = dvs_tc_to_int(timecodes.altc_tc);
             int vitc_as_int = dvs_tc_to_int(timecodes.avitc_tc[0]);
 
@@ -1317,7 +1360,8 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
         SV_CHECK( sv_query(sv, SV_QUERY_AUDIOINERROR, 0, &audioin) );
         SV_CHECK( sv_query(sv, SV_QUERY_VALIDTIMECODE, 0, &tc_status) );
 
-        if (verbose > 1) {
+        if (verbose > 1)
+        {
             printf("\r%8d raster=0x%08x video=%s audio=%s tc_status=%s%s%s%s%s%s (0x%x)",
                 current_tick,
                 sdiA,
@@ -1334,11 +1378,15 @@ static void wait_for_good_signal(sv_handle *sv, int chan, int required_good_fram
             fflush(stdout);
         }
 
-        if (videoin == SV_OK) {
+        if (videoin == SV_OK)
+        {
             good_frames++;
-            if (good_frames == required_good_frames) {
+            if (good_frames == required_good_frames)
+            {
                 if (verbose)
+                {
                     printf("\n");
+                }
                 break;              // break from while(1) loop
             }
         }
