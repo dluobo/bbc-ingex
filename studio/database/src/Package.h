@@ -1,5 +1,5 @@
 /*
- * $Id: Package.h,v 1.7 2009/10/12 15:44:55 philipn Exp $
+ * $Id: Package.h,v 1.8 2009/10/22 13:53:09 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -109,12 +109,16 @@ public:
     void clearUserComments();
 
     virtual void cloneInPlace(UMID newUID, bool resetLengths);
+    virtual Package* clone() = 0;
     
     UMID uid;
     std::string name;
     Timestamp creationDate;
     ProjectName projectName;
     std::vector<Track*> tracks;
+    
+protected:
+    void clone(Package *clone);
     
 private:
     std::vector<UserComment> _userComments;
@@ -131,6 +135,8 @@ public:
     virtual PackageType getType() { return MATERIAL_PACKAGE; }
 
     virtual std::string toString();
+
+    virtual Package* clone();
     
     int op;
 };
@@ -144,6 +150,7 @@ public:
     virtual ~EssenceDescriptor() {};
     
     virtual int getType() = 0;
+    virtual EssenceDescriptor* clone() = 0;
 };
 
 class SourcePackage : public Package
@@ -157,6 +164,7 @@ public:
     virtual std::string toString();
 
     virtual void cloneInPlace(UMID newUID, bool resetLengths);
+    virtual Package* clone();
     
     
     EssenceDescriptor* descriptor;
@@ -171,6 +179,7 @@ public:
     FileEssenceDescriptor();
     
     virtual int getType() { return FILE_ESSENCE_DESC_TYPE; };
+    virtual EssenceDescriptor* clone();
     
     std::string fileLocation;
     int fileFormat;
@@ -185,6 +194,7 @@ public:
     TapeEssenceDescriptor();
     
     virtual int getType() { return TAPE_ESSENCE_DESC_TYPE; };
+    virtual EssenceDescriptor* clone();
     
     std::string spoolNumber;
 };
@@ -195,6 +205,7 @@ public:
     LiveEssenceDescriptor();
     
     virtual int getType() { return LIVE_ESSENCE_DESC_TYPE; };
+    virtual EssenceDescriptor* clone();
     
     long recordingLocation;
 };

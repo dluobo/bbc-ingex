@@ -1,5 +1,5 @@
 /*
- * $Id: Track.cpp,v 1.3 2009/05/14 10:48:25 john_f Exp $
+ * $Id: Track.cpp,v 1.4 2009/10/22 13:53:09 john_f Exp $
  *
  * A Track in a Package
  *
@@ -85,5 +85,26 @@ void Track::cloneInPlace(bool resetLengths)
     }
 }
     
+Track* Track::clone()
+{
+    Track* clonedTrack = new Track();
+    
+    DatabaseObject::clone(clonedTrack);
+    
+    clonedTrack->id = id;
+    clonedTrack->number = number;
+    clonedTrack->name = name;
+    clonedTrack->editRate = editRate;
+    clonedTrack->origin = origin;
+    clonedTrack->dataDef = dataDef;
+    
+    if (sourceClip)
+    {
+        clonedTrack->sourceClip = sourceClip->clone();
+    }
+    
+    return clonedTrack;
+}
+
 
 

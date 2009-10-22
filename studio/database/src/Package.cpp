@@ -1,5 +1,5 @@
 /*
- * $Id: Package.cpp,v 1.6 2009/10/12 15:44:54 philipn Exp $
+ * $Id: Package.cpp,v 1.7 2009/10/22 13:53:09 john_f Exp $
  *
  * A MXF/AAF Package
  *
@@ -210,6 +210,25 @@ void Package::cloneInPlace(UMID newUID, bool resetLengths)
     }
 }
 
+void Package::clone(Package *clonedPackage)
+{
+    DatabaseObject::clone(clonedPackage);
+    
+    clonedPackage->uid = uid;
+    clonedPackage->name = name;
+    clonedPackage->creationDate = creationDate;
+    clonedPackage->projectName = projectName;
+    clonedPackage->_userComments = _userComments;
+    
+    size_t i;
+    for (i = 0; i < tracks.size(); i++)
+    {
+        clonedPackage->tracks.push_back(tracks[i]->clone());
+    }
+}
+
+
+
 
 MaterialPackage::MaterialPackage()
 : Package() 
@@ -236,6 +255,15 @@ string MaterialPackage::toString()
     packageStr << Package::toString() << endl;
 
     return packageStr.str();
+}
+
+Package* MaterialPackage::clone()
+{
+    MaterialPackage *clonedPackage = new MaterialPackage();
+    
+    Package::clone(clonedPackage);
+    
+    return clonedPackage;
 }
 
 
@@ -301,6 +329,21 @@ void SourcePackage::cloneInPlace(UMID newUID, bool resetLengths)
     }
 }
 
+Package* SourcePackage::clone()
+{
+    SourcePackage *clonedPackage = new SourcePackage();
+    
+    Package::clone(clonedPackage);
+
+    if (descriptor != 0)
+    {
+        clonedPackage->descriptor = descriptor->clone();
+    }
+    
+    return clonedPackage;
+}
+
+
 
 EssenceDescriptor::EssenceDescriptor()
 : DatabaseObject()
@@ -312,13 +355,47 @@ FileEssenceDescriptor::FileEssenceDescriptor()
   audioQuantizationBits(0)
 {}
 
+EssenceDescriptor* FileEssenceDescriptor::clone()
+{
+    FileEssenceDescriptor* clonedDescriptor = new FileEssenceDescriptor();
+    
+    clonedDescriptor->fileLocation = fileLocation;
+    clonedDescriptor->fileFormat = fileFormat;
+    clonedDescriptor->videoResolutionID = videoResolutionID;
+    clonedDescriptor->imageAspectRatio = imageAspectRatio;
+    clonedDescriptor->audioQuantizationBits = audioQuantizationBits;
+    
+    return clonedDescriptor;
+}
+
+
 TapeEssenceDescriptor::TapeEssenceDescriptor()
 : EssenceDescriptor()
 {}
 
+EssenceDescriptor* TapeEssenceDescriptor::clone()
+{
+    TapeEssenceDescriptor* clonedDescriptor = new TapeEssenceDescriptor();
+    
+    clonedDescriptor->spoolNumber = spoolNumber;
+    
+    return clonedDescriptor;
+}
+
+
 LiveEssenceDescriptor::LiveEssenceDescriptor()
 : EssenceDescriptor(), recordingLocation(0)
 {}
+
+EssenceDescriptor* LiveEssenceDescriptor::clone()
+{
+    LiveEssenceDescriptor* clonedDescriptor = new LiveEssenceDescriptor();
+    
+    clonedDescriptor->recordingLocation = recordingLocation;
+    
+    return clonedDescriptor;
+}
+
 
 
 

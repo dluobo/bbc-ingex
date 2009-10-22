@@ -1,5 +1,5 @@
 /*
- * $Id: DatabaseObject.h,v 1.1 2007/09/11 14:08:38 stuart_hc Exp $
+ * $Id: DatabaseObject.h,v 1.2 2009/10/22 13:53:09 john_f Exp $
  *
  * An object corresponding to a row in a table in the database
  *
@@ -40,6 +40,7 @@ public:
     virtual void wasLoaded(long databaseID);
   
     virtual void cloneInPlace();
+    void clone(DatabaseObject* clonedObject);
     
     long getDatabaseID() const;
     

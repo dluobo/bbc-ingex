@@ -1,5 +1,5 @@
 /*
- * $Id: SourceClip.h,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: SourceClip.h,v 1.2 2009/10/22 13:53:09 john_f Exp $
  *
  * A Source Clip in a Track referencing a Package or null
  *
@@ -42,6 +42,7 @@ public:
     virtual std::string toString();
 
     virtual void cloneInPlace(bool resetLength);
+    SourceClip* clone();
     
     UMID sourcePackageUID;
     uint32_t sourceTrackID;

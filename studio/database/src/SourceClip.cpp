@@ -1,5 +1,5 @@
 /*
- * $Id: SourceClip.cpp,v 1.1 2007/09/11 14:08:39 stuart_hc Exp $
+ * $Id: SourceClip.cpp,v 1.2 2009/10/22 13:53:09 john_f Exp $
  *
  * A Source Clip in a Track referencing a Package or null
  *
@@ -62,4 +62,17 @@ void SourceClip::cloneInPlace(bool resetLength)
     }
 }
 
+SourceClip* SourceClip::clone()
+{
+    SourceClip* clonedSourceClip = new SourceClip();
+    
+    DatabaseObject::clone(clonedSourceClip);
+    
+    clonedSourceClip->sourcePackageUID = sourcePackageUID;
+    clonedSourceClip->sourceTrackID = sourceTrackID;
+    clonedSourceClip->length = length;
+    clonedSourceClip->position = position;
+    
+    return clonedSourceClip;
+}
 

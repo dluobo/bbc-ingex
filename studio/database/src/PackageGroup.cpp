@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.cpp,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: PackageGroup.cpp,v 1.2 2009/10/22 13:53:09 john_f Exp $
  *
  * Package group
  *
@@ -106,6 +106,18 @@ void PackageGroup::UpdateFileLocation(string file_location)
     file_descriptor->fileLocation = file_location;
 }
 
+void PackageGroup::UpdateAllFileLocations(string prefix)
+{
+    size_t i;
+    for (i = 0; i < mFileSourcePackages.size(); i++) {
+        SourcePackage *fsp = mFileSourcePackages[i];
+        
+        PA_ASSERT(fsp->descriptor->getType() == FILE_ESSENCE_DESC_TYPE);
+        FileEssenceDescriptor *file_descriptor = dynamic_cast<FileEssenceDescriptor*>(fsp->descriptor);
+        file_descriptor->fileLocation = CreatePrefixFileLocation(prefix, file_descriptor->fileLocation);
+    }
+}
+
 SourcePackage* PackageGroup::GetFileSourcePackage()
 {
     PA_ASSERT(mOP == OPERATIONAL_PATTERN_1A);
@@ -114,6 +126,20 @@ SourcePackage* PackageGroup::GetFileSourcePackage()
         return 0;
     
     return mFileSourcePackages[0];
+}
+
+bool PackageGroup::HaveFileSourcePackage(uint32_t mp_track_id)
+{
+    Track *mp_track = mMaterialPackage->getTrack(mp_track_id);
+    PA_ASSERT(mp_track);
+    
+    size_t i;
+    for (i = 0; i < mFileSourcePackages.size(); i++) {
+        if (mp_track->sourceClip->sourcePackageUID == mFileSourcePackages[i]->uid)
+            return true;
+    }
+
+    return false;
 }
 
 SourcePackage* PackageGroup::GetFileSourcePackage(uint32_t mp_track_id)
@@ -234,6 +260,22 @@ void PackageGroup::RelocateFile(string target_directory)
     UpdateFileLocation(to);
 }
 
+PackageGroup* PackageGroup::Clone()
+{
+    PackageGroup *cloned_group = new PackageGroup(mPALProject, mOP);
+    
+    if (mMaterialPackage)
+        cloned_group->SetMaterialPackage(dynamic_cast<MaterialPackage*>(mMaterialPackage->clone()));
+    if (mTapeSourcePackage)
+        cloned_group->SetTapeSourcePackage(dynamic_cast<SourcePackage*>(mTapeSourcePackage->clone()), true);
+    
+    size_t i;
+    for (i = 0; i < mFileSourcePackages.size(); i++)
+        cloned_group->AppendFileSourcePackage(dynamic_cast<SourcePackage*>(mFileSourcePackages[i]->clone()));
+    
+    return cloned_group;
+}
+
 void PackageGroup::SaveToDatabase()
 {
     Database *database = Database::getInstance();
@@ -295,5 +337,27 @@ void PackageGroup::ClearPackages()
         delete mTapeSourcePackage;
     mTapeSourcePackage = 0;
     mOwnTapeSourcePackage = false;
+}
+
+string PackageGroup::CreatePrefixFileLocation(string prefix, string file_path)
+{
+    // strip the directory path
+    string filename = file_path;
+    size_t sep_index;
+#if defined(_WIN32)
+    if ((sep_index = file_path.rfind("\\")) != string::npos ||
+        (sep_index = file_path.rfind(":")) != string::npos)
+#else
+    if ((sep_index = file_path.rfind("/")) != string::npos)
+#endif
+    {
+        filename = file_path.substr(sep_index + 1);
+    }
+    
+    if (prefix.empty())
+        return filename;
+
+    
+    return prefix + filename;
 }
 

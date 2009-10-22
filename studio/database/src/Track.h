@@ -1,5 +1,5 @@
 /*
- * $Id: Track.h,v 1.2 2009/04/16 18:16:25 john_f Exp $
+ * $Id: Track.h,v 1.3 2009/10/22 13:53:09 john_f Exp $
  *
  * A Track in a Package
  *
@@ -45,6 +45,7 @@ public:
     virtual std::string toString();
 
     virtual void cloneInPlace(bool resetLengths);
+    Track* clone();
     
     uint32_t id;
     uint32_t number;

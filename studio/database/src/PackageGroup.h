@@ -1,5 +1,5 @@
 /*
- * $Id: PackageGroup.h,v 1.1 2009/10/12 15:54:33 philipn Exp $
+ * $Id: PackageGroup.h,v 1.2 2009/10/22 13:53:09 john_f Exp $
  *
  * Package group
  *
@@ -54,12 +54,14 @@ public:
 
     void UpdateFileLocation(uint32_t mp_track_id, std::string file_location);
     void UpdateFileLocation(std::string file_location); // use for OP-1A only
+    void UpdateAllFileLocations(std::string prefix);
     
     MaterialPackage* GetMaterialPackage() { return mMaterialPackage; }
     std::vector<SourcePackage*>& GetFileSourcePackages() { return mFileSourcePackages; }
     SourcePackage* GetFileSourcePackage(); // use for OP-1A only
     SourcePackage* GetTapeSourcePackage() { return mTapeSourcePackage; }
     
+    bool HaveFileSourcePackage(uint32_t mp_track_id);
     SourcePackage* GetFileSourcePackage(uint32_t mp_track_id);
     Track* GetFileSourceTrack(uint32_t mp_track_id);
     
@@ -69,6 +71,8 @@ public:
     std::string CreateFileLocation(std::string directory, std::string file_path);
     void RelocateFile(uint32_t mp_track_id, std::string target_directory);
     void RelocateFile(std::string target_directory); // use for OP-1A only
+    
+    PackageGroup* Clone();
     
     void SaveToDatabase();
     
@@ -80,7 +84,10 @@ public:
 
 public:
     virtual void ClearPackages();
-    
+
+protected:
+    std::string CreatePrefixFileLocation(std::string prefix, std::string file_path);
+
 protected:
     bool mPALProject;
     int mOP;
