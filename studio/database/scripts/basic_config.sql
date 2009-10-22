@@ -282,7 +282,7 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (14, 'ENCODE1_COPY_DEST', '/store/mxf_online/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (15, 'ENCODE1_COPY_PRIORITY', '1', 1);
+    VALUES (15, 'ENCODE1_COPY_PRIORITY', '3', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
     VALUES (20, 'ENCODE2_RESOLUTION', '8', 1);
@@ -298,17 +298,30 @@ INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_t
     VALUES (25, 'ENCODE2_COPY_PRIORITY', '2', 1);
     
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (30, 'QUAD_RESOLUTION', '0', 1);
+    VALUES (30, 'ENCODE3_RESOLUTION', '21', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (31, 'QUAD_WRAPPING', '1', 1);
+    VALUES (31, 'ENCODE3_WRAPPING', '3', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (32, 'QUAD_BITC', 'true', 1);
+    VALUES (32, 'ENCODE3_BITC', 'false', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (33, 'QUAD_DIR', '/video/browse/', 1);
+    VALUES (33, 'ENCODE3_DIR', '/video/browse/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (34, 'QUAD_COPY_DEST', '', 1);
+    VALUES (34, 'ENCODE3_COPY_DEST', '/store/browse/', 1);
 INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
-    VALUES (35, 'QUAD_COPY_PRIORITY', '3', 1);
+    VALUES (35, 'ENCODE3_COPY_PRIORITY', '1', 1);
+    
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (40, 'QUAD_RESOLUTION', '0', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (41, 'QUAD_WRAPPING', '1', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (42, 'QUAD_BITC', 'true', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (43, 'QUAD_DIR', '/video/browse/', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (44, 'QUAD_COPY_DEST', '', 1);
+INSERT INTO defaultrecorderparameter (drp_identifier, drp_name, drp_value, drp_type)
+    VALUES (45, 'QUAD_COPY_PRIORITY', '3', 1);
 
 --
 -- Ingex-MXF
@@ -330,7 +343,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_COPY_DEST', '/store/mxf_online/', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 10);
+    VALUES ('ENCODE1_COPY_PRIORITY', '3', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '8', 1, 10);
@@ -344,6 +357,19 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_DEST', '/store/mxf_offline/', 1, 10);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 10);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_RESOLUTION', '21', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_WRAPPING', '3', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_BITC', 'false', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_DIR', '/video/browse/', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_DEST', '/store/browse/', 1, 10);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_PRIORITY', '1', 1, 10);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 10);
@@ -426,7 +452,7 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE1_COPY_DEST', '/store/mxf_online/', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
-    VALUES ('ENCODE1_COPY_PRIORITY', '1', 1, 20);
+    VALUES ('ENCODE1_COPY_PRIORITY', '3', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_RESOLUTION', '8', 1, 20);
@@ -440,6 +466,19 @@ INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_
     VALUES ('ENCODE2_COPY_DEST', '/store/mxf_offline/', 1, 20);
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('ENCODE2_COPY_PRIORITY', '2', 1, 20);
+    
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_RESOLUTION', '21', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_WRAPPING', '3', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_BITC', 'false', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_DIR', '/video/browse/', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_DEST', '/store/browse/', 1, 20);
+INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
+    VALUES ('ENCODE3_COPY_PRIORITY', '1', 1, 20);
     
 INSERT INTO recorderparameter (rep_name, rep_value, rep_type, rep_recorder_conf_id)
     VALUES ('QUAD_RESOLUTION', '0', 1, 20);
