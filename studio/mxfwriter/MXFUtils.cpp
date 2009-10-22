@@ -1,5 +1,5 @@
 /*
- * $Id: MXFUtils.cpp,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: MXFUtils.cpp,v 1.2 2009/10/22 13:55:36 john_f Exp $
  *
  * General MXF utilities
  *
@@ -35,31 +35,32 @@ using namespace std;
 using namespace prodauto;
 
 
+static void mxfVLogging(MXFLogLevel level, const char* format, va_list ap)
+{
+    if (level < g_mxfLogLevel)
+        return;
+    
+    switch (level)
+    {
+        case MXF_ELOG:
+            Logging::verror("libMXF: ", format, ap);
+            break;
+        case MXF_WLOG:
+            Logging::vwarning("libMXF: ", format, ap);
+            break;
+        case MXF_ILOG:
+            Logging::vinfo("libMXF: ", format, ap);
+            break;
+        default: // MXF_DLOG
+            Logging::vdebug("libMXF: ", format, ap);
+    }
+}
 
 static void mxfLogging(MXFLogLevel level, const char* format, ...)
 {
     va_list ap;
     va_start(ap, format);
-    
-    switch (level)
-    {
-        case MXF_ELOG:
-            Logging::error("libMXF: ");
-            Logging::verror(format, ap);
-            break;
-        case MXF_WLOG:
-            Logging::warning("libMXF: ");
-            Logging::vwarning(format, ap);
-            break;
-        case MXF_ILOG:
-            Logging::info("libMXF: ");
-            Logging::vinfo(format, ap);
-            break;
-        default: // MXF_DLOG
-            Logging::debug("libMXF: ");
-            Logging::vdebug(format, ap);
-    }
-
+    mxfVLogging(level, format, ap);
     va_end(ap);
 }
 
@@ -68,5 +69,6 @@ static void mxfLogging(MXFLogLevel level, const char* format, ...)
 void prodauto::connectLibMXFLogging()
 {
     g_mxfLogLevel = MXF_DLOG;
+    mxf_vlog = mxfVLogging;
     mxf_log = mxfLogging;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.cpp,v 1.1 2009/10/12 15:53:08 philipn Exp $
+ * $Id: MXFOPAtomWriter.cpp,v 1.2 2009/10/22 13:55:36 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -42,7 +42,7 @@ using namespace prodauto;
 #define CHECK(cmd) \
     if (!(cmd)) \
     { \
-        PA_LOGTHROW(MXFWriterException, ("'%s' failed", #cmd)); \
+        PA_LOGTHROW(MXFWriterException, ("'%s' failed\n", #cmd)); \
     }
 
 
@@ -127,7 +127,7 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
     CHECK(create_clip_writer(mPackageGroup->GetMaterialPackage()->projectName.name.c_str(), project_format,
                              project_edit_rate, false, false, mPackageDefinitions, &mClipWriter));
 
-    // update the file locations
+    // update the file locations in the prodauto file source packages
     MXFListIterator mp_track_iter;
     mxf_initialise_list_iter(&mp_track_iter, &mPackageDefinitions->materialPackage->tracks);
     while (mxf_next_list_iter_element(&mp_track_iter))
@@ -147,13 +147,17 @@ void MXFOPAtomWriter::PrepareToWrite(PackageGroup *package_group, bool take_owne
                 break;
             }
         }
-        PA_ASSERT(fs_package);
+        // file source package could be null if the prodauto package_group didn't include a file source package
+        // for this material package track
         
-        mPackageGroup->UpdateFileLocation(mp_track->id, fs_package->filename);
+        if (fs_package)
+            mPackageGroup->UpdateFileLocation(mp_track->id, fs_package->filename);
+        else
+            Logging::warning("Missing file source package for material track %d\n", mp_track->id);
     }
 }
 
-void MXFOPAtomWriter::WriteSamples(uint32_t mp_track_id, uint32_t num_samples, uint8_t *data, uint32_t data_size)
+void MXFOPAtomWriter::WriteSamples(uint32_t mp_track_id, uint32_t num_samples, const uint8_t *data, uint32_t data_size)
 {
     CHECK(write_samples(mClipWriter, mp_track_id, num_samples, data, data_size));
 }
@@ -163,7 +167,7 @@ void MXFOPAtomWriter::StartSampleData(uint32_t mp_track_id)
     CHECK(start_write_samples(mClipWriter, mp_track_id));
 }
 
-void MXFOPAtomWriter::WriteSampleData(uint32_t mp_track_id, uint8_t *data, uint32_t data_size)
+void MXFOPAtomWriter::WriteSampleData(uint32_t mp_track_id, const uint8_t *data, uint32_t data_size)
 {
     CHECK(write_sample_data(mClipWriter, mp_track_id, data, data_size));
 }
@@ -184,7 +188,8 @@ void MXFOPAtomWriter::CompleteWriting(bool save_to_database)
         size_t i;
         for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++) {
             mp_track_id = mPackageGroup->GetMaterialPackage()->tracks[i]->id;
-            mPackageGroup->UpdateDuration(mp_track_id, GetDuration(mp_track_id));
+            if (mPackageGroup->HaveFileSourcePackage(mp_track_id))
+                mPackageGroup->UpdateDuration(mp_track_id, GetDuration(mp_track_id));
         }
         
         CHECK(update_and_complete_writing(&mClipWriter, mPackageDefinitions,
@@ -193,7 +198,8 @@ void MXFOPAtomWriter::CompleteWriting(bool save_to_database)
         // rename the files to the destination directory
         for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++) {
             mp_track_id = mPackageGroup->GetMaterialPackage()->tracks[i]->id;
-            mPackageGroup->RelocateFile(mp_track_id, mDestinationDirectory);
+            if (mPackageGroup->HaveFileSourcePackage(mp_track_id))
+                mPackageGroup->RelocateFile(mp_track_id, mDestinationDirectory);
         }
         
         // save the packages to the database
@@ -209,9 +215,13 @@ void MXFOPAtomWriter::CompleteWriting(bool save_to_database)
                 abort_writing(&mClipWriter, false);
             
             // rename the files to the failure directory
+            uint32_t mp_track_id;
             size_t i;
-            for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++)
-                mPackageGroup->RelocateFile(mPackageGroup->GetMaterialPackage()->tracks[i]->id, mFailureDirectory);
+            for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++) {
+                mp_track_id = mPackageGroup->GetMaterialPackage()->tracks[i]->id;
+                if (mPackageGroup->HaveFileSourcePackage(mp_track_id))
+                    mPackageGroup->RelocateFile(mp_track_id, mFailureDirectory);
+            }
         }
         catch (...)
         {
@@ -233,9 +243,13 @@ void MXFOPAtomWriter::AbortWriting(bool delete_files)
 
         if (!delete_files) {
             // rename the files to the failure directory
+            uint32_t mp_track_id;
             size_t i;
-            for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++)
-                mPackageGroup->RelocateFile(mPackageGroup->GetMaterialPackage()->tracks[i]->id, mFailureDirectory);
+            for (i = 0; i < mPackageGroup->GetMaterialPackage()->tracks.size(); i++) {
+                mp_track_id = mPackageGroup->GetMaterialPackage()->tracks[i]->id;
+                if (mPackageGroup->HaveFileSourcePackage(mp_track_id))
+                    mPackageGroup->RelocateFile(mp_track_id, mFailureDirectory);
+            }
         }
     }
     catch (...)
@@ -251,6 +265,7 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
     mxfUMID umid;
     mxfTimestamp timestamp;
     mxfRational edit_rate;
+    size_t i;
     
     if (mPackageDefinitions) {
         free_package_definitions(&mPackageDefinitions);
@@ -265,23 +280,24 @@ void MXFOPAtomWriter::CreatePackageDefinitions()
     CHECK(create_package_definitions(&mPackageDefinitions, &edit_rate));
 
     // map the tape source package
-    convert_umid(mPackageGroup->GetTapeSourcePackage()->uid, umid);
-    convert_timestamp(mPackageGroup->GetTapeSourcePackage()->creationDate, timestamp);
-    CHECK(create_tape_source_package(mPackageDefinitions, &umid, mPackageGroup->GetTapeSourcePackage()->name.c_str(),
-                                     &timestamp));
-
-    size_t i;
-    for (i = 0; i < mPackageGroup->GetTapeSourcePackage()->tracks.size(); i++) {
-        prodauto::Track *track = mPackageGroup->GetTapeSourcePackage()->tracks[i];
-
-        ::Track *mxf_track;
-        convert_umid(track->sourceClip->sourcePackageUID, umid);
-        convert_rational(track->editRate, edit_rate);
-        CHECK(create_track(mPackageDefinitions->tapeSourcePackage, track->id,
-                           track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
-                           &edit_rate, &umid, track->sourceClip->sourceTrackID,
-                           track->sourceClip->position, track->sourceClip->length, 0,
-                           &mxf_track));
+    if (mPackageGroup->GetTapeSourcePackage()) {
+        convert_umid(mPackageGroup->GetTapeSourcePackage()->uid, umid);
+        convert_timestamp(mPackageGroup->GetTapeSourcePackage()->creationDate, timestamp);
+        CHECK(create_tape_source_package(mPackageDefinitions, &umid, mPackageGroup->GetTapeSourcePackage()->name.c_str(),
+                                         &timestamp));
+    
+        for (i = 0; i < mPackageGroup->GetTapeSourcePackage()->tracks.size(); i++) {
+            prodauto::Track *track = mPackageGroup->GetTapeSourcePackage()->tracks[i];
+    
+            ::Track *mxf_track;
+            convert_umid(track->sourceClip->sourcePackageUID, umid);
+            convert_rational(track->editRate, edit_rate);
+            CHECK(create_track(mPackageDefinitions->tapeSourcePackage, track->id,
+                               track->number, track->name.c_str(), track->dataDef == PICTURE_DATA_DEFINITION,
+                               &edit_rate, &umid, track->sourceClip->sourceTrackID,
+                               track->sourceClip->position, track->sourceClip->length, 0,
+                               &mxf_track));
+        }
     }
 
     // map the material package

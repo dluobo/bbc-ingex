@@ -1,5 +1,5 @@
 /*
- * $Id: MXFOPAtomWriter.h,v 1.1 2009/10/12 15:53:08 philipn Exp $
+ * $Id: MXFOPAtomWriter.h,v 1.2 2009/10/22 13:55:36 john_f Exp $
  *
  * MXF OP-Atom writer
  *
@@ -52,9 +52,9 @@ public:
     
     virtual void PrepareToWrite(PackageGroup *package_group, bool take_ownership = false);
     
-    virtual void WriteSamples(uint32_t mp_track_id, uint32_t num_samples, uint8_t *data, uint32_t data_size);
+    virtual void WriteSamples(uint32_t mp_track_id, uint32_t num_samples, const uint8_t *data, uint32_t data_size);
     virtual void StartSampleData(uint32_t mp_track_id);
-    virtual void WriteSampleData(uint32_t mp_track_id, uint8_t *data, uint32_t data_size);
+    virtual void WriteSampleData(uint32_t mp_track_id, const uint8_t *data, uint32_t data_size);
     virtual void EndSampleData(uint32_t mp_track_id, uint32_t num_samples);
     
     virtual void CompleteWriting(bool save_to_database);

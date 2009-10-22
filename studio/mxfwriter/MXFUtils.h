@@ -1,5 +1,5 @@
 /*
- * $Id: MXFUtils.h,v 1.1 2007/09/11 14:08:44 stuart_hc Exp $
+ * $Id: MXFUtils.h,v 1.2 2009/10/22 13:55:36 john_f Exp $
  *
  * General MXF utilities
  *
