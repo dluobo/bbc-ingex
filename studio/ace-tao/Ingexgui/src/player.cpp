@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: player.cpp,v 1.15 2009/10/15 13:33:22 john_f Exp $              *
+ *   $Id: player.cpp,v 1.16 2009/10/22 14:44:33 john_f Exp $              *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -253,7 +253,7 @@ bool Player::Start(std::vector<std::string> * fileNames, std::vector<std::string
 			}
 			else {
 				showProgressBar(false); //irrelevant
-				setOSDTimecode(-1, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE); //timecode from shared memory
+//				setOSDTimecode(-1, SOURCE_TIMECODE_TYPE, LTC_SOURCE_TIMECODE_SUBTYPE); //timecode from shared memory
 				if (mSpeed) {
 					mSpeed = 0;
 					TrafficControl(false); //not reading from disk
