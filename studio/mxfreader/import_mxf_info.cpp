@@ -1,5 +1,5 @@
 /*
- * $Id: import_mxf_info.cpp,v 1.1 2009/09/18 17:29:30 john_f Exp $
+ * $Id: import_mxf_info.cpp,v 1.2 2009/10/22 15:16:57 john_f Exp $
  *
  * Read MXF files and add metadata to database.
  *
@@ -160,23 +160,7 @@ int main(int argc, const char **argv)
         IngexMXFInfo *info;
         IngexMXFInfo::ReadResult result = IngexMXFInfo::read(*iter, &info);
         if (result != IngexMXFInfo::SUCCESS) {
-            switch (result) {
-                case IngexMXFInfo::FILE_OPEN_ERROR:
-                    fprintf(stderr, "Error: failed to open file ('%s')\n", (*iter).c_str());
-                    break;
-                case IngexMXFInfo::NO_HEADER_PARTITION:
-                    fprintf(stderr, "Error: header partition is missing ('%s')\n", (*iter).c_str());
-                    break;
-                case IngexMXFInfo::NOT_OP_ATOM:
-                    fprintf(stderr, "Error: file is not OP-Atom ('%s')\n", (*iter).c_str());
-                    break;
-                case IngexMXFInfo::FAILED:
-                    fprintf(stderr, "Error: failed to read info ('%s')\n", (*iter).c_str());
-                    break;
-                case IngexMXFInfo::SUCCESS:
-                    break; // keep the compiler happy
-            }
-            
+            fprintf(stderr, "Error '%s': %s\n", (*iter).c_str(), IngexMXFInfo::errorToString(result).c_str());
             error_count++;
             continue;
         }
@@ -184,9 +168,9 @@ int main(int argc, const char **argv)
 
         try {
 
-            have_saved = save_package(db, info->getMaterialPackage());
-            have_saved = save_package(db, info->getFileSourcePackage()) || have_saved;
-            have_saved = save_package(db, info->getTapeSourcePackage()) || have_saved;
+            have_saved = save_package(db, info->getPackageGroup()->GetMaterialPackage());
+            have_saved = save_package(db, info->getPackageGroup()->GetFileSourcePackages().back()) || have_saved;
+            have_saved = save_package(db, info->getPackageGroup()->GetTapeSourcePackage()) || have_saved;
             
             if (have_saved)
                 saved_file_count++;
