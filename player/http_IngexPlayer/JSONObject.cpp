@@ -1,5 +1,5 @@
 /*
- * $Id: JSONObject.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: JSONObject.cpp,v 1.2 2009/10/26 09:33:20 john_f Exp $
  *
  * Utility class for serialising data to JSON text strings
  *
@@ -24,6 +24,7 @@
 #define __STDC_FORMAT_MACROS 1
 
 #include <sstream>
+#include <cstring>
 
 #include "JSONObject.h"
 #include "Utilities.h"

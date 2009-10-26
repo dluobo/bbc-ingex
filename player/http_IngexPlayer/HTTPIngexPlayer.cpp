@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPIngexPlayer.cpp,v 1.2 2009/09/18 16:13:50 philipn Exp $
+ * $Id: HTTPIngexPlayer.cpp,v 1.3 2009/10/26 09:33:20 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -28,6 +28,7 @@
 #include "IngexException.h"
 #include "Utilities.h"
 
+#include <cstring>
 
 using namespace std;
 using namespace ingex;

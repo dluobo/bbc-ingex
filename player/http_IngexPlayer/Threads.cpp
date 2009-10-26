@@ -1,5 +1,5 @@
 /*
- * $Id: Threads.cpp,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: Threads.cpp,v 1.2 2009/10/26 09:33:20 john_f Exp $
  *
  * Provides classes to manage mutexes, RW locks and threads
  *
@@ -25,6 +25,7 @@
 #include "IngexException.h"
 #include "Logging.h"
 
+#include <cstring>
 
 using namespace std;
 using namespace ingex;

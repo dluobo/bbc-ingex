@@ -1,5 +1,5 @@
 /*
- * $Id: Logging.h,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+ * $Id: Logging.h,v 1.2 2009/10/26 09:33:20 john_f Exp $
  *
  * Provides methods for various levels of logging to standard streams and/or file
  *
@@ -48,7 +48,7 @@ namespace ingex
 {
 
 // lowest message type to log, starting with error at the top and ending in debug
-typedef enum LogLevel
+enum LogLevel
 {
     LOG_LEVEL_ERROR = 0,
     LOG_LEVEL_WARNING,

@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.1 2009/02/24 08:21:16 stuart_hc Exp $
+# $Id: Makefile,v 1.2 2009/10/26 09:33:20 john_f Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -115,13 +115,13 @@ ifdef FFMPEG_INCLUDE_PATH
 	FFMPEG_RPM := $(shell rpm -q ffmpeg-h264-aac > /dev/null && echo YES)
 	FFMPEG_DNXHD_RPM := $(shell rpm -q ffmpeg-DNxHD-h264-aac > /dev/null && echo YES)
 	ifeq "$(FFMPEG_RPM)" "YES"
-		LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
+		LIBS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lmp3lame -lx264 -la52 -lfaac -lfaad -lm
 	else
 		ifeq "$(FFMPEG_DNXHD_RPM)" "YES"
-			LIBS += -lavformat -lavcodec -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
+			LIBS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm
 			CFLAGS += -DHAVE_DNXHD
 		else
-			LIBS += -lavformat -lavcodec -lavutil -lm
+			LIBS += -lavformat -lavcodec -lavutil -lswscale -lm
 		endif
 	endif
 else
