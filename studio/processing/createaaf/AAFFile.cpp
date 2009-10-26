@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.6 2009/09/18 17:05:47 philipn Exp $
+ * $Id: AAFFile.cpp,v 1.7 2009/10/26 12:45:00 philipn Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -149,6 +149,10 @@ static const aafUID_t kAAFCompressionDef_Avid_MJPEG_151s =
     {0x0e040201, 0x0201, 0x0202, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_Avid_MJPEG_201 =
     {0x0e040201, 0x0201, 0x0102, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
+static const aafUID_t kAAFCompressionDef_IMX_30 =
+    {0x04010202, 0x0102, 0x0105, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
+static const aafUID_t kAAFCompressionDef_IMX_40 =
+    {0x04010202, 0x0102, 0x0103, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_IMX_50 =
     {0x04010202, 0x0102, 0x0101, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 
@@ -2070,21 +2074,57 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x8e);
             }
+            else if (fileDescriptor->videoResolutionID == IMX30_MATERIAL_RESOLUTION)
+            {
+                AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_IMX_30));
+                AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(304, 720));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 16));
+                AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
+                aafInt32 videoLineMap[2] = {7, 320};
+                AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(0));
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDFrameSampleSize, 150000);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDImageSize, track->sourceClip->length * 150000);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDResolutionID, 0xa2);
+            }
+            else if (fileDescriptor->videoResolutionID == IMX40_MATERIAL_RESOLUTION)
+            {
+                AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_IMX_40));
+                AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(304, 720));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 16));
+                AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
+                aafInt32 videoLineMap[2] = {7, 320};
+                AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(0));
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDFrameSampleSize, 200000);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDImageSize, track->sourceClip->length * 200000);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDResolutionID, 0xa1);
+            }
             else if (fileDescriptor->videoResolutionID == IMX50_MATERIAL_RESOLUTION)
             {
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_IMX_50));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(304, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 16));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
                 aafInt32 videoLineMap[2] = {7, 320};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
                 AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(0));
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
-                    kAAFPropID_DIDFrameSampleSize, 253952);
+                    kAAFPropID_DIDFrameSampleSize, 250000);
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
-                    kAAFPropID_DIDImageSize, track->sourceClip->length * 253952);
+                    kAAFPropID_DIDImageSize, track->sourceClip->length * 250000);
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0xa0);
             }
@@ -2093,7 +2133,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(592, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(576, 720, 16, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(576, 720, 0, 16));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFMixedFields));
                 aafInt32 videoLineMap[2] = {15, 328};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
@@ -2112,7 +2152,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_21));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
                 aafInt32 videoLineMap[2] = {15, 328};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
@@ -2131,7 +2171,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_31));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
                 aafInt32 videoLineMap[2] = {15, 328};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
@@ -2150,7 +2190,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_101));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
                 aafInt32 videoLineMap[2] = {15, 328};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
@@ -2169,7 +2209,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_101m));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 288));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 288, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 288, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFOneField));
                 aafInt32 videoLineMap[1] = {15};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(1, videoLineMap));
@@ -2188,7 +2228,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_151s));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 352));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 352, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 352, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFOneField));
                 aafInt32 videoLineMap[1] = {15};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(1, videoLineMap));
@@ -2207,7 +2247,7 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                 AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
                 AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_Avid_MJPEG_201));
                 AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(296, 720));
-                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 8, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(288, 720, 0, 8));
                 AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
                 aafInt32 videoLineMap[2] = {15, 328};
                 AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
