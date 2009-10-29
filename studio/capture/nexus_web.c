@@ -1,5 +1,5 @@
 /*
- * $Id: nexus_web.c,v 1.7 2009/10/12 15:11:46 john_f Exp $
+ * $Id: nexus_web.c,v 1.8 2009/10/29 09:23:54 philipn Exp $
  *
  * Stand-alone web server to monitor and control nexus applications
  *
@@ -122,7 +122,7 @@ static void nexus_state(struct shttpd_arg* arg)
     // If nexus_web was started before dvs_sdi, p will be NULL
     if (p->connection.pctl == NULL) {
         // Connect to NexusControl structure in shared mem
-        if (! nexus_connect_to_shared_mem(0, 1, 1, &p->connection)) {
+        if (! nexus_connect_to_shared_mem(0, 0, 1, &p->connection)) {
             shttpd_printf(arg, "{\"requestError\":\"Shared memory unavailable. Is the capture process running?\",\"state\":\"error\"}\n");
             arg->flags |= SHTTPD_END_OF_OUTPUT;
             return;
@@ -321,7 +321,7 @@ static void nexus_state(struct shttpd_arg* arg)
 
     // If capture dead, try to reconnect for next status check
     if (capture_dead) {
-        nexus_connect_to_shared_mem(0, 1, 1, &p->connection);
+        nexus_connect_to_shared_mem(0, 0, 1, &p->connection);
     }
 }
 
@@ -337,7 +337,7 @@ static void timecode(struct shttpd_arg* arg)
     // If nexus_web was started before dvs_sdi, p will be NULL
     if (p->connection.pctl == NULL) {
         // Connect to NexusControl structure in shared mem
-        if (! nexus_connect_to_shared_mem(0, 1, 1, &p->connection)) {
+        if (! nexus_connect_to_shared_mem(0, 0, 1, &p->connection)) {
             shttpd_printf(arg, "{\"requestError\":\"Shared memory unavailable. Is the capture process running?\",\"state\":\"error\"}\n");
             arg->flags |= SHTTPD_END_OF_OUTPUT;
             return;
@@ -390,7 +390,7 @@ static void timecode(struct shttpd_arg* arg)
 
     // If capture dead, try to reconnect for next status check
     if (capture_dead) {
-        nexus_connect_to_shared_mem(0, 1, 1, &p->connection);
+        nexus_connect_to_shared_mem(0, 0, 1, &p->connection);
     }
 }
 
@@ -437,7 +437,7 @@ extern int main(int argc, char *argv[])
     }
 
     // Connect to NexusControl structure in shared mem
-    nexus_connect_to_shared_mem(0, 1, 1, &info.connection);
+    nexus_connect_to_shared_mem(0, 0, 1, &info.connection);
 
     // Setup the shttpd object
     struct shttpd_ctx *ctx;
