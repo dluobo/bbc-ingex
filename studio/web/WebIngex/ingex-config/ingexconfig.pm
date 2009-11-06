@@ -1,4 +1,6 @@
-# Copyright (C) 2008  British Broadcasting Corporation
+# $Id: ingexconfig.pm,v 1.3 2009/11/06 12:01:10 john_f Exp $
+# Copyright (C) 2008-9 British Broadcasting Corporation
+# All rights reserved
 # Author: Philip de Nier <philipn@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
@@ -49,7 +51,7 @@ BEGIN
 
 our %ingexConfig;
 
-load_config("/srv/www/cgi-bin/ingex-config/ingex.conf");
+load_config("/srv/www/cgi-bin/ingex-config/WebIngex.conf");
 untaint();
 
 

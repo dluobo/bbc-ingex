@@ -1,4 +1,6 @@
-# Copyright (C) 2008  British Broadcasting Corporation
+# $Id: README.txt,v 1.2 2009/11/06 12:02:08 john_f Exp $
+# Copyright (C) 2008-9 British Broadcasting Corporation
+# All rights reserved
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
@@ -25,7 +27,7 @@ Requirements:
 
 CGI and CGI::Pretty should already be present as part of perl. perl-DBI and perl-DBD-Pg can be installed using YaST.
 
-1) edit the configuration file "ingex-config/ingex.conf" to match your system setup, including the IP address of your database server.
+1) edit the configuration file "ingex-config/WebIngex.conf" to match your system setup, including the IP address of your database server.
 2) run "sudo ./install.sh" to install the files.
 
 Updating
