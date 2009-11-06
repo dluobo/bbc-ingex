@@ -11,9 +11,11 @@ YaST - make sure the following are installed
   perl-DBI
   perl-DBD-Pg
   apache2
-  unixODBC
-  unixODBC-devel
-  psqlODBC
+
+Perl - make sure the following are installed
+  JSON::XS
+  common::sense
+  XML::Simple
 
 
 Database access
