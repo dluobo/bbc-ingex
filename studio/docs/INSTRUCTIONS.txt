@@ -26,16 +26,15 @@ NVIDIA graphics card driver
 See instructions at http://en.opensuse.org/NVIDIA
 
 To add the repository use:
-  root# zypper ar http://download.nvidia.com/opensuse/10.3/ NVIDEA
+  root# zypper ar http://download.nvidia.com/opensuse/11.1/ NVIDIA
 
 (If you try to add the repository in the normal way with YaST, it
 doesn't work.)
 
 Then in YaST, software management, install:
-  x11-video-nvidiaG01, nvidia-gfxG01-kmp-default
+  x11-video-nvidiaG02, nvidia-gfxG02-kmp-default
 
-Note that the instructions imply you want the G02 driver but if you look
-at the 1-click-install you will see it actually installs G01 for 10.3
+Note that for 10.3 the G01 driver works better.
 
 If the install process updates the kernel (e.g. if you use 1-click-install),
 you should update kernel sources (in yast) and do the make oldconfig,
