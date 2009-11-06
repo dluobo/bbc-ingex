@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 
-#  $Id: import_db_infod.pl,v 1.1 2009/10/12 11:00:10 john_f Exp $
+#  $Id: import_db_infod.pl,v 1.2 2009/11/06 12:11:10 john_f Exp $
 #
 # Copyright (C) 2009  British Broadcasting Corporation.
 # All Rights Reserved.
@@ -29,7 +29,7 @@
 
 # If run as root, applies UID and GID of $ROOT to each $timestampFile created.
 
-# Dies if directories $ROOT and those in @topDirs do not initially exist, as it does not watch these for creation
+# Dies if $ROOT does not initially exist
 
 # Logs to the system log (/var/log/messages)
 
@@ -42,14 +42,14 @@ use File::Glob qw( :glob); # to ensure whitespace in names returned by glob is e
 use Sys::Syslog qw(:standard :macros);
 
 my $ROOT = '/store'; #the user/group of this is applied to all files created if the script is run as root
-my @topDirs = qw(mxf_offline mxf_online cuts); #incoming directories to scan, below $ROOT
+my %topDirs = qw(mxf_offline 1 mxf_online 1 cuts 1); #incoming directories to scan, below $ROOT
 my $timestampFile = 'import_db_info_timestamp';
 my $mxfImport = '/usr/local/bin/import_mxf_info';
 my $xmlImport = '/usr/local/bin/import_cuts';
 
 use constant WATCH_MASK => IN_CREATE | IN_MOVED_TO;
 
-openlog 'import_db_infod', 'perror', 'user'; #'perror' is supposed to echo output to stderr but doesn't seem to
+openlog 'import_db_infod', 'perror', 'user'; #'perror' echos output to stderr (if using -n option)
 # check arguments
 my %opts;
 &usage_exit unless getopts('cnv', \%opts);
@@ -72,6 +72,11 @@ my $notifier = Linux::Inotify2->new() or Die("Unable to create notify object: $!
 
 my $ugid = join ':', (stat $ROOT)[4,5] if `whoami` =~ /^root$/; #if we can, change owner/group of new files to that of $ROOT
 
+#subroutine called when something is created in the root directory (containing top-level directories)
+my $topChange = sub {
+ ScanTopDir($_[0]->fullname);
+};
+
 #subroutine called when something is created in a top level directory (containing project directories)
 my $projectChange = sub {
  ScanProjDir($_[0]->fullname);
@@ -84,38 +89,50 @@ my $dateChange = sub {
 
 #subroutine called when something is created in a date directory (containing material and metadata files)
 my $fileChange = sub {
- if (ImportFile($_[0]->fullname)) {
-    Report("Imported " . $_[0]->fullname) if $opts{v};
-    $_[0]->fullname =~ /(.*)\//;
-    WriteTimestampFile($1, (stat $_[0]->fullname)[9]);
- }
+ Report("Imported " . $_[0]->fullname) if ImportFile($_[0]->fullname) && $opts{v};
+ $_[0]->fullname =~ /(.*)\//;
+ WriteTimestampFile($1, (stat $_[0]->fullname)[9]);
 };
 
-foreach (@topDirs) {
-   my $path = "$ROOT/$_";
-   next unless -d $path;
-   Report("Watching $path/ for new project subdirectories");
-   my $watch = $notifier->watch($path, WATCH_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a project directory being created in the intervening period
-   unless (opendir ROOT, $path) {
-      Warn("Couldn't open $path/: $!");
-      $watch->cancel;
-      next;
-   }
-   Report("Scanning $path/ for project subdirectories");
-   foreach (readdir ROOT) {
-      next if /^\.\.?$/;
-      ScanProjDir("$path/$_");
-   }
-   closedir ROOT;
+#initial scan of everything
+Report("Watching $ROOT/ for new top-level subdirectories");
+my $watch = $notifier->watch($ROOT, WATCH_MASK, $topChange) or Die("Couldn't watch: $!"); #do this before scanning or we could miss a top-level directory being created in the intervening period
+Die("Couldn't open $ROOT/: $!") unless opendir ROOT, $ROOT;
+foreach (readdir ROOT) {
+   ScanTopDir("$ROOT/$_");
 }
+closedir ROOT;
 
+#infinite loop waiting for stuff to appear
 while (1) {
 	$notifier->poll;
+}
+
+# subroutines that aren't pre-defined
+
+sub ScanTopDir {
+ my $topPath = shift;
+ return unless -d $topPath;
+ $topPath =~ m|$ROOT/(.*)|;
+ return unless exists $topDirs{$1}; #only interested in certain top-level directories
+ Report("Watching $topPath/ for new project subdirectories");
+ my $watch = $notifier->watch($topPath, WATCH_MASK, $projectChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
+ unless (opendir TOP, $topPath) {
+    Warn("Couldn't open $topPath/: $!");
+    $watch->cancel;
+    return;
+ }
+ Report("Scanning $topPath/ for project subdirectories");
+ foreach (readdir TOP) {
+    ScanProjDir("$topPath/$_");
+ }
+ closedir TOP;
 }
 
 sub ScanProjDir {
  my $projPath = shift;
  return unless -d $projPath;
+ return if $projPath =~ m|/\.\.?$|;
  Report("Watching $projPath/ for new date subdirectories");
  my $watch = $notifier->watch($projPath, WATCH_MASK, $dateChange) or Warn("Couldn't watch: $!"); #do this before scanning or we could miss a date directory being created in the intervening period
  unless (opendir PROJ, $projPath) {
@@ -157,12 +174,13 @@ sub ScanDateDir {
     }
  }
  Report("Scanning $datePath/ for files to import");
- my (%files, $mtime);
+ my %files;
+ my $mtime = 0; #in case no files
  foreach (readdir DATE) {
     my $file = "$datePath/$_";
     next if -d $file;
     $mtime = (stat "$datePath/$_")[9];
-    next if $mtime < $timestamp;
+    next if $mtime < $timestamp; #if <=, may miss later files created in the same second; instead we may try to import the earlier files created in the same second twice on failure which isn't a major problem
     push @{$files{$mtime}}, $_;
  }
  closedir DATE;
