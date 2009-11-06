@@ -257,7 +257,7 @@ tab=$(dcop $capture_window konsole currentSession)
 if [ $CAPTURE -ge 1 ] ; then
   dcop $capture_window $tab renameSession Capture
   dcop $capture_window $tab sendSession "cd $capture_path"
-  dcop $capture_window $tab sendSession "sudo ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
+  dcop $capture_window $tab sendSession "sudo nice --10 ./dvs_sdi -c $CAPTURE_CHANNELS -mode $CAPTURE_MODE -f $CAPTURE_PRIMARY_BUFFER -s $CAPTURE_SECONDARY_BUFFER -mc 0 -tt $CAPTURE_TIMECODE $CAPTURE_OPTIONS"
   tab=
 fi
 
