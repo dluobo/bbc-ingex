@@ -1,7 +1,8 @@
 #!/bin/sh
-# $Id: install.sh,v 1.3 2008/11/06 11:23:44 john_f Exp $
+# $Id: install.sh,v 1.4 2009/11/06 11:54:19 john_f Exp $
 #
-# Copyright (C) 2008  British Broadcasting Corporation
+# Copyright (C) 2008-9  British Broadcasting Corporation
+# All rights reserved
 # Author: Rowan de Pomerai <rdepom@users.sourceforge.net>
 #
 # This program is free software; you can redistribute it and/or
@@ -61,8 +62,8 @@ chmod 444 $install_root/htdocs/favicon.ico || exit 1
 
 # tell the user what's happened
 echo "All files have been copied to the appropriate places in $install_root/"
-echo "If you haven't already done so, you will need to edit the ingex.conf file"
+echo "If you haven't already done so, you will need to edit the WebIngex.conf file"
 echo "to include your database details. E.g."
-echo "  sudo vi $install_root/cgi-bin/ingex-config/ingex.conf"
+echo "  sudo vi $install_root/cgi-bin/ingex-config/WebIngex.conf"
 echo "You must also define your Ingex system's nodes (what machines you have at"
 echo "what IP addresses) on the Config page of WebIngex."
