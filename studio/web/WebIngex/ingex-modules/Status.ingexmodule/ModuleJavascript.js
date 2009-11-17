@@ -611,7 +611,7 @@ function ingexOSH (mainImageID,numInputsID,numInputsTextID) {
 					}
 				}
 			}
-			html += "</li>";
+			html += "</ul>";
 		}
 		if (html != "") {
 			html = "<p>To see full status details, <a href='javascript:getTab(\"Status\",false,true,true);'>click here</a> or on the Status tab at the top right corner of the page.</p>" + html;
@@ -707,16 +707,22 @@ function ingexMonitor (myName,monitorInfo,myParentObject) {
 		var monToCall = this;
 
 		if(!this.i[instance].availXmlHttp) this.i[instance].availXmlHttp = getxmlHttp();
-		this.i[instance].availXmlHttp.onreadystatechange = function (){callAvailabilityStateChanged(monToCall,instance,display);};
-
+		
+		if (this.i[instance].availabilitytimeout) {
+			clearTimeout(this.i[instance].availabilitytimeout);
+			this.i[instance].availabilitytimeout = false;
+		}
+		
 		this.i[instance].availXmlHttp.open("GET",urlToGet,true);
-		this.i[instance].availXmlHttp.send(null);
+		this.i[instance].availXmlHttp.onreadystatechange = function (){callAvailabilityStateChanged(monToCall,instance,display);};
 		this.i[instance].availabilitytimeout = setTimeout(function(){callAvailabilityTimedout(monToCall,instance,display)},5000);
+		this.i[instance].availXmlHttp.send(null);
 	}
 	
 	this.availabilityTimedout = function(instance,display) {
 		this.i[instance].availXmlHttp.abort();
 		$(display).innerHTML = "<span class='error'>Unavailable</span><br /><span class='small indent'>Request timed out.</span>";
+		clearTimeout(this.i[instance].availabilitytimeout);
 		this.i[instance].availabilitytimeout = false;
 		insole.error("AJAX timeout occurred when testing availability of "+this.name+" on "+instance);
 		this.myParent.osh.unavailable(this.name,instance);

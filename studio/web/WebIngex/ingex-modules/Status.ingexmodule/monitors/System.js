@@ -211,6 +211,7 @@ function Status_process_usageBar (instanceData,visible,dataDescription,threshold
 	} else {
 		// Work out the percentage used (either from amount used or amount free data)
 		if(dataDescription.used) {
+			if(!data[dataDescription.used]){ data[dataDescription.used] = 0; }	// description undefined
 			used = Math.round(100*(data[dataDescription.used]/data[dataDescription.total]));
 		} else if(dataDescription.free) {
 			used = 100-Math.round(100*(data[dataDescription.free]/data[dataDescription.total]));

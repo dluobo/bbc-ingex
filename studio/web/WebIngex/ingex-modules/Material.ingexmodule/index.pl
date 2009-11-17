@@ -437,10 +437,10 @@ sub get_main_browser {
 			</fieldset>
 			
 			<br/>
-			<br/>
 
 		</body>
-		
+
+		<div class='displayOptions'><h5>Display Options:</h5> <a href='javascript:toggleTC()'>Toggle timecode frame display</a></div>		
 ENDHTML
 	}
 	
@@ -726,10 +726,10 @@ ENDHTML
 			</fieldset>
 			
 			<br/>
-			<br/>
 
 		</body>
 		
+		<div class='displayOptions'><h5>Display Options:</h5> <a href='javascript:toggleTC()'>Toggle timecode frame display</a></div>
 ENDHTML
 		
 	}

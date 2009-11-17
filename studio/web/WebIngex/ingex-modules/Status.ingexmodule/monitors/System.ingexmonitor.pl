@@ -32,7 +32,8 @@ my $queryType = "http";
 my $queryLoc = ":7001";
 my $sortOrder = 300;
 
-my $fields = {"disk_space"=>"volumes","cpu_usage"=>"cpu","memory"=>"usageBar"};
+#my $fields = {"disk_space"=>"volumes","cpu_usage"=>"cpu","memory"=>"usageBar"};
+my $fields = {"disk_space"=>"volumes","cpu_usage"=>"cpu"};	# do not report RAM usage as it is misleading
 my $thresholds = {"volumes"=>-5242880,"cpu"=>80,"memory"=>95};
 
 switch ($ARGV[0]){

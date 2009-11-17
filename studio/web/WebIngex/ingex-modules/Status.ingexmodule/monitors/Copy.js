@@ -55,79 +55,90 @@ function Status_process_copyRecs (instanceData, visible) {
 	}
 	
 	// If not drawm, draw the layout
-	if(this.container.$().innerHTML == ''){
+	if(visible && this.container.$().innerHTML == ''){
 		var h = "<span style='font-weight:bold;'>Copy Speed : </span>";
 		h += "<span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_speed'></span>";
 		this.container.$().innerHTML = h;
 		this.elements.speed = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_speed";
 	}
 
+	if(visible){
 	// Fill in the data
 	this.elements.speed.$().innerHTML = speed_msg;
+	}
 }
 typeHandlers.copyRecs = Status_process_copyRecs;
 
 function Status_process_copyCurrent (instanceData, visible) {
 	var data = instanceData.monitorData[this.name];
 
-	// If not drawm, draw the layout
-	if(this.container.$().innerHTML == ''){
-		var h = "<div style='font-weight:bold;'>Current Copy Priority : </div>";
-		h += "<div class='copyIndentedBlock'>Priority: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority'></span></div>";
-		h += "<div class='copyIndentedBlock'>Total files: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalfiles'></span></div>";
-		h += "<div class='copyIndentedBlock'>Total size: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalsize'></span>MB</div>";
-		h += "<div style='font-weight:bold;'>Current Copy File : </div>";
-		h += "<div class='copyIndentedBlock'>Filename: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filename'></span></div>";
-		h += "<div class='copyIndentedBlock'>File size: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filesize'></span>MB</div>";
-		this.container.$().innerHTML = h;
-		this.elements.priority = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority";
-		this.elements.totalfiles = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalfiles";
-		this.elements.totalsize = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalsize";
-		this.elements.currentfilename = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filename";
-		this.elements.currentfilesize = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filesize";
+	if(visible){
+		// If not drawm, draw the layout
+		if(this.container.$().innerHTML == ''){
+			var h = "<div style='font-weight:bold;'>Current Copy Priority : </div>";
+			h += "<div class='copyIndentedBlock'>Priority: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority'></span></div>";
+			h += "<div class='copyIndentedBlock'>Total files: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalfiles'></span></div>";
+			h += "<div class='copyIndentedBlock'>Total size: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalsize'></span>MB</div>";
+			h += "<div style='font-weight:bold;'>Current Copy File : </div>";
+			h += "<div class='copyIndentedBlock'>Filename: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filename'></span></div>";
+			h += "<div class='copyIndentedBlock'>File size: <span id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filesize'></span>MB</div>";
+			this.container.$().innerHTML = h;
+			this.elements.priority = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority";
+			this.elements.totalfiles = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalfiles";
+			this.elements.totalsize = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_totalsize";
+			this.elements.currentfilename = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filename";
+			this.elements.currentfilesize = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_filesize";
+		}
+	
+		// Fill in the data
+		if(!data.priority) { data.priority = ""; }
+		if(!data.totalFiles) { data.totalFiles = 0; }
+		if(!data.totalSize) { data.totalSize = 0; }
+		if(!data.fileName) { data.fileName = "(No file)"; }
+		if(!data.fileSize) { data.fileSize = 0; }
+		this.elements.priority.$().innerHTML = data.priority;
+		this.elements.totalfiles.$().innerHTML = data.totalFiles;
+		this.elements.totalsize.$().innerHTML = Math.round(data.totalSize/1024);
+		this.elements.currentfilename.$().innerHTML = data.fileName;
+		this.elements.currentfilesize.$().innerHTML = Math.round(data.fileSize/1024);
 	}
-
-	// Fill in the data
-	this.elements.priority.$().innerHTML = data.priority;
-	this.elements.totalfiles.$().innerHTML = data.totalFiles;
-	this.elements.totalsize.$().innerHTML = Math.round(data.totalSize/1024);
-	this.elements.currentfilename.$().innerHTML = data.fileName;
-	this.elements.currentfilesize.$().innerHTML = Math.round(data.fileSize/1024);
 }
 typeHandlers.copyCurrent = Status_process_copyCurrent;
 
 function Status_process_copyEndpoints (instanceData, visible) {
 	var data = instanceData.monitorData[this.name];
 
-	if(this.container.$().innerHTML == "") {
-		var h = "<span style='font-weight:bold;'>Copy End Points:</span><br />";
-		this.container.$().innerHTML = h;
-	}
-	
-	if (typeof this.priorities == "undefined") this.priorities = new Object();
-	
-	var redrawPriorities = false;
-	for (var i in data) {
-		if (typeof data[i] != "function") {
-			if (typeof this.priorities[i] == "undefined") {
-				this.priorities[i] = new Object();
-				redrawPriorities = true;
+	if(visible){
+		if(this.container.$().innerHTML == "") {
+			var h = "<span style='font-weight:bold;'>Copy End Points:</span><br />";
+			this.container.$().innerHTML = h;
+		}
+		
+		if (typeof this.priorities == "undefined") this.priorities = new Object();
+		
+		var redrawPriorities = false;
+		for (var i in data) {
+			if (typeof data[i] != "function") {
+				if (typeof this.priorities[i] == "undefined") {
+					this.priorities[i] = new Object();
+					redrawPriorities = true;
+				}
 			}
 		}
-	}
-	
-	for (var i in this.priorities) {
-		if(redrawPriorities) {
-			this.container.$().innerHTML += "<div id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority'></div>";
-			this.elements[i] = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority";
-		}
-		var x = "";
-		for (var j in data[i]) {
-			if(typeof data[i][j] != "function") {
-				x += "<div class='copyIndentedBlock'>"+data[i][j].source+" => "+data[i][j].destination+"</div>";
+		
+		for (var i in this.priorities) {
+			if(redrawPriorities) {
+				this.container.$().innerHTML += "<div id='field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority'></div>";
+				this.elements[i] = "field_"+this.monitor.name+"_"+this.instance.name+"_"+this.name+"_priority";
 			}
+			var x = "";
+			for (var j in data[i]) {
+				if(typeof data[i][j] != "function") {
+					x += "<div class='copyIndentedBlock'>"+data[i][j].source+" => "+data[i][j].destination+"</div>";
+				}
+			}
+			this.elements[i].$().innerHTML = "Priority "+i+":"+x;
 		}
-		this.elements[i].$().innerHTML = "Priority "+i+":"+x;
 	}
 }
 typeHandlers.copyEndpoints = Status_process_copyEndpoints;

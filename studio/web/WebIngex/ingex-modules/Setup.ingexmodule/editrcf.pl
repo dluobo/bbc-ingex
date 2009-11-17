@@ -57,6 +57,9 @@ my $errorMessage;
 my $vrs = load_video_resolutions($dbh) 
     or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
+my $fmts = load_file_formats($dbh)
+	or return_error_page("failed to load file formats: $prodautodb::errstr");
+
 my $rcf = load_recorder_config($dbh, $rcfId) or
     return_error_page("failed to find recorder config with id=$rcfId from database: $prodautodb::errstr");
 
@@ -114,7 +117,7 @@ elsif (defined param("Done"))
 }
 
 
-return_edit_page($rcf, $vrs, $errorMessage);
+return_edit_page($rcf, $vrs, $fmts, $errorMessage);
 
 
 
@@ -165,9 +168,9 @@ sub validate_params
 
 sub return_edit_page
 {
-    my ($rcf, $vrs, $errorMessage) = @_;
+    my ($rcf, $vrs, $fmts, $errorMessage) = @_;
 
-    my $page = get_edit_content($rcf, $vrs, $errorMessage) or
+    my $page = get_edit_content($rcf, $vrs, $fmts, $errorMessage) or
         return_error_page("failed to fill in content for edit recorder config page");
        
     print header;
@@ -178,7 +181,7 @@ sub return_edit_page
 
 sub get_edit_content
 {
-    my ($rcf, $vrs, $errorMessage) = @_;
+    my ($rcf, $vrs, $fmts, $errorMessage) = @_;
     
     
     my @pageContent;
@@ -294,12 +297,18 @@ sub get_edit_content
     {
         my $valueField;
         if ($rp->{"NAME"} eq "MXF_RESOLUTION" ||
-            $rp->{"NAME"} eq "ENCODE1_RESOLUTION" ||
-            $rp->{"NAME"} eq "ENCODE2_RESOLUTION" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_RESOLUTION/ ||
             $rp->{"NAME"} eq "QUAD_RESOLUTION")
         {
             $valueField = get_video_resolution_popup("param-$rp->{'ID'}",
                 $vrs, $rp->{"VALUE"});
+        }
+        elsif ($rp->{"NAME"} eq "MXF_WRAPPING" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_WRAPPING/ ||
+            $rp->{"NAME"} eq "QUAD_WRAPPING")
+        {
+        	$valueField = get_video_wrapping_popup("param-$rp->{'ID'}",
+                $fmts, $rp->{"VALUE"});
         }
         else
         {

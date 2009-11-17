@@ -41,6 +41,7 @@ BEGIN
         &get_sources_popup
         &get_source_config
         &get_video_resolution_popup
+        &get_video_wrapping_popup
         &get_recorder_config_popup
         &get_recorder_config
         &get_proxy_def
@@ -259,6 +260,46 @@ sub get_video_resolution_popup
 
         if (!defined $default && 
             defined $defaultId && "$vrn->{'ID'}" eq $defaultId)
+        {
+            $default = $value;
+        }
+    }
+    
+    # no default then is not set
+    if (!defined $default)
+    {
+        $default = 0;
+    }
+    
+    
+    return popup_menu(
+        -name => $paramId, 
+        -default => $default,
+        -values => \@values,
+        -labels => \%labels);
+}
+
+sub get_video_wrapping_popup
+{
+	my ($paramId, $fmts, $defaultId) = @_;
+    
+    my $default;
+    my @values;
+    my %labels;
+
+    # not set option
+    push(@values, 0);
+    $labels{0} = "not set (0)";
+
+    foreach my $fmt (@{ $fmts })
+    {
+        my $value = "$fmt->{'ID'}";
+        my $label = "$fmt->{'NAME'} ($value)";
+        push(@values, $value);
+        $labels{$value} = $label;
+
+        if (!defined $default && 
+            defined $defaultId && "$fmt->{'ID'}" eq $defaultId)
         {
             $default = $value;
         }

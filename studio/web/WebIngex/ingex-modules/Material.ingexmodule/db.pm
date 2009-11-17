@@ -78,8 +78,7 @@ sub load_package
 	                pkg_creation_date AS creation_date,
 	                pkg_project_name_id AS project_name_id,
 	                pjn_name AS project_name,
-	                pkg_descriptor_id AS descriptor_id,
-	                pkg_op_id AS op_id
+	                pkg_descriptor_id AS descriptor_id
 	            FROM Package
 	                LEFT OUTER JOIN ProjectName ON (pkg_project_name_id = pjn_identifier)
 	            WHERE

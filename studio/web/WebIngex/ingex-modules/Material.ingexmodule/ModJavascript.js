@@ -48,6 +48,9 @@ var selectedDestNodes = '';	// currently selected nodes on destination tree
 var toDelete = ''; 			// nodes flagged for deltion
 var isLoading = false;
 var dndMode = true;
+var multiResSelected = false;
+var currentFormat = 0;			// current video format
+var selectionFormat = 0;			// format of currently selected packages
 
 var onLoad_Material = function() {
 	checkJSLoaded(function(){
@@ -120,6 +123,10 @@ Ext.BLANK_IMAGE_URL = "/ingex/ext/resources/images/default/tree/s.gif";
  * initialise
  */
 function init() {
+	//have ext components already been loaded?
+	var renderedExt = false;
+	if($('tree').innerHTML){renderedExt = true;}
+	
 	//test for drag and drop mode
 	// if 'aafbasket' exist, the page is configured for drag/drop mode
 	if(document.getElementById('aafbasket')){
@@ -135,160 +142,161 @@ function init() {
 	// select default format
 	$('v_res').options[8].selected = true;
 
-	// from and to date pickers
-	var today = new Date();
-	
-	fromDate = new Ext.form.DateField({
-		renderTo: 'from_cal',
-		name: 'date',
-		width: '150px',
-		value: today,
-		format: 'd/m/y'
-	});
-	toDate = new Ext.form.DateField({
-		renderTo: 'to_cal',
-		name: 'date',
-		width: '100px',
-		value: today,
-		format: 'd/m/y'
-	});
-	
-	fromDate.disabled = 'true';
-	toDate.disabled = 'true';
-	
-	// tooltips
-	if(dndMode){
-		new Ext.ToolTip({
-			target:	'tree',
-			html:	'Browse and select original material items from here'
+	if(!renderedExt){	// ensure only initialised once
+		// from and to date pickers
+		var today = new Date();
+		
+		fromDate = new Ext.form.DateField({
+			renderTo: 'from_cal',
+			name: 'date',
+			width: '150px',
+			value: today,
+			format: 'd/m/y'
 		});
-		new Ext.ToolTip({
-			target:	'aafbasket',
-			html:	'Drag any materials you want to export into here'
+		toDate = new Ext.form.DateField({
+			renderTo: 'to_cal',
+			name: 'date',
+			width: '100px',
+			value: today,
+			format: 'd/m/y'
 		});
-	}
-	else{
-		new Ext.ToolTip({
-			target:	'tree',
-			html:	'Matching material items'
-		});
-	}
-	
-	// root nodes	 
-	rootNode = new Ext.tree.AsyncTreeNode({
-		allowChildren: true,
-		text: 'Projects',
-		id: '0',		//level depth
-		name: 'All Projects'
-	});
-	if(dndMode){
-		dbRootNode = new Ext.tree.TreeNode({
+		
+		fromDate.disabled = 'true';
+		toDate.disabled = 'true';
+		
+		// tooltips
+		if(dndMode){
+			new Ext.ToolTip({
+				target:	'tree',
+				html:	'Browse and select original material items from here'
+			});
+			new Ext.ToolTip({
+				target:	'aafbasket',
+				html:	'Drag any materials you want to export into here'
+			});
+		}
+		else{
+			new Ext.ToolTip({
+				target:	'tree',
+				html:	'Matching material items'
+			});
+		}
+		
+		// root nodes	 
+		rootNode = new Ext.tree.AsyncTreeNode({
 			allowChildren: true,
-			text: 'Package',
-			id: 'dbRoot',
-			name: 'Package',
-			children: []
+			text: 'Projects',
+			id: '0',		//level depth
+			name: 'All Projects'
 		});
-	}
-	
-	// tree node dynamic loaders
-	var tLoader = new Ext.tree.TreeLoader({
-        dataUrl: '../cgi-bin/ingex-modules/Material.ingexmodule/treeLoader.pl',
- 		uiProviders:{
-			'col': Ext.tree.ColumnNodeUI
-		},
-		listeners: {
-			loadexception: treeLoadException
+		if(dndMode){
+			dbRootNode = new Ext.tree.TreeNode({
+				allowChildren: true,
+				text: 'Package',
+				id: 'dbRoot',
+				name: 'Package',
+				children: []
+			});
 		}
-	});
-	var dbLoader = new Ext.tree.TreeLoader({
-		dataUrl: '../cgi-bin/ingex-modules/Material.ingexmodule/treeLoader.pl',
-		uiProviders:{
-			'col': Ext.tree.ColumnNodeUI
-		},
-		listeners: {
-			loadexception: treeLoadException
-		}
-	});
-	
-	// source materials tree
-	tree = new Ext.tree.MultiSelColumnTree({
-		width: 800,
-		height: 300,
-		rootVisible: true,
-		useArrows:true,
-		autoScroll: true,
-		animate:true,
-		renderTo: 'tree',
-		enableDrag: true, /* required as of MultiSelectTree v1.1 */
-		containerScroll: true,
-		ddGroup: 'tree',
-		loader: tLoader,
-		root: rootNode,
-		columns: [
-		 	{header: "Name", width: 310, sortable: true, dataIndex: 'name'},
-	    	{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
-	    	{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
-	    	{header: "End", width: 70, sortable: true, dataIndex: 'end'},
-	      	{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
-	     	{header: "Format", width: 95, sortable: true, dataIndex: 'video'},
-	     	{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
-		],
-		autoExpandColumn: 'name',
-		listeners: {
-			click: materialClickedSrc
-		}
-	});
-	
-	// if drag/drop enabled
-	if(dndMode){
-		// destination materials tree
-		dropBox = new Ext.tree.MultiSelColumnTree({
+		
+		// tree node dynamic loaders
+		var tLoader = new Ext.tree.TreeLoader({
+	        dataUrl: '../cgi-bin/ingex-modules/Material.ingexmodule/treeLoader.pl',
+	 		uiProviders:{
+				'col': Ext.tree.ColumnNodeUI
+			},
+			listeners: {
+				loadexception: treeLoadException
+			}
+		});
+		var dbLoader = new Ext.tree.TreeLoader({
+			dataUrl: '../cgi-bin/ingex-modules/Material.ingexmodule/treeLoader.pl',
+			uiProviders:{
+				'col': Ext.tree.ColumnNodeUI
+			},
+			listeners: {
+				loadexception: treeLoadException
+			}
+		});
+		// source materials tree
+		tree = new Ext.tree.MultiSelColumnTree({
 			width: 800,
 			height: 300,
 			rootVisible: true,
 			useArrows:true,
 			autoScroll: true,
 			animate:true,
-			renderTo: 'aafbasket',
+			renderTo: 'tree',
 			enableDrag: true, /* required as of MultiSelectTree v1.1 */
+			containerScroll: true,
 			ddGroup: 'tree',
-			loader: dbLoader,
-			root: dbRootNode,
+			loader: tLoader,
+			root: rootNode,
 			columns: [
 			 	{header: "Name", width: 310, sortable: true, dataIndex: 'name'},
-	       		{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
-	       		{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
-	       		{header: "End", width: 70, sortable: true, dataIndex: 'end'},
-	       		{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
-	       		{header: "Format", width: 95, sortable: true, dataIndex: 'video'},
-	       		{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
+		    	{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
+		    	{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
+		    	{header: "End", width: 70, sortable: true, dataIndex: 'end'},
+		      	{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
+		     	{header: "Format", width: 95, sortable: true, dataIndex: 'video'},
+		     	{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
 			],
 			autoExpandColumn: 'name',
 			listeners: {
-				append: function(){
-				},
-				click: materialClickedDest
+				click: materialClickedSrc
 			}
 		});
 		
-		// drag/drop targets
-		var panelDropTargetEl = dropBox.body.dom;
-		
-		var panelDropTarget = new Ext.dd.DropTarget(panelDropTargetEl, {
-			ddGroup	: 'tree',
-			notifyEnter: 	function(ddsource, e, data){
-								// add some style
-								dropBox.body.stopFx();
-								dropBox.body.highlight();
-							},
-			notifyDrop: function(ddSource, e, data){
-				if(debug){alert('dd');}	
-					// copy selected nodes 
-					copyNodesAndPaths(data.nodes);
+		// if drag/drop enabled
+		if(dndMode){
+			// destination materials tree
+			dropBox = new Ext.tree.MultiSelColumnTree({
+				width: 800,
+				height: 300,
+				rootVisible: true,
+				useArrows:true,
+				autoScroll: true,
+				animate:true,
+				renderTo: 'aafbasket',
+				enableDrag: true, /* required as of MultiSelectTree v1.1 */
+				ddGroup: 'tree',
+				loader: dbLoader,
+				root: dbRootNode,
+				columns: [
+				 	{header: "Name", width: 310, sortable: true, dataIndex: 'name'},
+		       		{header: "Created", width: 115, sortable: true, dataIndex: 'created'},
+		       		{header: "Start", width: 70, sortable: true, dataIndex: 'start'},
+		       		{header: "End", width: 70, sortable: true, dataIndex: 'end'},
+		       		{header: "Duration", width: 55, sortable: true, dataIndex: 'duration'},
+		       		{header: "Format", width: 95, sortable: true, dataIndex: 'video'},
+		       		{header: "TapeID", width: 65, sortable: true, dataIndex: 'tapeid'}
+				],
+				autoExpandColumn: 'name',
+				listeners: {
+					append: function(){
+					},
+					click: materialClickedDest
 				}
-			}
-		);
+			});
+			
+			// drag/drop targets
+			var panelDropTargetEl = dropBox.body.dom;
+			
+			var panelDropTarget = new Ext.dd.DropTarget(panelDropTargetEl, {
+				ddGroup	: 'tree',
+				notifyEnter: 	function(ddsource, e, data){
+									// add some style
+									dropBox.body.stopFx();
+									dropBox.body.highlight();
+								},
+				notifyDrop: function(ddSource, e, data){
+					if(debug){alert('dd');}	
+						// copy selected nodes 
+						copyNodesAndPaths(data.nodes);
+					}
+				}
+			);
+		}
 	}
 		
 	destPkgSize = 0;
@@ -603,10 +611,34 @@ function getNodeInsertPoint(source, dest){
 
 
 /*
+ * check that multiple video resolutions are not contained in the dragged nodes and that
+ * the resolution matches the packages currently in the selection
+ */
+function areNodesValid(nodes){
+	// check they are all same res
+	if(multiResSelected){
+		return false;
+	}
+	
+	//check this res matches any currently selected nodes
+	if(destPkgSize > 0 && currentFormat != selectionFormat){
+		return false;
+	}
+	
+	return true;
+}
+
+
+/*
  * takes array of selected nodes and copies them to the destination tree
  * also updates node count for destination tree
  */
 function copyNodesAndPaths(nodes){
+	
+	if(!areNodesValid(nodes)){
+		show_static_messagebox("Invalid Selection", "The package selection should contain only one video format. Select the desired format from the search options.");
+		return;
+	}
 	
 	for(var i=0; nodes.length; i++){
 		if(debug){alert('next node');}
@@ -620,6 +652,12 @@ function copyNodesAndPaths(nodes){
 		}
 		
 		var n = nodes[i];
+		
+		//this is a leaf - do not allow adding of single leaves
+		if(n.attributes.leaf){
+			show_static_messagebox("Invalid Selection", "Individual packages cannot be selected. Select the whole multicamera group.");
+			return;
+		}
 	
 		//keep the path
 		var node = getParent(n);
@@ -674,20 +712,10 @@ function copyNodesAndPaths(nodes){
 
 			//now add nodes to the total node count
 			
-			//this is a leaf
-			if(n.attributes.leaf){
-				//add item to total count
-				destPkgSize += 1;
-				
-				//update 
-	 			document.getElementById('status_bar_dest').innerHTML = "Output package contains " + destPkgSize + " material items<br>";
-			}
-			
 			//this is a folder
-			else{
-				//add folder size to total count
-				destPkgSize += countPath(n, 'dest');
-			}
+			
+			//add folder size to total count
+			destPkgSize += countPath(n, 'dest');
 		}
 	}
 	
@@ -696,6 +724,9 @@ function copyNodesAndPaths(nodes){
 	
 	//set root node to count
 	dbRootNode.attributes['materialCount'] = destPkgSize;
+	
+	//the current video format
+	selectionFormat = currentFormat;
 }
 
 
@@ -741,6 +772,12 @@ function getPathParams(node)
  * create an avid or final cut package using materials in destination tree
  */
 function packageAAF(){
+	if(multiResSelected){
+		//do not allow user to export as > 1 resolution in selection
+		show_static_messagebox("Invalid Selection", "The package selection contains more than one video format. Select the desired format from the search options.");
+		return;
+	}
+	
 	show_wait_messagebox("Packaging AAF", "Please wait...");
 	leafNodes = [];
 	
@@ -761,6 +798,7 @@ function getLeaves(node){
 	if(dndMode){
 		if(node instanceof Ext.tree.AsyncTreeNode && node.getDepth() > 0){	//check not root node
 			if(!node.attributes['leaf'] && !node.isLoaded()){
+                insole.log('unloaded folder');
 				//there are unloaded children, so this path will contain all original materials
 				var materialIdsStr = node.attributes['materialIds'];
 				var materialIds = materialIdsStr.split(",");
@@ -770,6 +808,21 @@ function getLeaves(node){
 					leafNodes.push(materialIds[i]);
 				}
 			}
+            else if(!node.attributes['leaf'] && node.isLoaded()){
+			    //this is a loaded folder, which contians some children
+
+			    //investigate each child
+			    var children = node.childNodes;
+
+			    for(var i=0; i<children.length; i++)
+                {                 
+				    if(children[i].attributes){
+					    getLeaves(children[i]);
+                    }
+                }
+
+                return;
+            }
 		}
 		else if(node.attributes['leaf'] && node.attributes.id>0){
 			//this is a material leaf
@@ -778,7 +831,7 @@ function getLeaves(node){
 		}
 		else{
 			//this is a loaded folder, which contians some children
-			
+		
 			//investigate each child
 			var children = node.childNodes;
 			
@@ -1027,6 +1080,9 @@ function dateFilterSet(){
  	options['projname'] = $('proj_name').value;
  	options['format'] = $('v_res').value;
  	
+ 	currentFormat = options['format']; 
+ 	currentFormat == -1 ? multiResSelected = true :	multiResSelected = false;
+ 	
  	if($('all_time_radio').checked){
  		//select all times
  		options['fromtime'] = 0;
@@ -1189,7 +1245,6 @@ function getToTime(){
   */
  function refreshTree(options){
  	
- 	
  	tree.loader = new Ext.tree.TreeLoader({
         dataUrl: '../cgi-bin/ingex-modules/Material.ingexmodule/treeLoader.pl?',
         //post parameters to pass to script
@@ -1204,6 +1259,8 @@ function getToTime(){
  		}
  		
 	});
+ 	
+ 	currentFormat = options['format']; 
  	
 	tree.getRootNode().reload();	//reload the root
 	tree.getRootNode().expand();	//expand the root
@@ -1367,14 +1424,15 @@ function deleteAllClicked(dom){
 		deleteMaterials(dom, delNodes);
 	}
 	else if(dom == 'dest'){
-		delNodes = dbRootNode.childNodes;
+		delNodes = new Array();
+		delNodes[0] = dbRootNode;
 		deleteMaterials(dom, delNodes);
 	}
 }
 
 
 function deleteMaterials(dom, delNodes){
-		if(dom == 'src'){
+	if(dom == 'src'){
 		if(delNodes.length > 0){
 			var count = 0;
 			
@@ -1461,16 +1519,19 @@ function removeNodesFromTree(dom, nodes){
 		}
 		
 		if(nodes[i].getDepth() == 0){	//this is a root node
-		if(debug){alert("root");}
-			//can't delete node itself, so delete children
-			var children = nodes[i].childNodes;
-			for(var j in children){
-				if(debug){alert("next child");}
-				nodes[i].removeChild(children[j]);
+			if(debug){alert("root");}
+				//can't delete node itself, so delete children
+				while(nodes[i].firstChild){
+					nodes[i].firstChild.remove();
+				}
+//				var children = nodes[i].childNodes;
+//				for(var j in children){
+//					if(debug){alert("next child " + children[j].text);}
+//					nodes[i].removeChild(children[j]);
+//				}
+			}
+			else{
+				nodes[i].remove();
 			}
 		}
-		else{
-			nodes[i].remove();
-		}
-	}
 }
