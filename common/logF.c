@@ -1,5 +1,5 @@
 /*
- * $Id: logF.c,v 1.3 2008/04/18 15:54:23 john_f Exp $
+ * $Id: logF.c,v 1.4 2009/11/17 16:28:41 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -37,20 +37,20 @@ static int log_overwrite = 1;
 
 extern int openLogFileWithDate(const char *logfile)
 {
-	time_t now = time(NULL);
-	struct tm l;
-	localtime_r(&now, &l);
+    time_t now = time(NULL);
+    struct tm l;
+    localtime_r(&now, &l);
 
-	sprintf(log_filename, "%s_%02d%02d%02d_%02d%02d%02d.log",
-					logfile,
-					l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
-					l.tm_hour, l.tm_min, l.tm_sec);
+    sprintf(log_filename, "%s_%02d%02d%02d_%02d%02d%02d.log",
+                    logfile,
+                    l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
+                    l.tm_hour, l.tm_min, l.tm_sec);
 
-	// Open the log file once for lifetime of program
-	if (! pLogFile)
-		pLogFile = fopen(log_filename, log_overwrite ? "w" : "a");
+    // Open the log file once for lifetime of program
+    if (! pLogFile)
+        pLogFile = fopen(log_filename, log_overwrite ? "w" : "a");
 
-	return pLogFile != NULL;
+    return pLogFile != NULL;
 }
 
 extern int reopenLogFileWithDate(const char *logfile)
@@ -58,15 +58,15 @@ extern int reopenLogFileWithDate(const char *logfile)
     if (! pLogFile)
         return openLogFileWithDate(logfile);
     
-	time_t now = time(NULL);
-	struct tm l;
-	localtime_r(&now, &l);
+    time_t now = time(NULL);
+    struct tm l;
+    localtime_r(&now, &l);
     char new_log_filename[FILENAME_MAX];
 
-	sprintf(new_log_filename, "%s_%02d%02d%02d_%02d%02d%02d.log",
-					logfile,
-					l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
-					l.tm_hour, l.tm_min, l.tm_sec);
+    sprintf(new_log_filename, "%s_%02d%02d%02d_%02d%02d%02d.log",
+                    logfile,
+                    l.tm_year % 100, l.tm_mon + 1, l.tm_mday,
+                    l.tm_hour, l.tm_min, l.tm_sec);
 
     // Check the new log filename if different
     if (strcmp(log_filename, new_log_filename) == 0)
@@ -78,7 +78,7 @@ extern int reopenLogFileWithDate(const char *logfile)
         return 0;
     fclose(test_file);
 
-	// Re-open the log file once for lifetime of program
+    // Re-open the log file once for lifetime of program
     if (freopen(new_log_filename, log_overwrite ? "w" : "a", pLogFile) == NULL) {
         // try reopening the original file
         freopen(log_filename, "a", pLogFile);
@@ -91,33 +91,33 @@ extern int reopenLogFileWithDate(const char *logfile)
 
 extern int openLogFile(const char *logfile)
 {
-	if (logfile != NULL) {
-		strcpy(log_filename, logfile);
-	}
+    if (logfile != NULL) {
+        strcpy(log_filename, logfile);
+    }
 
-	// Backup old log file once (convenient for debugging)
-	if (log_overwrite)
-	{
-		char *p, backup_name[FILENAME_MAX], suffix[FILENAME_MAX];
-		strcpy(backup_name, log_filename);
-		p = strchr(backup_name, '.');
-		if (p)
-		{
-			strcpy(suffix, p);
-			strcpy(p, "_old");
-			strcat(p, suffix);
-		}
-		else
-			strcat(backup_name, "_old");
+    // Backup old log file once (convenient for debugging)
+    if (log_overwrite)
+    {
+        char *p, backup_name[FILENAME_MAX], suffix[FILENAME_MAX];
+        strcpy(backup_name, log_filename);
+        p = strchr(backup_name, '.');
+        if (p)
+        {
+            strcpy(suffix, p);
+            strcpy(p, "_old");
+            strcat(p, suffix);
+        }
+        else
+            strcat(backup_name, "_old");
 
-		rename(log_filename, backup_name);
-	}
+        rename(log_filename, backup_name);
+    }
 
-	// Open the log file once for lifetime of program
-	if (! pLogFile)
-		pLogFile = fopen(log_filename, log_overwrite ? "w" : "a");
+    // Open the log file once for lifetime of program
+    if (! pLogFile)
+        pLogFile = fopen(log_filename, log_overwrite ? "w" : "a");
 
-	return pLogFile != NULL;
+    return pLogFile != NULL;
 }
 
 extern int reopenLogFile(const char *logfile)
@@ -125,7 +125,7 @@ extern int reopenLogFile(const char *logfile)
     if (! pLogFile)
         return openLogFile(logfile);
     
-	if (logfile == NULL)
+    if (logfile == NULL)
         return 0;
     
     if (strcmp(log_filename, logfile) == 0)
@@ -137,7 +137,7 @@ extern int reopenLogFile(const char *logfile)
         return 0;
     fclose(test_file);
 
-	// Re-open the log file once for lifetime of program
+    // Re-open the log file once for lifetime of program
     if (freopen(logfile, log_overwrite ? "w" : "a", pLogFile) == NULL) {
         // try reopening the original file
         freopen(log_filename, "a", pLogFile);
@@ -152,138 +152,138 @@ extern int reopenLogFile(const char *logfile)
 
 extern void logF(const char *fmt, ...)
 {
-	va_list	ap;
+    va_list ap;
 
-	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-		va_start(ap, fmt);
-		vfprintf(pLogFile, fmt, ap);
-		va_end(ap);
-	}
+    if (logfile_open) {
+        va_start(ap, fmt);
+        vfprintf(pLogFile, fmt, ap);
+        va_end(ap);
+    }
 }
 
 // same as logTF but takes a va_list instead of ...
 extern void vlogTF(const char *fmt, va_list ap)
 {
-	struct timeval tv;
-	time_t now = time(NULL);
-	gettimeofday(&tv, NULL);
-	struct tm l;
-	localtime_r(&now, &l);
+    struct timeval tv;
+    time_t now = time(NULL);
+    gettimeofday(&tv, NULL);
+    struct tm l;
+    localtime_r(&now, &l);
 
-	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+    printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
 
-	vprintf(fmt, ap);
+    vprintf(fmt, ap);
 
-	fflush(stdout);
+    fflush(stdout);
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
-		
-		vfprintf(pLogFile, fmt, ap);
+    if (logfile_open) {
+        fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+        
+        vfprintf(pLogFile, fmt, ap);
 
-		fflush(pLogFile);
-	}
+        //fflush(pLogFile);
+    }
 }
 
 // logging with time stamp and flushing to stdout and file
 extern void logTF(const char *fmt, ...)
 {
-	va_list ap;
-	
-	struct timeval tv;
-	time_t now = time(NULL);
-	gettimeofday(&tv, NULL);
-	struct tm l;
-	localtime_r(&now, &l);
+    va_list ap;
+    
+    struct timeval tv;
+    time_t now = time(NULL);
+    gettimeofday(&tv, NULL);
+    struct tm l;
+    localtime_r(&now, &l);
 
-	printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+    printf("%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
         va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
-	fflush(stdout);
+    vprintf(fmt, ap);
+    va_end(ap);
+    fflush(stdout);
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
-		va_start(ap, fmt);
-		vfprintf(pLogFile, fmt, ap);
-		va_end(ap);
-		fflush(pLogFile);
-	}
+    if (logfile_open) {
+        fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+        va_start(ap, fmt);
+        vfprintf(pLogFile, fmt, ap);
+        va_end(ap);
+        //fflush(pLogFile);
+    }
 }
 
 // logging with time stamp and flushing to file only
 extern void logFF(const char *fmt, ...)
 {
-	va_list	ap;
+    va_list ap;
 
-	struct timeval tv;
-	time_t now = time(NULL);
-	gettimeofday(&tv, NULL);
-	struct tm l;
-	localtime_r(&now, &l);
+    struct timeval tv;
+    time_t now = time(NULL);
+    gettimeofday(&tv, NULL);
+    struct tm l;
+    localtime_r(&now, &l);
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-		fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
-		va_start(ap, fmt);
-		vfprintf(pLogFile, fmt, ap);
-		va_end(ap);
-		fflush(pLogFile);
-	}
+    if (logfile_open) {
+        fprintf(pLogFile, "%02d %02d:%02d:%02d.%06ld ", l.tm_mday, l.tm_hour, l.tm_min, l.tm_sec, tv.tv_usec);
+        va_start(ap, fmt);
+        vfprintf(pLogFile, fmt, ap);
+        va_end(ap);
+        //fflush(pLogFile);
+    }
 }
 
 // logging flushing to file only
 extern void logFFi(const char *fmt, ...)
 {
-	va_list	ap;
+    va_list ap;
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-        	va_start(ap, fmt);
-		vfprintf(pLogFile, fmt, ap);
-		va_end(ap);
-		fflush(pLogFile);
-	}
+    if (logfile_open) {
+            va_start(ap, fmt);
+        vfprintf(pLogFile, fmt, ap);
+        va_end(ap);
+        //fflush(pLogFile);
+    }
 }
 
 // printf style logging to stderr and logfile
 extern void logerrF(const char *fmt, ...)
 {
-	va_list	ap;
+    va_list ap;
 
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
 
-	int logfile_open = 1;
-	if (! pLogFile)
-		logfile_open = openLogFile(NULL);
+    int logfile_open = 1;
+    if (! pLogFile)
+        logfile_open = openLogFile(NULL);
 
-	if (logfile_open) {
-		va_start(ap, fmt);
-		vfprintf(pLogFile, fmt, ap);
-		va_end(ap);
-	}
+    if (logfile_open) {
+        va_start(ap, fmt);
+        vfprintf(pLogFile, fmt, ap);
+        va_end(ap);
+    }
 }
