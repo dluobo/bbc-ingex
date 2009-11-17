@@ -366,17 +366,16 @@ function checkAllAvailability () {
 
 /// Check the availability of the databse connection
 /// @param display The ID of the DOM element in which to render the result
-window.DBajaxtimeout = false;
+var DBajaxtimeout;
 function checkDB (display) {
 	var xmlHttp = getxmlHttp();
-	xmlHttp.onreadystatechange = function (){stateChanged(display);};
-
+	
 	function stateChanged(display) {
 		if (xmlHttp.readyState==4)
 		{
-			if (window.DBajaxtimeout) {
-				clearTimeout(window.DBajaxtimeout);
-				window.DBajaxtimeout = false;
+			if (DBajaxtimeout) {
+				clearTimeout(DBajaxtimeout);
+				DBajaxtimeout = false;
 			}
 			try {
 				var info = JSON.parse(xmlHttp.responseText);
@@ -396,16 +395,20 @@ function checkDB (display) {
 	function DBajaxTimedout(display) {
 		xmlHttp.abort();
 		$(display).innerHTML = "<span class='error'>Unavailable</span>.";
-		window.DBajaxtimeout = false;
+		clearTimeout(DBajaxtimeout);
+		DBajaxtimeout = false;
 		insole.error("AJAX timeout occurred when querying trying to perform database check.");
 	};
 
-	xmlHttp.open("GET","/cgi-bin/ingex-config/check_db.pl",true);
-	xmlHttp.send(null);
-	if (window.DBajaxtimeout) {
-		clearTimeout(window.DBajaxtimeout);
+	if (DBajaxtimeout) {
+		clearTimeout(DBajaxtimeout);
+		DBajaxtimeout = false;
 	}
-	window.DBajaxtimeout = setTimeout(function(){DBajaxTimedout(display)},5000);
+	
+	xmlHttp.open("GET","/cgi-bin/ingex-config/check_db.pl",true);
+	xmlHttp.onreadystatechange = function (){stateChanged(display);};
+	DBajaxtimeout = setTimeout(function(){DBajaxTimedout(display)},5000);
+	xmlHttp.send(null);
 }
 
 /// Act on a change to the location. see RSH - http://code.google.com/p/reallysimplehistory/
