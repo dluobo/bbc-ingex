@@ -1,5 +1,5 @@
 /*
- * $Id: Timecode.cpp,v 1.5 2009/09/18 15:05:30 philipn Exp $
+ * $Id: Timecode.cpp,v 1.6 2009/11/17 16:29:16 john_f Exp $
  *
  * Class to hold a Timecode
  *
@@ -34,6 +34,12 @@ const unsigned int DF_FRAMES_PER_HOUR         = 6 * DF_FRAMES_PER_TEN_MINUTE;   
 Timecode::Timecode(int frames_since_midnight, int fps, bool df)
 : mFramesSinceMidnight(frames_since_midnight), mFramesPerSecond(fps), mDropFrame(df)
 {
+    // Guard against garbage data
+    if (mFramesSinceMidnight < 0)
+    {
+        mFramesSinceMidnight = 0;
+    }
+
     // Drop frame only supported for 30 fps
     if (df && fps != 30)
     {
@@ -136,6 +142,11 @@ Timecode & Timecode::operator=(const Timecode & tc)
 
 Timecode & Timecode::operator=(int frames_since_midnight)
 {
+    // Guard against garbage data
+    if (frames_since_midnight < 0)
+    {
+        frames_since_midnight = 0;
+    }
     mFramesSinceMidnight = frames_since_midnight;
     UpdateHoursMinsEtc();
     UpdateText();
@@ -144,6 +155,12 @@ Timecode & Timecode::operator=(int frames_since_midnight)
 
 void Timecode::UpdateHoursMinsEtc()
 {
+    // Guard against garbage data
+    if (mFramesSinceMidnight < 0)
+    {
+        mFramesSinceMidnight = 0;
+    }
+
     int frames = mFramesSinceMidnight;
 
     if (!mDropFrame)
