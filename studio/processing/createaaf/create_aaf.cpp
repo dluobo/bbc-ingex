@@ -1,5 +1,5 @@
 /*
- * $Id: create_aaf.cpp,v 1.16 2009/10/15 15:33:41 john_f Exp $
+ * $Id: create_aaf.cpp,v 1.17 2009/11/17 16:01:12 john_f Exp $
  *
  * Creates AAF files with clips extracted from the database
  *
@@ -366,10 +366,11 @@ static vector<CutInfo> getDirectorsCuts(Database* database, MCClipDef* mcClipDef
     // Find multi-cam track def we are interested in.
     // We want the video track and assume it's the one with index == 1.
     prodauto::MCTrackDef * mcTrackDef = 0;
-    if (mcClipDef)
+    if (mcClipDef->trackDefs.find(1) == mcClipDef->trackDefs.end())
     {
-        mcTrackDef = mcClipDef->trackDefs[1];
+        return cuts;
     }
+    mcTrackDef = mcClipDef->trackDefs[1];
 
     // Load cuts
     vector<MCCut *> mccuts = database->loadMultiCameraCuts(mcTrackDef, startDate, startTimecode, endDate, endTimecode);
@@ -378,8 +379,12 @@ static vector<CutInfo> getDirectorsCuts(Database* database, MCClipDef* mcClipDef
     for (vector<MCCut *>::const_iterator it = mccuts.begin(); mcTrackDef && it != mccuts.end(); ++it)
     {
         const MCCut * mc_cut = *it;
-        MCSelectorDef * mcSelector = mcTrackDef->selectorDefs[mc_cut->mcSelectorIndex];
+        MCSelectorDef * mcSelector = 0;
         SourceConfig * sc = 0;
+        if (mcTrackDef->selectorDefs.find(mc_cut->mcSelectorIndex) != mcTrackDef->selectorDefs.end())
+        {
+            mcSelector = mcTrackDef->selectorDefs[mc_cut->mcSelectorIndex];
+        }
         if (mcSelector)
         {
             sc = mcSelector->sourceConfig;
