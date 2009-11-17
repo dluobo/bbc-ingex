@@ -1,8 +1,4 @@
 Microsoft Visual Studio Solution File, Format Version 8.00
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Coordinator", "Coordinator\Coordinator.vcproj", "{8D2BF6EB-FECA-1BAD-2718-C89B13969817}"
-	ProjectSection(ProjectDependencies) = postProject
-	EndProjectSection
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Recorder", "Recorder\Recorder.vcproj", "{5D31F0B8-FECA-1BAD-4225-C93BB38D54CC}"
 	ProjectSection(ProjectDependencies) = postProject
 		{096B5C35-FECA-1BAD-8AF0-8C91516EF201} = {096B5C35-FECA-1BAD-8AF0-8C91516EF201}
@@ -62,16 +58,16 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "acetaocommonLib", "common\a
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mxfreader", "..\mxfreader\mxfreader.vcproj", "{A71043BE-FECA-1BAD-724A-6B2076C498E7}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfiguration) = preSolution
 		Debug = Debug
 		Release = Release
 	EndGlobalSection
 	GlobalSection(ProjectConfiguration) = postSolution
-		{8D2BF6EB-FECA-1BAD-2718-C89B13969817}.Debug.ActiveCfg = Debug|Win32
-		{8D2BF6EB-FECA-1BAD-2718-C89B13969817}.Debug.Build.0 = Debug|Win32
-		{8D2BF6EB-FECA-1BAD-2718-C89B13969817}.Release.ActiveCfg = Release|Win32
-		{8D2BF6EB-FECA-1BAD-2718-C89B13969817}.Release.Build.0 = Release|Win32
 		{5D31F0B8-FECA-1BAD-4225-C93BB38D54CC}.Debug.ActiveCfg = Debug|Win32
 		{5D31F0B8-FECA-1BAD-4225-C93BB38D54CC}.Debug.Build.0 = Debug|Win32
 		{5D31F0B8-FECA-1BAD-4225-C93BB38D54CC}.Release.ActiveCfg = Release|Win32
@@ -120,6 +116,10 @@ Global
 		{56CACC4C-FECA-1BAD-8D65-768875D5B9C7}.Debug.Build.0 = Debug|Win32
 		{56CACC4C-FECA-1BAD-8D65-768875D5B9C7}.Release.ActiveCfg = Release|Win32
 		{56CACC4C-FECA-1BAD-8D65-768875D5B9C7}.Release.Build.0 = Release|Win32
+		{A71043BE-FECA-1BAD-724A-6B2076C498E7}.Debug.ActiveCfg = Debug|Win32
+		{A71043BE-FECA-1BAD-724A-6B2076C498E7}.Debug.Build.0 = Debug|Win32
+		{A71043BE-FECA-1BAD-724A-6B2076C498E7}.Release.ActiveCfg = Release|Win32
+		{A71043BE-FECA-1BAD-724A-6B2076C498E7}.Release.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 	EndGlobalSection
