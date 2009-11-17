@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding ="UTF-8" standalone="no"?>
+<root>
+        
+        <!-- Settings defined by user at webpage level -->
+        
+        <ApplicationSettings
+                Prefix          = "dragonstest"
+                FCP             = "TRUE"
+                EditPath        = "\\hello/world/"
+                DirCut          = "FALSE"
+                DirSource       = ""
+		DirDB		= "FALSE"
+                AudioEdit       = "FALSE"
+                >
+        </ApplicationSettings>
+        
+        <!-- Database Material Packages go here -->
+        
+        <ClipSettings PkgID     = "40"/>
+    	<ClipSettings PkgID     = "39"/>
+	<ClipSettings PkgID     = "44"/>
+
+     
+        <!-- Settings for CreateAAF- not changed by user- -->
+        <RunSettings
+                GroupOnly       = "TRUE"
+                Group           = "TRUE"
+		MultiCam	= "TRUE"
+                NTSC            = "FALSE"
+                Verbose         = "TRUE"
+                DBHostName      = "localhost"
+                DBName          = "prodautodb"
+                User            = "bamzooki"
+                Password        = "bamzooki"
+                >
+        </RunSettings>
+                
+
+</root>
+
+
+
