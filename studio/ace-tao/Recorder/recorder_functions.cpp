@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.25 2009/10/12 15:15:32 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.26 2009/11/17 16:37:40 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -288,8 +288,9 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
     bool bitc = p_opt->bitc;
 
     ACE_DEBUG((LM_INFO,
-        ACE_TEXT("start_record_thread(%C, start_tc=%C %C %C %C)\n"),
-        src_name.c_str(), start_timecode.Text(),
+        ACE_TEXT("start_record_thread(%C thread %d, start_tc=%C %C %C %C)\n"),
+        src_name.c_str(),  p_opt->index,
+        start_timecode.Text(),
         file_format_name.c_str(), resolution_name.c_str(),
         (bitc ? "with BITC" : "")));
 
@@ -1109,9 +1110,11 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                 struct timeval heartbeat;
                 IngexShm::Instance()->GetHeartbeat(&heartbeat);
                 int64_t diff = tv_diff_microsecs(&heartbeat, &now);
-                if (diff > 1000 * 1000)
+                int64_t diff_secs = diff / 1000000;
+                if (diff_secs > 5)
                 {
-                    ACE_DEBUG((LM_ERROR, ACE_TEXT("Shared memory lost! Stopping recording.\n")));
+                    ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Shared memory lost - stopping recording!\n"),
+                        src_name.c_str(),  p_opt->index));
                     finished_record = true;
                 }
             }
