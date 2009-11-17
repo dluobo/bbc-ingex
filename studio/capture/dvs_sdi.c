@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.26 2009/10/22 13:47:37 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.27 2009/11/17 16:35:30 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -45,6 +45,7 @@
 #ifdef __MMX__
 #include <mmintrin.h>
 #endif
+#include <sched.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -76,6 +77,9 @@ typedef struct {
     AVFrame *inFrame;
     AVFrame *outFrame;
 } SDIThreadData;
+
+// Debug
+static int DEBUG_TIMING = 0;
 
 // Globals
 pthread_t       sdi_thread[MAX_CHANNELS] = {0};
@@ -163,6 +167,40 @@ static int64_t gettimeofday64(void)
     gettimeofday(&tv, NULL);
     int64_t tod = (int64_t)tv.tv_sec * 1000000 + tv.tv_usec ;
     return tod;
+}
+
+static void timestamp_decode(int64_t timestamp, int * year, int * month, int * day, int * hour, int * minute, int * sec, int * microsec)
+{
+    time_t time_sec = timestamp / INT64_C(1000000);
+    struct tm my_tm;
+    localtime_r(&time_sec, &my_tm);
+    *year = my_tm.tm_year + 1900;
+    *month = my_tm.tm_mon + 1;
+    *day = my_tm.tm_mday;
+    *hour = my_tm.tm_hour;
+    *minute = my_tm.tm_min;
+    *sec = my_tm.tm_sec;
+    *microsec = timestamp % INT64_C(1000000);
+}
+
+static void show_scheduler()
+{
+    int sched = sched_getscheduler(0);
+    switch (sched)
+    {
+    case SCHED_OTHER:
+        logTF("SCHED_OTHER\n");
+        break;
+    case SCHED_FIFO:
+        logTF("SCHED_FIFO\n");
+        break;
+    case SCHED_RR:
+        logTF("SCHED_RR\n");
+        break;
+    default:
+        logTF("SCHED unknown\n");
+        break;
+    }
 }
 
 static int init_process_shared_mutex(pthread_mutex_t *mutex)
@@ -443,7 +481,7 @@ static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, un
         if (click3)
             logTF("chan %d: %5d  a3off=%d %.1fms\n", chan, lastframe + 1, click3_off, click3_off / 48.0);
         if (click4)
-            logFF("chan %d: %5d  a4off=%d %.1fms\n", chan, lastframe + 1, click4_off, click4_off / 48.0);
+            logTF("chan %d: %5d  a4off=%d %.1fms\n", chan, lastframe + 1, click4_off, click4_off / 48.0);
     }
 }
 
@@ -676,13 +714,38 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         flags |= SV_FIFO_FLAG_FLUSH;
         logTF("chan %d: Setting SV_FIFO_FLAG_FLUSH\n", chan);
     }
+
+
+    /*
+    Call sv_fifo_getbuffer().
+    This returns a fifo buffer containing the next captured frame,
+    blocking if necessary to wait for a frame to be available.
+    */
+
+    int64_t tod1;
+    int64_t tod2;
+    int64_t tod3;
+    if (DEBUG_TIMING)
+    {
+        tod1 = gettimeofday64();
+    }
     //logTF("chan %d: calling sv_fifo_getbuffer()...\n", chan);
     get_res = sv_fifo_getbuffer(sv, poutput, &pbuffer, NULL, flags);
     //logTF("chan %d: sv_fifo_getbuffer() returned\n", chan);
+
     if (get_res != SV_OK && get_res != SV_ERROR_INPUT_AUDIO_NOAIV
             && get_res != SV_ERROR_INPUT_AUDIO_NOAESEBU)
     {
         return get_res;
+    }
+
+    // Check FIFO status
+    sv_fifo_info info;
+    int status_res = sv_fifo_status(sv, poutput, &info);
+
+    if (SV_OK == status_res && info.availbuffers > 1)
+    {
+        logTF("chan %d: frame backlog %d\n", chan, info.availbuffers - 1);
     }
 
     // dma buffer is structured as follows
@@ -723,11 +786,30 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     pbuffer->dma.addr = (char *)dma_dest;
     pbuffer->dma.size = dma_total_size;         // video + audio
 
+    /*
+    Call sv_fifo_putbuffer().
+    This performs the DMA transfer of the frame and then releases the buffer back to the fifo.
+    It also fills in our bufferinfo structure.
+    */
+
+    if (DEBUG_TIMING)
+    {
+        tod2 = gettimeofday64();
+    }
     // read frame from DVS chan
     // reception of a SIGUSR1 can sometimes cause this to fail
     // If it fails we should restart fifo.
     //logTF("chan %d: calling sv_fifo_putbuffer()...\n", chan);
     put_res = sv_fifo_putbuffer(sv, poutput, pbuffer, &bufferinfo);
+
+    if (DEBUG_TIMING && SV_OK == status_res)
+    {
+        tod3 = gettimeofday64();
+        //logTF("tick/2 %d getbuffer %"PRId64" putbuffer %"PRId64" microseconds\n", pbuffer->control.tick / 2, tod2 - tod1, tod3 - tod2);
+        logTF("chan %d: tick/2 %d drop %d buffers %d / %d getbuffer %"PRId64" microseconds\n", chan, pbuffer->control.tick / 2,
+            info.dropped, info.availbuffers, info.nbuffers, tod2 - tod1);
+    }
+
     if (put_res != SV_OK)
     {
         sv_errorprint(sv, put_res);
@@ -750,8 +832,9 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
 
     // Get current time-of-day time and this chan's current hw clock.
     int current_tick;
-    uint32_t h_clock;
-    uint32_t l_clock;
+    // Note DVS type unint32 rather than uint32_t
+    uint32 h_clock;
+    uint32 l_clock;
     SV_CHECK( sv_currenttime(sv, SV_CURRENTTIME_CURRENT, &current_tick, &h_clock, &l_clock) );
     int64_t tod = gettimeofday64();
 
@@ -762,8 +845,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // I found that as well, except for the 10th or 11th frame (when the FIFO
     // first wraps round?), when it jumps back in time a lot. Using pbuffer
     // means I don't have to pass a sv_fifo_bufferinfo to putbuffer.
-    int64_t cur_clock = (int64_t)h_clock * INT64_C(0x100000000) + l_clock;
-    int64_t rec_clock = (int64_t)bufferinfo.clock_high * INT64_C(0x100000000) + bufferinfo.clock_low;
+    int64_t cur_clock = h_clock * INT64_C(0x100000000) + l_clock;
+    int64_t rec_clock = bufferinfo.clock_high * INT64_C(0x100000000) + (unsigned)bufferinfo.clock_low;
     int64_t clock_diff = cur_clock - rec_clock;
     // The frame was captured clock_diff ago
     int64_t tod_rec = tod - clock_diff;
@@ -885,7 +968,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         if (1) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_tc, vitc2_tc);
+            logTF("chan %d: 1st vitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_tc, vitc2_tc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
     }
@@ -900,7 +983,7 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         if (1) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: 1st dvitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_anc, vitc2_anc);
+            logTF("chan %d: 1st dvitc value >= 0x80000000 (0x%08x), using 2nd vitc (0x%08x)\n", chan, vitc1_anc, vitc2_anc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
     }
@@ -913,20 +996,20 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // flag is occasionally set when the fifo call returns
     if ((unsigned)ltc_tc >= 0x80000000)
     {
-        if (1) //(verbose)
+        if (0) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_tc);
+            logTF("chan %d: ltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_tc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
         ltc_tc = (unsigned)ltc_tc & 0x7fffffff;
     }
     if ((unsigned)ltc_anc >= 0x80000000)
     {
-        if (1) //(verbose)
+        if (0) //(verbose)
         {
             PTHREAD_MUTEX_LOCK( &m_log )
-            logFF("chan %d: dltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_anc);
+            logTF("chan %d: dltc tc >= 0x80000000 (0x%08x), masking high bit\n", chan, ltc_anc);
             PTHREAD_MUTEX_UNLOCK( &m_log )
         }
         ltc_anc = (unsigned)ltc_anc & 0x7fffffff;
@@ -942,6 +1025,11 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         ltc_anc &= 0x3f7f7f3f;
     }
 
+    // sys_tc uses system clock as timecode source (tod_rec is in microsecs since 1970)
+    int64_t sys_time_microsec = tod_rec - (today_midnight_time() * INT64_C(1000000));
+    // compute sys_time timecode as int number of frames since midnight
+    int sys_tc = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
+
     // Convert timecodes to frames since midnight
     int vitc_as_int = dvs_tc_to_int(vitc_tc);
     int ltc_as_int = dvs_tc_to_int(ltc_tc);
@@ -954,8 +1042,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // If enabled, handle master timecode distribution
     int derived_tc = 0;
     int64_t diff_to_master = 0;
-    if (master_channel >= 0) {
-        if (chan == master_channel) {
+    if (master_channel >= 0)
+    {
+        if (chan == master_channel)
+        {
             // Store timecode and time-of-day the frame was recorded in shared variable
             PTHREAD_MUTEX_LOCK( &m_master_tc )
             switch (timecode_type)
@@ -979,7 +1069,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
             master_tod = tod_rec;
             PTHREAD_MUTEX_UNLOCK( &m_master_tc )
         }
-        else {
+        else
+        {
             derived_tc = derive_timecode_from_master(tod_rec, &diff_to_master);
 
             switch (timecode_type)
@@ -1008,6 +1099,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int last_ltc = 0;
     int last_dvitc = 0;
     int last_dltc = 0;
+    int last_systc = 0;
+    int64_t last_timestamp = 0;
 
     // Only process discontinuity when not the first frame
     if (pc->lastframe > -1)
@@ -1017,6 +1110,8 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         last_ltc = last_nfd->ltc;
         last_dvitc = last_nfd->dvitc;
         last_dltc = last_nfd->dltc;
+        last_systc = last_nfd->systc;
+        last_timestamp = last_nfd->timestamp;
 
         // Check number of frames to recover if any
         // A maximum of 50 frames will be recovered.
@@ -1035,23 +1130,43 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         case NexusTC_DVITC:
             diff = dvitc_as_int - last_dvitc;
             break;
+        case NexusTC_SYSTEM:
         default:
-            diff = vitc_as_int - last_vitc;
+            diff = sys_tc - last_systc;
             break;
         }
         // We expect diff to be 1 frame
         int missing = diff - 1;
 
+        // Compare timestamps
+        int64_t timestamp_diff = tod_rec - last_timestamp;
+        int64_t expected_diff = (INT64_C(1000000) * frame_rate_denom) / frame_rate_numer;
+        int64_t timestamp_variation = timestamp_diff - expected_diff;
+        if (timestamp_variation > 10000 || timestamp_variation < -10000)
+        {
+            logTF("chan %d: Timestamp differs from expected by %"PRId64" ms\n",
+                chan, timestamp_variation / 1000);
+            if (0)
+            {
+                // Additional debug
+                int year1, month1, day1, hour1, minute1, sec1, microsec1;
+                int year2, month2, day2, hour2, minute2, sec2, microsec2;
+                timestamp_decode(tod_rec, &year1, &month1, &day1, &hour1, &minute1, &sec1, &microsec1);
+                timestamp_decode(tod, &year2, &month2, &day2, &hour2, &minute2, &sec2, &microsec2);
+                logTF("chan %d:\n"
+                    "  tod_rec = %"PRId64" %"PRIx64" %04d-%02d-%02d %02d:%02d:%02d.%06d\n"
+                    "  tod     = %"PRId64" %"PRIx64" %04d-%02d-%02d %02d:%02d:%02d.%06d\n",
+                    chan,
+                    tod_rec, tod_rec,
+                    year1, month1, day1, hour1, minute1, sec1, microsec1,
+                    tod, tod,
+                    year2, month2, day2, hour2, minute2, sec2, microsec2);
+            }
+        }
+
         if (recover_from_video_loss && missing > 0 && missing <= 50)
         {
             logTF("chan %d: Need to recover %d frames\n", chan, missing);
-
-            /* These should not be adjusted
-            vitc_as_int += missing;
-            ltc_as_int += missing;
-            dvitc_as_int += missing;
-            dltc_as_int += missing;
-            */
 
             // Increment pc->lastframe by amount to avoid discontinuity.
             // Future frames will go in correct place in buffer
@@ -1097,18 +1212,10 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int num_audio_samples = pbuffer->audio[0].size / 2 / 4;
     nfd->num_aud_samp = num_audio_samples;
 
-    // Get info structure for statistics
-    sv_fifo_info info;
-    SV_CHECK(sv_fifo_status(sv, poutput, &info));
-
     // store timestamp of when frame was captured (microseconds since 1970)
     nfd->timestamp = tod_rec;
 
-    // sys_time uses system clock as timecode source (tod_rec is in microsecs since 1970)
-    int64_t sys_time_microsec = tod_rec - (today_midnight_time() * INT64_C(1000000));
-    // compute sys_time timecode as int number of frames since midnight
-    int sys_time = (int)(sys_time_microsec * frame_rate_numer / (INT64_C(1000000) * frame_rate_denom));
-    nfd->systc = sys_time;
+    nfd->systc = sys_tc;
 
     // Timecode error occurs when difference is not exactly 1
     // or (around midnight) not exactly -2159999
@@ -1118,22 +1225,39 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     int dvitc_diff = dvitc_as_int - last_dvitc;
     int dltc_diff = dltc_as_int - last_dltc;
 
+    int tc_bits;
+    int tc_frames;
     int tc_diff;
+    const char * tc_name = "";
     switch (timecode_type)
     {
     case NexusTC_VITC:
+        tc_name = "VITC";
+        tc_bits = vitc_tc;
+        tc_frames = vitc_as_int;
         tc_diff = vitc_diff;
         break;
     case NexusTC_LTC:
+        tc_name = "LTC";
+        tc_bits = ltc_tc;
+        tc_frames = ltc_as_int;
         tc_diff = ltc_diff;
         break;
     case NexusTC_DVITC:
+        tc_name = "DVITC";
+        tc_bits = vitc_anc;
+        tc_frames = dvitc_as_int;
         tc_diff = dvitc_diff;
         break;
     case NexusTC_DLTC:
+        tc_name = "DLTC";
+        tc_bits = ltc_anc;
+        tc_frames = dltc_as_int;
         tc_diff = dltc_diff;
         break;
     default:
+        tc_bits = 0;
+        tc_frames = 0;
         tc_diff = 1;
     }
     int tc_err = (tc_diff != 1 && tc_diff != 2159999 && pc->lastframe != -1); // NB. 2159999 assumes 25 fps
@@ -1141,33 +1265,48 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     // log timecode discontinuity if any, or give verbose log of specified chan
     if (tc_err || (verbose && chan == verbose_channel)) {
         PTHREAD_MUTEX_LOCK( &m_log )
-        logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x vitc_diff=%d%s ltc_diff=%d%s dvitc_diff=%d%s dltc_diff=%d%s\n",
-        chan, pc->lastframe, pbuffer->control.tick / 2,
-        info.dropped,
-        vitc1_tc,
-        vitc2_tc,
-        ltc_tc,
-        vitc1_anc,
-        vitc2_anc,
-        ltc_anc,
-        vitc_diff,
-        vitc_diff != 1 ? "!" : "",
-        ltc_diff,
-        ltc_diff != 1 ? "!" : "",
-        dvitc_diff,
-        dvitc_diff != 1 ? "!" : "",
-        dltc_diff,
-        dltc_diff != 1 ? "!" : "");
+        if (0)
+        {
+            // All timecode info
+            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d vitc1=%08x vitc2=%08x ltc=%08x dvitc1=%08x dvitc2=%08x dltc=%08x vitc_diff=%d%s ltc_diff=%d%s dvitc_diff=%d%s dltc_diff=%d%s\n",
+            chan, pc->lastframe, pbuffer->control.tick / 2,
+            info.dropped,
+            vitc1_tc,
+            vitc2_tc,
+            ltc_tc,
+            vitc1_anc,
+            vitc2_anc,
+            ltc_anc,
+            vitc_diff,
+            vitc_diff != 1 ? "!" : "",
+            ltc_diff,
+            ltc_diff != 1 ? "!" : "",
+            dvitc_diff,
+            dvitc_diff != 1 ? "!" : "",
+            dltc_diff,
+            dltc_diff != 1 ? "!" : "");
+        }
+        else
+        {
+            // Selected timecode info
+            logTF("chan %d: lastframe=%6d tick/2=%7d hwdrop=%5d tc=%08x frames=%7d tc_err=%d\n",
+                chan, pc->lastframe, pbuffer->control.tick / 2, info.dropped,
+                tc_bits, tc_frames, tc_diff - 1);
+        }
         PTHREAD_MUTEX_UNLOCK( &m_log )
     }
 
-    if (verbose) {
+    if (verbose)
+    {
         PTHREAD_MUTEX_LOCK( &m_log )        // guard logging with mutex to avoid intermixing
 
         if (info.dropped != pc->hwdrop)
+        {
+            // dropped count has changed
             logTF("chan %d: lf=%7d vitc=%8d ltc=%8d dropped=%d\n", chan, pc->lastframe+1, vitc_as_int, ltc_as_int, info.dropped);
+        }
 
-        logFF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PRIi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
+        logTF("chan[%d]: tick=%d hc=%u,%u diff_to_mast=%12"PRIi64"  lf=%7d vitc=%8d ltc=%8d (orig v=%8d l=%8d] drop=%d\n", chan,
             pbuffer->control.tick,
             pbuffer->control.clock_high, pbuffer->control.clock_low,
             diff_to_master,
@@ -1179,9 +1318,11 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     }
 
     // Query hardware health (once a second to reduce excessive sv_query calls)
-    if ((pc->lastframe+1) % 25 == 0) {
+    if ((pc->lastframe+1) % 25 == 0)
+    {
         int temp;
-        if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK) {
+        if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK)
+        {
             pc->hwtemperature = ((double)temp) / 65536.0;
         }
     }
@@ -1442,9 +1583,9 @@ static void * sdi_monitor(void *arg)
 #endif
 
     SV_CHECK( sv_fifo_init( sv,
-                            &poutput,
+                            &poutput,   // Returned FIFO handle
                             1,          // Input
-                            FALSE,      // bShared (TRUE for input/output share memory)
+                            0,          // bShared (obsolete, must be zero)
                             1,          // DMA FIFO
                             flagbase,   // Base SV_FIFO_FLAG_xxxx flags
                             0) );       // nFrames (0 means use maximum)
@@ -1452,6 +1593,20 @@ static void * sdi_monitor(void *arg)
     SV_CHECK( sv_fifo_start(sv, poutput) );
 
     logTF("chan %ld: fifo init/start completed\n", chan);
+
+    if (0)
+    {
+        // Experiment with real-time scheduling
+        show_scheduler();
+
+        int my_scheduler = SCHED_RR;
+        struct sched_param my_param;
+        my_param.sched_priority = sched_get_priority_max(my_scheduler);
+
+        sched_setscheduler(0, my_scheduler, &my_param);
+
+        show_scheduler();
+    }
 
     int recover_from_video_loss = 0;
     int last_res = -1;
@@ -1600,6 +1755,12 @@ int main (int argc, char ** argv)
             }
             else if (strcmp(argv[n+1], "LTC") == 0) {
                 timecode_type = NexusTC_LTC;
+            }
+            else if (strcmp(argv[n+1], "DVITC") == 0) {
+                timecode_type = NexusTC_DVITC;
+            }
+            else if (strcmp(argv[n+1], "DLTC") == 0) {
+                timecode_type = NexusTC_DLTC;
             }
             else if (strcmp(argv[n+1], "SYS") == 0) {
                 timecode_type = NexusTC_SYSTEM;
