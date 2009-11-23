@@ -55,6 +55,7 @@ BEGIN
         &dump_table
         &load_video_resolutions
         &load_video_resolution
+        &load_file_formats
 		&load_nodes
 		&load_node
 		&save_node
@@ -227,6 +228,38 @@ sub load_video_resolution
     }
     
     return $vrn;    
+}
+
+
+####################################
+#
+# File Formats
+#
+####################################
+
+sub load_file_formats
+{
+    my ($dbh) = @_;
+    
+    my $fmts;
+    eval
+    {
+        my $sth = $dbh->prepare("
+            SELECT fft_identifier AS id, 
+                fft_name AS name
+            FROM FileFormat
+            ");
+        $sth->execute;
+        
+        $fmts = $sth->fetchall_arrayref({});
+    };
+    if ($@)
+    {
+        $errstr = (defined $dbh->errstr) ? $dbh->errstr : "unknown error";
+        return undef;
+    }
+    
+    return $fmts;    
 }
 
 
