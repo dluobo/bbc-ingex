@@ -1,5 +1,5 @@
 /*
- * $Id: test_opatomreader.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: test_opatomreader.cpp,v 1.3 2009/11/24 15:18:58 john_f Exp $
  *
  * Test the OP-Atom reader
  *
@@ -29,6 +29,8 @@
 #include <libMXF++/MXF.h>
 
 #include "OPAtomClipReader.h"
+
+#include <cstdio>
 
 using namespace std;
 using namespace mxfpp;

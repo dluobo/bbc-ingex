@@ -1,5 +1,5 @@
 /*
- * $Id: ArchiveMXFWriter.cpp,v 1.2 2009/04/16 17:52:49 john_f Exp $
+ * $Id: ArchiveMXFWriter.cpp,v 1.3 2009/11/24 15:18:57 john_f Exp $
  *
  * 
  *
@@ -22,6 +22,7 @@
  
 #include "ArchiveMXFWriter.h"
 #include <cstring>
+#include <cstdio>
 
 
 using namespace std;

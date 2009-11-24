@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.h,v 1.3 2009/10/22 16:35:50 philipn Exp $
+ * $Id: DynamicByteArray.h,v 1.4 2009/11/24 15:18:58 john_f Exp $
  *
  * 
  *
@@ -23,6 +23,7 @@
 #ifndef __DYNAMIC_BYTE_ARRAY_H__
 #define __DYNAMIC_BYTE_ARRAY_H__
 
+#include <inttypes.h>
 
 
 class DynamicByteArray
