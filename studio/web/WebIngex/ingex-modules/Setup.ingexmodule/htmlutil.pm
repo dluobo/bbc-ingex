@@ -321,7 +321,7 @@ sub get_video_wrapping_popup
 
 sub get_recorder_config
 {
-    my ($rcf, $vrs) = @_;
+    my ($rcf, $vrs, $fmts) = @_;
     
     # stop the warnings about deep recursion
     push(@CGI::Pretty::AS_IS, qw(div table th tr td));
@@ -372,8 +372,7 @@ sub get_recorder_config
     {
         my $value = $rp->{"VALUE"};
         if ($rp->{"NAME"} eq "MXF_RESOLUTION" ||
-            $rp->{"NAME"} eq "ENCODE1_RESOLUTION" ||
-            $rp->{"NAME"} eq "ENCODE2_RESOLUTION" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_RESOLUTION/ ||
             $rp->{"NAME"} eq "QUAD_RESOLUTION")
         {
             if ($rp->{"VALUE"} == 0)
@@ -387,6 +386,26 @@ sub get_recorder_config
                     if ($vrn->{"ID"} == $rp->{"VALUE"})
                     {
                         $value = "$vrn->{'NAME'} ($value)";
+                        last;
+                    }
+                }
+            }
+        }
+        elsif ($rp->{"NAME"} eq "MXF_WRAPPING" ||
+            $rp->{"NAME"} =~ /ENCODE(\d*)_WRAPPING/ ||
+            $rp->{"NAME"} eq "QUAD_WRAPPING")
+        {
+        	if ($rp->{"VALUE"} == 0)
+            {
+                $value = "not set (0)";
+            }
+            else
+            {
+                foreach my $fmt (@{ $fmts })
+                {
+                    if ($fmt->{"ID"} == $rp->{"VALUE"})
+                    {
+                        $value = "$fmt->{'NAME'} ($value)";
                         last;
                     }
                 }

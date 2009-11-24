@@ -43,6 +43,9 @@ my $dbh = prodautodb::connect(
 my $vrs = load_video_resolutions($dbh)
     or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
+my $fmts = load_file_formats($dbh)
+	or return_error_page("failed to load file formats: $prodautodb::errstr");
+
 my $recs = load_recorders($dbh) 
     or return_error_page("failed to load recorders: $prodautodb::errstr");
 
@@ -143,7 +146,7 @@ sub get_page_content
         (@{ $rcfs })
     )
     {    
-        my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs);
+        my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs, $fmts);
         
         my $rcfConfig = $rcf->{"config"};
         

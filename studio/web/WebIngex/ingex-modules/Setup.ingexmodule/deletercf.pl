@@ -71,7 +71,10 @@ else
 my $vrs = load_video_resolutions($dbh) 
     or return_error_page("failed to load video resolutions: $prodautodb::errstr");
 
-my $page = get_delete_content($rcf, $vrs) or
+my $fmts = load_file_formats($dbh)
+	or return_error_page("failed to load file formats: $prodautodb::errstr");
+
+my $page = get_delete_content($rcf, $vrs, $fmts) or
     return_error_page("failed to fill in content for delete recorder config page");
    
 print header;
@@ -85,11 +88,11 @@ exit(0);
 
 sub get_delete_content
 {
-    my ($rcf, $vrs) = @_;
+    my ($rcf, $vrs, $fmts) = @_;
     
     my @pageContent;
 
-    my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs);
+    my $rcfHTML = htmlutil::get_recorder_config($rcf, $vrs, $fmts);
     
     push(@pageContent, h1('Delete recorder configuration'),
         start_form({-id=>"ingexForm", -action=>"javascript:sendForm('ingexForm','deletercf')"}),
