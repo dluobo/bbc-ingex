@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2006-2008 British Broadcasting Corporation              *
+ *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -29,6 +29,8 @@
 
 class ChunkInfo;
 
+WX_DEFINE_ARRAY_INT(int, ArrayOfInts);
+
 /// Ignore the "drag" bit - this class represents a set of source selection buttons for playback.
 class DragButtonList : public wxScrolledWindow
 {
@@ -44,7 +46,13 @@ class DragButtonList : public wxScrolledWindow
 		void SelectQuadrant(unsigned int source);
 //		std::vector<std::string> * GetFiles();
 	private:
+		void UpdateUI(wxUpdateUIEvent&);
+		void OnRadioButton(wxCommandEvent& event);
+		void Select(unsigned int);
 		wxBoxSizer * mSizer;
+		ArrayOfInts mEnableStates;
+		unsigned int mSelected;
+	DECLARE_EVENT_TABLE();
 };
 
 #endif

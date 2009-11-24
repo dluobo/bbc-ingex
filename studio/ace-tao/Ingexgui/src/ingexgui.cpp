@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: ingexgui.cpp,v 1.20 2009/10/22 14:47:24 john_f Exp $            *
+ *   $Id: ingexgui.cpp,v 1.21 2009/11/24 15:35:24 john_f Exp $            *
  *                                                                         *
  *   Copyright (C) 2006-2009 British Broadcasting Corporation              *
  *   - all rights reserved.                                                *
@@ -473,7 +473,6 @@ IngexguiFrame::IngexguiFrame(int argc, wxChar** argv)
 
 	//notebook playback page
 	wxPanel * playbackPage = new wxPanel(mNotebook); //need this as can't add a sizer directly to a notebook
-	playbackPage->SetNextHandler(this); //allow track select radio button events to propagate here
 	mNotebook->AddPage(playbackPage, wxT("Playback"));
 	mPlaybackPageSizer = new wxBoxSizer(wxVERTICAL);
 	playbackPage->SetSizer(mPlaybackPageSizer);
@@ -883,7 +882,7 @@ void IngexguiFrame::OnNextTake( wxCommandEvent& WXUNUSED(event))
 /// The following event IDs are recognised, with corresponding data values (all enumerations being in the prodauto namespace):
 ///	NEW_FILESET: Sets enable state of track select buttons and selects one.
 ///		Event client data: vector of enable states (tracks present)
-///		Event int: the selected tracks.
+///		Event int: the selected track.
 ///	STATE_CHANGE: Reflect the player's status.
 ///		Event int: PLAY, PLAY_BACKWARDS, PAUSE, STOP, CLOSE.
 ///	CUE_POINT: Select indicated point in the event list and pause player if at end/start of file depending on playback direction
