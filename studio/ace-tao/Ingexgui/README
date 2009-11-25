@@ -30,7 +30,7 @@ Install autoconf, automake and libtool packages if you don't have them.
 Make sure $ACE_ROOT, $TAO_ROOT and $DVS_SDK (if player has DVS card support) are defined.
 In this directory:
 
-> autoreconf
+> autoreconf --install
 > ./configure
 > make
 
