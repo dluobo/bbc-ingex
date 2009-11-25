@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_resample.c,v 1.2 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_resample.c,v 1.3 2009/11/25 17:12:27 john_f Exp $
  *
  *
  *
@@ -48,9 +48,19 @@ static void h_copy(BYTE* srcLine, BYTE* dstLine,
         memcpy(dstLine, srcLine, w);
         return;
     }
+    if ((inStride == 2) && (outStride == 1))
+    {
+        // common case - UYVY mux to planar layout
+        for (i = w; i != 0; i--)
+        {
+            *dstLine++ = *srcLine++;
+            srcLine++;
+        }
+        return;
+    }
     if (outStride == 1)
     {
-        for (i = 0; i < w; i++)
+        for (i = w; i != 0; i--)
         {
             *dstLine++ = *srcLine;
             srcLine += inStride;
@@ -59,14 +69,14 @@ static void h_copy(BYTE* srcLine, BYTE* dstLine,
     }
     if (inStride == 1)
     {
-        for (i = 0; i < w; i++)
+        for (i = w; i != 0; i--)
         {
             *dstLine = *srcLine++;
             dstLine += outStride;
         }
         return;
     }
-    for (i = 0; i < w; i++)
+    for (i = w; i != 0; i--)
     {
         *dstLine = *srcLine;
         dstLine += outStride;
@@ -85,7 +95,7 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
 
     in_0 = *srcLine;
     srcLine += inStride;
-    for (i = 0; i < (w/2) - 1; i++)
+    for (i = (w/2) - 1; i != 0; i--)
     {
         *dstLine = in_0;
         dstLine += outStride;
@@ -131,7 +141,7 @@ int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
     // copy Y
     inBuff0 = in_frame->Y.buff;
     outBuff0 = out_frame->Y.buff;
-    for (j = 0; j < h; j++)
+    for (j = h; j != 0; j--)
     {
         h_copy(inBuff0, outBuff0,
                in_frame->Y.pixelStride, out_frame->Y.pixelStride, w);
@@ -143,7 +153,7 @@ int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
     inBuff1 = in_frame->V.buff;
     outBuff0 = out_frame->U.buff;
     outBuff1 = out_frame->V.buff;
-    for (j = 0; j < h; j++)
+    for (j = h; j != 0; j--)
     {
         h_up_2_121(inBuff0, outBuff0,
                    in_frame->U.pixelStride, out_frame->U.pixelStride, w);
