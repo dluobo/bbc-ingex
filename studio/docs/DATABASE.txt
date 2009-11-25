@@ -7,10 +7,7 @@ Instructions for machine running the database
 Setup server
 ------------
 
-YaST - make sure the following are installed:
-  unixODBC
-  unixODBC-devel
-  psqlODBC
+YaST - make sure the following is installed:
   postgresql-server
 
 Start the postgres service, which should create an initial database for

@@ -18,21 +18,6 @@ Perl - make sure the following are installed
   XML::Simple
 
 
-Database access
----------------
-
-Create and edit:
-  /etc/unixODBC/odbcinst.ini
-  /etc/unixODBC/odbc.ini
-
-(details in ingex/studio/database/install/INSTALL.txt)
-
-Install libodbc++
-    ingex> wget http://ingex.sourceforge.net/studio/rpms/libodbc++-0.2.4pre3-1.i586.rpm
-    ingex> sudo rpm -ivh libodbc++-0.2.4pre3-1.i586.rpm
-
-
-
 Installation
 ------------
 
@@ -42,40 +27,50 @@ ingex> cd <...>ingex/studio/web/WebIngex
 2) run "sudo ./install.sh" to install the files.
 
 
-AAF file creation
------------------
+Database access
+---------------
 
-Get AAFSDK e.g.
+YaST - make sure the following are installed
+  postgresql-devel
+  libpqxx-devel
+
+
+AAF SDK
+-------
 
 ingex> cd <dir>
-ingex> wget http://downloads.sourceforge.net/aaf/AAF-src-1.1.2.tar.gz
-ingex> tar xf AAF-src-1.1.2.tar.gz
-ingex> cd AAF-src-1.1.2
+ingex> wget http://downloads.sourceforge.net/aaf/AAF-src-1.1.3.tar.gz
+ingex> tar xf AAF-src-1.1.3.tar.gz
+ingex> cd AAF-src-1.1.3
 ingex> make install
 
 Set AAFSDKINSTALL environment variable
 
 On 32-bit systems:
 
-ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFi686LinuxSDK/g++
+ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.3/AAFi686LinuxSDK/g++
 (and add same setting to your ~/.bashrc file)
 
 On 64-bit systems:
 
-ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.2/AAFx86_64LinuxSDK/g++
+ingex> export AAFSDKINSTALL=<dir>/AAF-src-1.1.3/AAFx86_64LinuxSDK/g++
 (and add same setting to your ~/.bashrc file)
+
+
+AAF file creation
+-----------------
 
 Now make create_aaf and install
 
 ingex> cd <...>/ingex/studio/processing/createaaf
 ingex> make
-ingex> cp create_aaf /srv/ingex/createaaf/
+ingex> sudo mkdir -p /srv/ingex/createaaf/
+ingex> sudo cp create_aaf /srv/ingex/createaaf/
 
-ingex> cd $AAFSDKINSTALL/bin/debug
-ingex> cp libcom-api.so /srv/ingex/createaaf/
+ingex> sudo cp $AAFSDKINSTALL/bin/debug/libcom-api.so /srv/ingex/createaaf/
 
-Make sure that the destination directory for AAF files is
-writeable by user www-run
+If using a  destination directory for AAF files other than /tmp
+make sure it is writeable by user www-run
 
 
 Usage
@@ -86,15 +81,15 @@ Open your web browser to the page http://<host name>/ingex
 
 Older Web Interface
 --------------------
-'WebIngex' is a newer web interface which provides a superset of the functionality of the old 'manage' interface. It should be adequate to use it instead of the older interface, bt they can be run side-by-side if desired.
+'WebIngex' is a newer web interface which provides a superset of the
+functionality of the old 'manage' interface. It should be adequate to use it
+instead of the older interface, but they can be run side-by-side if desired.
 
-Extra Dependencies:
-     CPAN - install the perl Text::Template module
+For the older web interface:
 
-     Do the following from a root login shell.  That way you will get helpful
-     prompts when configuring proxies etc.
-
-     root> perl -MCPAN -e 'install Text::Template'
+Perl - make sure the following are installed
+  Text::Template module
 
 Usage:
-     Open your web browser to the page http://<host name>/cgi-bin/ingex/index.pl
+  Open your web browser to the page http://<host name>/cgi-bin/ingex/index.pl
+

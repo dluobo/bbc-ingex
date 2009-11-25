@@ -11,15 +11,11 @@ YaST - make sure the following (and any dependencies) are installed:
   libjpeg-devel
   fontconfig-devel
   freetype2-devel
-  unixODBC
-  unixODBC-devel
-  psqlODBC
   libbz2-devel
 
 RPMs - make sure these (or later versions) are installed:
-  codecs-for-ffmpeg-20081009-1.i586.rpm
-  ffmpeg-DNxHD-h264-aac-15593-2.i586.rpm
-  libodbc++-0.2.4pre3-1.i586.rpm
+  codecs-for-ffmpeg-20081009-1
+  ffmpeg-DNxHD-h264-aac-0.5-3
 
 The RPMs can be found here:
   http://ingex.sourceforge.net/studio/rpms/
@@ -40,7 +36,7 @@ root> make scripts/mod/  (trailing slash important)
 DVS SDKs are available to registered users here:
   http://www.dvs.de/products/video-boards/centaurus-ii/login-area/video-boards/sdk.html
 
-get SDK e.g. sdk3.2.14.9.tar.gz and untar
+get SDK e.g. sdk3.4.0.1.tar.gz and untar
 
 ingex> cd linux-x86_64/driver
 ingex> ./driver_create
@@ -119,6 +115,7 @@ ingex> wget http://search.cpan.org/CPAN/authors/id/A/AN/ANDYA/IPC-ShareLite-0.17
 ingex> tar xf IPC-ShareLite-0.17.tar.gz
 ingex> cd IPC-ShareLite-0.17
 ingex> perl Makefile.PL
+ingex> make
 ingex> sudo make install
 
 
