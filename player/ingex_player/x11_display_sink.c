@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.9 2009/09/18 16:16:25 philipn Exp $
+ * $Id: x11_display_sink.c,v 1.10 2009/12/04 18:08:08 john_f Exp $
  *
  *
  *
@@ -472,6 +472,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
 
 
         XLockDisplay(sink->x11Common.windowInfo.display);
+        
         if (sink->useSharedMemory)
         {
             XShmPutImage(sink->x11Common.windowInfo.display, sink->x11Common.windowInfo.window, sink->x11Common.windowInfo.gc,
@@ -487,7 +488,11 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
                 0, 0, 0, 0,
                 sink->width, sink->height);
         }
+
+        XSync(sink->x11Common.windowInfo.display, False);
+
         XUnlockDisplay(sink->x11Common.windowInfo.display);
+
         
         x11c_process_events(&sink->x11Common);
 
