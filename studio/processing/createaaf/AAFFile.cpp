@@ -1,5 +1,5 @@
 /*
- * $Id: AAFFile.cpp,v 1.8 2009/11/06 11:05:20 john_f Exp $
+ * $Id: AAFFile.cpp,v 1.9 2009/12/04 18:30:16 john_f Exp $
  *
  * AAF file for defining clips, multi-camera clips, etc
  *
@@ -157,7 +157,10 @@ static const aafUID_t kAAFCompressionDef_IMX_50 =
     {0x04010202, 0x0102, 0x0101, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 static const aafUID_t kAAFCompressionDef_DNxHD =
     {0x0e040201, 0x0204, 0x0100, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
-
+// kAAFCompressionDef_DV_Based_100Mbps_1080x50I was added to the AAF SDK on May 14 2009
+// and we duplicate the constant here to support older SDKs
+static const aafUID_t kAAFCompressionDef_DV_Based_100Mbps_1080x50I_INGEX =
+    {0x04010202, 0x0202, 0x0600, {0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01}};
 
 static const RGBColor g_rgbColors[] =
 {
@@ -2074,6 +2077,22 @@ void AAFFile::mapFileSourceMob(SourcePackage* sourcePackage)
                     kAAFPropID_DIDImageSize, track->sourceClip->length * 288000);
                 setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
                     kAAFPropID_DIDResolutionID, 0x8e);
+            }
+            else if (fileDescriptor->videoResolutionID == DVCPROHD_MATERIAL_RESOLUTION)
+            {
+                AAF_CHECK(pCDCIDescriptor2->SetHorizontalSubsampling(2));
+                AAF_CHECK(pCDCIDescriptor2->SetVerticalSubsampling(1));
+                AAF_CHECK(pDigitalImageDescriptor2->SetCompression(kAAFCompressionDef_DV_Based_100Mbps_1080x50I_INGEX));
+                AAF_CHECK(pDigitalImageDescriptor2->SetStoredView(540, 1920));
+                AAF_CHECK(pDigitalImageDescriptor2->SetDisplayView(540, 1920, 0, 0));
+                AAF_CHECK(pDigitalImageDescriptor2->SetFrameLayout(kAAFSeparateFields));
+                aafInt32 videoLineMap[2] = {21, 584};
+                AAF_CHECK(pDigitalImageDescriptor2->SetVideoLineMap(2, videoLineMap));
+                AAF_CHECK(pDigitalImageDescriptor2->SetImageAlignmentFactor(1));
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDFrameSampleSize, 576000);
+                setDIDInt32Property(pCDDigitalImageDescriptor, pDigitalImageDescriptor2,
+                    kAAFPropID_DIDImageSize, track->sourceClip->length * 576000);
             }
             else if (fileDescriptor->videoResolutionID == IMX30_MATERIAL_RESOLUTION)
             {
