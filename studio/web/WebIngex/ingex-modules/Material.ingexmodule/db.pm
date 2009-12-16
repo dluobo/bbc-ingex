@@ -388,40 +388,37 @@ sub load_times
 	my ( $dbh, $projectid, $date ) = @_;
 	my $timecodes;
 
-	eval {
-		my $query = "
-				select DISTINCT file_position AS TC
-					from
-					(select * 
-						from
-						(select * 
-							from
-							(select file_position ,
-								pkg_uid as file_pkg_uid
-								from
-								(select file_position,
-									trk_package_id as file_trk_package_id
-									from
-									(select scp_position as file_position,
-										scp_track_id as file_track_id
-										from
-											sourceclip
-									) as file_scp
-									left join track on file_scp.file_track_id=track.trk_identifier
-										where trk_id=1
-								) as file_trk
-								left join package on file_trk.file_trk_package_id=package.pkg_identifier
-							) as file_package
-							left join sourceclip on file_package.file_pkg_uid=sourceclip.scp_source_package_uid
-						) as scp
-						left join track on scp.scp_track_id=track.trk_identifier
-					) as trk
-				left join package on trk.trk_package_id=package.pkg_identifier
-
-				WHERE pkg_project_name_id = ?
-					AND CAST(pkg_creation_date AS TEXT) ~ ?
-					AND pkg_descriptor_id IS NULL
+	eval {	
+		my $query = 	"
+				SELECT
+					DISTINCT file_scp.scp_position AS tc
+             			
+             				FROM
+             				
+            					sourceclip AS 		file_scp,
+             				 	track AS 		file_trk,
+             					package AS 		file_pkg,
+            				
+             					sourceclip AS	 	material_scp,
+              				 	track AS 		material_trk,
+             					package AS 		material_pkg
+             				
+  				
+            				WHERE
+            					file_trk.trk_identifier = file_scp.scp_track_id AND
+           					file_pkg.pkg_identifier = file_trk.trk_package_id AND
+           			
+            					material_scp.scp_source_package_uid = file_pkg.pkg_uid AND
+            					material_trk.trk_identifier = material_scp.scp_track_id AND
+            					material_pkg.pkg_identifier = material_trk.trk_package_id AND
+            				
+						file_trk.trk_id = 1 AND
+            					material_pkg.pkg_descriptor_id IS NULL AND
+						material_trk.trk_id = 1 AND
+           					material_pkg.pkg_project_name_id = ?
+						AND CAST(material_pkg.pkg_creation_date AS TEXT) ~ ?;
 				";
+
 		my $sth = $dbh->prepare( $query );
 		$sth->bind_param( 1, $projectid, {TYPE => SQL_INTEGER} );
 		$sth->bind_param( 2, "^".$date );

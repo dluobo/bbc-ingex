@@ -300,6 +300,7 @@ elsif ( $level == 4 ) {
 my $json = encode_json [@t_data];
 print "Content-Type: application/json; charset=ISO-8859-1\n\n";
 print $json;
+prodautodb::disconnect($dbh);
 
 
 # 
