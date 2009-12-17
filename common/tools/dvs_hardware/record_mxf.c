@@ -1,5 +1,5 @@
 /*
- * $Id: record_mxf.c,v 1.1 2008/05/07 17:04:21 philipn Exp $
+ * $Id: record_mxf.c,v 1.2 2009/12/17 15:53:43 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -605,6 +605,7 @@ int main (int argc, char ** argv)
 	// card specified by string of form "PCI,card=n" where n = 0,1,2,3
 	//
 	int card;
+    int componentDepth8Bit = 1;
 	for (card = 0; card < max_cards; card++)
 	{
 		sv_info				status_info;
@@ -642,12 +643,28 @@ int main (int argc, char ** argv)
 		SV_CHECK( sv_option_get(sv, SV_OPTION_VIDEOMODE, &voptmode) );
 		printf("videomode = 0x%08x  voptmode=0x%08x\n", videomode, voptmode);
 
+		componentDepth8Bit = 1;
 		if ((videomode & SV_MODE_NBIT_MASK) != SV_MODE_NBIT_8B) {
 			switch (videomode & SV_MODE_NBIT_MASK) {
 			case SV_MODE_NBIT_10B:
-			case SV_MODE_NBIT_10BDVS:
-			case SV_MODE_NBIT_10BDPX:
 				video_size = 4 * video_size / 3;
+				componentDepth8Bit = 0;
+				break;
+			case SV_MODE_NBIT_10BDVS:
+				if (write_mxf) {
+					fprintf(stderr, "Video mode SV_MODE_NBIT_10BDVS not supported in MXF writer\n");
+					return 1;
+				}
+				video_size = 4 * video_size / 3;
+				componentDepth8Bit = 0;
+				break;
+			case SV_MODE_NBIT_10BDPX:
+				if (write_mxf) {
+					fprintf(stderr, "Video mode SV_MODE_NBIT_10BDPX not supported in MXF writer\n");
+					return 1;
+				}
+				video_size = 4 * video_size / 3;
+				componentDepth8Bit = 0;
 				break;
 			}
 		}
@@ -665,7 +682,8 @@ int main (int argc, char ** argv)
 
 	// Setup MXF writer if specified
 	if (write_mxf) {
-		if (!prepare_archive_mxf_file(video_file, 4, 0, 1, &mxfout))
+		mxfRational aspect_ratio = {4, 3};
+		if (!prepare_archive_mxf_file(video_file, componentDepth8Bit, &aspect_ratio, 4, 0, 1, &mxfout))
     	{
 			fprintf(stderr, "Failed to prepare MXF writer\n");
 			return 1;
