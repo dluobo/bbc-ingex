@@ -274,13 +274,13 @@ if [ $MULTICAST -ge 1 ] ; then
   OPTIONS="${OPTIONS} -s ${MULTICAST_SIZE}"
 
   dcop $capture_window $tab renameSession Multicast
-  dcop $capture_window $tab sendSession "cd $scripts_path"
+  dcop $capture_window $tab sendSession "cd $capture_path"
 
   CHAN=0
   PORT=$MULTICAST_FIRST_PORT
-  while [ "$CHAN" -lt "$CHANNELS" ] ; do
+  while [ "$CHAN" -lt "$CAPTURE_CHANNELS" ] ; do
     #echo "Starting multicast channel ${CHAN}"
-    dcop $capture_window $tab sendSession "$MULTICAST -c ${CHAN} -q ${OPTIONS} ${MULTICAST_ADDR}:${PORT} &"
+    dcop $capture_window $tab sendSession "./nexus_multicast -c ${CHAN} -q ${OPTIONS} ${MULTICAST_ADDR}:${PORT} &"
     let CHAN=$CHAN+1
     let PORT=$PORT+1
   done
