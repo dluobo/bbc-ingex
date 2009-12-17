@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2008/05/07 17:04:19 philipn Exp $
+# $Id: Makefile,v 1.3 2009/12/17 15:51:22 john_f Exp $
 #
 # Makefile for building useful command-line tools
 #
@@ -31,7 +31,7 @@ MXF_LIB=-L../../libMXF/examples/archive/write -L../../libMXF/lib -lwritearchivem
 INCLUDE=-I.. -I../YUVlib $(MXF_INC)
 LIB_COMMON=../libcommon.a
 
-PROGS=convert_audio compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video
+PROGS=convert_audio convert_10bit_video create_video_test_signal compare_archive_mxf clapperboard_avsync disk_rw_benchmark send_video receive_video
 
 .PHONY: all
 all: $(PROGS) dvs_hardware
@@ -42,6 +42,12 @@ dvs_hardware:
 
 convert_audio: convert_audio.c $(LIB_COMMON)
 	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@ -lm
+
+convert_10bit_video: convert_10bit_video.c $(LIB_COMMON)
+	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
+
+create_video_test_signal: create_video_test_signal.c $(LIB_COMMON)
+	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
 
 compare_archive_mxf: compare_archive_mxf.c $(LIB_COMMON)
 	gcc $(CFLAGS) $(INCLUDE) $< $(LIB_COMMON) -o $@
