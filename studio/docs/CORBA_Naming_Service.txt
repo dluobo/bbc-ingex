@@ -7,15 +7,26 @@ Recorders advertise themselves in the naming service and controllers
 With RPM-installed ACE/TAO
 --------------------------
 
-Create the file
+Edit the file
+  /etc/tao/tao-cosnaming
+
+and change the TAO_COSNAMING_ENDPOINT line to something like:
+
+  TAO_COSNAMING_ENDPOINT="-ORBEndPoint iiop://192.168.1.100:8888 -ORBDottedDecimalAddresses 1"
+
+The IP address should be one of the addresses of the machine.  You can omit
+the address (e.g. iiop://:8888) to get the default address of the machine
+but this may result in the naming service using an endpoint of localhost,
+which won't be accessible from other machines.
+
+You can use a hostname instead of IP address if you're using DNS.
+In that case, don't put -ORBDottedDecimalAddresses 1
+
+NB. In older versions of the RPM, the config is in
   /etc/sysconfig/TAO-cosnaming
 
-containing:
-
-  TAO_COSNAMING_ENDPOINT="-ORBEndPoint iiop://:8888 -ORBDottedDecimalAddresses 1"
-
-You may want to put an explicit IP address or hostname in that line.
-(Don't put -ORBDottedDecimalAddresses 1 if you want to use hostname rather then IP address.)
+You need to create that file and make an entry for TAO_COSNAMING_ENDPOINT as
+above.
 
 
 Then in YaST, System, System Services (runlevel):
