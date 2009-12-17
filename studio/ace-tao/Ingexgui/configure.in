@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.12 2009/09/18 16:10:14 john_f Exp $
+    # $Id: configure.in,v 1.13 2009/12/17 16:44:31 john_f Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -134,6 +134,7 @@ LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_V
 LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/libMXF/lib -L$WORKSPACE/libMXF/examples/avidmxfinfo -L$WORKSPACE/libMXF/examples/archive/info -L$WORKSPACE/libMXF/examples/reader -L$WORKSPACE/common -L$WORKSPACE/common/YUVlib"
 LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"
 
+#AC_CONFIG_MACRO_DIR([m4])
 AC_SUBST(WX_LIBS)
 AC_SUBST(WORKSPACE)
 
