@@ -1,5 +1,5 @@
 /*
- * $Id: OPAtomTrackReader.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: OPAtomTrackReader.cpp,v 1.3 2009/12/17 16:35:48 john_f Exp $
  *
  * Read a single OP-Atom file representing a clip track
  *
@@ -49,6 +49,7 @@ const char * const ERROR_STRINGS[] =
     "essence data not found"
 };
 
+#define ERROR_STRINGS_SIZE      (sizeof(ERROR_STRINGS) / sizeof(char*))
 
 
 
@@ -102,7 +103,7 @@ OPAtomOpenResult OPAtomTrackReader::Open(std::string filename, OPAtomTrackReader
 string OPAtomTrackReader::ErrorToString(OPAtomOpenResult result)
 {
     size_t index = (size_t)(-1 * (int)result);
-    MXFPP_ASSERT(index < sizeof(ERROR_STRINGS) / sizeof(char*));
+    MXFPP_ASSERT(index < ERROR_STRINGS_SIZE);
     
     return ERROR_STRINGS[index];
 }
@@ -219,7 +220,7 @@ OPAtomTrackReader::OPAtomTrackReader(string filename, File *file, Partition *hea
         
         
         
-        // get the index table info (if present and complete)
+        // read the index table if present and complete
         int64_t file_pos = file->tell();
         try
         {
@@ -244,7 +245,7 @@ OPAtomTrackReader::OPAtomTrackReader(string filename, File *file, Partition *hea
         
         file->seek(file_pos, SEEK_SET);
 
-        // position file at start of essence data
+        // position the file at the start of the essence data
         try
         {
             file->readNextNonFillerKL(&key, &llen, &len);
