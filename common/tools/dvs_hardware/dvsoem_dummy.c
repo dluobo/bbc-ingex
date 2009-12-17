@@ -1,5 +1,5 @@
 /*
- * $Id: dvsoem_dummy.c,v 1.8 2009/09/18 15:06:26 philipn Exp $
+ * $Id: dvsoem_dummy.c,v 1.9 2009/12/17 15:52:58 john_f Exp $
  *
  * Implement a debug-only DVS hardware library for testing.
  *
@@ -500,8 +500,8 @@ int sv_openex(sv_handle ** psv, char * setup, int openprogram, int opentype, int
 	}
 
 	// Setup fifo_buffer which contains offsets to audio buffers
-	dvs->fifo_buffer.audio[0].addr[0] = (char*)video_size;
-	dvs->fifo_buffer.audio[0].addr[1] = (char*)(video_size + 0x4000);
+	dvs->fifo_buffer.audio[0].addr[0] = (char*)0 + video_size;
+	dvs->fifo_buffer.audio[0].addr[1] = (char*)0 + video_size + 0x4000;
 
 #ifdef DVSDUMMY_LOGGING
 	// logging for debugging
