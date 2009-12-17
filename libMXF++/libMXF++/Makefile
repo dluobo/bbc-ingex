@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2009/10/22 16:37:31 philipn Exp $
+# $Id: Makefile,v 1.3 2009/12/17 16:38:40 john_f Exp $
 #
 # Makefile for building libMXF++
 #
@@ -111,6 +111,7 @@ install: libMXF++.a
 	cp *.h $(INSTALL_PREFIX)/include/libMXF++/
 	cp metadata/*.h $(INSTALL_PREFIX)/include/libMXF++/metadata/
 	cp metadata/base/*.h $(INSTALL_PREFIX)/include/libMXF++/metadata/base/
+	mkdir -p $(INSTALL_PREFIX)/include/libMXF++/extensions
 	cp extensions/*.h $(INSTALL_PREFIX)/include/libMXF++/extensions/
 
 .PHONY: uninstall
