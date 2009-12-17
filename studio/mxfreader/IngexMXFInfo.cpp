@@ -1,5 +1,5 @@
 /*
- * $Id: IngexMXFInfo.cpp,v 1.2 2009/10/22 15:15:56 john_f Exp $
+ * $Id: IngexMXFInfo.cpp,v 1.3 2009/12/17 16:59:41 john_f Exp $
  *
  * Extract information from Ingex MXF files.
  *
@@ -32,9 +32,9 @@
 //   move Avid user comments and attributes to libMXF
 
 
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
+#include <cstdio>
+#include <cstring>
+#include <cassert>
 #include <memory>
 
 #include <libMXF++/MXF.h>
@@ -61,7 +61,7 @@ using namespace std;
 
 // these colors match the colors defined in studio/database/src/DatabaseEnums.h and
 // AvidRGBColor in libMXF/examples/writeavidmxf/package_definitions.h
-static const RGBColor g_rgb_colors[] =
+static const RGBColor RGB_COLORS[] =
 {
     {65534, 65535, 65535}, // white
     {41471, 12134, 6564 }, // red
@@ -73,7 +73,10 @@ static const RGBColor g_rgb_colors[] =
     {0    , 0    , 0    }  // black
 };
 
-static const char *g_error_strings[] =
+#define RGB_COLORS_SIZE     (sizeof(RGB_COLORS) / sizeof(RGBColor))
+
+
+static const char *ERROR_STRINGS[] =
 {
     "success",
     "general error",
@@ -84,6 +87,121 @@ static const char *g_error_strings[] =
     "unknown project edit rate",
 };
 
+#define ERROR_STRINGS_SIZE  (sizeof(ERROR_STRINGS) / sizeof(char*))
+
+
+typedef struct
+{
+    const mxfUL container_label;
+    int ingex_resolution_id;
+} ECLabelToIngexResolutionMap;
+
+static const ECLabelToIngexResolutionMap EC_LABEL_RESOLUTION_MAP[] =
+{
+    {MXF_EC_L(D10_50_625_50_defined_template),      IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_625_50_extended_template),     IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_625_50_picture_only),          IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_525_60_defined_template),      IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_525_60_extended_template),     IMX50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_50_525_60_picture_only),          IMX50_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(D10_40_625_50_defined_template),      IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_625_50_extended_template),     IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_625_50_picture_only),          IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_525_60_defined_template),      IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_525_60_extended_template),     IMX40_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_40_525_60_picture_only),          IMX40_MATERIAL_RESOLUTION},
+
+    {MXF_EC_L(D10_30_625_50_defined_template),      IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_625_50_extended_template),     IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_625_50_picture_only),          IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_525_60_defined_template),      IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_525_60_extended_template),     IMX30_MATERIAL_RESOLUTION},
+    {MXF_EC_L(D10_30_525_60_picture_only),          IMX30_MATERIAL_RESOLUTION},
+
+    {MXF_EC_L(IECDV_25_525_60_ClipWrapped),         DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(IECDV_25_525_60_FrameWrapped),        DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(IECDV_25_625_50_ClipWrapped),         DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(IECDV_25_625_50_FrameWrapped),        DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_25_525_60_ClipWrapped),       DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_25_525_60_FrameWrapped),      DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_25_625_50_ClipWrapped),       DV25_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_25_625_50_FrameWrapped),      DV25_MATERIAL_RESOLUTION},
+
+    {MXF_EC_L(DVBased_50_525_60_ClipWrapped),       DV50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_50_525_60_FrameWrapped),      DV50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_50_625_50_ClipWrapped),       DV50_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DVBased_50_625_50_FrameWrapped),      DV50_MATERIAL_RESOLUTION},
+
+    {MXF_EC_L(DV720p50ClipWrapped),                 DVCPROHD_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DV1080i50ClipWrapped),                DVCPROHD_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped),     UNC_MATERIAL_RESOLUTION},
+    {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  UNC_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(DNxHD1080i185ClipWrapped),            DNX185i_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(DNxHD1080p185ClipWrapped),            DNX185p_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD720p185ClipWrapped),             DNX185p_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(DNxHD1080i120ClipWrapped),            DNX120i_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(DNxHD1080p120ClipWrapped),            DNX120p_MATERIAL_RESOLUTION},
+    {MXF_EC_L(DNxHD720p120ClipWrapped),             DNX120p_MATERIAL_RESOLUTION},
+    
+    {MXF_EC_L(DNxHD1080p36ClipWrapped),             DNX36p_MATERIAL_RESOLUTION},
+};
+
+#define EC_LABEL_RESOLUTION_MAP_SIZE    (sizeof(EC_LABEL_RESOLUTION_MAP) / sizeof(ECLabelToIngexResolutionMap))
+
+
+typedef struct
+{
+    const mxfUL compression_label;
+    int ingex_resolution_id;
+} CompLabelToIngexResolutionMap;
+
+static const CompLabelToIngexResolutionMap COMP_LABEL_RESOLUTION_MAP[] =
+{
+    {MXF_CMDEF_L(AvidMJPEG21_PAL),                     MJPEG21_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG21_NTSC),                    MJPEG21_MATERIAL_RESOLUTION},
+    
+    {MXF_CMDEF_L(AvidMJPEG31_PAL),                     MJPEG31_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG31_NTSC),                    MJPEG31_MATERIAL_RESOLUTION},
+    
+    {MXF_CMDEF_L(AvidMJPEG101_PAL),                    MJPEG101_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG101_NTSC),                   MJPEG101_MATERIAL_RESOLUTION},
+    
+    {MXF_CMDEF_L(AvidMJPEG101m_PAL),                   MJPEG101M_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG101m_NTSC),                  MJPEG101M_MATERIAL_RESOLUTION},
+    
+    {MXF_CMDEF_L(AvidMJPEG151s_PAL),                   MJPEG151S_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG151s_NTSC),                  MJPEG151S_MATERIAL_RESOLUTION},
+    
+    {MXF_CMDEF_L(AvidMJPEG201_PAL),                    MJPEG201_MATERIAL_RESOLUTION},
+    {MXF_CMDEF_L(AvidMJPEG201_NTSC),                   MJPEG201_MATERIAL_RESOLUTION},
+};
+
+#define COMP_LABEL_RESOLUTION_MAP_SIZE  (sizeof(COMP_LABEL_RESOLUTION_MAP) / sizeof(CompLabelToIngexResolutionMap))
+
+
+typedef struct
+{
+    int32_t avid_resolution_id;
+    int ingex_resolution_id;
+} ResolutionMap;
+
+static const ResolutionMap RESOLUTION_MAP[] =
+{
+    {g_AvidMJPEG21_ResolutionID,                    MJPEG21_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG31_ResolutionID,                    MJPEG31_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG101_ResolutionID,                   MJPEG101_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG101m_ResolutionID,                  MJPEG101M_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG151s_ResolutionID,                  MJPEG151S_MATERIAL_RESOLUTION},
+    {g_AvidMJPEG201_ResolutionID,                   MJPEG201_MATERIAL_RESOLUTION},
+};
+
+#define RESOLUTION_MAP_SIZE     (sizeof(RESOLUTION_MAP) / sizeof(ResolutionMap))
 
 
 
@@ -116,23 +234,22 @@ void convert_data_def(mxfUL data_def_ul, int *data_def)
 
 void convert_color(const RGBColor *color, int *db_color)
 {
-    int i;
-    float diff[8];
+    size_t i;
+    float diff[RGB_COLORS_SIZE];
     float min_diff = -1;
     int min_diff_index = 0;
     
-    assert(sizeof(g_rgb_colors) / sizeof(RGBColor) == 8);
-    assert(USER_COMMENT_BLACK_COLOUR - USER_COMMENT_WHITE_COLOUR == 7);
+    assert(USER_COMMENT_BLACK_COLOUR - USER_COMMENT_WHITE_COLOUR == RGB_COLORS_SIZE - 1);
     
     // choose the color that has minimum difference to a known color
     
-    for (i = 0; i < 8; i++) {
-        diff[i] = ((float)(color->red - g_rgb_colors[i].red) * (float)(color->red - g_rgb_colors[i].red) +
-                   (float)(color->green - g_rgb_colors[i].green) * (float)(color->green - g_rgb_colors[i].green) +
-                   (float)(color->blue - g_rgb_colors[i].blue) * (float)(color->blue - g_rgb_colors[i].blue)) / 3.0;
+    for (i = 0; i < RGB_COLORS_SIZE; i++) {
+        diff[i] = ((float)(color->red - RGB_COLORS[i].red) * (float)(color->red - RGB_COLORS[i].red) +
+                   (float)(color->green - RGB_COLORS[i].green) * (float)(color->green - RGB_COLORS[i].green) +
+                   (float)(color->blue - RGB_COLORS[i].blue) * (float)(color->blue - RGB_COLORS[i].blue)) / 3.0;
     }
     
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < RGB_COLORS_SIZE; i++) {
         if (min_diff < 0 || diff[i] < min_diff) {
             min_diff = diff[i];
             min_diff_index = i;
@@ -237,9 +354,9 @@ IngexMXFInfo::ReadResult IngexMXFInfo::read(string filename, mxfUL *essence_cont
 string IngexMXFInfo::errorToString(ReadResult result)
 {
     size_t index = (size_t)(-1 * (int)result);
-    PA_ASSERT(index < sizeof(g_error_strings) / sizeof(char*));
+    PA_ASSERT(index < ERROR_STRINGS_SIZE);
     
-    return g_error_strings[index];
+    return ERROR_STRINGS[index];
 }
 
 
@@ -546,7 +663,7 @@ void IngexMXFInfo::extractFileSourcePackageInfo(SourcePackage *mxf_package, mxfU
     if (!source_comments.empty())
         getCurrentFileSourcePackage()->sourceConfigName = source_comments[0].value;
     else
-        prodauto::Logging::warning("Missing Avid '%s' (source config name) user comment\n", AVID_UC_SOURCE_NAME);
+        prodauto::Logging::warning("Missing Ingex '%s' (source config name) user comment\n", AVID_UC_SOURCE_NAME);
     
     mxf_picture_descriptor = dynamic_cast<GenericPictureEssenceDescriptor*>(mxf_descriptor);
     mxf_sound_descriptor = dynamic_cast<GenericSoundEssenceDescriptor*>(mxf_descriptor);
@@ -628,158 +745,30 @@ string IngexMXFInfo::getStringTaggedValue(vector<TaggedValue*>& tagged_values, s
 int IngexMXFInfo::getVideoResolutionId(mxfUL *container_label, mxfUL *picture_essence_coding,
                                        int32_t avid_resolution_id)
 {
-    // Note: using mxf_equals_ul_mod_regver function below because the Avid labels use a different registry version byte
-    if (mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_625_50_defined_template)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_625_50_extended_template)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_625_50_picture_only)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_525_60_defined_template)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_525_60_extended_template)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_50_525_60_picture_only)) ||
-        mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_625_50_defined_template)))
-    {
-        return IMX50_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_625_50_extended_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_625_50_picture_only)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_525_60_defined_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_525_60_extended_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_40_525_60_picture_only)))
-    {
-        return IMX40_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_625_50_defined_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_625_50_extended_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_625_50_picture_only)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_525_60_defined_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_525_60_extended_template)) ||
-             mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(D10_30_525_60_picture_only)))
-    {
-        return IMX30_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(IECDV_25_525_60_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(IECDV_25_525_60_FrameWrapped)))
-    {
-        return DV25_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(IECDV_25_625_50_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)))
-    {
-        return DV25_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DVBased_25_525_60_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_25_525_60_FrameWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_25_625_50_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_25_625_50_FrameWrapped)))
-    {
-        return DV25_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DVBased_50_525_60_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_50_525_60_FrameWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_50_625_50_ClipWrapped)) || 
-             mxf_equals_ul(container_label, &MXF_EC_L(DVBased_50_625_50_FrameWrapped)))
-    {
-        return DV50_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DV720p50ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DV1080i50ClipWrapped)))
-    {
-        return DVCPROHD_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(AvidMJPEGClipWrapped)))
-    {
-        // use the Avid resolution id if present, else use the picture essence coding label 
-        if (avid_resolution_id != 0x00) {
-            switch (avid_resolution_id) {
-                case 0x4c:
-                    return MJPEG21_MATERIAL_RESOLUTION;
-                    break;
-                case 0x4d:
-                    return MJPEG31_MATERIAL_RESOLUTION;
-                    break;
-                case 0x6f:
-                    return 0; // 4:1 not supported
-                    break;
-                case 0x4b:
-                    return MJPEG101_MATERIAL_RESOLUTION;
-                    break;
-                case 0x6e:
-                    return MJPEG101M_MATERIAL_RESOLUTION;
-                    break;
-                case 0x4e:
-                    return MJPEG151S_MATERIAL_RESOLUTION;
-                    break;
-                case 0x52:
-                    return MJPEG201_MATERIAL_RESOLUTION;
-                    break;
-                default:
-                    return 0;
-            }
-        } else {
-            if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG21_PAL)) ||
-                mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG21_NTSC)))
-            {
-                return MJPEG21_MATERIAL_RESOLUTION;
-            }
-            else if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG31_PAL)) ||
-                     mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG31_NTSC)))
-            {
-                return MJPEG31_MATERIAL_RESOLUTION;
-            }
-            else if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG101_PAL)) ||
-                     mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG101_NTSC)))
-            {
-                return MJPEG101_MATERIAL_RESOLUTION;
-            }
-            else if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG101m_PAL)) ||
-                     mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG101m_NTSC)))
-            {
-                return MJPEG101M_MATERIAL_RESOLUTION;
-            }
-            else if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG151s_PAL)) ||
-                     mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG151s_NTSC)))
-            {
-                return MJPEG151S_MATERIAL_RESOLUTION;
-            }
-            else if (mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG201_PAL)) ||
-                     mxf_equals_ul(picture_essence_coding, &MXF_CMDEF_L(AvidMJPEG201_NTSC)))
-            {
-                return MJPEG201_MATERIAL_RESOLUTION;
-            }
-            else
-            {
-                return 0;
+    size_t i;
+
+    if (mxf_equals_ul_mod_regver(container_label, &MXF_EC_L(AvidMJPEGClipWrapped))) {
+        if (avid_resolution_id >= 0) {
+            for (i = 0; i < RESOLUTION_MAP_SIZE; i++) {
+                if (avid_resolution_id == RESOLUTION_MAP[i].avid_resolution_id)
+                    return RESOLUTION_MAP[i].ingex_resolution_id;
             }
         }
+
+        for (i = 0; i < COMP_LABEL_RESOLUTION_MAP_SIZE; i++) {
+            if (mxf_equals_ul(picture_essence_coding, &COMP_LABEL_RESOLUTION_MAP[i].compression_label))
+                return COMP_LABEL_RESOLUTION_MAP[i].ingex_resolution_id;
+        }
+    } else {
+        // Note: using mxf_equals_ul_mod_regver function below because the Avid labels sometimes have a
+        // different registry version byte
+        for (i = 0; i < EC_LABEL_RESOLUTION_MAP_SIZE; i++) {
+            if (mxf_equals_ul_mod_regver(container_label, &EC_LABEL_RESOLUTION_MAP[i].container_label))
+                return EC_LABEL_RESOLUTION_MAP[i].ingex_resolution_id;
+        }
     }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)))
-    {
-        return UNC_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DNxHD1080i185ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DNxHD1080p185ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DNxHD720p185ClipWrapped)))
-    {
-        return DNX185i_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DNxHD1080i120ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DNxHD1080p120ClipWrapped)) ||
-             mxf_equals_ul(container_label, &MXF_EC_L(DNxHD720p120ClipWrapped)))
-    {
-        return DNX120i_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(DNxHD1080p36ClipWrapped)))
-    {
-        return DNX36p_MATERIAL_RESOLUTION;
-    }
-    else if (mxf_equals_ul(container_label, &MXF_EC_L(BWFClipWrapped)))
-    {
-        return 0;
-    }
-    else
-    {
-        return 0;
-    }
+
+    return 0;
 }
 
 prodauto::SourcePackage* IngexMXFInfo::getCurrentFileSourcePackage()
