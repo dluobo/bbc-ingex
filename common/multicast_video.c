@@ -376,7 +376,7 @@ static void *udp_reader_thread(void *arg)
 
 		// Check for corrupted packet - should never happen
 		if ((bytes_read != PACKET_SIZE) || (buf[0] != 'I')) {
-			printf("Bad packet: bytes_read=%d (PACKET_SIZE=%d) buf[0]=0x%02x\n", bytes_read, PACKET_SIZE, buf[0]);
+			printf("Bad packet: bytes_read=%zd (PACKET_SIZE=%d) buf[0]=0x%02x\n", bytes_read, PACKET_SIZE, buf[0]);
 			continue;
 		}
 
