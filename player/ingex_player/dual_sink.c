@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.9 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: dual_sink.c,v 1.10 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -429,6 +429,15 @@ static int dusk_osd_create_marks_model(void* data, OSDMarksModel** model)
         result = osd_create_marks_model(msk_get_osd(dualSink->dvsSink), model);
     }
     return result;
+}
+
+static void dusk_osd_free_marks_model(void* data, OSDMarksModel** model)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    /* either x11Sink frees the model or dvsSink */
+    osd_free_marks_model(msk_get_osd(dualSink->x11Sink), model);
+    osd_free_marks_model(msk_get_osd(dualSink->dvsSink), model);
 }
 
 static void dusk_osd_set_marks_model(void* data, int updateMask, OSDMarksModel* model)
@@ -881,6 +890,7 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->dualOSD.show_field_symbol = dusk_osd_show_field_symbol;
     newDualSink->dualOSD.set_mark_display = dusk_osd_set_mark_display;
     newDualSink->dualOSD.create_marks_model = dusk_osd_create_marks_model;
+    newDualSink->dualOSD.free_marks_model = dusk_osd_free_marks_model;
     newDualSink->dualOSD.set_marks_model = dusk_osd_set_marks_model;
     newDualSink->dualOSD.set_second_marks_model = dusk_osd_set_second_marks_model;
     newDualSink->dualOSD.set_progress_bar_visibility = dusk_osd_set_progress_bar_visibility;

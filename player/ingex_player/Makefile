@@ -184,7 +184,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
 	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
-	ffmpeg_source.c audio_switch_sink.c
+	ffmpeg_source.c audio_switch_sink.c overlay.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 

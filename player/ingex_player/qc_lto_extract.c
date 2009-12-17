@@ -1,5 +1,5 @@
 /*
- * $Id: qc_lto_extract.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: qc_lto_extract.c,v 1.6 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -787,7 +787,7 @@ static int extract_index_file(QCLTOExtract* extract, unsigned char* buffer)
     unsigned char magic1[6] = {'u','s','t','a','r','\0'};
     unsigned char magic2[6] = {'u','s','t','a','r',' '};
     if (memcmp(pmagic, magic1, 6) == 0 || memcmp(pmagic, magic2, 6) == 0) {
-        // Does it look like a D3 archive tape, starting with a txt file?
+        // Does it look like an archive tape, starting with a txt file?
 
         size_t filenameLen = strlen((char*)buffer);
         if (filenameLen < 6 ||

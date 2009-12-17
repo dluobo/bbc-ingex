@@ -1,5 +1,5 @@
 /*
- * $Id: shuttle_input_connect.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: shuttle_input_connect.c,v 1.6 2009/12/17 15:57:41 john_f Exp $
  *
  *
  *
@@ -100,7 +100,7 @@ static const ControlInputHelp g_qcShuttleInputHelp[] =
     {"6", "Toggle mark green (type M2)"},
     {"7", "Toggle mark blue (type M3)"},
     {"8", "Toggle mark cyan (type M4)"},
-    {"9", "Clear mark or clear all marks after a 1.5 second hold (except D3 VTR error and PSE failure)"},
+    {"9", "Clear mark or clear all marks after a 1.5 second hold (except VTR error and PSE failure)"},
     {"10", "Toggle play/pause or play/step percentage in combination with shuttle/jog"},
     {"11", "Seek clip mark"},
     {"12", "Next active mark bar"},
@@ -478,15 +478,15 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             {
                                 if (get_time_diff(&connect->qcClearMarkPressedTime) >= KEY_HOLD_EVENT_DURATION)
                                 {
-                                    /* clear all marks except for PSE failures and D3 VTR errors */
+                                    /* clear all marks except for PSE failures and VTR errors */
                                     mc_clear_all_marks(connect->control,
-                                        ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
+                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
                                 }
                                 else
                                 {
-                                    /* clear mark except for PSE failures and D3 VTR errors */
+                                    /* clear mark except for PSE failures and VTR errors */
                                     mc_clear_mark(connect->control,
-                                        ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
+                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
                                 }
                             }
                             break;

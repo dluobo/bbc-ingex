@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.11 2009/10/12 16:06:29 philipn Exp $
+ * $Id: on_screen_display.c,v 1.12 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -34,6 +34,7 @@
 #include "osd_symbols.h"
 #include "YUV_frame.h"
 #include "YUV_text_overlay.h"
+#include "overlay.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -146,6 +147,8 @@ struct DefaultOnScreenDisplay
     OnScreenDisplayState prevState; /* NOTE: does not include mark colours */
 
     OSDListener* listener;
+    
+    OverlayWorkspace workspace;
 
     p_info_rec p_info;
 
@@ -298,24 +301,6 @@ static void osdd_free_menu_list_item_int(void* data)
     free(itemInt);
 }
 
-static int init_yuv_frame(DefaultOnScreenDisplay* osdd, YUV_frame* yuvFrame, unsigned char* image, int width, int height)
-{
-    if (osdd->videoFormat == UYVY_FORMAT)
-    {
-        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, UYVY) == 1);
-    }
-    else if (osdd->videoFormat == YUV422_FORMAT)
-    {
-        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, YV16) == 1);
-    }
-    else /* YUV420_FORMAT */
-    {
-        CHK_ORET(YUV_frame_from_buffer(yuvFrame, image, width, height, I420) == 1);
-    }
-
-    return 1;
-}
-
 static void complete_labels(DefaultOnScreenDisplay* osdd)
 {
     int i, j;
@@ -427,7 +412,7 @@ static int initialise_audio_level_overlay(DefaultOnScreenDisplay* osdd, int widt
         (osdd->maxAudioLevels - 1) * AUDIO_LEVEL_BAR_SEP; /* in-between bars */
     osdd->audioLevelOverlay.h = height * AUDIO_LEVEL_RELATIVE_HEIGHT;
 
-    if (osdd->videoFormat == UYVY_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
     {
         osdd->audioLevelOverlay.ssx = 2;
         osdd->audioLevelOverlay.ssy = 1;
@@ -600,7 +585,6 @@ static void fill_audio_level_overlay(DefaultOnScreenDisplay* osdd)
 static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameInfo,
     unsigned char* image, int width, int height)
 {
-    YUV_frame yuvFrame;
     int xPos, yPos;
     char txtY, txtU, txtV, box;
     int hour, min, sec, frame;
@@ -622,11 +606,6 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     int markPixelSet;
     int markPixel;
     int hideAudioLevels;
-
-
-    /* initialise the YUV lib frame */
-    CHK_ORET(init_yuv_frame(osdd, &yuvFrame, image, width, height) == 1);
-
 
 
     /* start/stop ticker use if required */
@@ -692,19 +671,22 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         {
             xPos = (width - osdd->osdPauseSymbol->w) / 2;
             yPos = (height * 11) / 16 - osdd->osdPauseSymbol->h / 2;
-            CHK_ORET(add_overlay(osdd->osdPauseSymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdPauseSymbol, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else if (osdd->state->playSpeed == 1)
         {
             xPos = (width - osdd->osdPlaySymbol->w) / 2;
             yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
-            CHK_ORET(add_overlay(osdd->osdPlaySymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdPlaySymbol, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else if (osdd->state->playSpeed == -1)
         {
             xPos = (width - osdd->osdReversePlaySymbol->w) / 2;
             yPos = (height * 11) / 16 - osdd->osdReversePlaySymbol->h / 2;
-            CHK_ORET(add_overlay(osdd->osdReversePlaySymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdReversePlaySymbol, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else if (osdd->state->playSpeed > 1)
         {
@@ -713,13 +695,14 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
             xPos = (width - (osdd->osdPlaySymbol->w + osdd->numberData.cs_ovly[0].w * numberStringLen + 5)) / 2;
             yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
-            CHK_ORET(add_overlay(osdd->osdFastForwardSymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdFastForwardSymbol, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
             xPos += osdd->osdFastForwardSymbol->w + 5;
             for (i = 0; i < numberStringLen; i++)
             {
-                CHK_ORET(add_overlay(&osdd->numberData.cs_ovly[numberString[i] - '0'],
-                    &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+                CHK_ORET(apply_overlay(&osdd->numberData.cs_ovly[numberString[i] - '0'],
+                    image, osdd->videoFormat, width, height, xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
                 xPos += osdd->numberData.cs_ovly[numberString[i] - '0'].w;
             }
         }
@@ -732,13 +715,14 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             yPos = (height * 11) / 16 - osdd->osdPlaySymbol->h / 2;
             for (i = 0; i < numberStringLen; i++)
             {
-                CHK_ORET(add_overlay(&osdd->numberData.cs_ovly[numberString[i] - '0'],
-                    &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+                CHK_ORET(apply_overlay(&osdd->numberData.cs_ovly[numberString[i] - '0'],
+                    image, osdd->videoFormat, width, height, xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
                 xPos += osdd->numberData.cs_ovly[numberString[i] - '0'].w;
             }
 
             xPos += 5;
-            CHK_ORET(add_overlay(osdd->osdFastRewindSymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdFastRewindSymbol, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
     }
 
@@ -769,7 +753,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
                 box = 80;
             }
 
-            CHK_ORET(add_overlay(&osdd->markOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->markOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
             xPos += osdd->markOverlay.w + MARK_OVERLAY_SPACING;
         }
@@ -862,12 +847,14 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         timecodeHeight = osdd->timecodeTextData.height;
 
         /* timecode type */
-        CHK_ORET(add_overlay(tcTypeOvly, &yuvFrame, timecodeXPos, timecodeYPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(tcTypeOvly, image, osdd->videoFormat, width, height,
+            timecodeXPos, timecodeYPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         /* timecode */
         xPos = timecodeXPos + osdd->timecodeTypeData.cs_ovly[UNKNOWN_TC_OVLY_IDX].w * 5 / 3;
-        CHK_ORET(add_timecode_player(&osdd->timecodeTextData, hour, min, sec, frame, is_pal_frame_rate(&frameInfo->frameRate),
-            &yuvFrame, xPos, timecodeYPos, txtY, txtU, txtV, box) == YUV_OK);
+        CHK_ORET(apply_timecode_overlay(&osdd->timecodeTextData, hour, min, sec, frame, 
+            is_pal_frame_rate(&frameInfo->frameRate), image, osdd->videoFormat, width, height, 
+            xPos, timecodeYPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
 
@@ -1017,7 +1004,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         xPos = (width - osdd->progressBarOverlay.w) / 2;
         yPos = timecodeYPos + timecodeHeight + 20;
-        CHK_ORET(add_overlay(&osdd->progressBarOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->progressBarOverlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
 
         if (haveMarksModel)
@@ -1047,7 +1035,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
             xPos = (width - osdd->progressBarMarkOverlay.w) / 2;
             yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h - osdd->progressBarMarkOverlay.h;
-            CHK_ORET(add_overlay(&osdd->progressBarMarkOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->progressBarMarkOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
             if (markOverlayUpdated)
             {
@@ -1063,7 +1052,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
             xPos = (width - osdd->progressBarOverlay.w) / 2 + PROGRESS_BAR_ENDS_WIDTH - PROGRESS_BAR_MARK_WIDTH / 2;
             yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h - PROGRESS_BAR_MARK_OVERLAP;
-            CHK_ORET(add_overlay(&osdd->userMarksOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->userMarksOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
 
         if (haveSecondMarksModel)
@@ -1084,7 +1074,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
             xPos = (width - osdd->progressBarMarkOverlay.w) / 2;
             yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h + 8;
-            CHK_ORET(add_overlay(&osdd->progressBarMarkOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->progressBarMarkOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
             if (secondMarkOverlayUpdated)
             {
@@ -1100,7 +1091,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
             xPos = (width - osdd->progressBarOverlay.w) / 2 + PROGRESS_BAR_ENDS_WIDTH - PROGRESS_BAR_MARK_WIDTH / 2;
             yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h + PROGRESS_BAR_MARK_HEIGHT + 4 - PROGRESS_BAR_MARK_OVERLAP;
-            CHK_ORET(add_overlay(&osdd->secondUserMarksOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->secondUserMarksOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
 
         if (osdd->highlightProgressPointer &&
@@ -1135,11 +1127,13 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         yPos = timecodeYPos + timecodeHeight + 20 - (osdd->osdProgressBarPointer->h - osdd->progressBarOverlay.h) - PROGRESS_BAR_TB_HEIGHT;
         if (haveSecondMarksModel)
         {
-            CHK_ORET(add_overlay(osdd->osdLongProgressBarPointer, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdLongProgressBarPointer, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
         else
         {
-            CHK_ORET(add_overlay(osdd->osdProgressBarPointer, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(osdd->osdProgressBarPointer, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
     }
 
@@ -1168,7 +1162,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         xPos = width - (width - osdd->progressBarOverlay.w) / 2 + 6;
         yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h / 3 - osdd->osdLockSymbol->h / 2;
-        CHK_ORET(add_overlay(osdd->osdLockSymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(osdd->osdLockSymbol, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
 
@@ -1184,7 +1179,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
         xPos = (width - osdd->droppedFrameOverlay.w) / 2;
         yPos = timecodeYPos + timecodeHeight + 20 + osdd->progressBarOverlay.h + 10;
-        CHK_ORET(add_overlay(&osdd->droppedFrameOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->droppedFrameOverlay,image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
 
@@ -1216,7 +1212,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         {
             xPos = 50;
             yPos = (height - osdd->audioLevelOverlay.h) / 2;
-            CHK_ORET(add_overlay(&osdd->audioLevelOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+            CHK_ORET(apply_overlay(&osdd->audioLevelOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
         }
 
         box = 0;
@@ -1224,27 +1221,32 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         /* 0 dBFS */
         xPos = 50 + osdd->audioLevelOverlay.w;
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN;
-        CHK_ORET(add_overlay(&osdd->audioLevelM0Overlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->audioLevelM0Overlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         /* lineup level */
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN +
             (osdd->audioLevelOverlay.h - 2 * AUDIO_LEVEL_MARGIN) * (osdd->state->audioLineupLevel) / osdd->state->minimumAudioLevel;
-        CHK_ORET(add_overlay(&osdd->audioLevelLineupOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->audioLevelLineupOverlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         /* -40 dBFS */
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN +
             (osdd->audioLevelOverlay.h - 2 * AUDIO_LEVEL_MARGIN) * (-40) / osdd->state->minimumAudioLevel;
-        CHK_ORET(add_overlay(&osdd->audioLevelM40Overlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->audioLevelM40Overlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         /* -60 dBFS */
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN +
             (osdd->audioLevelOverlay.h - 2 * AUDIO_LEVEL_MARGIN) * (-60) / osdd->state->minimumAudioLevel;
-        CHK_ORET(add_overlay(&osdd->audioLevelM60Overlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->audioLevelM60Overlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         /* -96 dBFS */
         yPos = (height - osdd->audioLevelOverlay.h) / 2 + AUDIO_LEVEL_MARGIN +
             (osdd->audioLevelOverlay.h - 2 * AUDIO_LEVEL_MARGIN) * (-96) / osdd->state->minimumAudioLevel;
-        CHK_ORET(add_overlay(&osdd->audioLevelM96Overlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->audioLevelM96Overlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
 
@@ -1261,7 +1263,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
         /* position on an odd line (second field) */
         xPos = timecodeXPos + timecodeWidth + 5;
         yPos = timecodeYPos + timecodeHeight / 2 - osdd->osdFieldSymbol->h / 2;
-        CHK_ORET(add_overlay(osdd->osdFieldSymbol, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(osdd->osdFieldSymbol, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
 
@@ -1293,7 +1296,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             continue;
         }
 
-        CHK_ORET(add_overlay(&osdd->cachedLabels[i].labelOverlay, &yuvFrame, xPos, yPos, txtY, txtU, txtV, box) == 0);
+        CHK_ORET(apply_overlay(&osdd->cachedLabels[i].labelOverlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
     }
 
     return 1;
@@ -1301,7 +1305,6 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
 
 static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameInfo, unsigned char* image, int width, int height)
 {
-    YUV_frame yuvFrame;
     int xPos, yPos;
     char txtY, txtU, txtV, box;
     float fontScale = width / 720.0;
@@ -1331,10 +1334,6 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
         }
     }
 
-    /* initialise the YUV lib frame */
-    CHK_ORET(init_yuv_frame(osdd, &yuvFrame, image, width, height) == 1);
-
-
     /* white */
     txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
     txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
@@ -1345,8 +1344,8 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
     xPos = (xPos < 0) ? 0 : xPos;
     yPos = (height < 20) ? 0 : 20;
 
-    CHK_ORET(add_overlay(osdd->sourceInfoOverlay, &yuvFrame, xPos, yPos,
-        txtY, txtU, txtV, box) == YUV_OK);
+    CHK_ORET(apply_overlay(osdd->sourceInfoOverlay, image, osdd->videoFormat, width, height,
+        xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
     return 1;
 }
@@ -1354,7 +1353,6 @@ static int source_info_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* fra
 static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameInfo,
     unsigned char* image, int width, int height)
 {
-    YUV_frame yuvFrame;
     int xPos, yPos;
     char txtY, txtU, txtV, box;
     OSDMenuListItem* item;
@@ -1367,10 +1365,6 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
     int numMenuItemsShown;
     void* privateData = NULL;
     float fontScale = width / 720.0;
-
-
-    /* initialise the YUV lib frame */
-    CHK_ORET(init_yuv_frame(osdd, &yuvFrame, image, width, height) == 1);
 
 
     PTHREAD_MUTEX_LOCK(&osdd->setMenuModelMutex) /* prevent change in osdd->menu value */
@@ -1428,8 +1422,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
     xPos = MENU_OUTER_MARGIN;
     yPos = MENU_OUTER_MARGIN;
 
-    CHK_OFAIL(add_overlay(&menuInt->titleOverlay, &yuvFrame, xPos, yPos,
-        txtY, txtU, txtV, box) == YUV_OK);
+    CHK_OFAIL(apply_overlay(&menuInt->titleOverlay, image, osdd->videoFormat, width, height,
+        xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
     yPos += menuInt->titleOverlay.h;
 
@@ -1465,8 +1459,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
     txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
     box = 100;
 
-    CHK_OFAIL(add_overlay(&menuInt->statusOverlay, &yuvFrame, xPos, yPos,
-        txtY, txtU, txtV, box) == YUV_OK);
+    CHK_OFAIL(apply_overlay(&menuInt->statusOverlay, image, osdd->videoFormat, width, height,
+        xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
 
     yPos += menuInt->statusOverlay.h;
@@ -1506,8 +1500,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
         txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
         box = 100;
 
-        CHK_OFAIL(add_overlay(&menuInt->commentOverlay, &yuvFrame, xPos, yPos,
-            txtY, txtU, txtV, box) == YUV_OK);
+        CHK_OFAIL(apply_overlay(&menuInt->commentOverlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         yPos += menuInt->commentOverlay.h;
     }
@@ -1612,8 +1606,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
                     modSelectionOverlay.h = itemInt->textOverlay.h;
                 }
 
-                CHK_OFAIL(add_overlay(&modSelectionOverlay, &yuvFrame, xPos, yPos,
-                    txtY, txtU, txtV, box) == YUV_OK);
+                CHK_OFAIL(apply_overlay(&modSelectionOverlay, image, osdd->videoFormat, width, height,
+                    xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
             }
 
             if (item->state == MENU_ITEM_DISABLED)
@@ -1643,8 +1637,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
                 box = 100;
             }
 
-            CHK_OFAIL(add_overlay(&itemInt->textOverlay, &yuvFrame, xPos, yPos,
-                txtY, txtU, txtV, box) == YUV_OK);
+            CHK_OFAIL(apply_overlay(&itemInt->textOverlay, image, osdd->videoFormat, width, height,
+                xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
             yPos += itemInt->textOverlay.h;
 
 
@@ -1695,8 +1689,8 @@ static int add_menu_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* frameI
 
         xPos = MENU_OUTER_MARGIN;
 
-        CHK_OFAIL(add_overlay(&menuInt->bottomMarginOverlay, &yuvFrame, xPos, yPos,
-            txtY, txtU, txtV, box) == YUV_OK);
+        CHK_OFAIL(apply_overlay(&menuInt->bottomMarginOverlay, image, osdd->videoFormat, width, height,
+            xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
 
         yPos += menuInt->bottomMarginOverlay.h;
 
@@ -1753,6 +1747,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     }
 
     if (streamInfo->format != UYVY_FORMAT &&
+        streamInfo->format != UYVY_10BIT_FORMAT &&
         streamInfo->format != YUV422_FORMAT &&
         streamInfo->format != YUV420_FORMAT)
     {
@@ -1800,7 +1795,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->markOverlay.Cbuff = NULL;
     osdd->markOverlay.w = MARK_OVERLAY_WIDTH;
     osdd->markOverlay.h = MARK_OVERLAY_HEIGHT;
-    if (osdd->videoFormat == UYVY_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
     {
         osdd->markOverlay.ssx = 2;
         osdd->markOverlay.ssy = 1;
@@ -1898,7 +1893,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
     osdd->userMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
     osdd->secondUserMarksOverlay.w = osdd->progressBarMarkOverlay.w - 2 * PROGRESS_BAR_ENDS_WIDTH + PROGRESS_BAR_MARK_WIDTH;
     osdd->secondUserMarksOverlay.h = PROGRESS_BAR_MARK_HEIGHT;
-    if (osdd->videoFormat == UYVY_FORMAT)
+    if (osdd->videoFormat == UYVY_FORMAT || osdd->videoFormat == UYVY_10BIT_FORMAT)
     {
         osdd->progressBarOverlay.ssx = 2;
         osdd->progressBarOverlay.ssy = 1;
@@ -2464,6 +2459,8 @@ static void osdd_free(void* data)
 
     destroy_mutex(&osdd->setMenuModelMutex);
     destroy_mutex(&osdd->setMarksModelMutex);
+    
+    clear_overlay_workspace(&osdd->workspace);
 
     SAFE_FREE(&osdd);
 }
@@ -2774,6 +2771,8 @@ int osdd_create(OnScreenDisplay** osd)
     DefaultOnScreenDisplay* newOSDD;
 
     CALLOC_ORET(newOSDD, DefaultOnScreenDisplay, 1);
+    
+    init_overlay_workspace(&newOSDD->workspace);
 
     newOSDD->maxAudioLevels = -1;
     newOSDD->playStateTick = -1;

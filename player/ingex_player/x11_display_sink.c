@@ -1,5 +1,5 @@
 /*
- * $Id: x11_display_sink.c,v 1.10 2009/12/04 18:08:08 john_f Exp $
+ * $Id: x11_display_sink.c,v 1.11 2009/12/17 15:57:41 john_f Exp $
  *
  *
  *
@@ -44,6 +44,7 @@
 #include "keyboard_input_connect.h"
 #include "on_screen_display.h"
 #include "video_conversion.h"
+#include "video_conversion_10bits.h"
 #include "YUV_frame.h"
 #include "YUV_small_pic.h"
 #include "utils.h"
@@ -64,6 +65,9 @@ typedef struct
     unsigned char* inputBuffer;
     unsigned int inputBufferSize;
     StreamFormat videoFormat;
+
+    unsigned char* convertBuffer;
+    unsigned int convertBufferSize;
 
     unsigned char* scaleBuffer;
     unsigned int scaleBufferSize;
@@ -358,9 +362,9 @@ static void reset_streams(X11DisplayFrame* frame)
 
 static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
 {
-    if (sink->displayInitialised)
+    if (!sink->displayInitialised)
     {
-        return 1;
+        CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
     }
 
     sink->inputWidth = streamInfo->width;
@@ -374,7 +378,8 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
     sink->displayWidth = sink->width;
     sink->displayHeight = sink->height;
 
-    if (streamInfo->format == UYVY_FORMAT)
+    if (streamInfo->format == UYVY_FORMAT ||
+        streamInfo->format == UYVY_10BIT_FORMAT)
     {
         sink->yuvFormat = UYVY;
     }
@@ -386,8 +391,6 @@ static int init_display(X11DisplaySink* sink, const StreamInfo* streamInfo)
     {
         sink->yuvFormat = I420;
     }
-
-    CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
 
     /* check if we can use shared memory */
     sink->useSharedMemory = x11c_shared_memory_available(&sink->x11Common);
@@ -411,7 +414,9 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
     long durationSlept;
     YUV_frame inputFrame;
     YUV_frame outputFrame;
+    unsigned char* inputBuffer;
     unsigned char* rgbInputBuffer;
+    StreamFormat rgbInputFormat;
     int frameDurationMsec;
     int frameSlippage;
 
@@ -421,10 +426,23 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
 
     if (frame->videoIsPresent)
     {
+        if (frame->videoFormat == UYVY_10BIT_FORMAT)
+        {
+            DitherFrame(frame->convertBuffer, frame->inputBuffer, sink->inputWidth * 2, (sink->inputWidth + 5) / 6 * 16,
+                sink->inputWidth, sink->inputHeight);
+            inputBuffer = frame->convertBuffer;
+            rgbInputFormat = UYVY_FORMAT;
+        }
+        else
+        {
+            inputBuffer = frame->inputBuffer;
+            rgbInputFormat = frame->videoFormat;
+        }
+        
         /* scale image */
         if (sink->swScale != 1)
         {
-            YUV_frame_from_buffer(&inputFrame, (void*)frame->inputBuffer,
+            YUV_frame_from_buffer(&inputFrame, (void*)inputBuffer,
                 sink->inputWidth, sink->inputHeight, sink->yuvFormat);
 
             YUV_frame_from_buffer(&outputFrame, (void*)frame->scaleBuffer,
@@ -445,7 +463,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         }
         else
         {
-            rgbInputBuffer = frame->inputBuffer;
+            rgbInputBuffer = inputBuffer;
         }
 
         /* add OSD to frame */
@@ -459,7 +477,7 @@ static int display_frame(X11DisplaySink* sink, X11DisplayFrame* frame, const Fra
         }
 
         /* convert frame to RGB */
-        convertToRGB(sink, frame->videoFormat, rgbInputBuffer, frame->rgbBuffer, sink->width, sink->height);
+        convertToRGB(sink, rgbInputFormat, rgbInputBuffer, frame->rgbBuffer, sink->width, sink->height);
 
 
         /* wait until it is time to display this frame */
@@ -551,7 +569,16 @@ static int init_frame(X11DisplayFrame* frame)
 
     frame->videoFormat = sink->videoFormat;
 
-    if (frame->videoFormat == UYVY_FORMAT ||
+    if (sink->videoFormat == UYVY_10BIT_FORMAT)
+    {
+        frame->inputBufferSize = (sink->inputWidth + 5) / 6 * 16 * sink->inputHeight;
+        frame->convertBufferSize = sink->inputWidth * sink->inputHeight * 2;
+        if (sink->swScale != 1)
+        {
+            frame->scaleBufferSize = sink->width * sink->height * 2;
+        }
+    }
+    else if (frame->videoFormat == UYVY_FORMAT ||
         frame->videoFormat == YUV422_FORMAT)
     {
         frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 2;
@@ -572,7 +599,11 @@ static int init_frame(X11DisplayFrame* frame)
 
 
     MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
-    if (sink->swScale != 1)
+    if (frame->convertBufferSize > 0)
+    {
+        MALLOC_ORET(frame->convertBuffer, unsigned char, frame->convertBufferSize);
+    }
+    if (frame->scaleBufferSize > 0)
     {
         MALLOC_ORET(frame->scaleBuffer, unsigned char, frame->scaleBufferSize);
         MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
@@ -727,28 +758,22 @@ static int xskf_register_stream(void* data, int streamId, const StreamInfo* stre
         }
 
         /* TODO: user option to set aspect ratio */
-        if (!sink->displayInitialised)
+        if (!sink->displayInitialised || sink->haveReset)
         {
             CHK_ORET(init_display(sink, streamInfo));
-        }
-        else if (sink->haveReset)
-        {
-            /* check dimensions */
-            /* TODO: allow dimensions to change */
-            if (sink->inputWidth != streamInfo->width || sink->inputHeight != streamInfo->height)
-            {
-                ml_log_error("Image dimensions, %dx%d, does not match previous dimensions %dx%d\n",
-                    streamInfo->width, streamInfo->height, sink->inputWidth, sink->inputHeight);
-                return 0;
-            }
         }
 
         if (sink->osd != NULL && !sink->osdInitialised)
         {
-            /* sw scale changes the output dimensions */
             outputStreamInfo = *streamInfo;
+            /* sw scale changes the output dimensions */
             outputStreamInfo.width = sink->width;
             outputStreamInfo.height = sink->height;
+            /* UYVY_10BIT to UYVY conversion */
+            if (outputStreamInfo.format == UYVY_10BIT_FORMAT)
+            {
+                outputStreamInfo.format = UYVY_FORMAT;
+            }
 
             CHK_ORET(osd_initialise(sink->osd, &outputStreamInfo, &sink->aspectRatio));
             sink->osdInitialised = 1;
@@ -867,6 +892,7 @@ static void xskf_free(void* data)
         }
     }
     SAFE_FREE(&frame->inputBuffer);
+    SAFE_FREE(&frame->convertBuffer);
     SAFE_FREE(&frame->scaleBuffer);
 
     osds_free(&frame->osdState);
@@ -932,6 +958,7 @@ static int xsk_accept_stream(void* data, const StreamInfo* streamInfo)
         streamInfo->width > 0 &&
         streamInfo->height > 0 &&
         (streamInfo->format == UYVY_FORMAT ||
+            streamInfo->format == UYVY_10BIT_FORMAT ||
             streamInfo->format == YUV422_FORMAT ||
             streamInfo->format == YUV420_FORMAT))
     {

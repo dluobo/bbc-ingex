@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.c,v 1.7 2009/09/18 16:16:24 philipn Exp $
+ * $Id: frame_info.c,v 1.8 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -70,9 +70,9 @@ static const char* g_sourceInfoNames[] =
 
     "Orig filename",
     "Creation date",
-    "LTO spool no.",
-    "D3 spool no.",
-    "D3 item no.",
+    "LTO spool no",
+    "Source spool no",
+    "Source item no",
     "Prog title",
     "Episode title",
     "Tx date",

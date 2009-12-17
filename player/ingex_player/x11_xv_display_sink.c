@@ -1,5 +1,5 @@
 /*
- * $Id: x11_xv_display_sink.c,v 1.11 2009/12/04 18:08:10 john_f Exp $
+ * $Id: x11_xv_display_sink.c,v 1.12 2009/12/17 15:57:41 john_f Exp $
  *
  *
  *
@@ -31,6 +31,7 @@
 #include <sys/time.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <assert.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xproto.h>
@@ -49,6 +50,7 @@
 #include "YUV_frame.h"
 #include "YUV_small_pic.h"
 #include "video_conversion.h"
+#include "video_conversion_10bits.h"
 #include "utils.h"
 #include "logging.h"
 #include "macros.h"
@@ -340,12 +342,10 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     int widthForAspectRatio;
     int heightForAspectRatio;
 
-    if (sink->displayInitialised)
+    if (!sink->displayInitialised)
     {
-        return 1;
+        CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
     }
-
-    CHK_OFAIL(x11c_prepare_display(&sink->x11Common));
 
     sink->inputWidth = streamInfo->width;
     sink->inputHeight = streamInfo->height;
@@ -357,16 +357,11 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
     {
         sink->outputYUVFormat = UYVY;
     }
-    else if (streamInfo->format == YUV422_FORMAT)
-    {
-        /* format is converted to UYVY */
-        sink->outputYUVFormat = UYVY;
-    }
     else if (streamInfo->format == YUV420_FORMAT)
     {
         sink->outputYUVFormat = I420;
     }
-    else /* streamInfo->format == YUV444_FORMAT */
+    else /* streamInfo->format == UYVY_10BIT_FORMAT or YUV422_FORMAT or YUV444_FORMAT */
     {
         /* format is converted to UYVY */
         sink->outputYUVFormat = UYVY;
@@ -446,13 +441,9 @@ static int init_display(X11XVDisplaySink* sink, const StreamInfo* streamInfo)
 
     sink->inputVideoFormat = streamInfo->format;
 
-    if (streamInfo->format == UYVY_FORMAT)
-    {
-        sink->frameFormat = X11_FOURCC('U','Y','V','Y');
-        sink->frameSize = sink->width * sink->height * 2;
-        sink->outputVideoFormat = streamInfo->format;
-    }
-    else if (streamInfo->format == YUV422_FORMAT ||
+    if (streamInfo->format == UYVY_FORMAT ||
+        streamInfo->format == UYVY_10BIT_FORMAT ||
+        streamInfo->format == YUV422_FORMAT ||
         streamInfo->format == YUV444_FORMAT)
     {
         sink->frameFormat = X11_FOURCC('U','Y','V','Y');
@@ -505,7 +496,7 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
     float scaleFactor;
     YUV_frame inputFrame;
     YUV_frame outputFrame;
-    unsigned char* convertOutputBuffer;
+    unsigned char* activeBuffer;
     int frameDurationMsec;
     int frameSlippage;
 
@@ -516,46 +507,62 @@ static int display_frame(X11XVDisplaySink* sink, X11DisplayFrame* frame, const F
     if (frame->videoIsPresent)
     {
         /* convert if required */
-        if (sink->inputVideoFormat == YUV444_FORMAT)
+        if (sink->inputVideoFormat == UYVY_10BIT_FORMAT)
         {
             if (sink->swScale != 1)
             {
-                /* scale afterwards */
-                convertOutputBuffer = frame->scaleInputBuffer;
+                /* scale required afterwards */
+                activeBuffer = frame->scaleInputBuffer;
             }
             else
             {
                 /* no scale afterwards */
-                convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
+                activeBuffer = (unsigned char*)frame->yuv_image->data;
             }
 
-            yuv444_to_uyvy(sink->inputWidth, sink->inputHeight, frame->inputBuffer, convertOutputBuffer);
+            DitherFrame(activeBuffer, frame->inputBuffer, sink->inputWidth * 2, (sink->inputWidth + 5) / 6 * 16,
+                sink->inputWidth, sink->inputHeight);
+        }
+        else if (sink->inputVideoFormat == YUV444_FORMAT)
+        {
+            if (sink->swScale != 1)
+            {
+                /* scale required afterwards */
+                activeBuffer = frame->scaleInputBuffer;
+            }
+            else
+            {
+                /* no scale afterwards */
+                activeBuffer = (unsigned char*)frame->yuv_image->data;
+            }
+
+            yuv444_to_uyvy(sink->inputWidth, sink->inputHeight, frame->inputBuffer, activeBuffer);
         }
         else if (sink->inputVideoFormat == YUV422_FORMAT)
         {
             if (sink->swScale != 1)
             {
-                /* scale afterwards */
-                convertOutputBuffer = frame->scaleInputBuffer;
+                /* scale required afterwards */
+                activeBuffer = frame->scaleInputBuffer;
             }
             else
             {
                 /* no scale afterwards */
-                convertOutputBuffer = (unsigned char*)frame->yuv_image->data;
+                activeBuffer = (unsigned char*)frame->yuv_image->data;
             }
 
-            yuv422_to_uyvy_2(sink->inputWidth, sink->inputHeight, 0, frame->inputBuffer, convertOutputBuffer);
+            yuv422_to_uyvy_2(sink->inputWidth, sink->inputHeight, 0, frame->inputBuffer, activeBuffer);
         }
         else
         {
-            /* no conversion - scale input if from the frame input buffer */
-            convertOutputBuffer = frame->inputBuffer;
+            /* no conversion - scale input frame->input buffer != frame->yuv_image->data */
+            activeBuffer = frame->inputBuffer;
         }
 
-        /* scale image */
+        /* scale image and output to frame->yuv_image */
         if (sink->swScale != 1)
         {
-            YUV_frame_from_buffer(&inputFrame, (void*)convertOutputBuffer,
+            YUV_frame_from_buffer(&inputFrame, (void*)activeBuffer,
                 sink->inputWidth, sink->inputHeight, sink->outputYUVFormat);
 
             YUV_frame_from_buffer(&outputFrame, (void*)(unsigned char*)frame->yuv_image->data,
@@ -674,7 +681,20 @@ static int init_frame(X11DisplayFrame* frame)
 
     PTHREAD_MUTEX_LOCK(&sink->x11Common.eventMutex)
 
-    if (sink->inputVideoFormat == YUV444_FORMAT)
+    if (sink->inputVideoFormat == UYVY_10BIT_FORMAT)
+    {
+        /* Conversion required for UYVY 10-bit input */
+        frame->inputBufferSize = (sink->inputWidth + 5) / 6 * 16 * sink->inputHeight;
+        MALLOC_ORET(frame->inputBuffer, unsigned char, frame->inputBufferSize);
+
+        /* buffer for software scaling (after 10- to 8-bit conversion) */
+        if (sink->swScale != 1)
+        {
+            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, sink->inputWidth * sink->inputHeight * 2);
+            MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
+        }
+    }
+    else if (sink->inputVideoFormat == YUV444_FORMAT)
     {
         /* Conversion required for YUV444 input */
         frame->inputBufferSize = sink->inputWidth * sink->inputHeight * 3;
@@ -683,7 +703,7 @@ static int init_frame(X11DisplayFrame* frame)
         /* buffer for software scaling */
         if (sink->swScale != 1)
         {
-            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, frame->inputBufferSize);
+            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, sink->inputWidth * sink->inputHeight * 2);
             MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
         }
     }
@@ -696,7 +716,7 @@ static int init_frame(X11DisplayFrame* frame)
         /* buffer for software scaling */
         if (sink->swScale != 1)
         {
-            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, frame->inputBufferSize);
+            MALLOC_ORET(frame->scaleInputBuffer, unsigned char, sink->inputWidth * sink->inputHeight * 2);
             MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
         }
     }
@@ -716,7 +736,7 @@ static int init_frame(X11DisplayFrame* frame)
         MALLOC_ORET(frame->scaleWorkspace, unsigned char, sink->inputWidth * 3);
     }
     /* else frame->inputBuffer = (unsigned char*)frame->yuv_image->data;
-    delayed until after creating yuv_image */
+    but setting delayed until after creating yuv_image */
 
     XLockDisplay(sink->x11Common.windowInfo.display);
     if (sink->useSharedMemory)
@@ -769,7 +789,8 @@ static int init_frame(X11DisplayFrame* frame)
     XUnlockDisplay(sink->x11Common.windowInfo.display);
 
     /* input buffer == output if no scaling and no conversion */
-    if (sink->inputVideoFormat != YUV444_FORMAT &&
+    if (sink->inputVideoFormat != UYVY_10BIT_FORMAT &&
+        sink->inputVideoFormat != YUV444_FORMAT &&
         sink->inputVideoFormat != YUV422_FORMAT &&
         sink->swScale == 1)
     {
@@ -815,28 +836,18 @@ static int xvskf_register_stream(void* data, int streamId, const StreamInfo* str
             return 0;
         }
 
-        if (!sink->displayInitialised)
+        if (!sink->displayInitialised || sink->haveReset)
         {
             CHK_ORET(init_display(sink, streamInfo));
-        }
-        else if (sink->haveReset)
-        {
-            /* check dimensions */
-            /* TODO: allow dimensions to change */
-            if (sink->inputWidth != streamInfo->width || sink->inputHeight != streamInfo->height)
-            {
-                ml_log_error("Image dimensions, %dx%d, does not match previous dimensions %dx%d\n",
-                    streamInfo->width, streamInfo->height, sink->inputWidth, sink->inputHeight);
-                return 0;
-            }
         }
 
         if (sink->osd != NULL && !sink->osdInitialised)
         {
             outputStreamInfo = *streamInfo;
 
-            /* YUV422 and YUV444 are converted to UYVY */
-            if (streamInfo->format == YUV422_FORMAT ||
+            /* UYVY_10BIT, YUV422 and YUV444 are converted to UYVY */
+            if (streamInfo->format == UYVY_10BIT_FORMAT ||
+                streamInfo->format == YUV422_FORMAT ||
                 streamInfo->format == YUV444_FORMAT)
             {
                 outputStreamInfo.format = UYVY_FORMAT;
@@ -1030,9 +1041,10 @@ static int xvsk_accept_stream(void* data, const StreamInfo* streamInfo)
         streamInfo->width > 0 &&
         streamInfo->height > 0 &&
         (streamInfo->format == UYVY_FORMAT ||
-             streamInfo->format == YUV422_FORMAT ||
-             streamInfo->format == YUV420_FORMAT ||
-             streamInfo->format == YUV444_FORMAT))
+            streamInfo->format == UYVY_10BIT_FORMAT ||
+            streamInfo->format == YUV422_FORMAT ||
+            streamInfo->format == YUV420_FORMAT ||
+            streamInfo->format == YUV444_FORMAT))
     {
         return 1;
     }

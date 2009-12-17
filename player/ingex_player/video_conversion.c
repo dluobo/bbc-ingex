@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: video_conversion.c,v 1.6 2009/12/17 15:57:41 john_f Exp $
  *
  *
  *
@@ -742,6 +742,34 @@ void fill_black(StreamFormat format, int width, int height, unsigned char* image
             image[i + 1] = 0x10;
             image[i + 2] = 0x80;
             image[i + 3] = 0x10;
+        }
+    }
+    else if (format == UYVY_10BIT_FORMAT)
+    {
+        int i;
+        int size = (width + 5) / 6 * 16 * height;
+
+        for (i = 0; i < size; i += 16)
+        {
+            image[i + 0] = 0x00;
+            image[i + 1] = 0x02;
+            image[i + 2] = 0x01;
+            image[i + 3] = 0x20;
+
+            image[i + 4] = 0x40;
+            image[i + 5] = 0x00;
+            image[i + 6] = 0x08;
+            image[i + 7] = 0x04;
+
+            image[i + 8] = 0x00;
+            image[i + 9] = 0x02;
+            image[i + 10] = 0x01;
+            image[i + 11] = 0x20;
+            
+            image[i + 12] = 0x40;
+            image[i + 13] = 0x00;
+            image[i + 14] = 0x08;
+            image[i + 15] = 0x04;
         }
     }
     else if (format == YUV422_FORMAT)

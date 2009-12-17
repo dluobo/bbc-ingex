@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.13 2009/09/18 16:16:24 philipn Exp $
+ * $Id: dvs_sink.c,v 1.14 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -34,6 +34,7 @@
 #include "dvs_sink.h"
 #include "on_screen_display.h"
 #include "video_conversion.h"
+#include "video_conversion_10bits.h"
 #include "YUV_frame.h"
 #include "utils.h"
 #include "logging.h"
@@ -183,6 +184,7 @@ struct DVSSink
     TimecodeStream timecodes[MAX_TIMECODES];
     int numTimecodes;
 
+    int depth8Bit;
     unsigned int rasterWidth;
     unsigned int rasterHeight;
     unsigned int videoDataSize;
@@ -227,6 +229,11 @@ struct DVSSink
     int reversePlay;
 
     int muteAudio;
+    
+    unsigned char* workBuffer1;
+    unsigned int workBuffer1Size;
+    unsigned char* workBuffer2;
+    unsigned int workBuffer2Size;
 };
 
 
@@ -457,7 +464,7 @@ static int display_on_sv_fifo(DVSSink* sink, DVSFifoBuffer* fifoBuffer)
 
 
     /* set VITC */
-    if (sink->palFFMode)
+    if (sink->palFFMode && sink->depth8Bit) /* writing VITC lines is only supported for 8-bit */
     {
         /* write timecode lines directly */
 
@@ -825,7 +832,9 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
 
     /* video, 25 fps, UYVY/YUV422 */
     if (streamInfo->type == PICTURE_STREAM_TYPE &&
-        (streamInfo->format == UYVY_FORMAT || streamInfo->format == YUV422_FORMAT) &&
+        (streamInfo->format == UYVY_FORMAT ||
+            streamInfo->format == UYVY_10BIT_FORMAT ||
+            streamInfo->format == YUV422_FORMAT) &&
         memcmp(&streamInfo->frameRate, &g_palFrameRate, sizeof(Rational)) == 0)
     {
         if ((unsigned int)streamInfo->width == sink->rasterWidth &&
@@ -834,7 +843,7 @@ static int dvs_accept_stream(void* data, const StreamInfo* streamInfo)
         {
             return 1;
         }
-        else if (sink->fitVideo && streamInfo->format == UYVY_FORMAT)
+        else if (sink->fitVideo && streamInfo->format == UYVY_FORMAT) /* fitting UYVY_10BIT not supported */
         {
             return 1;
         }
@@ -902,9 +911,14 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         if (sink->osd != NULL && !sink->osdInitialised)
         {
             /* TODO: clean this up */
-            /* set the format to UYVY because YUV422 inputs will be converted */
+            
             formats format = streamInfo->format;
-            ((StreamInfo*)streamInfo)->format = UYVY_FORMAT;
+            if (streamInfo->format == YUV422_FORMAT ||
+                (streamInfo->format == UYVY_10BIT_FORMAT && sink->depth8Bit))
+            {
+                /* input format will be converted to UYVY before applying overlay */
+                ((StreamInfo*)streamInfo)->format = UYVY_FORMAT;
+            }
 
             CHK_ORET(osd_initialise(sink->osd, streamInfo, &sink->aspectRatio));
             sink->osdInitialised = 1;
@@ -916,8 +930,22 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
         dvsStream->index = 0;
         dvsStream->streamId = streamId;
         dvsStream->streamInfo = *streamInfo;
-        dvsStream->dataSize = streamInfo->width * streamInfo->height * 2;
-        if (streamInfo->format == UYVY_FORMAT &&
+        if (streamInfo->format == UYVY_FORMAT || streamInfo->format == YUV422_FORMAT)
+        {
+            dvsStream->dataSize = streamInfo->width * streamInfo->height * 2;
+        }
+        else // UYVY_10BIT_FORMAT
+        {
+            dvsStream->dataSize = (streamInfo->width + 5) / 6 * 16 * streamInfo->height;
+        }
+
+        sink->workBuffer1Size = (sink->rasterWidth + 5) / 6 * 16 * sink->rasterHeight;
+        CALLOC_ORET(sink->workBuffer1, unsigned char, sink->workBuffer1Size);
+        sink->workBuffer2Size = sink->workBuffer1Size;
+        CALLOC_ORET(sink->workBuffer2, unsigned char, sink->workBuffer2Size);
+        
+        if (((streamInfo->format == UYVY_FORMAT && sink->depth8Bit) ||
+                (streamInfo->format == UYVY_10BIT_FORMAT && !sink->depth8Bit)) &&
             (unsigned int)streamInfo->width == sink->rasterWidth &&
             ((unsigned int)streamInfo->height == sink->rasterHeight ||
                     (streamInfo->height == 576 && sink->rasterHeight == 592)))
@@ -927,8 +955,16 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             if (sink->rasterHeight == 592 && streamInfo->height == 576)
             {
                 // If raster is PALFF mode, skip first 16 lines
-                dvsStream->data[0] = &sink->fifoBuffer[0].buffer[sink->rasterWidth * 16 * 2];
-                dvsStream->data[1] = &sink->fifoBuffer[1].buffer[sink->rasterWidth * 16 * 2];
+                if (sink->depth8Bit)
+                {
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[sink->rasterWidth * 16 * 2];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[sink->rasterWidth * 16 * 2];
+                }
+                else
+                {
+                    dvsStream->data[0] = &sink->fifoBuffer[0].buffer[(sink->rasterWidth + 5) / 6 * 16 * 16];
+                    dvsStream->data[1] = &sink->fifoBuffer[1].buffer[(sink->rasterWidth + 5) / 6 * 16 * 16];
+                }
             }
             else
             {
@@ -949,7 +985,6 @@ static int dvs_register_stream(void* data, int streamId, const StreamInfo* strea
             dvsStream->allocatedDataSize[0] = dvsStream->dataSize;
             CALLOC_ORET(dvsStream->data[1], unsigned char, dvsStream->dataSize);
             dvsStream->allocatedDataSize[1] = dvsStream->dataSize;
-
             dvsStream->ownData = 1;
 
             if ((unsigned int)streamInfo->width != sink->rasterWidth ||
@@ -1117,31 +1152,58 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     int h;
     int w;
     DVSFifoBuffer* fifoBuffer = &sink->fifoBuffer[sink->currentFifoBuffer];
+    unsigned char* activeBuffer = NULL;
+    int activeBufferDepth8Bit = 1;
 
 
-    /* if video is not present than set to black */
     if (!sink->videoStream.isPresent)
     {
-        fill_black(UYVY_FORMAT, sink->width, sink->height, sink->videoStream.data[sink->currentFifoBuffer]);
+        if (sink->videoStream.data[0] != NULL) /* is NULL if no video stream registered */
+        {
+            /* if video is not present than set to black */
+            if (sink->videoStream.streamInfo.format == UYVY_10BIT_FORMAT)
+            {
+                fill_black(UYVY_10BIT_FORMAT, sink->width, sink->height, sink->videoStream.data[sink->currentFifoBuffer]);
+                activeBufferDepth8Bit = 0;
+            }
+            else
+            {
+                fill_black(UYVY_FORMAT, sink->width, sink->height, sink->videoStream.data[sink->currentFifoBuffer]);
+                activeBufferDepth8Bit = 1;
+            }
+            activeBuffer = sink->videoStream.data[sink->currentFifoBuffer];
+        }
     }
-    /* else convert yuv422 input video */
     else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
     {
-        /* convert to uyvy and use the fifo buffer as a work buffer */
+        /* convert yuv422 to uyvy into workBuffer1 */
         yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer],
-            fifoBuffer->buffer);
-
-        /* TODO: avoid this memcpy and memset below by writing the incoming data to another temp buffer */
-
-        memcpy(sink->videoStream.data[sink->currentFifoBuffer], fifoBuffer->buffer, sink->width * sink->height * 2);
-
-        /* cleanup the fifo buffer if the intermediate data goes beyond the video data and into the audio data */
-        if ((unsigned int)(sink->width * sink->height * 2) > sink->rasterWidth * sink->rasterHeight * 2)
+            sink->workBuffer1);
+        activeBuffer = sink->workBuffer1;
+        activeBufferDepth8Bit = 1;
+    }
+    else if (sink->depth8Bit && sink->videoStream.streamInfo.format == UYVY_10BIT_FORMAT)
+    {
+        /* convert 10-bit UYVY to 8-bit */
+        if (!sink->videoStream.requireFit)
         {
-            /* set audio data overlap to 0 */
-            memset(&fifoBuffer->buffer[sink->rasterWidth * sink->rasterHeight * 2], 0,
-                sink->width * sink->height * 2 - sink->rasterWidth * sink->rasterHeight * 2);
+            /* no more conversion required after this conversion */
+            activeBuffer = fifoBuffer->buffer;
         }
+        else
+        {
+            /* need to fit picture */
+            activeBuffer = sink->workBuffer1;
+        }
+        DitherFrame(activeBuffer, sink->videoStream.data[sink->currentFifoBuffer],
+            sink->width * 2, (sink->width + 5) / 6 * 16,
+            sink->width, sink->height);
+        activeBufferDepth8Bit = 1;
+    }
+    else
+    {
+        activeBuffer = sink->videoStream.data[sink->currentFifoBuffer];
+        activeBufferDepth8Bit = !(sink->videoStream.streamInfo.format == UYVY_10BIT_FORMAT);
     }
 
 
@@ -1149,18 +1211,39 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     if (sink->videoStream.isPresent && frameInfo->reversePlay)
     {
         /* simple reverse field by moving frame down one line */
-        memmove(sink->videoStream.data[sink->currentFifoBuffer] + sink->width * 2,
-            sink->videoStream.data[sink->currentFifoBuffer],
-            sink->width * (sink->height - 1) * 2);
+        if (activeBufferDepth8Bit)
+        {
+            memmove(activeBuffer + sink->width * 2,  activeBuffer, sink->width * (sink->height - 1) * 2);
+        }
+        else
+        {
+            memmove(activeBuffer + (sink->width + 5) / 6 * 16,  activeBuffer, (sink->width + 5) / 6 * 16 * (sink->height - 1));
+        }
     }
 
     /* fit video */
-    if (sink->videoStream.requireFit)
+    if (sink->videoStream.isPresent && sink->videoStream.requireFit)
     {
-        unsigned char* inData = sink->videoStream.data[sink->currentFifoBuffer];
-        unsigned char* outData = fifoBuffer->buffer;
+        /* only support 8-bit */
+        CHK_ORET(activeBufferDepth8Bit);
+        
+        unsigned char* inData;
+        unsigned char* outData;
         int imageYStart;
         int imageXStart;
+
+        inData = activeBuffer;
+        if (sink->depth8Bit)
+        {
+            outData = fifoBuffer->buffer;
+            activeBuffer = fifoBuffer->buffer;
+        }
+        else
+        {
+            /* output to workBuffer2 because a 8- to 10-bit conversion is still required */
+            outData = sink->workBuffer2;
+            activeBuffer = sink->workBuffer2;
+        }
 
         imageYStart = ((int)sink->rasterHeight < sink->height) ? 0 : (sink->rasterHeight - sink->height) / 2;
         imageXStart = ((int)sink->rasterWidth < sink->width) ? 0 : (sink->rasterWidth - sink->width) / 2;
@@ -1295,15 +1378,24 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
 
 
     /* add OSD to frame */
-    if (sink->videoStream.isPresent && sink->osd != NULL)
+    if (sink->osd != NULL) /* only support OSD for 8-bit video */
     {
-        if (!osd_add_to_image(sink->osd, frameInfo, fifoBuffer->buffer + sink->videoOffset,
-            sink->rasterWidth, sink->rasterHeight))
+        if (!osd_add_to_image(sink->osd, frameInfo, activeBuffer + sink->videoOffset,
+            sink->rasterWidth, sink->rasterHeight - sink->videoOffset))
         {
             fprintf(stderr, "Failed to add OSD to frame\n");
             /* continue anyway */
         }
     }
+    
+    if (!sink->depth8Bit && activeBufferDepth8Bit)
+    {
+        /* convert 8-bit UYVY to 10-bit */
+        ConvertFrame8to10(fifoBuffer->buffer, activeBuffer,
+            (sink->rasterWidth + 5) / 6 * 16, sink->rasterWidth * 2,
+            sink->rasterWidth, sink->rasterHeight);
+    }
+    
 
 
     PTHREAD_MUTEX_LOCK(&sink->frameInfosMutex);
@@ -1417,7 +1509,14 @@ static void dvs_close(void* data)
     if (sink->sv != NULL && sink->svfifo != NULL)
     {
         memset(sink->fifoBuffer[0].buffer, 0, sink->fifoBuffer[0].bufferSize);
-        fill_black(UYVY_FORMAT, sink->rasterWidth, sink->rasterHeight, sink->fifoBuffer[0].buffer);
+        if (sink->depth8Bit)
+        {
+            fill_black(UYVY_FORMAT, sink->rasterWidth, sink->rasterHeight, sink->fifoBuffer[0].buffer);
+        }
+        else
+        {
+            fill_black(UYVY_10BIT_FORMAT, sink->rasterWidth, sink->rasterHeight, sink->fifoBuffer[0].buffer);
+        }
         sink->fifoBuffer[0].vitcCount = 0;
         sink->fifoBuffer[0].ltcCount = 0;
         memset(&sink->fifoBuffer[0].vitcTimecode, 0, sizeof(sink->fifoBuffer[0].vitcTimecode));
@@ -1428,6 +1527,8 @@ static void dvs_close(void* data)
         PTHREAD_MUTEX_UNLOCK(&sink->frameInfosMutex);
     }
 
+    SAFE_FREE(&sink->workBuffer1);
+    SAFE_FREE(&sink->workBuffer2);
 
     if (sink->videoStream.ownData)
     {
@@ -1569,14 +1670,24 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extra
 
     SV_CHK_OFAIL(sv_status(newSink->sv, &status_info));
     ml_log_info("DVS card [card=%d,channel=%d] display raster is %dx%di, mode is 0x%x\n", selectedCard, selectedChannel, status_info.xsize, status_info.ysize, status_info.config);
+    
+    CHK_OFAIL(status_info.nbit == 8 || status_info.nbit == 10);
+    newSink->depth8Bit = (status_info.nbit == 8);
 
     newSink->rasterWidth = status_info.xsize;
     newSink->rasterHeight = status_info.ysize;
 
-    newSink->videoDataSize = newSink->rasterWidth * newSink->rasterHeight * 2;
+    if (newSink->depth8Bit)
+    {
+        newSink->videoDataSize = newSink->rasterWidth * newSink->rasterHeight * 2;
+    }
+    else
+    {
+        newSink->videoDataSize = (newSink->rasterWidth + 5) / 6 * 16 * newSink->rasterHeight;
+    }
     newSink->audioDataSize = 1920 * 2 * 4; /* 48k Hz for 25 fps, 2 channels, 32 bit */
 
-    newSink->audioPairOffset[0] = newSink->rasterWidth * newSink->rasterHeight * 2;
+    newSink->audioPairOffset[0] = newSink->videoDataSize;
     for (i = 2; i < MAX_DVS_AUDIO_STREAMS; i += 2)
     {
         newSink->audioPairOffset[i / 2] = newSink->audioPairOffset[(i / 2) - 1] + 0x4000;
@@ -1589,14 +1700,29 @@ int dvs_open(int dvsCard, int dvsChannel, SDIVITCSource sdiVITCSource, int extra
     MEM_ALLOC_OFAIL(newSink->fifoBuffer[1].buffer, valloc, unsigned char, newSink->fifoBuffer[1].bufferSize);
     memset(newSink->fifoBuffer[1].buffer, 0, newSink->fifoBuffer[1].bufferSize);
 
-    fill_black(UYVY_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[0].buffer);
-    fill_black(UYVY_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[1].buffer);
+    if (newSink->depth8Bit)
+    {
+        fill_black(UYVY_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[0].buffer);
+        fill_black(UYVY_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[1].buffer);
+    }
+    else
+    {
+        fill_black(UYVY_10BIT_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[0].buffer);
+        fill_black(UYVY_10BIT_FORMAT, newSink->rasterWidth, newSink->rasterHeight, newSink->fifoBuffer[1].buffer);
+    }
 
     // If raster is PALFF mode, then set start offset to after first 16 lines
     if (newSink->rasterHeight == 592)
     {
         newSink->palFFMode = 1;
-        newSink->videoOffset = newSink->rasterWidth * 16 * 2;
+        if (newSink->depth8Bit)
+        {
+            newSink->videoOffset = newSink->rasterWidth * 16 * 2;
+        }
+        else
+        {
+            newSink->videoOffset = (newSink->rasterWidth + 5) / 6 * 16 * 16;
+        }
     }
 
 

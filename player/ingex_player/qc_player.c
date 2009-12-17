@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.10 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: qc_player.c,v 1.11 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -155,7 +155,7 @@ static const Options g_defaultOptions =
     XV_DISPLAY_OUTPUT,
     20,
     {0,0},
-    {0,0},
+    {1,1},
     {0,0},
     0.0,
     VITC_AS_SDI_VITC,
@@ -763,7 +763,7 @@ static int validate_player_quit(MediaPlayer* player, void* data)
     return 0;
 }
 
-static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Options* options,
+static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, Options* options,
     char* directory, char* name, char* sessionName)
 {
     MediaSource* mediaSource = NULL;
@@ -784,7 +784,7 @@ static int play_d3_mxf_file(QCPlayer* player, int argc, const char** argv, Optio
     player->mediaSource = mls_get_media_source(multipleSource);
 
 
-    /* open the D3 MXF source */
+    /* open the archive MXF source */
 
     strcpy(filename, directory);
     strcat_separator(filename);
@@ -1133,7 +1133,7 @@ static int qc_main(QCPlayer* player, int argc, const char** argv, Options* optio
 
             /* play selected file */
 
-            if (!play_d3_mxf_file(player, argc, argv, options, directory, name, sessionName))
+            if (!play_archive_mxf_file(player, argc, argv, options, directory, name, sessionName))
             {
                 ml_log_warn("Failed to play '%s/%s'\n", directory, name);
                 /* TODO: check if file exists to give more some usefull feedback */
@@ -1352,9 +1352,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --x11                    X11 display output (RGB colourspace)\n");
     fprintf(stderr, "  --disable-x11-osd        Disable the OSD on the X11 or X11 Xv output\n");
     fprintf(stderr, "  --src-buf  <size>        Size of the media source buffer (default is %d)\n", g_defaultOptions.srcBufferSize);
-    fprintf(stderr, "  --no-pse-fails           Don't add marks for PSE failures recorded in the D3 MXF file\n");
-    fprintf(stderr, "  --no-vtr-errors          Don't add marks for VTR playback errors recorded in the D3 MXF file\n");
-    fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default uses screen resolution and assumes a 4:3 monitor)\n");
+    fprintf(stderr, "  --no-pse-fails           Don't add marks for PSE failures recorded in the archive MXF file\n");
+    fprintf(stderr, "  --no-vtr-errors          Don't add marks for VTR playback errors recorded in the archive MXF file\n");
+    fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
     fprintf(stderr, "  --scale <float>          Scale the video (currently only works for the X11 Xv extension output)\n");
@@ -1900,8 +1900,8 @@ int main(int argc, const char **argv)
             {M2_MARK_TYPE, "green", GREEN_COLOUR},
             {M3_MARK_TYPE, "blue", BLUE_COLOUR},
             {M4_MARK_TYPE, "cyan", CYAN_COLOUR},
-            {D3_VTR_ERROR_MARK_TYPE, "yellow (D3 VTR)", YELLOW_COLOUR},
-            {D3_PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
+            {VTR_ERROR_MARK_TYPE, "yellow (VTR)", YELLOW_COLOUR},
+            {PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
         };
         memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
         g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);

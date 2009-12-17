@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.10 2009/03/25 13:53:18 john_f Exp $
+ * $Id: mxf_source.c,v 1.11 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -85,7 +85,7 @@ struct MXFFileSource
     int numInputTracks;
     int numTimecodeTracks;
     int eof;
-    int isD3MXF;
+    int isArchiveMXF;
 
     struct timeval lastPostCompleteTry;
     int postCompleteTryCount;
@@ -215,7 +215,6 @@ static int create_output_streams(InputTrackData* trackData, int numOutputStreams
     {
         trackData->streamData[j].streamId = *nextOutputStreamId + j;
 
-        CHK_ORET(initialise_stream_info(&trackData->streamData[j].streamInfo));
         CHK_ORET(duplicate_stream_info(commonStreamInfo, &trackData->streamData[j].streamInfo));
     }
 
@@ -669,7 +668,7 @@ static int mxfs_seek(void* data, int64_t position)
     return 0;
 }
 
-/* TODO: VITC and LTC only works for D3 MXF */
+/* TODO: VITC and LTC only works for archive MXF */
 static int mxfs_seek_timecode(void* data, const Timecode* timecode, TimecodeType type, TimecodeSubType subType)
 {
     MXFFileSource* source = (MXFFileSource*)data;
@@ -750,8 +749,8 @@ static int mxfs_is_complete(void* data)
     int64_t availableLength;
     int64_t length;
 
-    /* only D3 MXF files with option to mark PSE failures or VTR errors require post complete step */
-    if (!source->isD3MXF ||
+    /* only archive MXF files with option to mark PSE failures or VTR errors require post complete step */
+    if (!source->isArchiveMXF ||
         (!source->markPSEFailures && !source->markVTRErrors))
     {
         return 1;
@@ -778,9 +777,9 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
     int freeHeaderMetadata = 0;
     int64_t convertedPosition;
 
-    /* only D3 MXF files with option to mark PSE failures or VTR errors require post complete step */
+    /* only archive MXF files with option to mark PSE failures or VTR errors require post complete step */
     if (source->donePostComplete ||
-        !source->isD3MXF ||
+        !source->isArchiveMXF ||
         (!source->markPSEFailures && !source->markVTRErrors))
     {
         source->donePostComplete = 1;
@@ -790,7 +789,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
     if (have_footer_metadata(source->mxfReader))
     {
-        /* the D3 MXF file is complete and the header metadata in the footer was already read by the MXF reader */
+        /* the archive MXF file is complete and the header metadata in the footer was already read by the MXF reader */
         headerMetadata = get_header_metadata(source->mxfReader);
         source->donePostComplete = 1;
     }
@@ -854,7 +853,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
                 for (i = 0; i < numFailures; i++)
                 {
                     convertedPosition = msc_convert_position(rootSource, failures[i].position, &source->mediaSource);
-                    mc_mark_position(mediaControl, convertedPosition, D3_PSE_FAILURE_MARK_TYPE, 0);
+                    mc_mark_position(mediaControl, convertedPosition, PSE_FAILURE_MARK_TYPE, 0);
                 }
 
                 SAFE_FREE(&failures);
@@ -869,11 +868,11 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
             if (d3_mxf_get_vtr_errors(headerMetadata, &errors, &numErrors))
             {
-                ml_log_info("Marking %ld D3 VTR errors\n", numErrors);
+                ml_log_info("Marking %ld VTR errors\n", numErrors);
                 for (i = 0; i < numErrors; i++)
                 {
                     convertedPosition = msc_convert_position(rootSource, errors[i].position, &source->mediaSource);
-                    mc_mark_position(mediaControl, convertedPosition, D3_VTR_ERROR_MARK_TYPE, 0);
+                    mc_mark_position(mediaControl, convertedPosition, VTR_ERROR_MARK_TYPE, 0);
                 }
 
                 SAFE_FREE(&errors);
@@ -967,13 +966,13 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     MXFPageFile* mxfPageFile = NULL;
     int i;
     int j;
-    D3MXFInfo d3MXFInfo;
-    int haveD3Info = 0;
+    D3MXFInfo archiveMXFInfo;
+    int haveArchiveInfo = 0;
     char stringBuf[128];
     int numSourceTimecodes;
     int timecodeType;
-    int haveD3VITC = 0;
-    int haveD3LTC = 0;
+    int haveArchiveVITC = 0;
+    int haveArchiveLTC = 0;
     int64_t duration = -1;
     char progNo[16];
     char clipUMIDStr[65] = {0};
@@ -1040,18 +1039,18 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         }
         else
         {
-            ml_log_info("MXF file is a BBC D3 MXF file\n");
+            ml_log_info("MXF file is a BBC Archive MXF file\n");
         }
-        newSource->isD3MXF = 1;
-        memset(&d3MXFInfo, 0, sizeof(D3MXFInfo));
-        if (d3_mxf_get_info(get_header_metadata(newSource->mxfReader), &d3MXFInfo))
+        newSource->isArchiveMXF = 1;
+        memset(&archiveMXFInfo, 0, sizeof(D3MXFInfo));
+        if (d3_mxf_get_info(get_header_metadata(newSource->mxfReader), &archiveMXFInfo))
         {
-            haveD3Info = 1;
+            haveArchiveInfo = 1;
         }
         else
         {
-            haveD3Info = 0;
-            ml_log_warn("Failed to read D3 MXF information\n");
+            haveArchiveInfo = 0;
+            ml_log_warn("Failed to read archive MXF information\n");
         }
     }
 
@@ -1105,9 +1104,9 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     set_stream_clip_id(&commonStreamInfo, clipUMIDStr);
 
     CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_FILE_NAME, filename));
-    if (newSource->isD3MXF)
+    if (newSource->isArchiveMXF)
     {
-        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "D3-MXF"));
+        CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_FILE_TYPE, "Archive-MXF"));
     }
     else
     {
@@ -1115,51 +1114,51 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     }
     CHK_OFAIL(add_timecode_source_info(&commonStreamInfo, SRC_INFO_FILE_DURATION, duration, get_rounded_frame_rate(&commonStreamInfo.frameRate)));
 
-    if (newSource->isD3MXF)
+    if (newSource->isArchiveMXF)
     {
-        if (haveD3Info)
+        if (haveArchiveInfo)
         {
-            CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_D3MXF_ORIG_FILENAME,
-                d3MXFInfo.filename));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_CREATION_DATE,
-                convert_date(&d3MXFInfo.creationDate, stringBuf)));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_LTO_SPOOL_NO,
-                d3MXFInfo.ltoInfaxData.spoolNo));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_D3_SPOOL_NO,
-                d3MXFInfo.d3InfaxData.spoolNo));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_D3_ITEM_NO,
-                convert_uint32(d3MXFInfo.d3InfaxData.itemNo, stringBuf)));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_TITLE,
-                d3MXFInfo.d3InfaxData.progTitle));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_EPISODE_TITLE,
-                d3MXFInfo.d3InfaxData.epTitle));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_TX_DATE,
-                convert_date(&d3MXFInfo.d3InfaxData.txDate, stringBuf)));
+            CHK_OFAIL(add_filename_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_ORIG_FILENAME,
+                archiveMXFInfo.filename));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_CREATION_DATE,
+                convert_date(&archiveMXFInfo.creationDate, stringBuf)));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_LTO_SPOOL_NO,
+                archiveMXFInfo.ltoInfaxData.spoolNo));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_SOURCE_SPOOL_NO,
+                archiveMXFInfo.d3InfaxData.spoolNo));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_SOURCE_ITEM_NO,
+                convert_uint32(archiveMXFInfo.d3InfaxData.itemNo, stringBuf)));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_TITLE,
+                archiveMXFInfo.d3InfaxData.progTitle));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_EPISODE_TITLE,
+                archiveMXFInfo.d3InfaxData.epTitle));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_TX_DATE,
+                convert_date(&archiveMXFInfo.d3InfaxData.txDate, stringBuf)));
             progNo[0] = '\0';
-            if (strlen(d3MXFInfo.d3InfaxData.magPrefix) > 0)
+            if (strlen(archiveMXFInfo.d3InfaxData.magPrefix) > 0)
             {
-                strcat(progNo, d3MXFInfo.d3InfaxData.magPrefix);
+                strcat(progNo, archiveMXFInfo.d3InfaxData.magPrefix);
                 strcat(progNo, ":");
             }
-            strcat(progNo, d3MXFInfo.d3InfaxData.progNo);
-            if (strlen(d3MXFInfo.d3InfaxData.prodCode) > 0)
+            strcat(progNo, archiveMXFInfo.d3InfaxData.progNo);
+            if (strlen(archiveMXFInfo.d3InfaxData.prodCode) > 0)
             {
                 strcat(progNo, "/");
-                if (strlen(d3MXFInfo.d3InfaxData.prodCode) == 1 &&
-                    d3MXFInfo.d3InfaxData.prodCode[0] >= '0' && d3MXFInfo.d3InfaxData.prodCode[0] <= '9')
+                if (strlen(archiveMXFInfo.d3InfaxData.prodCode) == 1 &&
+                    archiveMXFInfo.d3InfaxData.prodCode[0] >= '0' && archiveMXFInfo.d3InfaxData.prodCode[0] <= '9')
                 {
                     strcat(progNo, "0");
                 }
-                strcat(progNo, d3MXFInfo.d3InfaxData.prodCode);
+                strcat(progNo, archiveMXFInfo.d3InfaxData.prodCode);
             }
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_NUMBER,
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_NUMBER,
                 progNo));
-            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_D3MXF_PROGRAMME_DURATION,
-                convert_prog_duration(d3MXFInfo.d3InfaxData.duration, stringBuf)));
+            CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_DURATION,
+                convert_prog_duration(archiveMXFInfo.d3InfaxData.duration, stringBuf)));
         }
         else
         {
-            CHK_OFAIL(add_source_info(&commonStreamInfo, "D3 info", "not available"));
+            CHK_OFAIL(add_source_info(&commonStreamInfo, "Archive info", "not available"));
         }
     }
 
@@ -1187,7 +1186,16 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)))
             {
-                outputStream->streamInfo.format = UYVY_FORMAT;
+                CHK_OFAIL(track->video.componentDepth == 8 || track->video.componentDepth == 10);
+                if (track->video.componentDepth == 8)
+                {
+                    outputStream->streamInfo.format = UYVY_FORMAT;
+                }
+                else
+                {
+                    CHK_OFAIL(mxf_equals_ul(&track->codecLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
+                    outputStream->streamInfo.format = UYVY_10BIT_FORMAT;
+                }
             }
             else if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(IECDV_25_625_50_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(IECDV_25_625_50_FrameWrapped)) ||
@@ -1300,29 +1308,29 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
         outputStream->streamInfo.type = TIMECODE_STREAM_TYPE;
         outputStream->streamInfo.format = TIMECODE_FORMAT;
         outputStream->streamInfo.timecodeType = SOURCE_TIMECODE_TYPE;
-        if (newSource->isD3MXF)
+        if (newSource->isArchiveMXF)
         {
             /* we are only interested in the VITC and LTC source timecodes */
             if (timecodeType == SYSTEM_ITEM_TC_ARRAY_TIMECODE)
             {
-                if (!haveD3VITC)
+                if (!haveArchiveVITC)
                 {
                     outputStream->streamInfo.timecodeSubType = VITC_SOURCE_TIMECODE_SUBTYPE;
-                    haveD3VITC = 1;
+                    haveArchiveVITC = 1;
                 }
-                else if (!haveD3LTC)
+                else if (!haveArchiveLTC)
                 {
                     outputStream->streamInfo.timecodeSubType = LTC_SOURCE_TIMECODE_SUBTYPE;
-                    haveD3LTC = 1;
+                    haveArchiveLTC = 1;
                 }
                 else
                 {
-                    /* this is unexpected because a D3 MXF file should only have a VITC and LTC timecode */
-                    ml_log_warn("Found more than 2 system item timecodes for D3 MXF file\n");
+                    /* this is unexpected because a archive MXF file should only have a VITC and LTC timecode */
+                    ml_log_warn("Found more than 2 system item timecodes for archive MXF file\n");
 
                     outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
 
-                    /* we disable it because it doesn't apply for D3 MXF files */
+                    /* we disable it because it doesn't apply for archive MXF files */
                     outputStream->isDisabled = 1;
                 }
             }
@@ -1330,7 +1338,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             {
                 outputStream->streamInfo.timecodeSubType = NO_TIMECODE_SUBTYPE;
 
-                /* we disable it because it doesn't apply for D3 MXF files */
+                /* we disable it because it doesn't apply for archive MXF files */
                 outputStream->isDisabled = 1;
             }
         }

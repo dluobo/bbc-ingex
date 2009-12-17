@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.9 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: keyboard_input_connect.c,v 1.10 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -107,8 +107,8 @@ static const ControlInputHelp g_qcKeyboardInputHelp[] =
     {"'o'", "Display next OSD screen"},
     {"'t'", "Display next timecode"},
     {"'m'", "Toggle mark red (type M0)"},
-    {"'c'", "Clear mark (except D3 VTR error and PSE failure)"},
-    {"'b'", "Clear all marks (except D3 VTR error and PSE failure)"},
+    {"'c'", "Clear mark (except VTR error and PSE failure)"},
+    {"'b'", "Clear all marks (except VTR error and PSE failure)"},
     {"','", "Seek to previous mark"},
     {"'.'", "Seek to next mark"},
     {"'/'", "Seek to clip mark"},
@@ -539,12 +539,12 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 mc_mark(connect->control, M0_MARK_TYPE, 1);
                 break;
             case 'c':
-                /* clear mark except for PSE failures and D3 VTR errors */
-                mc_clear_mark(connect->control, ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
+                /* clear mark except for PSE failures and VTR errors */
+                mc_clear_mark(connect->control, ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
                 break;
             case 'b':
-                /* clear all marks except for PSE failures and D3 VTR errors */
-                mc_clear_all_marks(connect->control, ALL_MARK_TYPE & ~D3_VTR_ERROR_MARK_TYPE & ~D3_PSE_FAILURE_MARK_TYPE);
+                /* clear all marks except for PSE failures and VTR errors */
+                mc_clear_all_marks(connect->control, ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
                 break;
             case ',':
                 mc_seek_prev_mark(connect->control);

@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.20 2009/10/12 16:06:30 philipn Exp $
+ * $Id: player.c,v 1.21 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -806,8 +806,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --exit-at-end            Close the player when the end of stream is reached\n");
     fprintf(stderr, "  --src-buf  <size>        Size of the media source buffer (default is 0)\n");
     fprintf(stderr, "  --force-d3-mxf           (Use only for MXF inputs using deprecated keys). Force the treatment of the MXF inputs to be BBC D3 MXF\n");
-    fprintf(stderr, "  --mark-pse-fails         Add marks for PSE failures recorded in the D3 MXF file\n");
-    fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the D3 MXF file\n");
+    fprintf(stderr, "  --mark-pse-fails         Add marks for PSE failures recorded in the archive MXF file\n");
+    fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the archive MXF file\n");
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
@@ -864,7 +864,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  -m, --mxf  <file>        MXF file input\n");
     fprintf(stderr, "  --system-tc <timecode>   Add a system timecode with given start timecode (hh:mm:ss:ff or 'now', replace : with ; for NTSC)\n");
     fprintf(stderr, "  --max-length <dur>       Limit the source length played (hh:mm:ss:ff, replace : with ; for NTSC)\n");
-    fprintf(stderr, "  --src-format <format>    Source video format: uyvy, yuv420, yuv422, yuv444, pcm, timecode (default uyvy)\n");
+    fprintf(stderr, "  --src-format <format>    Source video format: uyvy, yuv420, yuv422, yuv444, uyvy10b, pcm, timecode (default uyvy)\n");
     fprintf(stderr, "  --src-size <WxH>         Width and height for source video input (default is 720x576)\n");
     fprintf(stderr, "  --src-bps <num>          Audio bits per sample (default 16)\n");
     fprintf(stderr, "  --src-fps <num>          Video frame rate for the source. Valid values are 25 (PAL) or 30 (NTSC)\n");
@@ -1943,6 +1943,11 @@ int main(int argc, const char **argv)
                 inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
                 inputs[numInputs].streamInfo.format = YUV444_FORMAT;
             }
+            else if (strcmp(argv[cmdlnIndex + 1], "uyvy10b") == 0)
+            {
+                inputs[numInputs].streamInfo.type = PICTURE_STREAM_TYPE;
+                inputs[numInputs].streamInfo.format = UYVY_10BIT_FORMAT;
+            }
             else if (strcmp(argv[cmdlnIndex + 1], "pcm") == 0)
             {
                 inputs[numInputs].streamInfo.type = SOUND_STREAM_TYPE;
@@ -2882,8 +2887,8 @@ int main(int argc, const char **argv)
                 {M2_MARK_TYPE, "green", GREEN_COLOUR},
                 {M3_MARK_TYPE, "blue", BLUE_COLOUR},
                 {M4_MARK_TYPE, "cyan", CYAN_COLOUR},
-                {D3_VTR_ERROR_MARK_TYPE, "yellow (D3 VTR)", YELLOW_COLOUR},
-                {D3_PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
+                {VTR_ERROR_MARK_TYPE, "yellow (VTR)", YELLOW_COLOUR},
+                {PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
             };
             memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
             g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);

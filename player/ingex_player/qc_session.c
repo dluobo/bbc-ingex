@@ -1,5 +1,5 @@
 /*
- * $Id: qc_session.c,v 1.6 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: qc_session.c,v 1.7 2009/12/17 15:57:40 john_f Exp $
  *
  *
  *
@@ -195,44 +195,41 @@ static void write_comment_end(QCSession* qcSession)
 static void qcs_write_timecodes(LogLine logLine, const FrameInfo* frameInfo)
 {
     int i;
-    int element;
     int haveControlTC = 0;
     int haveVITC = 0;
     int haveLTC = 0;
+    char* logLineStr;
 
     for (i = 0; i < frameInfo->numTimecodes; i++)
     {
         if (!haveControlTC && frameInfo->timecodes[i].timecodeType == CONTROL_TIMECODE_TYPE)
         {
-            element = QC_LOG_LINE_ELEMENTS - 3;
+            logLineStr = logLine[QC_LOG_LINE_ELEMENTS - 3];
             haveControlTC = 1;
         }
         else if (!haveVITC && frameInfo->timecodes[i].timecodeType == SOURCE_TIMECODE_TYPE &&
             frameInfo->timecodes[i].timecodeSubType == VITC_SOURCE_TIMECODE_SUBTYPE)
         {
-            element = QC_LOG_LINE_ELEMENTS - 2;
+            logLineStr = logLine[QC_LOG_LINE_ELEMENTS - 2];
             haveVITC = 1;
         }
         else if (!haveLTC && frameInfo->timecodes[i].timecodeType == SOURCE_TIMECODE_TYPE &&
             frameInfo->timecodes[i].timecodeSubType == LTC_SOURCE_TIMECODE_SUBTYPE)
         {
-            element = QC_LOG_LINE_ELEMENTS - 1;
+            logLineStr = logLine[QC_LOG_LINE_ELEMENTS - 1];
             haveLTC = 1;
         }
         else
         {
-            element = -1;
+            continue;
         }
 
-        if (element >= 0)
-        {
-            sprintf(logLine[element],
-                "%02u:%02u:%02u:%02u",
-                frameInfo->timecodes[i].timecode.hour,
-                frameInfo->timecodes[i].timecode.min,
-                frameInfo->timecodes[i].timecode.sec,
-                frameInfo->timecodes[i].timecode.frame);
-        }
+        sprintf(logLineStr,
+            "%02u:%02u:%02u:%02u",
+            frameInfo->timecodes[i].timecode.hour,
+            frameInfo->timecodes[i].timecode.min,
+            frameInfo->timecodes[i].timecode.sec,
+            frameInfo->timecodes[i].timecode.frame);
     }
 }
 
@@ -605,8 +602,8 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
         }
         else
         {
-            /* filter out D3 errors and PSE failures */
-            markType = marks[i].type & ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+            /* filter out VTR errors and PSE failures */
+            markType = marks[i].type & ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
             if (markType == 0)
             {
                 continue;
@@ -888,8 +885,8 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                             type = parse_mark_type(markTypeStr + 1);
                             if (type != 0)
                             {
-                                /* filter out D3 errors and PSE failures which will be extracted from the MXF file */
-                                type &= ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+                                /* filter out VTR errors and PSE failures which will be extracted from the MXF file */
+                                type &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
                                 if (type != 0)
                                 {
                                     mc_mark_position(control, position, type, 0);
@@ -905,8 +902,8 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                                     clipMarkType = parse_mark_type(clipMarkTypeStr + 1);
                                     if (clipMarkType != 0)
                                     {
-                                        /* filter out D3 errors and PSE failures which will be extracted from the MXF file */
-                                        clipMarkType &= ~(D3_PSE_FAILURE_MARK_TYPE | D3_VTR_ERROR_MARK_TYPE);
+                                        /* filter out VTR errors and PSE failures which will be extracted from the MXF file */
+                                        clipMarkType &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
                                         if (clipMarkType != 0)
                                         {
                                             /* mark the end of the clip */
