@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.h,v 1.12 2009/09/18 15:51:16 john_f Exp $
+ * $Id: RecorderImpl.h,v 1.13 2009/12/17 16:47:15 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -147,6 +147,8 @@ private:
     ACE_Thread_Mutex mTrackMapMutex;
     ACE_Thread_Mutex mTrackIndexMapMutex;
     ACE_Thread_Mutex mRecordingLocationMapMutex;
+// mutex to protect TracksStatus
+    ACE_Thread_Mutex mTracksStatusMutex;
 
 public:
 // data which needs to be visible to clases such as IngexRecorder
@@ -158,6 +160,9 @@ public:
 
     // map with RecordingLocation database id as key
     std::map<long, std::string> mRecordingLocationMap;
+
+    // Set track status rec_error flag
+    void NoteRecError(long stc_dbid);
 
 protected:
 // data

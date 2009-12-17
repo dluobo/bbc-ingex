@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.12 2009/09/18 15:51:16 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.13 2009/12/17 16:47:15 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -680,6 +680,7 @@ bool RecorderImpl::UpdateFromDatabase(unsigned int max_inputs, unsigned int max_
             {
                 ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
                 ts.rec = 0;
+                ts.rec_error = 0;
                 ts.signal_present = 0;
                 ts.timecode.undefined = true;
                 //ts.timecode.edit_rate = mEditRate;
@@ -714,6 +715,18 @@ std::string RecorderImpl::RecordingLocationMap(long id)
     return mRecordingLocationMap[id];
 }
 
+/**
+Set track status rec_error flag for the track corresponding to
+SourceTrackConfig with database id stc_dbid.
+*/
+void RecorderImpl::NoteRecError(long stc_dbid)
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mTracksStatusMutex);
+
+    unsigned int track_index = TrackIndexMap(stc_dbid);
+    ProdAuto::TrackStatus & ts = mTracksStatus->operator[](track_index);
+    ts.rec_error = 1;
+}
 
 void RecorderImpl::Destroy()
 {

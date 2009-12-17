@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.26 2009/11/17 16:37:40 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.27 2009/12/17 16:46:21 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -74,9 +74,11 @@ const bool SAVE_PACKAGE_DATA = true; // Write to database for non-MXF files
 // shared memory placeholder for error messages
 // Note that format directives are not always the same
 // e.g. %C with ACE_DEBUG vs. %s with printf
-#define LOG_RECORD_ERROR(fmt, args...) { \
+#define LOG_RECORD_ERROR(fmt, args...) \
+{ \
     ACE_DEBUG((LM_ERROR, ACE_TEXT( fmt ), ## args)); \
-    IngexShm::Instance()->InfoSetRecordError(channel_i, p_opt->index, quad_video, fmt, ## args); }
+    IngexShm::Instance()->InfoSetRecordError(channel_i, p_opt->index, quad_video, fmt, ## args); \
+}
 
 
 // Local context only
@@ -1604,6 +1606,10 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     {
                         LOG_RECORD_ERROR("MXFWriterException: %C\n", e.getMessage().c_str());
                         p_rec->NoteFailure();
+
+                        // Set error status of this track.
+                        long id = mp_stc_dbids[i];
+                        p_impl->NoteRecError(id);
                     }
                 }
             }

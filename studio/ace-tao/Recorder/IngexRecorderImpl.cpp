@@ -1,5 +1,5 @@
 /*
- * $Id: IngexRecorderImpl.cpp,v 1.15 2009/10/12 15:16:16 john_f Exp $
+ * $Id: IngexRecorderImpl.cpp,v 1.16 2009/12/17 16:46:58 john_f Exp $
  *
  * Servant class for Recorder.
  *
@@ -599,6 +599,7 @@ char * IngexRecorderImpl::RecordingFormat (
             {
                 ProdAuto::TrackStatus & ts = mTracksStatus->operator[](i);
                 ts.rec = rec_enable[i];
+                ts.rec_error = 0;
             }
         }
     }
