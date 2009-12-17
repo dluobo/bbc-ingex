@@ -1,5 +1,5 @@
 /*
- * $Id: RawEssenceParser.cpp,v 1.2 2009/10/23 09:05:21 philipn Exp $
+ * $Id: RawEssenceParser.cpp,v 1.3 2009/12/17 16:36:43 john_f Exp $
  *
  * Parse raw essence data
  *
@@ -38,8 +38,6 @@ using namespace std;
 using namespace mxfpp;
 
 
-#define NUM_SUPPORTED_FORMATS   (sizeof(SUPPORTED_FORMATS) / sizeof(SupportedFormat))
-
 
 typedef enum
 {
@@ -65,9 +63,13 @@ const SupportedFormat SUPPORTED_FORMATS[] =
     {MXF_EC_L(DVBased_50_625_50_ClipWrapped),       FIXED_FRAME_SIZE_PARSER,    288000},
     {MXF_EC_L(DVBased_100_1080_50_I_ClipWrapped),   FIXED_FRAME_SIZE_PARSER,    576000},
     {MXF_EC_L(DVBased_100_720_50_P_ClipWrapped),    FIXED_FRAME_SIZE_PARSER,    288000},
-    {MXF_EC_L(DNxHD1080i120ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    606208},
-    {MXF_EC_L(DNxHD1080i185ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    917504},
     {MXF_EC_L(DNxHD1080p36ClipWrapped),             FIXED_FRAME_SIZE_PARSER,    188416},
+    {MXF_EC_L(DNxHD1080i120ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    606208},
+    {MXF_EC_L(DNxHD1080p120ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    606208},
+    {MXF_EC_L(DNxHD1080i185ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    917504},
+    {MXF_EC_L(DNxHD1080p185ClipWrapped),            FIXED_FRAME_SIZE_PARSER,    917504},
+    {MXF_EC_L(DNxHD1080i185XClipWrapped),           FIXED_FRAME_SIZE_PARSER,    917504},
+    {MXF_EC_L(DNxHD1080p185XClipWrapped),           FIXED_FRAME_SIZE_PARSER,    917504},
     {MXF_EC_L(DNxHD720p120ClipWrapped),             FIXED_FRAME_SIZE_PARSER,    303104},
     {MXF_EC_L(DNxHD720p185ClipWrapped),             FIXED_FRAME_SIZE_PARSER,    458752},
     {MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped),  FIXED_FRAME_SIZE_PARSER,         0},
@@ -82,6 +84,9 @@ const SupportedFormat SUPPORTED_FORMATS[] =
     {MXF_EC_L(BWFClipWrapped),                      PCM_PARSER,                      0},
     {MXF_EC_L(AES3ClipWrapped),                     PCM_PARSER,                      0},
 };
+
+#define NUM_SUPPORTED_FORMATS   (sizeof(SUPPORTED_FORMATS) / sizeof(SupportedFormat))
+
 
 
 

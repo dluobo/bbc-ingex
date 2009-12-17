@@ -1,5 +1,5 @@
 /*
- * $Id: test_opatomreader.cpp,v 1.3 2009/11/24 15:18:58 john_f Exp $
+ * $Id: test_opatomreader.cpp,v 1.4 2009/12/17 16:36:43 john_f Exp $
  *
  * Test the OP-Atom reader
  *
@@ -26,14 +26,15 @@
 
 #define __STDC_FORMAT_MACROS    1
 
+#include <cstdio>
+
 #include <libMXF++/MXF.h>
 
 #include "OPAtomClipReader.h"
 
-#include <cstdio>
-
 using namespace std;
 using namespace mxfpp;
+
 
 
 int main(int argc, const char **argv)
