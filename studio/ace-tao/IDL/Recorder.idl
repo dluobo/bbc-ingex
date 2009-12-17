@@ -1,5 +1,5 @@
 /*
- * $Id: Recorder.idl,v 1.3 2008/09/03 14:04:24 john_f Exp $
+ * $Id: Recorder.idl,v 1.4 2009/12/17 16:57:33 john_f Exp $
  *
  * Interface for Recorder.
  *
@@ -41,6 +41,7 @@ module ProdAuto
     struct TrackStatus
     {
         boolean rec; ///< True if currently recording.
+        boolean rec_error; ///< True if there has been an error in current recording
         boolean signal_present; ///< True if signal present at input.
         MxfTimecode timecode; ///< Current %Timecode relevant to this input.
     };
