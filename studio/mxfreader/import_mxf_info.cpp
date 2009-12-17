@@ -1,5 +1,5 @@
 /*
- * $Id: import_mxf_info.cpp,v 1.2 2009/10/22 15:16:57 john_f Exp $
+ * $Id: import_mxf_info.cpp,v 1.3 2009/12/17 16:58:57 john_f Exp $
  *
  * Read MXF files and add metadata to database.
  *
@@ -22,10 +22,9 @@
  * 02110-1301, USA.
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -37,10 +36,11 @@
 using namespace std;
 
 
-const char * const g_default_dbhost = "localhost";
-const char * const g_default_dbname = "prodautodb";
-const char * const g_default_dbuser = "bamzooki";
-const char * const g_default_dbpw = "bamzooki";
+const char * const DEFAULT_DBHOST = "localhost";
+const char * const DEFAULT_DBNAME = "prodautodb";
+const char * const DEFAULT_DBUSER = "bamzooki";
+const char * const DEFAULT_DBPW = "bamzooki";
+
 
 
 static bool save_package(prodauto::Database *db, prodauto::Package *package)
@@ -84,10 +84,10 @@ static void print_usage(const char *cmd)
 
 int main(int argc, const char **argv)
 {
-    string dbhost = g_default_dbhost;
-    string dbname = g_default_dbname;
-    string dbuser = g_default_dbuser;
-    string dbpw = g_default_dbpw;
+    string dbhost = DEFAULT_DBHOST;
+    string dbname = DEFAULT_DBNAME;
+    string dbuser = DEFAULT_DBUSER;
+    string dbpw = DEFAULT_DBPW;
     vector<string> file_list;
     int cmdln_index;
 
