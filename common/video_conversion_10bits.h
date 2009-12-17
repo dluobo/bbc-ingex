@@ -3,6 +3,10 @@
 
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * This routine converts a frame of 10-bit YUV "v210" format data
  * to 8-bit UYVY format. It uses error feedback to minimise visibility
@@ -38,5 +42,9 @@ void ConvertFrame10to8(uint8_t *pOutFrame, uint8_t *pInFrame,
 void ConvertFrame8to10(uint8_t *pOutFrame, uint8_t *pInFrame,
                        const int StrideOut, const int StrideIn,
                        const int xLen, const int yLen);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __VIDEO_CONVERSION_10BITS_H__
