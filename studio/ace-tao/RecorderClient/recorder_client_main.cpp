@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_client_main.cpp,v 1.3 2009/03/19 17:58:55 john_f Exp $
+ * $Id: recorder_client_main.cpp,v 1.4 2009/12/17 18:16:40 john_f Exp $
  *
  * Simple test client for Recorder.
  *
@@ -73,7 +73,7 @@ int Event_Handler::handle_input(ACE_HANDLE h)
         std::cout << "Starting" << std::endl;
         rec_manager->Start("MyProject");
     }
-    else if ("t" == command | "stop" == command)
+    else if ("t" == command || "stop" == command)
     {
         std::cout << "Stopping" << std::endl;
         rec_manager->Stop();
