@@ -1,5 +1,5 @@
 /*
- * $Id: RecoverClip.cpp,v 1.1 2009/11/17 16:26:35 john_f Exp $
+ * $Id: RecoverClip.cpp,v 1.2 2009/12/17 16:54:31 john_f Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -62,14 +62,14 @@ void RecoverClip::MergeIn(const IngexMXFInfo *info)
     PA_ASSERT(!info->getPackageGroup()->GetTapeSourcePackage() ||
               info->getPackageGroup()->GetTapeSourcePackage()->uid == mPackageGroup->GetTapeSourcePackage()->uid);
     
-    // copy in non-duplicate file source packages
+    // append clone of file source packages not already present
     vector<prodauto::SourcePackage*> &from_file_packages = info->getPackageGroup()->GetFileSourcePackages();
     vector<prodauto::SourcePackage*> &to_file_packages = mPackageGroup->GetFileSourcePackages();
     size_t i, j;
     for (i = 0; i < from_file_packages.size(); i++) {
         for (j = 0; j < to_file_packages.size(); j++) {
             if (from_file_packages[i]->uid == to_file_packages[j]->uid)
-                break;
+                break; // duplicate
         }
 
         if (j == to_file_packages.size()) {
@@ -109,9 +109,10 @@ vector<uint32_t> RecoverClip::GetMissingTracks()
 }
 
 bool RecoverClip::Recover(string create_dir, string dest_dir, string fail_dir, string output_prefix,
-                          bool remove_files_on_error, bool simulate)
+                          bool remove_files_on_error, bool simulate, bool simulate_no_ess)
 {
-    // collect file locations for the available source packages because they will be modified below
+    // collect file locations from the source packages because they will be modified in place
+    // when creating the recovered files
     vector<string> file_locations;
     prodauto::MaterialPackage *material_package = mPackageGroup->GetMaterialPackage();
     size_t i;
@@ -120,13 +121,13 @@ bool RecoverClip::Recover(string create_dir, string dest_dir, string fail_dir, s
             file_locations.push_back(mPackageGroup->GetFileLocation(material_package->tracks[i]->id));
     }
     
-    printf("Recover %d of %d files in clip '%s':\n", file_locations.size(), material_package->tracks.size(),
+    printf("Recover %zd of %zd files in clip '%s':\n", file_locations.size(), material_package->tracks.size(),
            mPackageGroup->GetMaterialPackage()->name.c_str());
     for (i = 0; i < file_locations.size(); i++)
         printf("    '%s'\n", file_locations[i].c_str());
     
 
-    // open a clip reader with the given file locations
+    // open a clip reader given the file locations
     OPAtomClipReader *clip_reader;
     pair<OPAtomOpenResult, string> result = OPAtomClipReader::Open(file_locations, &clip_reader);
     if (result.first != OP_ATOM_SUCCESS) {
@@ -139,53 +140,57 @@ bool RecoverClip::Recover(string create_dir, string dest_dir, string fail_dir, s
     // update the file locations with a new prefix
     mPackageGroup->UpdateAllFileLocations(output_prefix);
     
-    int64_t num_samples = 0;
-    prodauto::MXFOPAtomWriter writer;
-    const OPAtomContentPackage *content_package;
-    try
-    {
-        writer.SetCreatingDirectory(create_dir);
-        writer.SetDestinationDirectory(dest_dir);
-        writer.SetFailureDirectory(fail_dir);
-
-        if (!simulate)
-            writer.PrepareToWrite(mPackageGroup, false);
-        
-        while (true) {
-            // read content package
-            content_package = clip_reader->Read();
-            if (!content_package) {
-                if (!clip_reader->IsEOF()) {
-                    fprintf(stderr, "Failed to read content package\n");
-                    throw false;
+    
+    // write the recovered file, copying the essence data over from the source file
+    if (!simulate_no_ess) {
+        int64_t num_samples = 0;
+        prodauto::MXFOPAtomWriter writer;
+        const OPAtomContentPackage *content_package;
+        try
+        {
+            writer.SetCreatingDirectory(create_dir);
+            writer.SetDestinationDirectory(dest_dir);
+            writer.SetFailureDirectory(fail_dir);
+    
+            if (!simulate)
+                writer.PrepareToWrite(mPackageGroup, false);
+            
+            while (true) {
+                // read content package
+                content_package = clip_reader->Read();
+                if (!content_package) {
+                    if (!clip_reader->IsEOF()) {
+                        fprintf(stderr, "Failed to read content package\n");
+                        throw false;
+                    }
+                    break;
                 }
-                break;
+                
+                // write content package
+                if (!simulate) {
+                    const OPAtomContentElement *element;
+                    for (i = 0; i < content_package->NumEssenceData(); i++) {
+                        element = content_package->GetEssenceDataI(i);
+                        writer.WriteSamples(element->GetMaterialTrackId(), element->GetNumSamples(),
+                                            element->GetBytes(), element->GetSize());
+                    }
+                }
+                
+                num_samples++;
             }
             
-            // write content package essence data
-            if (!simulate) {
-                const OPAtomContentElement *element;
-                for (i = 0; i < content_package->NumEssenceData(); i++) {
-                    element = content_package->GetEssenceDataI(i);
-                    writer.WriteSamples(element->GetMaterialTrackId(), element->GetNumSamples(),
-                                        element->GetBytes(), element->GetSize());
-                }
-            }
+            if (!simulate)
+                writer.CompleteWriting(false);
             
-            num_samples++;
+            printf("Success: recovered %"PRId64" samples\n", num_samples);
         }
-        
-        if (!simulate)
-            writer.CompleteWriting(false);
-        
-        printf("Success: recovered %"PRId64" samples\n", num_samples);
-    }
-    catch (...)
-    {
-        fprintf(stderr, "Failed to complete recovery\n");
-        if (!simulate)
-            writer.AbortWriting(remove_files_on_error);
-        return false;
+        catch (...)
+        {
+            fprintf(stderr, "Failed to complete clip recovery\n");
+            if (!simulate)
+                writer.AbortWriting(remove_files_on_error);
+            return false;
+        }
     }
     
     delete clip_reader;

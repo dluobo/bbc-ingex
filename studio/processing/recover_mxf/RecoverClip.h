@@ -1,5 +1,5 @@
 /*
- * $Id: RecoverClip.h,v 1.1 2009/11/17 16:26:35 john_f Exp $
+ * $Id: RecoverClip.h,v 1.2 2009/12/17 16:54:31 john_f Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -47,7 +47,7 @@ public:
     prodauto::MaterialPackage* GetMaterialPackage() { return mPackageGroup->GetMaterialPackage(); }
     
     bool Recover(std::string create_dir, std::string dest_dir, std::string fail_dir, std::string output_prefix,
-                 bool remove_files_on_error, bool simulate);
+                 bool remove_files_on_error, bool simulate, bool simulate_no_ess);
     
 private:
     prodauto::PackageGroup *mPackageGroup;

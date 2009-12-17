@@ -1,5 +1,5 @@
 /*
- * $Id: recover_mxf.cpp,v 1.1 2009/11/17 16:26:35 john_f Exp $
+ * $Id: recover_mxf.cpp,v 1.2 2009/12/17 16:54:31 john_f Exp $
  *
  * Copyright (C) 2009  British Broadcasting Corporation.
  * All Rights Reserved.
@@ -24,9 +24,9 @@
 
 #define __STDC_FORMAT_MACROS    1
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
 
 #include <vector>
 #include <string>
@@ -41,10 +41,7 @@ using namespace std;
 
 
 const char * const DEFAULT_OUTPUT_PREFIX = "recover_";
-
 const char * const DEFAULT_CREATING_DIR = "";
-const char * const DEFAULT_DESTINATION_DIR = "";
-const char * const DEFAULT_FAILURE_DIR = "";
 
 
 
@@ -58,10 +55,11 @@ static void print_usage(const char *cmd)
     fprintf(stderr, "    --prefix               Prefix for output files (default '%s')\n", DEFAULT_OUTPUT_PREFIX);
     fprintf(stderr, "    --accept-incomplete    Accept incomplete set of files for a clip\n");
     fprintf(stderr, "    --del-on-error         Delete recovered files if an error occurs whilst recovering\n");
-    fprintf(stderr, "    --simulate             Do everything except create and write recovered files\n");
+    fprintf(stderr, "    --sim                  Do everything except create and write recovered files\n");
+    fprintf(stderr, "    --sim-no-ess           Do everything except read the essence data, create and write recovered files\n");
     fprintf(stderr, "    --create <dir>         Recovered file creation directory (default '%s')\n", DEFAULT_CREATING_DIR);
-    fprintf(stderr, "    --dest <dir>           Recovered file destination directory (default '%s')\n", DEFAULT_DESTINATION_DIR);
-    fprintf(stderr, "    --fail <dir>           Recovered file failure directory (default '%s')\n", DEFAULT_FAILURE_DIR);
+    fprintf(stderr, "    --dest <dir>           Recovered file destination directory (default equals create dir)\n");
+    fprintf(stderr, "    --fail <dir>           Recovered file failure directory (default equals create dir)\n");
 }
 
 int main(int argc, const char **argv)
@@ -72,9 +70,10 @@ int main(int argc, const char **argv)
     bool accept_incomplete = false;
     bool del_on_error = false;
     bool simulate = false;
+    bool simulate_no_ess = false;
     const char *create_dir = DEFAULT_CREATING_DIR;
-    const char *dest_dir = DEFAULT_CREATING_DIR;
-    const char *fail_dir = DEFAULT_CREATING_DIR;
+    const char *dest_dir = 0;
+    const char *fail_dir = 0;
 
     for (cmdln_index = 1; cmdln_index < argc; cmdln_index++) {
         if (strcmp(argv[cmdln_index], "-h") == 0 ||
@@ -101,9 +100,14 @@ int main(int argc, const char **argv)
         {
             del_on_error = true;
         }
-        else if (strcmp(argv[cmdln_index], "--simulate") == 0)
+        else if (strcmp(argv[cmdln_index], "--sim") == 0)
         {
             simulate = true;
+        }
+        else if (strcmp(argv[cmdln_index], "--sim-no-ess") == 0)
+        {
+            simulate = true;
+            simulate_no_ess = true;
         }
         else if (strcmp(argv[cmdln_index], "--create") == 0)
         {
@@ -150,6 +154,11 @@ int main(int argc, const char **argv)
     for (; cmdln_index < argc; cmdln_index++)
         filenames.push_back(argv[cmdln_index]);
     
+    if (!dest_dir)
+        dest_dir = create_dir;
+    if (!fail_dir)
+        fail_dir = create_dir;
+    
     
     // connect libMXF logging to prodauto logging
     prodauto::connectLibMXFLogging();
@@ -194,10 +203,13 @@ int main(int argc, const char **argv)
     for (j = 0; j < clips.size(); j++) {
         if (!clips[j]->IsComplete()) {
             vector<uint32_t> missing_tracks = clips[j]->GetMissingTracks();
-            fprintf(stderr, "Clip file set '%s' is incomplete: missing tracks ",
+            fprintf(stderr, "Clip file set '%s' is incomplete: missing material package tracks ",
                     clips[j]->GetMaterialPackage()->name.c_str());
-            for (k = 0; k < missing_tracks.size(); k++)
-                fprintf(stderr, "%d ", missing_tracks[i]);
+            for (k = 0; k < missing_tracks.size(); k++) {
+                if (k != 0)
+                    fprintf(stderr, ", ");
+                fprintf(stderr, "%d", missing_tracks[k]);
+            }
             fprintf(stderr, "\n");
             if (!accept_incomplete) {
                 fprintf(stderr, "Failed because clip file set is incomplete\n");
@@ -210,7 +222,8 @@ int main(int argc, const char **argv)
     // recover each clip
     
     for (j = 0; j < clips.size(); j++)
-        clips[j]->Recover(create_dir, dest_dir, fail_dir, output_filename_prefix, del_on_error, simulate);
+        clips[j]->Recover(create_dir, dest_dir, fail_dir, output_filename_prefix, del_on_error, simulate,
+                          simulate_no_ess);
     
     
     // clean up
