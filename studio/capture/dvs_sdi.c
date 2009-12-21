@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.27 2009/11/17 16:35:30 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.28 2009/12/21 19:35:21 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -486,14 +486,28 @@ static void log_avsync_analysis(int chan, int lastframe, const uint8_t *addr, un
 }
 
 // Read available physical memory stats and
-// allocate shared memory ring buffers accordingly
+// allocate shared memory ring buffers accordingly.
 static int allocate_shared_buffers(int num_channels, long long max_memory)
 {
     long long   k_shmmax = 0;
     int         ring_len, i;
     FILE        *procfp;
 
-    // Linux specific way to read shmmax value
+    // Default maximum of 1 GiB to avoid misleading shmmat errors.
+    // /usr/src/linux/Documentation/sysctl/kernel.txt says:
+    // "memory segments up to 1Gb are now supported"
+    const long long shm_default = 0x40000000; // 1GiB
+    if (max_memory <= 0)
+    {
+        max_memory = shm_default;
+    }
+
+    // Linux specific way to read shmmax value.
+    // With opensuse it will be -1 by default.
+    // Change shmmax with...
+    //  root# echo  104857600 >> /proc/sys/kernel/shmmax  # (100 MiB)
+    //  root# echo 1073741824 >> /proc/sys/kernel/shmmax  # (1 GiB)
+
     if ((procfp = fopen("/proc/sys/kernel/shmmax", "r")) == NULL)
     {
         perror("fopen(/proc/sys/kernel/shmmax)");
@@ -502,25 +516,17 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
     fscanf(procfp, "%lld", &k_shmmax);
     fclose(procfp);
 
-    if (max_memory > 0) {
-        // Limit to specified maximum memory usage
-        k_shmmax = max_memory;
-    }
-    else {
-        // Reduce maximum to 1GiB to avoid misleading shmmat errors since
-        // Documentation/sysctl/kernel.txt says "memory segments up to 1Gb are now supported"
-        const long long shm_limit = 0x40000000; // 1GiB
-
-        if (k_shmmax > shm_limit) {
-            printf("shmmax=%lld (%.3f MiB) probably too big, reducing to %lld MiB\n", k_shmmax, k_shmmax / (1024 * 1024.0), shm_limit / (1024 * 1024) );
-            k_shmmax = shm_limit;
-        }
+    if (k_shmmax > 0 && max_memory > k_shmmax)
+    {
+        // Limit to kernel max segment size
+        printf("Buffer size request %lld MiB too large, reducing to kernel limit %lld MiB\n", max_memory / (1024 * 1024), k_shmmax / (1024 * 1024) );
+        max_memory = k_shmmax;
     }
 
     // calculate reasonable ring buffer length
     // reduce by small number 5 to leave a little room for other shared mem
-    ring_len = k_shmmax / num_channels / element_size - 5;
-    printf("shmmax=%lld (%.3f MiB) calculated per channel ring_len=%d\n", k_shmmax, k_shmmax / (1024*1024.0), ring_len);
+    ring_len = max_memory / num_channels / element_size - 5;
+    printf("buffer size %lld (%.3f MiB) calculated per channel ring_len %d\n", max_memory, max_memory / (1024*1024.0), ring_len);
 
     printf("element_size=%d ring_len=%d (%.2f secs) (total=%lld)\n", element_size, ring_len, ring_len / 25.0, (long long)element_size * ring_len);
     if (ring_len < 10)
@@ -584,27 +590,13 @@ static int allocate_shared_buffers(int num_channels, long long max_memory)
 
     p_control->frame_data_offset = frame_data_offset;
 
-    /*
-    p_control->vitc_offset = vitc_offset;
-    p_control->ltc_offset = ltc_offset;
-    p_control->sys_time_offset = sys_time_offset;
-    p_control->tick_offset = tick_offset;
-    p_control->signal_ok_offset = signal_ok_offset;
-    p_control->num_aud_samp_offset = num_aud_samp_offset;
-    p_control->frame_number_offset = frame_number_offset;
-    */
-
     p_control->source_name_update = 0;
     if (!init_process_shared_mutex(&p_control->m_source_name_update))
+    {
         return 0;
+    }
 
     // Allocate multiple element ring buffers containing video + audio + tc
-    //
-    // by default 32MB is available (40 PAL frames), or change it with:
-    //  root# echo  104857600 >> /proc/sys/kernel/shmmax  # 120 frms (100MB)
-    //  root# echo  201326592 >> /proc/sys/kernel/shmmax  # 240 frms (192MB)
-    //  root# echo 1073741824 >> /proc/sys/kernel/shmmax  # 1294 frms (1GB)
-
     // key for variable number of ring buffers can be 10, 11, 12, 13, 14, 15, 16, 17
     for (i = 0; i < num_channels; i++)
     {
@@ -756,14 +748,17 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
     //
 
     // check audio offset
-    /*fprintf(stderr, "chan = %d, audio_offset = %d, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p\n",
-        chan,
-        audio_offset,
-        pbuffer->video[0].addr,
-        pbuffer->audio[0].addr[0],
-        pbuffer->audio[0].addr[1],
-        pbuffer->audio[0].addr[2],
-        pbuffer->audio[0].addr[3]);*/
+    if (0)
+    {
+        fprintf(stderr, "chan = %d, audio_offset = %x, video[0].addr = %p, audio[0].addr[0-4] = %p %p %p %p\n",
+            chan,
+            audio_offset,
+            pbuffer->video[0].addr,
+            pbuffer->audio[0].addr[0],
+            pbuffer->audio[0].addr[1],
+            pbuffer->audio[0].addr[2],
+            pbuffer->audio[0].addr[3]);
+    }
 
     // Clear frame number.
     // Do this first in order to mark video as changed before we start to change it.
@@ -1323,7 +1318,11 @@ static int write_picture(int chan, sv_handle *sv, sv_fifo *poutput, int recover_
         int temp;
         if (sv_query(sv, SV_QUERY_TEMPERATURE, 0, &temp) == SV_OK)
         {
-            pc->hwtemperature = ((double)temp) / 65536.0;
+            // Ignore bad temperature values - sometimes returned by DVS SDK
+            if (temp != 0xFF0000)
+            {
+                pc->hwtemperature = (double)temp / 65536.0;
+            }
         }
     }
 
@@ -2266,12 +2265,30 @@ int main (int argc, char ** argv)
     // successful sv_fifo_getbuffer() before those parameters are known.
     // Instead use the following values found experimentally since we need
     // to allocate buffers before successful dma transfers occur.
-#if DVS_VERSION_MAJOR >= 3
-    // TODO: test this for HD-SDI
-    dma_video_size = width*height*2 + 6144;
-#else
-    dma_video_size = width*height*2;
-#endif
+
+    // Need to know card type. (We assume all the same type.)
+    int sn = 0;
+    sv_query(a_sv[0], SV_QUERY_SERIALNUMBER, 0, &sn);
+    sn /= 1000000;
+    int extra_offset;
+    switch (sn)
+    {
+    case 11: // SDStationOEM
+    case 19: // SDStationOEMII
+        extra_offset = 0;
+        break;
+    case 13: // Centaurus
+    case 20: // CentaurusII PCI-X
+    case 23: // CentaurusII PCIe
+    default:
+        extra_offset = 6144;
+        break;
+    }
+
+    // Set the DMA size, taking into account the
+    // empirically determined offsets.
+    dma_video_size = width*height*2 + extra_offset;
+
     audio_pair_size = 0x4000;
     if (audio8ch)
     {
