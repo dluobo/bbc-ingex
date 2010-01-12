@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.2 2009/10/12 15:07:45 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.3 2010/01/12 16:57:27 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -24,14 +24,14 @@
 
 #include "Block.h"
 #include "Package.h"
-#include "CodedFrameBuffer.h"
+#include "EncodeFrameBuffer.h"
 #include "MtEncoder.h"
 
 const int DEFAULT_NUM_THREADS = 3;
 
-MtEncoder::MtEncoder(CodedFrameBuffer * cfb, ACE_Thread_Mutex * mutex)
+MtEncoder::MtEncoder(ACE_Thread_Mutex * mutex)
 : ACE_Task<ACE_MT_SYNCH>(),
-  mpCodedFrameBuffer(cfb), mpAvcodecMutex(mutex), mShutdown(0)
+  mpAvcodecMutex(mutex), mShutdown(0)
 {
 }
 
@@ -52,9 +52,9 @@ void MtEncoder::Init(ffmpeg_encoder_resolution_t res, int num_threads)
     this->activate(THR_NEW_LWP | THR_JOINABLE | THR_INHERIT_SCHED, num_threads);
 }
 
-void MtEncoder::Encode(void * p_video, int * p_framenum, int index)
+void MtEncoder::Encode(EncodeFrameTrack & eft)
 {
-    FramePackage * fp = new FramePackage(p_video, p_framenum, index);
+    FramePackage * fp = new FramePackage(eft);
     MessageBlock * mb = new MessageBlock(fp);
     putq(mb);
 }
@@ -103,26 +103,24 @@ int MtEncoder::svc()
             DataBlock * db = ACE_dynamic_cast(DataBlock *, mb->data_block());
             Package * p = db->data();
             FramePackage * fp = ACE_dynamic_cast(FramePackage *, p);
+            EncodeFrameTrack & eft = fp->VideoData();
+            uint8_t * p_input_video = (uint8_t *)eft.Data();
 
             // Encode the frame.
             uint8_t * p_enc_video = 0;
-            int size_enc_video = ffmpeg_encoder_encode(enc, (uint8_t *)fp->VideoData(), &p_enc_video);
+            size_t size_enc_video = ffmpeg_encoder_encode(enc, p_input_video, &p_enc_video);
 
             // Check the frame was still in memory
-            bool err = false;
-            int frame_number_in_memory = * fp->FrameNumber();
-            /*
-            int frame_number_in_memory = * (int *) ((uint8_t *)fp->FrameData() + mOffsetToFrameNumber);
-            */
-            if (frame_number_in_memory != fp->Index())
-            {
-                err = true;
-                ACE_DEBUG((LM_ERROR, ACE_TEXT("MtEncoder missed frame %d, it was actually %d!\n"),
-                    fp->Index(), frame_number_in_memory));
-            }
+            bool valid = eft.Valid();
 
-            // Queue coded frame.
-            mpCodedFrameBuffer->QueueFrame(p_enc_video, size_enc_video, fp->Index(), err);
+            // Replace input data with coded data
+            eft.Init(p_enc_video, size_enc_video, true, false, true, 0, 0);
+            if (!valid)
+            {
+                eft.Error(true);
+                ACE_DEBUG((LM_ERROR, ACE_TEXT("MtEncoder missed frame %d!\n"),
+                    eft.FrameIndex()));
+            }
 
             mb->release();
         }

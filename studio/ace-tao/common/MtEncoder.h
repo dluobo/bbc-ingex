@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.h,v 1.2 2009/10/12 15:07:45 john_f Exp $
+ * $Id: MtEncoder.h,v 1.3 2010/01/12 16:57:27 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -29,22 +29,21 @@
 
 #include "ffmpeg_encoder.h"
 
-class CodedFrameBuffer;
+class EncodeFrameBuffer;
 
 class MtEncoder : public ACE_Task<ACE_MT_SYNCH>
 {
 public:
-    MtEncoder(CodedFrameBuffer * cfb, ACE_Thread_Mutex * mutex);
+    MtEncoder(ACE_Thread_Mutex * ff_mutex);
     virtual ~MtEncoder();
 
     void Init(ffmpeg_encoder_resolution_t res, int num_threads);
-    void Encode(void * p_video, int * p_framenum, int index);
+    void Encode(EncodeFrameTrack & eft);
     void Close();
     virtual int svc();
 
 private:
-    CodedFrameBuffer * mpCodedFrameBuffer;
-    ACE_Thread_Mutex * mpAvcodecMutex;
+    ACE_Thread_Mutex * mpAvcodecMutex; // For AVCodec init
     ffmpeg_encoder_resolution_t mRes;
     int mNumThreads;
     int mShutdown;
