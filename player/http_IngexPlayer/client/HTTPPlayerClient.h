@@ -1,5 +1,5 @@
 /*
- * $Id: HTTPPlayerClient.h,v 1.1 2009/02/24 08:21:17 stuart_hc Exp $
+ * $Id: HTTPPlayerClient.h,v 1.2 2010/01/12 17:11:36 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -39,7 +39,7 @@ namespace ingex
 {
 
 
-typedef enum PlayerOutputType
+typedef enum
 {
     UNKNOWN_OUTPUT = 0,
     /* playout to SDI via DVS card */
@@ -56,7 +56,7 @@ typedef enum PlayerOutputType
     DUAL_DVS_X11_OUTPUT,
     /* playout to both SDI and X11 X video extension window */
     DUAL_DVS_X11_XV_OUTPUT
-};
+} PlayerOutputType;
 
 typedef enum
 {
