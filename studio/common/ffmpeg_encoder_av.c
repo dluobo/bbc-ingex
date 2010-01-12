@@ -1,5 +1,5 @@
 /*
- * $Id: ffmpeg_encoder_av.c,v 1.9 2009/12/17 16:49:48 john_f Exp $
+ * $Id: ffmpeg_encoder_av.c,v 1.10 2010/01/12 17:01:00 john_f Exp $
  *
  * Encode AV and write to file.
  *
@@ -548,7 +548,8 @@ static int write_video_frame(internal_ffmpeg_encoder_t * enc, uint8_t * p_video)
         AVPacket pkt;
         av_init_packet(&pkt);
             
-        if (c->coded_frame->pts != (unsigned)AV_NOPTS_VALUE)
+        const int64_t av_nopts_value = AV_NOPTS_VALUE; // avoids compiler warning
+        if (c->coded_frame->pts != av_nopts_value)
         {
             pkt.pts = av_rescale_q(c->coded_frame->pts, c->time_base, st->time_base);
         }
