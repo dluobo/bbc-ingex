@@ -1,4 +1,4 @@
-    # $Id: configure.in,v 1.13 2009/12/17 16:44:31 john_f Exp $
+    # $Id: configure.in,v 1.14 2010/01/12 17:44:49 john_f Exp $
 #
 AC_INIT(src/ingexgui.cpp)
 AM_INIT_AUTOMAKE(ingexgui, 0.1)
@@ -130,7 +130,7 @@ ACETAOTEST
 
 CPPFLAGS="$CPPFLAGS $WX_CPPFLAGS -I$ACE_ROOT -I$TAO_ROOT -I$TAO_ROOT/orbsvcs -I$IDLLOC/Generated -I$WORKSPACE/player/ingex_player -I$WORKSPACE/player/IngexPlayer -I$WORKSPACE/player/jogshuttle -I$WORKSPACE/libMXF/lib/include -I$WORKSPACE/libMXF/examples/avidmxfinfo -I$WORKSPACE/common $DVS_CPPFLAGS $PLAYER_CPPFLAGS"
 CXXFLAGS="$CXXFLAGS $WX_CPPFLAGS"
-LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lavidmxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lswscale -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio"
+LIBS="-lTAO -lACE -lTAO_CosNaming -lTAO_PortableServer -lTAO_AnyTypeCode -lTAO_Valuetype -lTAO_Messaging -lTAO_PI -lTAO_CodecFactory -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -larchivemxfinfo -lavidmxfinfo -lMXFReader -lMXF -lavformat -lavcodec -lavutil -lswscale -lmp3lame -lx264 -lfaac -lfaad -lbz2 -lportaudio"
 LIBDIRS="-L$ACE_ROOT/lib -L$WORKSPACE/libMXF/lib -L$WORKSPACE/libMXF/examples/avidmxfinfo -L$WORKSPACE/libMXF/examples/archive/info -L$WORKSPACE/libMXF/examples/reader -L$WORKSPACE/common -L$WORKSPACE/common/YUVlib"
 LDFLAGS="$LDFLAGS $LIBS $LIBDIRS $IDLLOC/$IDLLIB $WORKSPACE/player/IngexPlayer/$PLAYERLIB $DVS_LDFLAGS"
 
