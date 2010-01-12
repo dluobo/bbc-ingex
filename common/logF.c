@@ -1,5 +1,5 @@
 /*
- * $Id: logF.c,v 1.4 2009/11/17 16:28:41 john_f Exp $
+ * $Id: logF.c,v 1.5 2010/01/12 16:03:05 john_f Exp $
  *
  * Logging and debugging utility functions.
  *
@@ -146,6 +146,12 @@ extern int reopenLogFile(const char *logfile)
     
     strcpy(log_filename, logfile);
     return 1;
+}
+
+extern void flushLogFile()
+{
+    if (pLogFile)
+        fflush(pLogFile);
 }
 
 // printf style logging to stdout and logfile
