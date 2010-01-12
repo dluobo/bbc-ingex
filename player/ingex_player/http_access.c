@@ -1,5 +1,5 @@
 /*
- * $Id: http_access.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: http_access.c,v 1.7 2010/01/12 16:32:22 john_f Exp $
  *
  *
  *
@@ -83,6 +83,18 @@ static int parse_int64(const char* str, int64_t* value)
 {
     int64_t result;
     if (sscanf(str, "%"PRId64, &result) != 1)
+    {
+        return 0;
+    }
+
+    *value = result;
+    return 1;
+}
+
+static int parse_int(const char* str, int* value)
+{
+    int result;
+    if (sscanf(str, "%d", &result) != 1)
     {
         return 0;
     }
@@ -188,6 +200,7 @@ static void http_player_state_txt(struct shttpd_arg* arg)
     shttpd_printf(arg, "availableLength=%"PRId64"\n", access->currentFrameInfo.availableSourceLength);
     shttpd_printf(arg, "position=%"PRId64"\n", access->currentFrameInfo.position);
     shttpd_printf(arg, "startOffset=%"PRId64"\n", access->currentFrameInfo.startOffset);
+    shttpd_printf(arg, "vtrErrorLevel=%u\n", access->currentFrameInfo.vtrErrorLevel);
 
     PTHREAD_MUTEX_UNLOCK(&access->playerStateMutex);
 
@@ -213,6 +226,8 @@ static void http_player_control(struct shttpd_arg* arg)
     int markType = 0;
     int64_t position = 0;
     int markTypeMask = 0;
+    int vtrErrorLevel = 0;
+
 
 	requestURI = shttpd_get_env(arg, "REQUEST_URI");
 
@@ -505,6 +520,33 @@ static void http_player_control(struct shttpd_arg* arg)
         {
             mc_clear_mark_position(access->control, position, markTypeMask);
         }
+    }
+    else if (strcmp("/player/control/set-vtr-error-level", requestURI) == 0)
+    {
+        queryOk = 1;
+        queryValueCount = 0;
+
+        if (get_query_value(arg, "level", queryValue, sizeof(queryValue)))
+        {
+            if (!parse_int(queryValue, &vtrErrorLevel) ||
+                vtrErrorLevel < VTR_NO_ERROR_LEVEL || vtrErrorLevel > VTR_NO_GOOD_LEVEL)
+            {
+                queryOk = 0;
+            }
+            else
+            {
+                queryValueCount++;
+            }
+        }
+
+        if (queryOk && queryValueCount == 1)
+        {
+            mc_set_vtr_error_level(access->control, (VTRErrorLevel)vtrErrorLevel);
+        }
+    }
+    else if (strcmp("/player/control/next-vtr-error-level", requestURI) == 0)
+    {
+        mc_next_vtr_error_level(access->control);
     }
     else if (strcmp("/player/control/next-osd-screen", requestURI) == 0)
     {

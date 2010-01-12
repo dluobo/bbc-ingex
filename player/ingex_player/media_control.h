@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_control.h,v 1.9 2010/01/12 16:32:25 john_f Exp $
  *
  *
  *
@@ -92,6 +92,8 @@ typedef struct
     void (*seek_prev_mark)(void* data);
     void (*seek_clip_mark)(void* data);
     void (*next_active_mark_selection)(void* data);
+    void (*set_vtr_error_level)(void* data, VTRErrorLevel level);
+    void (*next_vtr_error_level)(void* data);
 
 
     /* on screen display */
@@ -173,6 +175,8 @@ void mc_seek_next_mark(MediaControl* control);
 void mc_seek_prev_mark(MediaControl* control);
 void mc_seek_clip_mark(MediaControl* control);
 void mc_next_active_mark_selection(MediaControl* control);
+void mc_set_vtr_error_level(MediaControl* control, VTRErrorLevel level);
+void mc_next_vtr_error_level(MediaControl* control);
 
 void mc_set_osd_screen(MediaControl* control, OSDScreen screen);
 void mc_next_osd_screen(MediaControl* control);

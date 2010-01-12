@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.c,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_control.c,v 1.9 2010/01/12 16:32:25 john_f Exp $
  *
  *
  *
@@ -192,6 +192,22 @@ void mc_next_active_mark_selection(MediaControl* control)
     if (control && control->next_active_mark_selection)
     {
         control->next_active_mark_selection(control->data);
+    }
+}
+
+void mc_set_vtr_error_level(MediaControl* control, VTRErrorLevel level)
+{
+    if (control && control->set_vtr_error_level)
+    {
+        control->set_vtr_error_level(control->data, level);
+    }
+}
+
+void mc_next_vtr_error_level(MediaControl* control)
+{
+    if (control && control->next_vtr_error_level)
+    {
+        control->next_vtr_error_level(control->data);
     }
 }
 

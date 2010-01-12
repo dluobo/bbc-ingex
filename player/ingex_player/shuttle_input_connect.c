@@ -1,5 +1,5 @@
 /*
- * $Id: shuttle_input_connect.c,v 1.6 2009/12/17 15:57:41 john_f Exp $
+ * $Id: shuttle_input_connect.c,v 1.7 2010/01/12 16:32:33 john_f Exp $
  *
  *
  *
@@ -478,15 +478,15 @@ static void qc_listener(void* data, ShuttleEvent* event)
                             {
                                 if (get_time_diff(&connect->qcClearMarkPressedTime) >= KEY_HOLD_EVENT_DURATION)
                                 {
-                                    /* clear all marks except for PSE failures and VTR errors */
+                                    /* clear all marks except for PSE failures, VTR errors and digibeta dropouts */
                                     mc_clear_all_marks(connect->control,
-                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
+                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE & ~DIGIBETA_DROPOUT_MARK_TYPE);
                                 }
                                 else
                                 {
-                                    /* clear mark except for PSE failures and VTR errors */
+                                    /* clear mark except for PSE failures, VTR errors and digibeta dropouts */
                                     mc_clear_mark(connect->control,
-                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
+                                        ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE & ~DIGIBETA_DROPOUT_MARK_TYPE);
                                 }
                             }
                             break;

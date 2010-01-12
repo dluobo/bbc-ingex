@@ -1,5 +1,5 @@
 /*
- * $Id: types.h,v 1.5 2009/01/29 07:10:27 stuart_hc Exp $
+ * $Id: types.h,v 1.6 2010/01/12 16:32:33 john_f Exp $
  *
  *
  *
@@ -105,6 +105,15 @@ typedef struct
     int numConfigs;
 } MarkConfigs;
 
+
+typedef enum
+{
+    VTR_NO_ERROR_LEVEL = 0,
+    VTR_ALMOST_GOOD_LEVEL = 1,
+    VTR_CANNOT_DETERMINE_LEVEL = 2,
+    VTR_UNCLEAR_LEVEL = 3,
+    VTR_NO_GOOD_LEVEL = 4,
+} VTRErrorLevel;
 
 
 #endif

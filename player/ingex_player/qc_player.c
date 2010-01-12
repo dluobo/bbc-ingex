@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.11 2009/12/17 15:57:40 john_f Exp $
+ * $Id: qc_player.c,v 1.12 2010/01/12 16:32:33 john_f Exp $
  *
  *
  *
@@ -130,6 +130,7 @@ typedef struct
     MarkConfigs markConfigs;
     int markPSEFails;
     int markVTRErrors;
+    int markDigiBetaDropouts;
     const char* ltoCacheDirectory;
     const char* reportDirectory;
     const char* tapeDevice;
@@ -146,6 +147,7 @@ typedef struct
 #endif
     char userName[256];
     char hostName[256];
+    int vtrErrorLevel;
 } Options;
 
 static const Options g_defaultOptions =
@@ -168,6 +170,7 @@ static const Options g_defaultOptions =
     {{{0,{0},0}},0},
     1,
     1,
+    1,
     NULL,
     NULL,
     "/dev/nst0",
@@ -183,7 +186,8 @@ static const Options g_defaultOptions =
     9006,
 #endif
     {0},
-    {0}
+    {0},
+    VTR_ALMOST_GOOD_LEVEL,
 };
 
 
@@ -350,6 +354,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     {
         {"white", WHITE_COLOUR},
         {"light-white", LIGHT_WHITE_COLOUR},
+        {"light-grey", LIGHT_GREY_COLOUR},
         {"yellow", YELLOW_COLOUR},
         {"cyan", CYAN_COLOUR},
         {"green", GREEN_COLOUR},
@@ -791,7 +796,7 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     strcat(filename, name);
 
     /* open mxf file */
-    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, &mxfSource))
+    if (!mxfs_open(filename, 0, options->markPSEFails, options->markVTRErrors, options->markDigiBetaDropouts, &mxfSource))
     {
         ml_log_error("Failed to open MXF file source '%s'\n", filename);
         goto fail;
@@ -871,6 +876,9 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
 
     ply_set_qc_quit_validator(player->mediaPlayer, validate_player_quit, player);
+    
+    mc_set_vtr_error_level(ply_get_media_control(player->mediaPlayer), (VTRErrorLevel)options->vtrErrorLevel);
+    ply_register_vtr_error_source(player->mediaPlayer, mxfs_get_vtr_error_source(mxfSource));
 
 
     /* restore the marks from the selected session file */
@@ -1354,6 +1362,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --src-buf  <size>        Size of the media source buffer (default is %d)\n", g_defaultOptions.srcBufferSize);
     fprintf(stderr, "  --no-pse-fails           Don't add marks for PSE failures recorded in the archive MXF file\n");
     fprintf(stderr, "  --no-vtr-errors          Don't add marks for VTR playback errors recorded in the archive MXF file\n");
+    fprintf(stderr, "  --no-digi-dropouts       Don't add marks for DigiBeta dropouts recorded in the archive MXF file\n");
+    fprintf(stderr, "  --vtr-error-level <val>  Set the initial minimum VTR error level. 0 means no errors. Max value is %d (default 1)\n", VTR_NO_GOOD_LEVEL);
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
@@ -1583,6 +1593,28 @@ int main(int argc, const char **argv)
         {
             options.markVTRErrors = 0;
             cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--no-digi-dropouts") == 0)
+        {
+            options.markDigiBetaDropouts = 0;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--vtr-error-level") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &options.vtrErrorLevel) != 1 ||
+                options.vtrErrorLevel < 0 || options.vtrErrorLevel > VTR_NO_GOOD_LEVEL)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--pixel-aspect") == 0)
         {
@@ -1902,6 +1934,7 @@ int main(int argc, const char **argv)
             {M4_MARK_TYPE, "cyan", CYAN_COLOUR},
             {VTR_ERROR_MARK_TYPE, "yellow (VTR)", YELLOW_COLOUR},
             {PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
+            {DIGIBETA_DROPOUT_MARK_TYPE, "light-grey (DigiB dropout)", LIGHT_GREY_COLOUR},
         };
         memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
         g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);

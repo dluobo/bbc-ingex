@@ -72,8 +72,8 @@ OPT = -O3 -mmmx -msse2
 INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I/usr/local/include -I/usr/include/freetype2 -I/usr/include/fontconfig
 
 LIBDIRS = -L. -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L/usr/X11R6/lib -L/usr/local/lib -L/usr/X11R6/lib64 -L/usr/local/lib64
-LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -ld3mxfinfo -lMXFReader -lMXF
-LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a $(LIBMXF_READER_DIR)/libMXFReader.a
+LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -larchivemxfinfo -lMXFReader -lMXF
+LIB_DEPS = $(LIBMXF_DIR)/lib/libMXF.a $(LIBMXF_ARCHIVE_DIR)/info/libarchivemxfinfo.a $(LIBMXF_READER_DIR)/libMXFReader.a
 
 ifdef DISABLE_QC_LTO_ACCESS
 	CFLAGS += -DDISABLE_QC_LTO_ACCESS
@@ -184,7 +184,7 @@ SOURCES = multiple_sources.c dvs_sink.c connection_matrix.c stream_connect.c uti
 	udp_source.c audio_sink.c blank_source.c progress_bar_input.c progress_bar_input_connect.c \
 	clapper_source.c sdl_sink.c clip_source.c video_switch_database.c source_event.c \
 	dnxhd_stream_connect.c qc_http_access.c mouse_input.c mouse_input_connect.c raw_dv_source.c \
-	ffmpeg_source.c audio_switch_sink.c overlay.c
+	ffmpeg_source.c audio_switch_sink.c overlay.c vtr_error_source.c
 OBJECTS = $(patsubst %.c,.objs/%.o,$(SOURCES))
 DEPENDENCIES = $(patsubst %.c,.deps/%.d,$(SOURCES))
 
@@ -196,8 +196,8 @@ all: libingexplayer.a player qc_player
 $(LIBMXF_DIR)/lib/libMXF.a:
 	cd $(LIBMXF_DIR)/lib && $(MAKE) libMXF.a
 
-$(LIBMXF_ARCHIVE_DIR)/info/libd3mxfinfo.a:
-	cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libd3mxfinfo.a
+$(LIBMXF_ARCHIVE_DIR)/info/libarchivemxfinfo.a:
+	cd $(LIBMXF_ARCHIVE_DIR)/info && $(MAKE) libarchivemxfinfo.a
 
 $(LIBMXF_READER_DIR)/libMXFReader.a:
 	cd $(LIBMXF_READER_DIR) && $(MAKE) libMXFReader.a

@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.21 2009/12/17 15:57:40 john_f Exp $
+ * $Id: player.c,v 1.22 2010/01/12 16:32:29 john_f Exp $
  *
  *
  *
@@ -474,6 +474,7 @@ static int parse_config_marks(const char* val, MarkConfigs* markConfigs)
     {
         {"white", WHITE_COLOUR},
         {"light-white", LIGHT_WHITE_COLOUR},
+        {"light-grey", LIGHT_GREY_COLOUR},
         {"yellow", YELLOW_COLOUR},
         {"cyan", CYAN_COLOUR},
         {"green", GREEN_COLOUR},
@@ -808,6 +809,8 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --force-d3-mxf           (Use only for MXF inputs using deprecated keys). Force the treatment of the MXF inputs to be BBC D3 MXF\n");
     fprintf(stderr, "  --mark-pse-fails         Add marks for PSE failures recorded in the archive MXF file\n");
     fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the archive MXF file\n");
+    fprintf(stderr, "  --mark-digi-dropouts     Add marks for DigiBeta dropouts recorded in the archive MXF file\n");
+    fprintf(stderr, "  --vtr-error-level <val>  Set the initial minimum VTR error level. 0 means no errors. Max value is %d (default 1)\n", VTR_NO_GOOD_LEVEL);
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
@@ -943,6 +946,7 @@ int main(int argc, const char **argv)
     int forceD3MXFInput = 0;
     int markPSEFails = 0;
     int markVTRErrors = 0;
+    int markDigiBetaDropouts = 0;
     Rational pixelAspectRatio = {1, 1};
     Rational monitorAspectRatio = {0, 0};
     Rational sourceAspectRatio = {0, 0};
@@ -1004,6 +1008,9 @@ int main(int argc, const char **argv)
     int numDisabledStreams = 0;
     int disableShuttle = 0;
     int forceUYVYFormat;
+    VTRErrorSource* vtrErrorSources[MAX_INPUTS];
+    int numVTRErrorSources = 0;
+    int vtrErrorLevel = 1;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1434,6 +1441,28 @@ int main(int argc, const char **argv)
         {
             markVTRErrors = 1;
             cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--mark-digi-dropouts") == 0)
+        {
+            markDigiBetaDropouts = 1;
+            cmdlnIndex += 1;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--vtr-error-level") == 0)
+        {
+            if (cmdlnIndex + 1 >= argc)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Missing argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            if (sscanf(argv[cmdlnIndex + 1], "%d", &vtrErrorLevel) != 1 ||
+                vtrErrorLevel < 0 || vtrErrorLevel > VTR_NO_GOOD_LEVEL)
+            {
+                usage(argv[0]);
+                fprintf(stderr, "Invalid argument for %s\n", argv[cmdlnIndex]);
+                return 1;
+            }
+            cmdlnIndex += 2;
         }
         else if (strcmp(argv[cmdlnIndex], "--pixel-aspect") == 0)
         {
@@ -2279,12 +2308,16 @@ int main(int argc, const char **argv)
         switch (inputs[i].type)
         {
             case MXF_INPUT:
-                if (!mxfs_open(inputs[i].filename, forceD3MXFInput, markPSEFails, markVTRErrors, &mxfSource))
+                if (!mxfs_open(inputs[i].filename, forceD3MXFInput, markPSEFails, markVTRErrors, markDigiBetaDropouts, &mxfSource))
                 {
                     ml_log_error("Failed to open MXF file source\n");
                     goto fail;
                 }
                 mediaSource = mxfs_get_media_source(mxfSource);
+                
+                assert(numVTRErrorSources < (int)(sizeof(vtrErrorSources) / sizeof(VTRErrorSource)));
+                vtrErrorSources[numVTRErrorSources] = mxfs_get_vtr_error_source(mxfSource);
+                numVTRErrorSources++;
                 break;
 
             case SHM_INPUT:
@@ -2867,8 +2900,18 @@ int main(int argc, const char **argv)
     {
         mc_set_osd_timecode(ply_get_media_control(g_player.mediaPlayer), 0, shmDefaultTimecodeType, shmDefaultTimecodeSubType);
     }
+    
+    
+    /* set the VTR error level and register the VTR error sources */
+    
+    mc_set_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), (VTRErrorLevel)vtrErrorLevel);
 
+    for (i = 0; i < numVTRErrorSources; i++)
+    {
+        ply_register_vtr_error_source(g_player.mediaPlayer, vtrErrorSources[i]);
+    }
 
+    
     /* qc or not control stuff */
 
     if (qcControl)
@@ -2889,6 +2932,7 @@ int main(int argc, const char **argv)
                 {M4_MARK_TYPE, "cyan", CYAN_COLOUR},
                 {VTR_ERROR_MARK_TYPE, "yellow (VTR)", YELLOW_COLOUR},
                 {PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
+                {DIGIBETA_DROPOUT_MARK_TYPE, "light-grey (DigiBeta dropout)", LIGHT_GREY_COLOUR},
             };
             memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
             g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);

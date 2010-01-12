@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.11 2009/12/17 15:57:40 john_f Exp $
+ * $Id: frame_info.h,v 1.12 2010/01/12 16:32:22 john_f Exp $
  *
  *
  *
@@ -51,6 +51,7 @@ extern "C"
 #define M8_MARK_TYPE                0x00000100
 #define VTR_ERROR_MARK_TYPE         0x00010000
 #define PSE_FAILURE_MARK_TYPE       0x00020000
+#define DIGIBETA_DROPOUT_MARK_TYPE  0x00040000
 
 #define CLIP_ID_SIZE                128
 
@@ -210,7 +211,8 @@ typedef struct
 
     int droppedFrame; /* true if a frame was dropped when the player controls are locked */
 
-    /* user mark */
+    /* user marks */
+    VTRErrorLevel vtrErrorLevel;
     int isMarked;
     int markType;
 

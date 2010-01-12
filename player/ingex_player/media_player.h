@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.h,v 1.8 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: media_player.h,v 1.9 2010/01/12 16:32:29 john_f Exp $
  *
  *
  *
@@ -36,6 +36,7 @@ extern "C"
 #include "media_control.h"
 #include "connection_matrix.h"
 #include "frame_info.h"
+#include "vtr_error_source.h"
 
 
 typedef struct MediaPlayer MediaPlayer;
@@ -140,6 +141,7 @@ void ply_enable_clip_marks(MediaPlayer* player, int markType);
 void ply_set_start_offset(MediaPlayer* player, int64_t offset);
 void ply_print_source_info(MediaPlayer* player);
 void ply_get_frame_rate(MediaPlayer* player, Rational* frameRate);
+int ply_register_vtr_error_source(MediaPlayer* player, VTRErrorSource* source);
 
 
 /* quality checking */

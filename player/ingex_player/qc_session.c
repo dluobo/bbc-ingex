@@ -1,5 +1,5 @@
 /*
- * $Id: qc_session.c,v 1.7 2009/12/17 15:57:40 john_f Exp $
+ * $Id: qc_session.c,v 1.8 2010/01/12 16:32:33 john_f Exp $
  *
  *
  *
@@ -602,8 +602,8 @@ void qcs_write_marks(QCSession* qcSession, int includeAll, int clipMarkType,
         }
         else
         {
-            /* filter out VTR errors and PSE failures */
-            markType = marks[i].type & ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
+            /* filter out VTR errors, PSE failures and digibeta dropouts */
+            markType = marks[i].type & ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE | DIGIBETA_DROPOUT_MARK_TYPE);
             if (markType == 0)
             {
                 continue;
@@ -885,8 +885,8 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                             type = parse_mark_type(markTypeStr + 1);
                             if (type != 0)
                             {
-                                /* filter out VTR errors and PSE failures which will be extracted from the MXF file */
-                                type &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
+                                /* filter out VTR errors, PSE failures and digibeta dropouts which will be extracted from the MXF file */
+                                type &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE | DIGIBETA_DROPOUT_MARK_TYPE);
                                 if (type != 0)
                                 {
                                     mc_mark_position(control, position, type, 0);
@@ -902,8 +902,8 @@ int qcs_restore_session(MediaControl* control, const char* filename, char* sessi
                                     clipMarkType = parse_mark_type(clipMarkTypeStr + 1);
                                     if (clipMarkType != 0)
                                     {
-                                        /* filter out VTR errors and PSE failures which will be extracted from the MXF file */
-                                        clipMarkType &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE);
+                                        /* filter out VTR errors, PSE failures and digibeta dropouts which will be extracted from the MXF file */
+                                        clipMarkType &= ~(PSE_FAILURE_MARK_TYPE | VTR_ERROR_MARK_TYPE | DIGIBETA_DROPOUT_MARK_TYPE);
                                         if (clipMarkType != 0)
                                         {
                                             /* mark the end of the clip */

@@ -1,5 +1,5 @@
 /*
- * $Id: keyboard_input_connect.c,v 1.10 2009/12/17 15:57:40 john_f Exp $
+ * $Id: keyboard_input_connect.c,v 1.11 2010/01/12 16:32:25 john_f Exp $
  *
  *
  *
@@ -539,12 +539,14 @@ static void qc_key_pressed(void* data, int key, int modifier)
                 mc_mark(connect->control, M0_MARK_TYPE, 1);
                 break;
             case 'c':
-                /* clear mark except for PSE failures and VTR errors */
-                mc_clear_mark(connect->control, ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
+                /* clear mark except for PSE failures, VTR errors and digibeta dropouts */
+                mc_clear_mark(connect->control,
+                    ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE & ~DIGIBETA_DROPOUT_MARK_TYPE);
                 break;
             case 'b':
-                /* clear all marks except for PSE failures and VTR errors */
-                mc_clear_all_marks(connect->control, ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE);
+                /* clear all marks except for PSE failures, VTR errors and digibeta dropouts */
+                mc_clear_all_marks(connect->control,
+                    ALL_MARK_TYPE & ~VTR_ERROR_MARK_TYPE & ~PSE_FAILURE_MARK_TYPE & ~DIGIBETA_DROPOUT_MARK_TYPE);
                 break;
             case ',':
                 mc_seek_prev_mark(connect->control);

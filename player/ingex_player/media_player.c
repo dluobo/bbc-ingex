@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.12 2009/10/12 16:06:29 philipn Exp $
+ * $Id: media_player.c,v 1.13 2010/01/12 16:32:25 john_f Exp $
  *
  *
  *
@@ -46,6 +46,8 @@
 
 
 #define MAX_MARK_SELECTIONS     2
+
+#define MAX_VTR_ERROR_SOURCES   16
 
 #define HAVE_PLAYER_LISTENER(player) \
     (player->listeners.listener != NULL)
@@ -98,6 +100,9 @@ typedef struct
     int nextOSDTimecode;
     int disableOSDDisplay;
     int disableOSDDisplayChanged;
+    
+    VTRErrorLevel vtrErrorLevel;
+    int nextVTRErrorLevel;
 
     int refreshRequired;
 
@@ -176,6 +181,11 @@ struct MediaPlayer
     int userMarksTypeMask[MAX_MARK_SELECTIONS];
     UserMark* currentClipMark;
     pthread_mutex_t userMarksMutex;
+    
+    /* VTR error sources */
+    VTRErrorSource* vtrErrorSources[MAX_VTR_ERROR_SOURCES];
+    int numVTRErrorSources;
+    VTRErrorLevel vtrErrorLevel;
 
     /* menu handler */
     MenuHandler* menuHandler;
@@ -1015,6 +1025,21 @@ static void free_marks(MediaPlayer* player, int markSelection, int typeMask)
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
 }
 
+static void update_vtr_marks(MediaPlayer* player, VTRErrorLevel level)
+{
+    int i;
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        free_marks(player, i, VTR_ERROR_MARK_TYPE);
+    }
+    
+    for (i = 0; i < player->numVTRErrorSources; i++)
+    {
+        ves_set_vtr_error_level(player->vtrErrorSources[i], level);
+        ves_mark_vtr_errors(player->vtrErrorSources[i], player->mediaSource, &player->control);
+    }
+}
+
 
 static int64_t legitimise_position(MediaPlayer* player, int64_t position)
 {
@@ -1555,6 +1580,37 @@ static void ply_next_active_mark_selection(void* data)
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 }
 
+static void ply_set_vtr_error_level(void* data, VTRErrorLevel level)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+
+    if (!player->state.locked)
+    {
+        player->state.vtrErrorLevel = level;
+    }
+    player->state.refreshRequired = 1;
+    switch_source_info_screen(player);
+
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_next_vtr_error_level(void* data)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+
+    if (!player->state.locked)
+    {
+        player->state.nextVTRErrorLevel = 1;
+    }
+    player->state.refreshRequired = 1;
+    switch_source_info_screen(player);
+
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
 
 static void ply_set_osd_screen(void* data, OSDScreen screen)
 {
@@ -2599,6 +2655,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
             newPlayer->userMarksTypeMask[i] = markSelectionTypeMasks[i];
         }
     }
+    newPlayer->vtrErrorLevel = VTR_ALMOST_GOOD_LEVEL;
 
     newPlayer->frameInfo.position = -1; /* make sure that first frame at position 0 is not marked as a repeat */
 
@@ -2682,6 +2739,7 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->state.nextPosition = 0;
     newPlayer->state.lastPosition = -1;
     newPlayer->state.reviewEndPosition = -1;
+    newPlayer->state.vtrErrorLevel = newPlayer->vtrErrorLevel;
 
     newPlayer->mediaSource = mediaSource;
     newPlayer->mediaSink = mediaSink;
@@ -2720,6 +2778,8 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.seek_prev_mark = ply_seek_prev_mark;
     newPlayer->control.seek_clip_mark = ply_seek_clip_mark;
     newPlayer->control.next_active_mark_selection = ply_next_active_mark_selection;
+    newPlayer->control.set_vtr_error_level = ply_set_vtr_error_level;
+    newPlayer->control.next_vtr_error_level = ply_next_vtr_error_level;
     newPlayer->control.set_osd_screen = ply_set_osd_screen;
     newPlayer->control.next_osd_screen = ply_next_osd_screen;
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;
@@ -2926,7 +2986,6 @@ int ply_start_player(MediaPlayer* player, int startPaused)
             sourceProcessingCompleted = msc_post_complete(player->mediaSource, player->mediaSource, &player->control);
         }
 
-
         /* execute paused start */
 
         if (doStartPause)
@@ -2937,11 +2996,26 @@ int ply_start_player(MediaPlayer* player, int startPaused)
         }
 
 
-        /* update the sink OSD */
-
         PTHREAD_MUTEX_LOCK(&player->stateMutex)
         currentState = player->state;
         PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+
+        
+        /* process VTR error level changes */
+        
+        if (currentState.vtrErrorLevel != player->vtrErrorLevel)
+        {
+            player->vtrErrorLevel = currentState.vtrErrorLevel;
+            update_vtr_marks(player, player->vtrErrorLevel);
+        }
+        else if (currentState.nextVTRErrorLevel)
+        {
+            player->vtrErrorLevel = (player->vtrErrorLevel + 1) % (VTR_NO_GOOD_LEVEL + 1);
+            update_vtr_marks(player, player->vtrErrorLevel);
+        }
+
+        
+        /* update the sink OSD */
 
         if (currentState.nextOSDTimecode)
         {
@@ -2967,9 +3041,12 @@ int ply_start_player(MediaPlayer* player, int startPaused)
             refreshRequired = 1;
         }
 
+        
         PTHREAD_MUTEX_LOCK(&player->stateMutex)
         player->state.setOSDTimecode = 0;
         player->state.nextOSDTimecode = 0;
+        player->state.nextVTRErrorLevel = 0;
+        player->state.vtrErrorLevel = player->vtrErrorLevel;
         PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
 
 
@@ -3159,6 +3236,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
                     player->frameInfo.markType = currentMarkType;
                 }
                 PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+                player->frameInfo.vtrErrorLevel = player->vtrErrorLevel;
                 player->frameInfo.isRepeat = isRepeat;
                 player->frameInfo.muteAudio = muteAudio;
                 player->frameInfo.locked = currentState.locked;
@@ -3776,6 +3854,22 @@ fail:
 void ply_get_frame_rate(MediaPlayer* player, Rational* frameRate)
 {
     *frameRate = player->frameRate;
+}
+
+int ply_register_vtr_error_source(MediaPlayer* player, VTRErrorSource* source)
+{
+    if (player->numVTRErrorSources >= MAX_VTR_ERROR_SOURCES)
+    {
+        ml_log_warn("Maximum VTR error sources exceeded\n");
+        return 0;
+    }
+    
+    player->vtrErrorSources[player->numVTRErrorSources] = source;
+    player->numVTRErrorSources++;
+    
+    ves_set_vtr_error_level(source, player->vtrErrorLevel);
+    
+    return 1;
 }
 
 void ply_set_qc_quit_validator(MediaPlayer* player, qc_quit_validator_func func, void* data)

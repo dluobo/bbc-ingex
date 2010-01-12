@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.11 2009/12/17 15:57:40 john_f Exp $
+ * $Id: mxf_source.c,v 1.12 2010/01/12 16:32:29 john_f Exp $
  *
  *
  *
@@ -31,7 +31,7 @@
 #include "logging.h"
 
 #include <mxf_reader.h>
-#include <d3_mxf_info_lib.h>
+#include <archive_mxf_info_lib.h>
 #include <mxf/mxf_page_file.h>
 #include <mxf/mxf_avid_labels_and_keys.h>
 
@@ -74,9 +74,16 @@ struct MXFFileSource
 {
     int markPSEFailures;
     int markVTRErrors;
+    int markDigiBetaDropouts;
     char* filename;
 
     MediaSource mediaSource;
+    
+    VTRErrorSource vtrErrorSource;
+    VTRErrorLevel vtrErrorLevel;
+    VTRErrorAtPos* vtrErrors;
+    long numVTRErrors;
+    
     MXFDataModel* dataModel;
     MXFReader* mxfReader;
     MXFReaderListener mxfListener;
@@ -201,6 +208,37 @@ static int deinterleave_audio(uint8_t* input, uint32_t inputSize, int numChannel
     }
 
     return 1;
+}
+
+
+static void mark_vtr_errors(MXFFileSource* source, MediaSource* rootSource, MediaControl* mediaControl)
+{
+    long i;
+    int64_t convertedPosition;
+    long numMarked = 0;
+    uint8_t audioErrorCode, videoErrorCode;
+    
+    if (source->vtrErrorLevel == VTR_NO_ERROR_LEVEL)
+    {
+        ml_log_info("Not marking VTR errors for level == %d\n", source->vtrErrorLevel);
+        return;
+    }
+    
+    for (i = 0; i < source->numVTRErrors; i++)
+    {
+        audioErrorCode = source->vtrErrors[i].errorCode & 0x0f;
+        videoErrorCode = (source->vtrErrors[i].errorCode & 0xf0) >> 4;
+        
+        if (audioErrorCode >= (uint8_t)source->vtrErrorLevel ||
+            videoErrorCode >= (uint8_t)source->vtrErrorLevel)
+        {
+            convertedPosition = msc_convert_position(rootSource, source->vtrErrors[i].position, &source->mediaSource);
+            mc_mark_position(mediaControl, convertedPosition, VTR_ERROR_MARK_TYPE, 0);
+            numMarked++;
+        }
+    }
+
+    ml_log_info("Marked %ld of %ld VTR errors at level >= %d\n", numMarked, source->numVTRErrors, source->vtrErrorLevel);
 }
 
 
@@ -749,9 +787,9 @@ static int mxfs_is_complete(void* data)
     int64_t availableLength;
     int64_t length;
 
-    /* only archive MXF files with option to mark PSE failures or VTR errors require post complete step */
+    /* only archive MXF files with option to mark PSE failures, VTR errors or digibeta dropouts require post complete step */
     if (!source->isArchiveMXF ||
-        (!source->markPSEFailures && !source->markVTRErrors))
+        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts))
     {
         return 1;
     }
@@ -777,10 +815,10 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
     int freeHeaderMetadata = 0;
     int64_t convertedPosition;
 
-    /* only archive MXF files with option to mark PSE failures or VTR errors require post complete step */
+    /* only archive MXF files with option to mark PSE failures, VTR errors or digibeta dropouts require post complete step */
     if (source->donePostComplete ||
         !source->isArchiveMXF ||
-        (!source->markPSEFailures && !source->markVTRErrors))
+        (!source->markPSEFailures && !source->markVTRErrors && !source->markDigiBetaDropouts))
     {
         source->donePostComplete = 1;
         return 1;
@@ -813,7 +851,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
         }
         else if (timeDiff > 2000000) /* 2 second */
         {
-            result = d3_mxf_read_footer_metadata(source->filename, source->dataModel, &headerMetadata);
+            result = archive_mxf_read_footer_metadata(source->filename, source->dataModel, &headerMetadata);
             if (result == 1)
             {
                 /* have header metadata */
@@ -847,7 +885,7 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
             long numFailures = 0;
             long i;
 
-            if (d3_mxf_get_pse_failures(headerMetadata, &failures, &numFailures))
+            if (archive_mxf_get_pse_failures(headerMetadata, &failures, &numFailures))
             {
                 ml_log_info("Marking %ld PSE failures\n", numFailures);
                 for (i = 0; i < numFailures; i++)
@@ -862,20 +900,28 @@ static int mxfs_post_complete(void* data, MediaSource* rootSource, MediaControl*
 
         if (source->markVTRErrors)
         {
-            VTRErrorAtPos* errors = NULL;
-            long numErrors = 0;
+            if (archive_mxf_get_vtr_errors(headerMetadata, &source->vtrErrors, &source->numVTRErrors))
+            {
+                mark_vtr_errors(source, rootSource, mediaControl);
+            }
+        }
+
+        if (source->markDigiBetaDropouts)
+        {
+            DigiBetaDropout* digiBetaDropouts = NULL;
+            long numDigiBetaDropouts = 0;
             long i;
 
-            if (d3_mxf_get_vtr_errors(headerMetadata, &errors, &numErrors))
+            if (archive_mxf_get_digibeta_dropouts(headerMetadata, &digiBetaDropouts, &numDigiBetaDropouts))
             {
-                ml_log_info("Marking %ld VTR errors\n", numErrors);
-                for (i = 0; i < numErrors; i++)
+                ml_log_info("Marking %ld digibeta dropouts\n", numDigiBetaDropouts);
+                for (i = 0; i < numDigiBetaDropouts; i++)
                 {
-                    convertedPosition = msc_convert_position(rootSource, errors[i].position, &source->mediaSource);
-                    mc_mark_position(mediaControl, convertedPosition, VTR_ERROR_MARK_TYPE, 0);
+                    convertedPosition = msc_convert_position(rootSource, digiBetaDropouts[i].position, &source->mediaSource);
+                    mc_mark_position(mediaControl, convertedPosition, DIGIBETA_DROPOUT_MARK_TYPE, 0);
                 }
 
-                SAFE_FREE(&errors);
+                SAFE_FREE(&digiBetaDropouts);
             }
         }
     }
@@ -953,20 +999,46 @@ static void mxfs_close(void* data)
 
     mxf_free_data_model(&source->dataModel);
     SAFE_FREE(&source->filename);
+    
+    SAFE_FREE(&source->vtrErrors);
+    source->numVTRErrors = 0;
 
     SAFE_FREE(&source);
 }
 
 
+void mxfs_set_vtr_error_level(void* data, VTRErrorLevel level)
+{
+    MXFFileSource* source = (MXFFileSource*)data;
 
-int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int markVTRErrors, MXFFileSource** source)
+    source->vtrErrorLevel = level;
+}
+
+void mxfs_mark_vtr_errors(void* data, MediaSource* rootSource, MediaControl* mediaControl)
+{
+    MXFFileSource* source = (MXFFileSource*)data;
+
+    if (!source->markVTRErrors || !source->isArchiveMXF)
+    {
+        return;
+    }
+    
+    if (source->numVTRErrors > 0)
+    {
+        mark_vtr_errors(source, rootSource, mediaControl);
+    }
+}
+
+
+int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int markVTRErrors, int markDigiBetaDropouts,
+    MXFFileSource** source)
 {
     MXFFileSource* newSource = NULL;
     MXFFile* mxfFile = NULL;
     MXFPageFile* mxfPageFile = NULL;
     int i;
     int j;
-    D3MXFInfo archiveMXFInfo;
+    ArchiveMXFInfo archiveMXFInfo;
     int haveArchiveInfo = 0;
     char stringBuf[128];
     int numSourceTimecodes;
@@ -1023,15 +1095,16 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
 
     newSource->markPSEFailures = markPSEFailures;
     newSource->markVTRErrors = markVTRErrors;
+    newSource->markDigiBetaDropouts = markDigiBetaDropouts;
     CALLOC_OFAIL(newSource->filename, char, strlen(filename) + 1);
     strcpy(newSource->filename, filename);
 
     CHK_OFAIL(mxf_load_data_model(&newSource->dataModel));
-    CHK_OFAIL(d3_mxf_load_extensions(newSource->dataModel));
+    CHK_OFAIL(archive_mxf_load_extensions(newSource->dataModel));
     CHK_OFAIL(mxf_finalise_data_model(newSource->dataModel));
 
     CHK_OFAIL(init_mxf_reader_2(&mxfFile, newSource->dataModel, &newSource->mxfReader));
-    if (forceD3MXF || is_d3_mxf(get_header_metadata(newSource->mxfReader)))
+    if (forceD3MXF || is_archive_mxf(get_header_metadata(newSource->mxfReader)))
     {
         if (forceD3MXF)
         {
@@ -1042,8 +1115,8 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             ml_log_info("MXF file is a BBC Archive MXF file\n");
         }
         newSource->isArchiveMXF = 1;
-        memset(&archiveMXFInfo, 0, sizeof(D3MXFInfo));
-        if (d3_mxf_get_info(get_header_metadata(newSource->mxfReader), &archiveMXFInfo))
+        memset(&archiveMXFInfo, 0, sizeof(ArchiveMXFInfo));
+        if (archive_mxf_get_info(get_header_metadata(newSource->mxfReader), &archiveMXFInfo))
         {
             haveArchiveInfo = 1;
         }
@@ -1078,6 +1151,10 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
     newSource->mediaSource.set_clip_id = mxfs_set_clip_id;
     newSource->mediaSource.close = mxfs_close;
     newSource->mediaSource.data = newSource;
+    
+    newSource->vtrErrorSource.set_vtr_error_level = mxfs_set_vtr_error_level;
+    newSource->vtrErrorSource.mark_vtr_errors = mxfs_mark_vtr_errors;
+    newSource->vtrErrorSource.data = newSource;
 
     newSource->mxfListener.accept_frame = map_accept_frame;
     newSource->mxfListener.allocate_buffer = map_allocate_buffer;
@@ -1125,36 +1202,36 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_LTO_SPOOL_NO,
                 archiveMXFInfo.ltoInfaxData.spoolNo));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_SOURCE_SPOOL_NO,
-                archiveMXFInfo.d3InfaxData.spoolNo));
+                archiveMXFInfo.sourceInfaxData.spoolNo));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_SOURCE_ITEM_NO,
-                convert_uint32(archiveMXFInfo.d3InfaxData.itemNo, stringBuf)));
+                convert_uint32(archiveMXFInfo.sourceInfaxData.itemNo, stringBuf)));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_TITLE,
-                archiveMXFInfo.d3InfaxData.progTitle));
+                archiveMXFInfo.sourceInfaxData.progTitle));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_EPISODE_TITLE,
-                archiveMXFInfo.d3InfaxData.epTitle));
+                archiveMXFInfo.sourceInfaxData.epTitle));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_TX_DATE,
-                convert_date(&archiveMXFInfo.d3InfaxData.txDate, stringBuf)));
+                convert_date(&archiveMXFInfo.sourceInfaxData.txDate, stringBuf)));
             progNo[0] = '\0';
-            if (strlen(archiveMXFInfo.d3InfaxData.magPrefix) > 0)
+            if (strlen(archiveMXFInfo.sourceInfaxData.magPrefix) > 0)
             {
-                strcat(progNo, archiveMXFInfo.d3InfaxData.magPrefix);
+                strcat(progNo, archiveMXFInfo.sourceInfaxData.magPrefix);
                 strcat(progNo, ":");
             }
-            strcat(progNo, archiveMXFInfo.d3InfaxData.progNo);
-            if (strlen(archiveMXFInfo.d3InfaxData.prodCode) > 0)
+            strcat(progNo, archiveMXFInfo.sourceInfaxData.progNo);
+            if (strlen(archiveMXFInfo.sourceInfaxData.prodCode) > 0)
             {
                 strcat(progNo, "/");
-                if (strlen(archiveMXFInfo.d3InfaxData.prodCode) == 1 &&
-                    archiveMXFInfo.d3InfaxData.prodCode[0] >= '0' && archiveMXFInfo.d3InfaxData.prodCode[0] <= '9')
+                if (strlen(archiveMXFInfo.sourceInfaxData.prodCode) == 1 &&
+                    archiveMXFInfo.sourceInfaxData.prodCode[0] >= '0' && archiveMXFInfo.sourceInfaxData.prodCode[0] <= '9')
                 {
                     strcat(progNo, "0");
                 }
-                strcat(progNo, archiveMXFInfo.d3InfaxData.prodCode);
+                strcat(progNo, archiveMXFInfo.sourceInfaxData.prodCode);
             }
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_NUMBER,
                 progNo));
             CHK_OFAIL(add_known_source_info(&commonStreamInfo, SRC_INFO_ARCHIVEMXF_PROGRAMME_DURATION,
-                convert_prog_duration(archiveMXFInfo.d3InfaxData.duration, stringBuf)));
+                convert_prog_duration(archiveMXFInfo.sourceInfaxData.duration, stringBuf)));
         }
         else
         {
@@ -1182,6 +1259,12 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
             outputStream->streamInfo.height = track->video.frameHeight;
             outputStream->streamInfo.aspectRatio.num = track->video.aspectRatio.numerator;
             outputStream->streamInfo.aspectRatio.den = track->video.aspectRatio.denominator;
+            if (outputStream->streamInfo.aspectRatio.num < 1 || outputStream->streamInfo.aspectRatio.den < 1)
+            {
+                ml_log_warn("MXF file has unknown aspect ratio. Defaulting to 4:3\n");
+                outputStream->streamInfo.aspectRatio.num = 4;
+                outputStream->streamInfo.aspectRatio.den = 3;
+            }
             if (mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_FrameWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(SD_Unc_625_50i_422_135_ClipWrapped)) ||
                 mxf_equals_ul(&track->essenceContainerLabel, &MXF_EC_L(HD_Unc_1080_50i_422_ClipWrapped)))
@@ -1369,4 +1452,8 @@ MediaSource* mxfs_get_media_source(MXFFileSource* source)
     return &source->mediaSource;
 }
 
+VTRErrorSource* mxfs_get_vtr_error_source(MXFFileSource* source)
+{
+    return &source->vtrErrorSource;
+}
 
