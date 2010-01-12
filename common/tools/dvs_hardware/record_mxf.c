@@ -1,5 +1,5 @@
 /*
- * $Id: record_mxf.c,v 1.2 2009/12/17 15:53:43 john_f Exp $
+ * $Id: record_mxf.c,v 1.3 2010/01/12 16:12:42 john_f Exp $
  *
  * Record uncompressed SDI video and audio to disk.
  *
@@ -113,7 +113,7 @@ static void cleanup_exit(int res, sv_handle *sv)
 		sv_close(sv);
 	}
 	if (write_mxf) {
-		if (!complete_archive_mxf_file(&mxfout, NULL, NULL, 0, NULL, 0)) {
+		if (!complete_archive_mxf_file(&mxfout, NULL, NULL, 0, NULL, 0, NULL, 0)) {
             fprintf(stderr, "Failed to complete writing MXF file\n");
         }
 	}
@@ -210,7 +210,7 @@ static void *write_to_disk(void *arg)
 			memcpy(&ltc, video_buf + element_size - sizeof(ArchiveTimecode)*2, sizeof(ArchiveTimecode));
 			memcpy(&vitc, video_buf + element_size - sizeof(ArchiveTimecode)*1, sizeof(ArchiveTimecode));
 
-			CHK(write_timecode(mxfout, vitc, ltc));
+			CHK(write_system_item(mxfout, vitc, ltc, NULL, 0));
 			CHK(write_video_frame(mxfout, active_video, VIDEO_FRAME_SIZE));
 
 			// convert 32bit audio to 24bit (each frame has 1920 samples)
@@ -459,7 +459,7 @@ static void * sdi_monitor(void *arg)
             "LONPROG";
 		InfaxData d3InfaxData;
 		parse_infax_data(d3InfaxDataString, &d3InfaxData, 1);
-		if (!complete_archive_mxf_file(&mxfout, &d3InfaxData, &pseFailure, 1, vtrErrors, 0)) {
+		if (!complete_archive_mxf_file(&mxfout, &d3InfaxData, &pseFailure, 1, vtrErrors, 0, NULL, 0)) {
             fprintf(stderr, "Failed to complete writing MXF file\n");
         }
 
@@ -683,7 +683,7 @@ int main (int argc, char ** argv)
 	// Setup MXF writer if specified
 	if (write_mxf) {
 		mxfRational aspect_ratio = {4, 3};
-		if (!prepare_archive_mxf_file(video_file, componentDepth8Bit, &aspect_ratio, 4, 0, 1, &mxfout))
+		if (!prepare_archive_mxf_file(video_file, componentDepth8Bit, &aspect_ratio, 4, 0, 0, 1, &mxfout))
     	{
 			fprintf(stderr, "Failed to prepare MXF writer\n");
 			return 1;
