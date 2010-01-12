@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_text_overlay.c,v 1.3 2009/09/18 15:07:24 philipn Exp $
+ * $Id: YUV_text_overlay.c,v 1.4 2010/01/12 16:10:20 john_f Exp $
  *
  *
  *
@@ -898,9 +898,8 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
 {
     info_rec*		info;
     FT_GlyphSlot	slot;
-    int			w_max;
     char		cset[] = "0123456789:";
-    int			bb_t, bb_b;	// bounding box
+    int         bb_t, bb_b, bb_l, bb_r; // bounding box
     BYTE*		dstLine;
     BYTE*		srcPtr;
     BYTE*		dstPtr;
@@ -920,9 +919,10 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
     if (result < 0)
         return result;
     // get bounding box for characters
-    w_max = 0;
     bb_t =  1000000;
     bb_b = -1000000;
+    bb_l =  1000000;
+    bb_r = -1000000;
     for (c = 0; c < 11; c++)
     {
         /* load glyph image into the slot (erase previous one) */
@@ -931,19 +931,23 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
         slot = info->face->glyph;  /* a small shortcut */
         if (bb_t > -slot->bitmap_top)
             bb_t = -slot->bitmap_top;
-        if (w_max < slot->advance.x / 64)
-            w_max = slot->advance.x / 64;
         if (bb_b < slot->bitmap.rows - slot->bitmap_top)
             bb_b = slot->bitmap.rows - slot->bitmap_top;
+        if (bb_l > slot->bitmap_left)
+            bb_l = slot->bitmap_left;
+        if (bb_r < slot->bitmap_left + slot->bitmap.width)
+            bb_r = slot->bitmap_left + slot->bitmap.width;
     }
     // expand bounding box a little
     bb_t -= 1;
     bb_b += 1;
+    bb_l -= 1;
+    bb_r += 1;
     tc_data->height = bb_b - bb_t;
     // initialise character overlays
     for (c = 0; c < 11; c++)
     {
-        tc_data->tc_ovly[c].w = w_max;
+        tc_data->tc_ovly[c].w = bb_r - bb_l;
         tc_data->tc_ovly[c].h = tc_data->height;
         tc_data->tc_ovly[c].ssx = -1;
         tc_data->tc_ovly[c].ssy = -1;
@@ -971,11 +975,8 @@ int init_timecode(p_info_rec* p_info, timecode_data* tc_data,
         dstLine = tc_data->tc_ovly[c].buff;
         // add vertical offset
         dstLine += tc_data->tc_ovly[c].w * (-slot->bitmap_top - bb_t);
-        // add horizontal offset
-        dstLine += slot->bitmap_left;
-        if (c != 10)
-            // horizontally centre character
-            dstLine += (w_max - (slot->bitmap_left + slot->bitmap.width)) / 2;
+        // horizontally centre character
+        dstLine += (tc_data->tc_ovly[c].w - slot->bitmap.width) / 2;
         for (j = 0; j < slot->bitmap.rows; j++)
         {
             dstPtr = dstLine;
@@ -1064,8 +1065,7 @@ YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
 {
     info_rec*       info;
     FT_GlyphSlot    slot;
-    int         w_max;
-    int         bb_t, bb_b; // bounding box
+    int         bb_t, bb_b, bb_l, bb_r; // bounding box
     BYTE*       dstLine;
     BYTE*       srcPtr;
     BYTE*       dstPtr;
@@ -1085,24 +1085,29 @@ YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
     if (result < 0)
         return result;
     // get bounding box for character
-    w_max = 0;
     bb_t =  1000000;
     bb_b = -1000000;
+    bb_l =  1000000;
+    bb_r = -1000000;
     /* load glyph image into the slot (erase previous one) */
     if (FT_Load_Char(info->face, character, FT_LOAD_RENDER))
         return YUV_freetype;
     slot = info->face->glyph;  /* a small shortcut */
     if (bb_t > -slot->bitmap_top)
         bb_t = -slot->bitmap_top;
-    if (w_max < slot->advance.x / 64)
-        w_max = slot->advance.x / 64;
     if (bb_b < slot->bitmap.rows - slot->bitmap_top)
         bb_b = slot->bitmap.rows - slot->bitmap_top;
+    if (bb_l > slot->bitmap_left)
+        bb_l = slot->bitmap_left;
+    if (bb_r < slot->bitmap_left + slot->bitmap.width)
+        bb_r = slot->bitmap_left + slot->bitmap.width;
     // expand bounding box a little
     bb_t -= 1;
     bb_b += 1;
+    bb_l -= 1;
+    bb_r += 1;
     // initialise character overlays
-    ovly->w = w_max;
+    ovly->w = bb_r - bb_l;
     ovly->h = bb_b - bb_t;
     ovly->ssx = -1;
     ovly->ssy = -1;
@@ -1125,11 +1130,8 @@ YUV_error char_to_overlay(p_info_rec* p_info, overlay* ovly, char character,
     dstLine = ovly->buff;
     // add vertical offset
     dstLine += ovly->w * (-slot->bitmap_top - bb_t);
-    // add horizontal offset
-    dstLine += slot->bitmap_left;
-    if (character != '(' && character != ')') // add other characters to this list
-        // horizontally centre character
-        dstLine += (w_max - (slot->bitmap_left + slot->bitmap.width)) / 2;
+    // horizontally centre character
+    dstLine += (ovly->w - slot->bitmap.width) / 2;
     for (j = 0; j < slot->bitmap.rows; j++)
     {
         dstPtr = dstLine;
@@ -1158,8 +1160,7 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
 {
     info_rec*       info;
     FT_GlyphSlot    slot;
-    int         w_max;
-    int         bb_t, bb_b; // bounding box
+    int         bb_t, bb_b, bb_l, bb_r; // bounding box
     BYTE*       dstLine;
     BYTE*       srcPtr;
     BYTE*       dstPtr;
@@ -1186,9 +1187,10 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
     if (result < 0)
         return result;
     // get bounding box for characters
-    w_max = 0;
     bb_t =  1000000;
     bb_b = -1000000;
+    bb_l =  1000000;
+    bb_r = -1000000;
     for (c = 0; c < csetLen; c++)
     {
         /* load glyph image into the slot (erase previous one) */
@@ -1197,18 +1199,22 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
         slot = info->face->glyph;  /* a small shortcut */
         if (bb_t > -slot->bitmap_top)
             bb_t = -slot->bitmap_top;
-        if (w_max < slot->advance.x / 64)
-            w_max = slot->advance.x / 64;
         if (bb_b < slot->bitmap.rows - slot->bitmap_top)
             bb_b = slot->bitmap.rows - slot->bitmap_top;
+        if (bb_l > slot->bitmap_left)
+            bb_l = slot->bitmap_left;
+        if (bb_r < slot->bitmap_left + slot->bitmap.width)
+            bb_r = slot->bitmap_left + slot->bitmap.width;
     }
     // expand bounding box a little
     bb_t -= 1;
     bb_b += 1;
+    bb_l -= 1;
+    bb_r += 1;
     // initialise character overlays
     for (c = 0; c < csetLen; c++)
     {
-        cs_data->cs_ovly[c].w = w_max;
+        cs_data->cs_ovly[c].w = bb_r - bb_l;
         cs_data->cs_ovly[c].h = bb_b - bb_t;
         cs_data->cs_ovly[c].ssx = -1;
         cs_data->cs_ovly[c].ssy = -1;
@@ -1236,14 +1242,8 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
         dstLine = cs_data->cs_ovly[c].buff;
         // add vertical offset
         dstLine += cs_data->cs_ovly[c].w * (-slot->bitmap_top - bb_t);
-        // add horizontal offset
-        dstLine += slot->bitmap_left;
-        if (c != 10)
-            // horizontally centre character
-            dstLine += (w_max - (slot->bitmap_left + slot->bitmap.width)) / 2;
-        // TODO: fix the problem with offsets
-        if (dstLine < cs_data->cs_ovly[c].buff)
-            dstLine = cs_data->cs_ovly[c].buff; 
+        // horizontally centre character
+        dstLine += (cs_data->cs_ovly[c].w - slot->bitmap.width) / 2;
         for (j = 0; j < slot->bitmap.rows; j++)
         {
             dstPtr = dstLine;
@@ -1258,7 +1258,4 @@ YUV_error char_set_to_overlay(p_info_rec* p_info, char_set_data* cs_data,
 
     return YUV_OK;
 }
-
-
-
 
