@@ -1,5 +1,5 @@
 /*
- * $Id: LocalIngexPlayer.cpp,v 1.18 2009/10/12 16:06:27 philipn Exp $
+ * $Id: LocalIngexPlayer.cpp,v 1.19 2010/01/12 16:49:23 john_f Exp $
  *
  * Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
  * Author: Philip de Nier
@@ -857,7 +857,7 @@ bool LocalIngexPlayer::start(vector<PlayerInput> inputs, vector<bool>& opened, b
                 case MXF_INPUT:
                 {
                     MXFFileSource* mxfSource = 0;
-                    if (!mxfs_open(input.name.c_str(), 0, 0, 0, &mxfSource))
+                    if (!mxfs_open(input.name.c_str(), 0, 0, 0, 0, &mxfSource))
                     {
                         ml_log_warn("Failed to open MXF file source '%s'\n", input.name.c_str());
                         opened.push_back(false);
