@@ -1,5 +1,5 @@
 /*
- * $Id: create_video_test_signal.c,v 1.1 2009/12/17 15:50:42 john_f Exp $
+ * $Id: create_video_test_signal.c,v 1.2 2010/01/12 16:05:52 john_f Exp $
  *
  * Create file with UYVY video test signal
  *
@@ -162,7 +162,7 @@ int main(int argc, const char **argv)
             uyvy_black_frame(width, height, output_buffer);
             break;
         case RANDOM_SIGNAL:
-            uyvy_random_frame(width, height, output_buffer);
+            /* image is not static - image re-created for each frame below */
             break;
         case NO_VIDEO_SIGNAL:
             uyvy_no_video_frame(width, height, output_buffer);
@@ -171,6 +171,9 @@ int main(int argc, const char **argv)
     
     
     for (count = 0; count < dur; count++) {
+        if (test_signal == RANDOM_SIGNAL)
+            uyvy_random_frame(width, height, output_buffer);
+        
         num_write = fwrite(output_buffer, output_buffer_size, 1, output);
         if (num_write != 1) {
             if (ferror(output))
