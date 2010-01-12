@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.12 2009/01/29 07:10:26 stuart_hc Exp $
+# $Id: Makefile,v 1.13 2010/01/12 16:50:23 john_f Exp $
 #
 # Makefile for building IngexPlayer library
 #
@@ -64,7 +64,7 @@ OPT = -O3 -mmmx -msse2
 INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR)
 
 LIBDIRS = -L$(C_INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
-LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lMXFReader -lMXF
+LIBS = -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -larchivemxfinfo -lMXFReader -lMXF
 
 
 ifdef DVS_HARDWARE_INCLUDE

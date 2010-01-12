@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.2 2009/01/29 07:10:26 stuart_hc Exp $
+# $Id: Makefile,v 1.3 2010/01/12 16:50:23 john_f Exp $
 #
 
 # dvs_sdk_paths.mk searches for sdk and sets DVS_HARDWARE_INCLUDE and DVS_HARDWARE_LIB
@@ -15,7 +15,7 @@ LIBS=../libIngexPlayer.a ../../../common/libcommon.a ../../../common/YUVlib/libY
 	-lX11 -lXv -lfreetype -lfontconfig -luuid \
 	-lavformat -lavcodec -lavutil -lm -lportaudio \
 	$(DVS_HARDWARE_LIB) \
-	-L../../../libMXF/examples/archive/info -ld3mxfinfo \
+	-L../../../libMXF/examples/archive/info -larchivemxfinfo \
 	-L../../../libMXF/examples/reader -lMXFReader \
 	-L../../../libMXF/lib -lMXF \
 	-lswscale -lavformat -lavcodec -lavutil -lz -lmp3lame -lx264 -lbz2 -lfaac -lfaad -lm \
