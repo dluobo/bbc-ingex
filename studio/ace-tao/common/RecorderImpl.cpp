@@ -1,5 +1,5 @@
 /*
- * $Id: RecorderImpl.cpp,v 1.13 2009/12/17 16:47:15 john_f Exp $
+ * $Id: RecorderImpl.cpp,v 1.14 2010/01/12 16:54:12 john_f Exp $
  *
  * Base class for Recorder servant.
  *
@@ -381,7 +381,7 @@ bool RecorderImpl::SetSourcePackages()
                     prodauto::RecorderInputTrackConfig * ritc = 0;
                     if (ric)
                     {
-                        ritc = ric->trackConfigs[j];
+                        ritc = ric->getTrackConfig(j + 1);
                     }
 
                     // SourceConfig for the track
@@ -511,7 +511,7 @@ bool RecorderImpl::UpdateFromDatabase(unsigned int max_inputs, unsigned int max_
                     prodauto::RecorderInputTrackConfig * ritc = 0;
                     if (ric && j < ric->trackConfigs.size())
                     {
-                        ritc = ric->trackConfigs[j];
+                        ritc = ric->getTrackConfig(j + 1);
                     }
                     prodauto::SourceConfig * sc = 0;
                     if (ritc)
