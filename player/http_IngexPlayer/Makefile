@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2009/10/26 09:33:20 john_f Exp $
+# $Id: Makefile,v 1.3 2010/01/12 17:12:23 john_f Exp $
 #
 # Copyright (C) 2008-2009 British Broadcasting Corporation, All Rights Reserved
 # Author: Philip de Nier
@@ -64,7 +64,7 @@ OPT = -O3 -mmmx -msse2
 INCLUDEDIRS = -I. -I$(LIBMXF_DIR)/lib/include -I$(LIBMXF_ARCHIVE_DIR) -I$(LIBMXF_ARCHIVE_DIR)/info -I$(LIBMXF_READER_DIR) -I$(C_INGEX_PLAYER_DIR) -I$(INGEX_PLAYER_DIR)
 
 LIBDIRS = -L$(INGEX_PLAYER_DIR) -L$(LIBMXF_DIR)/lib -L$(LIBMXF_ARCHIVE_DIR)/info -L$(LIBMXF_READER_DIR) -L$(COMMON_DIR) -L$(COMMON_DIR)/YUVlib -L/usr/X11R6/lib -L/usr/local/lib
-LIBS =  -lIngexPlayer -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -ld3mxfinfo -lMXFReader -lMXF -lshttpd
+LIBS =  -lIngexPlayer -lX11 -lXv -lpthread -lfreetype -lfontconfig -luuid -lcommon -lYUVlib -larchivemxfinfo -lMXFReader -lMXF -lshttpd
 
 
 ifdef DVS_PATH
