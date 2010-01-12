@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_blend.c,v 1.1 2009/12/17 15:43:29 john_f Exp $
+ * $Id: YUV_blend.c,v 1.2 2010/01/12 16:09:16 john_f Exp $
  *
  *
  * Copyright (C) 2009 British Broadcasting Corporation, All Rights Reserved
@@ -20,6 +20,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "YUV_frame.h"

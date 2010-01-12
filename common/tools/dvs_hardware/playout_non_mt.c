@@ -1,5 +1,5 @@
 /*
- * $Id: playout_non_mt.c,v 1.2 2008/07/08 14:59:21 philipn Exp $
+ * $Id: playout_non_mt.c,v 1.3 2010/01/12 16:13:22 john_f Exp $
  *
  * Playout uncompressed video and audio files over SDI.
  *
@@ -20,7 +20,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA.
  */
- 
+
+#define __STDC_FORMAT_MACROS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -345,7 +347,7 @@ int main (int argc, char ** argv)
 		}
 		else if (strcmp(argv[n], "-in") == 0)
 		{
-			if (sscanf(argv[n+1], "%llu", &frame_inpoint) != 1)
+			if (sscanf(argv[n+1], "%"PRIu64, &frame_inpoint) != 1)
 			{
 				fprintf(stderr, "-in requires integer number of frames\n");
 				return 1;
@@ -354,7 +356,7 @@ int main (int argc, char ** argv)
 		}
 		else if (strcmp(argv[n], "-out") == 0)
 		{
-			if (sscanf(argv[n+1], "%llu", &frame_outpoint) != 1)
+			if (sscanf(argv[n+1], "%"PRIu64, &frame_outpoint) != 1)
 			{
 				fprintf(stderr, "-out requires integer number of frames\n");
 				return 1;

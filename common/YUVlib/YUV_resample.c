@@ -1,5 +1,5 @@
 /*
- * $Id: YUV_resample.c,v 1.3 2009/11/25 17:12:27 john_f Exp $
+ * $Id: YUV_resample.c,v 1.4 2010/01/12 16:09:16 john_f Exp $
  *
  *
  *
@@ -116,7 +116,6 @@ static void h_up_2_121(BYTE* srcLine, BYTE* dstLine,
 int to_444(YUV_frame* in_frame, YUV_frame* out_frame,
            void* workSpace)
 {
-    BYTE*   work[3];
     int     ssx, ssy;
     int     w, h;
     BYTE*   inBuff0;
