@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.cpp,v 1.8 2009/10/15 13:32:48 john_f Exp $           *
+ *   $Id: eventlist.cpp,v 1.9 2010/01/12 17:04:15 john_f Exp $           *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -44,7 +44,7 @@ const wxString TypeLabels[] = {wxT(""), wxT("Start"), wxT("Cue"), wxT("Chunk Sta
 
 EventList::EventList(wxWindow * parent, wxWindowID id, const wxPoint & pos, const wxSize & size, bool loadEventFiles) :
 wxListView(parent, id, pos, size, wxLC_REPORT|wxLC_SINGLE_SEL|wxSUNKEN_BORDER|wxLC_EDIT_LABELS/*|wxALWAYS_SHOW_SB*/), //ALWAYS_SHOW_SB results in a disabled scrollbar on GTK (wx 2.8))
-mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0),  mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
+mCurrentChunkInfo(-1), mCurrentSelectedEvent(-1), mRecordingNodeCount(0), mChunking(false), mRunThread(false), mSyncThread(false), mLoadEventFiles(loadEventFiles)
 {
 	//set up the columns
 	wxListItem itemCol;
@@ -109,9 +109,7 @@ bool EventList::HasChunkBefore()
 		wxListItem item;
 		item.SetId(selected);
 		GetItem(item); //the chunk info index is in this item's data
-		item.SetId(mChunkInfoArray.Item(item.GetData()).GetStartIndex()); //the position in the list of the start of this chunk
-		GetItem(item);
-		hasChunkBefore = item.GetText() == TypeLabels[CHUNK]; //if this event is labelled a chunk, it follows on from a previous chunk
+		hasChunkBefore = mChunkInfoArray.Item(item.GetData()).HasChunkBefore();
 	}
 	return hasChunkBefore;
 }
@@ -125,11 +123,7 @@ bool EventList::HasChunkAfter()
 		wxListItem item;
 		item.SetId(selected);
 		GetItem(item); //the chunk info index is in this item's data
-		if (mChunkInfoArray.GetCount() - 1 != item.GetData()) { //not the last chunk
-			item.SetId(mChunkInfoArray.Item(item.GetData() + 1).GetStartIndex()); //the position in the list of the start of the next chunk
-			GetItem(item);
-			hasChunkAfter = item.GetText() == TypeLabels[CHUNK]; //if this event is labelled a chunk, it follows on from the current chunk
-		}
+		hasChunkAfter = mChunkInfoArray.Item(item.GetData()).HasChunkAfter();
 	}
 	return hasChunkAfter;
 }
@@ -415,6 +409,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 	wxFont font(EVENT_FONT_SIZE, wxFONTFAMILY_DEFAULT, wxFONTFLAG_UNDERLINED, wxFONTFLAG_UNDERLINED);
 	switch (type) {
 		case START :
+			mChunking = false;
 			NewChunkInfo(timecode, 0);
 			item.SetText(TypeLabels[START]);
 			item.SetTextColour(wxColour(0xFF, 0x20, 0x00));
@@ -458,10 +453,10 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 						totalMinutes -= 1; //nudge downwards to ensure an extra day is not added if frameCount is a bit high
 					}
 					position += (totalMinutes / 60 / 24) * 3600 * 24 * timecode->edit_rate.numerator / timecode->edit_rate.denominator; //add whole days to the fractional day
-					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //first sample not recorded. Relative to start of chunk
+					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), position - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartPosition())); //first sample not recorded. Relative to start of chunk
 				}
 				else if (frameCount) {
-					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartPosition())); //less accurate than the above. Relative to start of chunk
+					mRecordingNode->AddProperty(wxT("OutSample"), wxString::Format(wxT("%d"), frameCount - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartPosition())); //less accurate than the above. Relative to start of chunk
 					wxListItem startItem;
 					startItem.SetId(GetItemCount());
 					while (startItem.GetId()) {
@@ -495,9 +490,9 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 					}
 				}
 				mMutex.Unlock();
-				mChunkInfoArray[mChunkInfoArray.GetCount() - 1].SetLastTimecode(*timecode);
+				mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).SetLastTimecode(*timecode);
 				if (mChunking) {
-					//chunking is like stopping and then immediately starting again
+					//chunking is like stopping and then immediately starting again, so create a new ChunkInfo
 					NewChunkInfo(timecode, position);
 				}
 				else if (!timecode->undefined) {
@@ -580,7 +575,7 @@ void EventList::AddEvent(EventType type, ProdAuto::MxfTimecode * timecode, const
 }
 
 /// Generates a new ChunkInfo object and Recording XML node for a new recording or chunk
-/// @param timecode Start time (can be undefined)
+/// @param timecode Start time (can be 0)
 /// @param position Start position relative to start of recording
 void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
 {
@@ -591,7 +586,8 @@ void EventList::NewChunkInfo(ProdAuto::MxfTimecode * timecode, int64_t position)
 		mRecordingNode->AddProperty(wxT("StartTime"), wxString::Format(wxT("%d"), timecode->samples));
 	}
 	mMutex.Unlock();
-	ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
+	if (mChunking && mChunkInfoArray.GetCount()) mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).HasChunkAfter(); //latter check a sanity check
+	ChunkInfo * info = new ChunkInfo(GetItemCount(), mProjectName, *timecode, position, mChunking); //this will be the index of the current event; deleted by mChunkInfoArray (object array)
 	mChunkInfoArray.Add(info);
 }
 
@@ -642,7 +638,7 @@ void EventList::DeleteCuePoint()
 	if (mChunkInfoArray.GetCount()) { //sanity check
 		//remove cue point from chunk info
 		long selected = GetFirstSelected();
-		if (mChunkInfoArray[mChunkInfoArray.GetCount() - 1].DeleteCuePoint(selected - mChunkInfoArray[mChunkInfoArray.GetCount() - 1].GetStartIndex() - 1)) { //sanity check; the last 1 is to jump over the start event
+		if (mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).DeleteCuePoint(selected - mChunkInfoArray.Item(mChunkInfoArray.GetCount() - 1).GetStartIndex() - 1)) { //sanity check; the last 1 is to jump over the start event
 			//remove displayed cue point
 			wxListItem item;
 			item.SetId(selected);

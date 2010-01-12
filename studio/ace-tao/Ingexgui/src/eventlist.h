@@ -1,5 +1,5 @@
 /***************************************************************************
- *   $Id: eventlist.h,v 1.6 2009/10/15 13:32:48 john_f Exp $             *
+ *   $Id: eventlist.h,v 1.7 2010/01/12 17:04:15 john_f Exp $             *
  *                                                                         *
  *   Copyright (C) 2009 British Broadcasting Corporation                   *
  *   - all rights reserved.                                                *
@@ -38,7 +38,8 @@ DEFINE_EVENT_TYPE (wxEVT_RESTORE_LIST_LABEL);
 class ChunkInfo
 {
 	public:
-		ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition) {};
+		ChunkInfo(const unsigned long startIndex, const wxString & projectName, const ProdAuto::MxfTimecode & startTimecode, const int64_t startPosition, const bool hasChunkBefore) : mStartIndex(startIndex), mProjectName(projectName), mStartTimecode(startTimecode), mStartPosition(startPosition), mHasChunkBefore(hasChunkBefore), mHasChunkAfter(false) {};
+		void SetHasChunkAfter() {mHasChunkAfter = true;};
 		void AddRecorder(ProdAuto::TrackList_var trackList, CORBA::StringSeq_var fileList) {mFiles.Add(fileList); mTracks.Add(trackList);}; //adds a set of tracks provided by a recorder at the end of a recording
 		void AddCuePoint(const int64_t frame, size_t colourIndex) {mCuePointFrames.push_back(frame); mCueColourIndeces.push_back(colourIndex);}; //no text here because it's stored in the event list (which means it can be edited)
 		void SetLastTimecode(const ProdAuto::MxfTimecode & lastTimecode) {mLastTimecode = lastTimecode;};
@@ -60,6 +61,8 @@ class ChunkInfo
 		std::vector<int64_t> & GetCuePointFrames() {return mCuePointFrames;};
 		std::vector<size_t> & GetCueColourIndeces() {return mCueColourIndeces;};
 		int64_t GetStartPosition() {return mStartPosition;};
+		bool HasChunkBefore() {return mHasChunkBefore;};
+		bool HasChunkAfter() {return mHasChunkAfter;};
 	private:
 		const unsigned long mStartIndex; //the index in the event list for the start of this chunk
 		ArrayOfStringSeq_var mFiles;
@@ -70,6 +73,8 @@ class ChunkInfo
 		ArrayOfTrackList_var mTracks; //deletes itself
 		std::vector<int64_t> mCuePointFrames;
 		std::vector<size_t> mCueColourIndeces;
+		bool mHasChunkBefore;
+		bool mHasChunkAfter;
 };
 
 WX_DECLARE_OBJARRAY(ChunkInfo, ChunkInfoArray);
