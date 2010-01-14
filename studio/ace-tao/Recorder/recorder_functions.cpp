@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.28 2010/01/12 16:59:28 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.29 2010/01/14 14:10:45 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -1157,6 +1157,7 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
 
         // Now we have some frames to code, check the backlog.
         int allowed_backlog = ring_length - 3;
+        unsigned int warn_backlog = allowed_backlog / 2;
         if (frames_to_code > allowed_backlog / 2)
         {
             // Warn about backlog
@@ -1564,16 +1565,19 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
             {
                 // Check buffer occupancy
                 size_t frames_in_buffer = encode_frame_buffer.QueueSize();
-                if (frames_in_buffer >= 25)
+                if (frames_in_buffer > warn_backlog)
                 {
-                    ACE_DEBUG((LM_WARNING, ACE_TEXT("EncodeFrameBuffer contains %u frames\n"), frames_in_buffer));
+                    ACE_DEBUG((LM_WARNING, ACE_TEXT("%C thread %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
+                        src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
                 }
                 else
                 {
-                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("EncodeFrameBuffer contains %u frames\n"), frames_in_buffer));
+                    ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d EncodeFrameBuffer contains %u frames (%u coded)\n"),
+                        src_name.c_str(), p_opt->index, frames_in_buffer, encode_frame_buffer.CodedSize()));
                 }
 
-                ACE_DEBUG((LM_DEBUG, ACE_TEXT("Looking for frames starting from %d\n"), last_saved + 1));
+                ACE_DEBUG((LM_DEBUG, ACE_TEXT("%C thread %d Looking for frames starting from %d\n"),
+                    src_name.c_str(), p_opt->index, last_saved + 1));
 
                 while (!finished_record && encode_frame_buffer.Frame(last_saved + 1).IsCoded())
                 {
