@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sdi.c,v 1.28 2009/12/21 19:35:21 john_f Exp $
+ * $Id: dvs_sdi.c,v 1.29 2010/01/14 14:09:33 john_f Exp $
  *
  * Record multiple SDI inputs to shared memory buffers.
  *
@@ -2273,6 +2273,7 @@ int main (int argc, char ** argv)
     int extra_offset;
     switch (sn)
     {
+    case 0:  // dvs_dummy
     case 11: // SDStationOEM
     case 19: // SDStationOEMII
         extra_offset = 0;
