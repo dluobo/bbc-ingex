@@ -1,5 +1,5 @@
 /*
- * $Id: MtEncoder.cpp,v 1.3 2010/01/12 16:57:27 john_f Exp $
+ * $Id: MtEncoder.cpp,v 1.4 2010/01/14 14:07:50 john_f Exp $
  *
  * Video encoder using multiple threads.
  *
@@ -112,14 +112,15 @@ int MtEncoder::svc()
 
             // Check the frame was still in memory
             bool valid = eft.Valid();
+            int frame_index = eft.FrameIndex();
 
             // Replace input data with coded data
-            eft.Init(p_enc_video, size_enc_video, true, false, true, 0, 0);
+            eft.Init(p_enc_video, size_enc_video, true, false, true, frame_index, 0);
             if (!valid)
             {
                 eft.Error(true);
                 ACE_DEBUG((LM_ERROR, ACE_TEXT("MtEncoder missed frame %d!\n"),
-                    eft.FrameIndex()));
+                    frame_index));
             }
 
             mb->release();
