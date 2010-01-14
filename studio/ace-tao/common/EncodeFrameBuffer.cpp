@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.cpp,v 1.1 2010/01/12 16:57:27 john_f Exp $
+ * $Id: EncodeFrameBuffer.cpp,v 1.2 2010/01/14 14:07:13 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -95,7 +95,7 @@ EncodeFrameTrack::~EncodeFrameTrack()
 
 // EncodeFrame class
 
-bool EncodeFrame::IsCoded()
+bool EncodeFrame::IsCoded() const
 {
     bool result = true;
     for (std::map<unsigned int, EncodeFrameTrack>::const_iterator
@@ -168,5 +168,21 @@ size_t EncodeFrameBuffer::QueueSize()
     ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
 
     return mFrameBuffer.size();
+}
+
+size_t EncodeFrameBuffer::CodedSize()
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(mFrameBufferMutex);
+
+    size_t coded_size = 0;
+    for (std::map<unsigned int, EncodeFrame>::const_iterator
+        it = mFrameBuffer.begin(); it != mFrameBuffer.end(); ++it)
+    {
+        if (it->second.IsCoded())
+        {
+            ++coded_size;
+        }
+    }
+    return coded_size;
 }
 

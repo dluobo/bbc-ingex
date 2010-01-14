@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.h,v 1.1 2010/01/12 16:57:27 john_f Exp $
+ * $Id: EncodeFrameBuffer.h,v 1.2 2010/01/14 14:07:13 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -60,7 +60,7 @@ public:
     //EncodeFrame();
     //~EncodeFrame();
     EncodeFrameTrack & Track(unsigned int track_index) { return mTracks[track_index]; }
-    bool IsCoded();
+    bool IsCoded() const;
     //void * TrackData(unsigned int trk);
     //size_t TrackSize(unsigned int trk);
 private:
@@ -76,6 +76,7 @@ public:
     EncodeFrame & Frame(unsigned int frame_index);
     void EraseFrame(unsigned int index);
     size_t QueueSize();
+    size_t CodedSize();
 private:
     std::map<unsigned int, EncodeFrame> mFrameBuffer;
     ACE_Thread_Mutex mFrameBufferMutex; // mutex protects the map
