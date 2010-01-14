@@ -1,5 +1,5 @@
 /*
- * $Id: recorder_functions.cpp,v 1.29 2010/01/14 14:10:45 john_f Exp $
+ * $Id: recorder_functions.cpp,v 1.30 2010/01/14 15:38:11 john_f Exp $
  *
  * Functions which execute in recording threads.
  *
@@ -1588,6 +1588,13 @@ ACE_THR_FUNC_RETURN start_record_thread(void * p_arg)
                     {
                         prodauto::Track * mp_trk = package_creator->GetMaterialPackage()->tracks[i];
                         EncodeFrameTrack & eft = ef.Track(i);
+
+                        if (eft.Error())
+                        {
+                            ACE_DEBUG((LM_ERROR, ACE_TEXT("%C thread %d Coded frame %d track %d has error!\n"),
+                                src_name.c_str(), p_opt->index, last_saved + 1, i));
+                            p_rec->NoteFailure();
+                        }
 
                         if (mxf && !DEBUG_NOWRITE)
                         {
