@@ -1,5 +1,5 @@
 /*
- * $Id: dvs_sink.c,v 1.14 2009/12/17 15:57:40 john_f Exp $
+ * $Id: dvs_sink.c,v 1.15 2010/01/18 15:46:52 philipn Exp $
  *
  *
  *
@@ -1176,10 +1176,18 @@ static int dvs_complete_frame(void* data, const FrameInfo* frameInfo)
     }
     else if (sink->videoStream.streamInfo.format == YUV422_FORMAT)
     {
-        /* convert yuv422 to uyvy into workBuffer1 */
-        yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer],
-            sink->workBuffer1);
-        activeBuffer = sink->workBuffer1;
+         /* convert yuv422 to uyvy */
+        if (!sink->videoStream.requireFit)
+        {
+            /* no more conversion required after this conversion */
+            activeBuffer = fifoBuffer->buffer;
+        }
+        else
+        {
+            /* need to fit picture */
+            activeBuffer = sink->workBuffer1;
+        }
+        yuv422_to_uyvy_2(sink->width, sink->height, 0, sink->videoStream.data[sink->currentFifoBuffer], activeBuffer);
         activeBufferDepth8Bit = 1;
     }
     else if (sink->depth8Bit && sink->videoStream.streamInfo.format == UYVY_10BIT_FORMAT)
