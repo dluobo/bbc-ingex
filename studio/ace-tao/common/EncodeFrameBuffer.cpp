@@ -1,5 +1,5 @@
 /*
- * $Id: EncodeFrameBuffer.cpp,v 1.2 2010/01/14 14:07:13 john_f Exp $
+ * $Id: EncodeFrameBuffer.cpp,v 1.3 2010/01/25 20:01:07 john_f Exp $
  *
  * Buffer to handle video/audio data during encoding process.
  *
@@ -31,7 +31,7 @@
 // EncodeFrameTrack class
 
 EncodeFrameTrack::EncodeFrameTrack()
-: mData(0), mSize(0), mDel(false), mCoded(false), mFrameIndex(0), mpFrameIndex(0)
+: mData(0), mSize(0), mDel(false), mCoded(false), mFrameIndex(0), mpFrameIndex(0), mError(false)
 { }
 
 /**
