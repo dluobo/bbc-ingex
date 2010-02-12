@@ -1,5 +1,5 @@
 #
-# $Id: Makefile,v 1.2 2009/09/18 16:28:05 philipn Exp $
+# $Id: Makefile,v 1.3 2010/02/12 17:18:20 john_f Exp $
 #
 # Makefile for building studio common functions
 #
@@ -40,7 +40,7 @@ OBJECTS=$(CFILES:%.c=%.o) $(CPPFILES:%.cpp=%.o)
 LIBSTUDIOCOMMON=libstudiocommon.a
 
 .PHONY: all
-all: $(LIBSTUDIOCOMMON) test_ffmpeg_encoder
+all: $(LIBSTUDIOCOMMON) test_ffmpeg_encoder test_ffmpeg_encoder_av
 
 $(LIBSTUDIOCOMMON): $(OBJECTS)
 	ar rcv $(LIBSTUDIOCOMMON) $(OBJECTS)
@@ -51,4 +51,7 @@ clean:
 
 test_ffmpeg_encoder: test_ffmpeg_encoder.c ffmpeg_encoder.o
 	gcc -Wall -W -g test_ffmpeg_encoder.c ffmpeg_encoder.o -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder
+
+test_ffmpeg_encoder_av: test_ffmpeg_encoder_av.c ffmpeg_encoder.o ffmpeg_encoder_av.o
+	gcc -Wall -W -g test_ffmpeg_encoder_av.c ffmpeg_encoder.o ffmpeg_encoder_av.o -lavformat -lavcodec -lswscale -lavutil -lz -lbz2 -lmp3lame -lx264 -lfaac -lfaad -lm -lpthread -o test_ffmpeg_encoder_av
 
