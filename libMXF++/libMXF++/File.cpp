@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.2 2009/10/12 15:30:25 philipn Exp $
+ * $Id: File.cpp,v 1.3 2010/02/12 13:52:49 philipn Exp $
  *
  * 
  *
@@ -242,6 +242,11 @@ void File::writeInt32(int32_t value)
 void File::writeInt64(int64_t value)
 {
     MXFPP_CHECK(mxf_write_int64(_cFile, value));
+}
+
+void File::writeUL(const mxfUL* ul)
+{
+    MXFPP_CHECK(mxf_write_ul(_cFile, ul));
 }
 
 void File::writeKL(const mxfKey* key, uint64_t len)

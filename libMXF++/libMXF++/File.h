@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.2 2009/10/12 15:30:25 philipn Exp $
+ * $Id: File.h,v 1.3 2010/02/12 13:52:49 philipn Exp $
  *
  * 
  *
@@ -73,6 +73,7 @@ public:
     void writeInt16(int16_t value);
     void writeInt32(int32_t value);
     void writeInt64(int64_t value);
+    void writeUL(const mxfUL* ul);
     
     void writeKL(const mxfKey* key, uint64_t len);
     void writeFixedL(uint8_t llen, uint64_t len);

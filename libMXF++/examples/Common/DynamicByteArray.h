@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.h,v 1.4 2009/11/24 15:18:58 john_f Exp $
+ * $Id: DynamicByteArray.h,v 1.5 2010/02/12 13:52:47 philipn Exp $
  *
  * 
  *
@@ -38,7 +38,10 @@ public:
     unsigned char* getBytes() const;
     uint32_t getSize() const;
 
-    void append(unsigned char* bytes, uint32_t size);
+    void setBytes(const unsigned char* bytes, uint32_t size);
+    
+    void append(const unsigned char* bytes, uint32_t size);
+    void appendZeros(uint32_t size);
     unsigned char* getBytesAvailable() const;
     uint32_t getSizeAvailable() const;
     void setSize(uint32_t size);

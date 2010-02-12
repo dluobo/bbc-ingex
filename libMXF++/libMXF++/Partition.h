@@ -1,5 +1,5 @@
 /*
- * $Id: Partition.h,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: Partition.h,v 1.2 2010/02/12 13:52:49 philipn Exp $
  *
  * 
  *
@@ -36,6 +36,20 @@ public:
     virtual ~FillerWriter() {};
     
     virtual void write(File* file) = 0;
+};
+
+class Partition;
+
+class KAGFillerWriter : public FillerWriter
+{
+public:
+    KAGFillerWriter(Partition* partition);
+    virtual ~KAGFillerWriter();
+
+    virtual void write(File* file);
+    
+private:
+    Partition* _partition;
 };
 
 class PositionFillerWriter : public FillerWriter

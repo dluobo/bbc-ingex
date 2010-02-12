@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.cpp,v 1.4 2009/10/22 16:35:50 philipn Exp $
+ * $Id: DynamicByteArray.cpp,v 1.5 2010/02/12 13:52:47 philipn Exp $
  *
  * 
  *
@@ -64,7 +64,13 @@ uint32_t DynamicByteArray::getSize() const
     return _size;
 }
 
-void DynamicByteArray::append(unsigned char* bytes, uint32_t size)
+void DynamicByteArray::setBytes(const unsigned char* bytes, uint32_t size)
+{
+    setSize(0);
+    append(bytes, size);
+}
+
+void DynamicByteArray::append(const unsigned char* bytes, uint32_t size)
 {
     if (size == 0)
     {
@@ -79,6 +85,24 @@ void DynamicByteArray::append(unsigned char* bytes, uint32_t size)
     grow(size);
 
     memcpy(_bytes + _size, bytes, size);
+    _size += size;
+}
+
+void DynamicByteArray::appendZeros(uint32_t size)
+{
+    if (size == 0)
+    {
+        return;
+    }
+    
+    if (_isCopy)
+    {
+        throw MXFException("Cannot append byte array data to a copy\n");
+    }
+    
+    grow(size);
+
+    memset(_bytes + _size, 0, size);
     _size += size;
 }
 

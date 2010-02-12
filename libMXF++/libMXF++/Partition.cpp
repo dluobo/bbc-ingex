@@ -1,5 +1,5 @@
 /*
- * $Id: Partition.cpp,v 1.1 2009/02/02 05:14:33 stuart_hc Exp $
+ * $Id: Partition.cpp,v 1.2 2010/02/12 13:52:49 philipn Exp $
  *
  * 
  *
@@ -25,6 +25,19 @@
 
 using namespace std;
 using namespace mxfpp;
+
+
+KAGFillerWriter::KAGFillerWriter(Partition* partition)
+: _partition(partition)
+{}
+
+KAGFillerWriter::~KAGFillerWriter()
+{}
+
+void KAGFillerWriter::write(File* file)
+{
+    _partition->fillToKag(file);
+}
 
 
 PositionFillerWriter::PositionFillerWriter(int64_t position)
