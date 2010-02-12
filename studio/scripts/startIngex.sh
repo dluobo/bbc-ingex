@@ -301,7 +301,7 @@ if [ $TRANSFER -ge 1 ] ; then
   if [ -z "${COPY_FTP_SERVER}" ] ; then
     dcop $capture_window $tab sendSession "./xferserver.pl ${EXTRA_DEST}"
   else
-    FTP_OPTIONS="${COPY_FTP_SERVER} ${COPY_FTP_USER} ${COPY_FTP_PASSWORD}" 
+    FTP_OPTIONS="'${COPY_FTP_SERVER} ${COPY_FTP_USER} ${COPY_FTP_PASSWORD}'" 
     dcop $capture_window $tab sendSession "./xferserver.pl ${EXTRA_DEST} -f $FTP_OPTIONS"
   fi
   tab=
