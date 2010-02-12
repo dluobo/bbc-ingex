@@ -1,9 +1,9 @@
 #! /usr/bin/perl -w
 
 #/***************************************************************************
-# * $Id: xferserver.pl,v 1.11 2009/09/18 17:05:47 philipn Exp $             *
+# * $Id: xferserver.pl,v 1.12 2010/02/12 14:52:01 john_f Exp $             *
 # *                                                                         *
-# *   Copyright (C) 2008-2009 British Broadcasting Corporation              *
+# *   Copyright (C) 2008-2010 British Broadcasting Corporation              *
 # *   - all rights reserved.                                                *
 # *   Authors: Philip de Nier, Matthew Marks                                *
 # *                                                                         *
@@ -39,7 +39,7 @@
 
 # Arguments after the client name and identifier should be supplied in groups of three: priority (a positive number), source path and destination path.  The script will attempt to copy all the files in all the path pairs at the highest priority (the smallest priority argument value) before moving on to the next, and so on.  (Offline files would normally be given higher priority [smaller argument value] than online files, because they are likely to be needed sooner and are smaller so will be copied more quickly.)  The script saves paths in file PATHS_FILE (unless overridden with the -a option) to allow copying to commence without client intervention when the script is (re)started.  When a client supplies paths, the copying cycle starts or restarts from the highest priority, letting any pending file copy finish first.  This minimises the delay in copying high-priority files without wasting any bandwidth by re-copying.
 
-# In each source directory, every file whose name begins with 8 digits* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits.)
+# In each source directory, every file whose name begins with 8 digits and an underscore* and ends in ".mxf", ".mov" or ".xml" (case-insensitive) is examined.  If it does not exist in a subdirectory of the corresponding destination path, named after the first 8 digits of the filename*, it is copied using the COPY executable or curl (FTP mode), into <destination path>/<first 8 digits of filename>*/<DEST_INCOMING>, creating directories if necessary.  After a successful copy, the file is moved up one directory level.  This prevents anything looking at the destination directories from seeing partial files.  At the end of each copying cycle, the (empty) DEST_INCOMING subdirectories are removed.  (* If option -d is provided, 8-digit subdirectories are not used and files do not have to start with 8 digits and an underscore.)
 
 # If the file already exists in its final resting place, but is of a different length to the source file, a warning is issued and the destination file is renamed to allow copying without overwriting it.  (Copying is abandoned if there is already a file with the new name.)  If a file fails to copy, any partial file is deleted and no more files are copied from that source directory (because the order of copying must be maintained - see below).  Once a copy cycle has been successfully completed, the script sleeps until it receives further client connections.  If any files could not be copied, it re-awakes after RECHECK_INTERVAL to try again.
 # Because the script creates all required destination directories, it is recommended that mount points are made non-writeable so that non-mounted drives are detected rather than destination directories being created at, and data being copied to, the mount point, which may fill up a system drive.
@@ -49,7 +49,7 @@
 
 # PATHS_FILE is normally automatically handled but for completeness its format is explained here.  It contains fields separated by newlines.  Each group of fields consists of a priority value (indicated by having a leading space), followed by one or more triplets of source directory, destination directory and ctime value.  Any files in the corresponding source directory with a ctime of this value or less will not be copied.  (The -c option causes these values to be set to zero when the file is first read, but updated values will be written to the file even if nothing is copied.)  An exception is the priority 1 section, which contains the extra directory name immediately after the priority value (may be blank) and an extra ctime value for this extra directory, after each normal ctime value.
 
-# If option -e is supplied, the path specified with it forms an additional destination for all files at priority '1'.  This is intended for use with a portable drive onto which to copy offline rushes (and operates in the same way whether using FTP mode or not).
+# If option -e or -g is supplied, the path specified with it forms an additional destination for all files at priority '1'.  This is intended for use with a portable drive onto which to copy offline rushes (and operates in the same way whether using FTP mode or not).  With option -e, each source file will be copied to the extra destination first; with option -g, they are all copied to the extra destination first. 
 
 # As source directories are scanned, source files are deleted if they have been successfully copied (indicated by existing at the destination with the same size, or having a ctime older than the value stored in PATHS_FILE) their mtimes are more than KEEP_PERIOD old, and the source directory is at least DELETE_THRESHOLD percent full.
 
@@ -87,7 +87,7 @@ use constant FTP_SPEED => '20'; #Mbits/sec
 use constant UP_TO_DATE => 0;
 use constant PROCESSING => 1;
 use constant STALE => 2;
-use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile);
+use vars qw($childPid %opts $curl $interface @ftpDetails $recSock $monSock $pathsFile $byAge);
 
 die "Usage: xferserver.pl [-a <path>] [-c] [-d] [-e <path>] [-f <server>] [-f '<server> <username> <password>'] [-p] [-r] [-s] [-t] [-v]
  -a  optional location of paths file
@@ -95,15 +95,31 @@ die "Usage: xferserver.pl [-a <path>] [-c] [-d] [-e <path>] [-f <server>] [-f '<
  -d  do not make and copy to 8-digit subdirectories
  -e <path>  extra destination for priority 1 files
  -f '<server>[ <username> <password>]'  use ftp rather than copying (apart from to extra destination)
+ -g <path>  as -e but prioritises copying to extra destination
  -p  preserve files (do not delete anything)
  -r  reset (remove stored information)
  -s  start in slow (traffic-limited) mode - NB will switch to fast as soon as ANY client indicates the end of an event; ignored if option -t is specified
  -t  do not use traffic control
  -v  verbose: print out every source file name with reasons for not copying, and put curl into verbose mode for ftp transfers\n"
-unless getopts('a:cde:f:prstv', \%opts) && !scalar @ARGV && (!defined $opts{e} || ($opts{e} ne '' && $opts{e} !~ /^-/)) && (!defined $opts{f} || ($opts{f} !~ /^-/ && (@ftpDetails = split/\s+/, $opts{f}) && (1 == scalar @ftpDetails || 3 == scalar @ftpDetails)));
+unless getopts('a:cde:f:g:prstv', \%opts)
+ && !scalar @ARGV #no other args
+ && (!defined $opts{e} || (!defined $opts{g} && $opts{e} ne '' && $opts{e} !~ /^-/)) #-e correct if supplied, and -g not supplied as well
+ && (!defined $opts{f} || ($opts{f} !~ /^-/ && (@ftpDetails = split/\s+/, $opts{f}) && (1 == scalar @ftpDetails || 3 == scalar @ftpDetails))) #-f correct if supplied
+ && (!defined $opts{g} || ($opts{g} ne '' && $opts{g} !~ /^-/)); #-g correct if supplied
 
 $pathsFile = PATHS_FILE;
 $pathsFile = $opts{a} if $opts{a};
+if ($opts{g}) {
+	$byAge = sub {
+	  $b->{extra} <=> $a->{extra} || $a->{ctime} <=> $b->{ctime};
+	};
+	$opts{e} = $opts{g};
+}
+else {
+	$byAge = sub {
+	  $a->{ctime} <=> $b->{ctime} || $b->{extra} <=> $a->{extra};
+	};
+}
 
 my %transfers;
 $transfers{limit} = $opts{t} ? 0 : ($opts{'s'} |= 0); #quotes stop highlighting getting confused in kate!
@@ -117,7 +133,7 @@ if ($opts{f}) {
 	#generate curl common options
 	$curl = "curl --proxy ''";
 	$curl .= " --user $ftpDetails[1]:$ftpDetails[2]" if 3 == scalar @ftpDetails; #non-anonymous
-	if (system "curl --help | grep 'keepalive-time'") { #not found
+	if (system "curl --help | grep 'keepalive-time' > /dev/null") { #not found
 		print "WARNING: curl doesn't support '--keepalive-time' option so long transfers may fail, depending on the characteristics of the network\n";
 	}
 	else {
@@ -208,7 +224,7 @@ elsif (-e $pathsFile) {
 	}
 }
 else {
-	print "No stored paths file '", $pathsFile, "' found.\n\n";
+	print "No stored paths file '", $pathsFile, "' found.  (Assuming we haven't been told to copy anything yet.)\n\n";
 }
 
 $share->store(freeze \%transfers);
@@ -532,7 +548,7 @@ sub Scan {
  my ($handle, $srcDir, $destRoot, $ctimeCleared, $share, $extraDestRoot, $extraCtimeCleared, $ftpFileList) = @_;
  my ($totalFiles, $totalToCopy, $extraTotalToCopy, $totalSize, $extraTotalSize, $latestCtime) = (0, 0, 0, 0, 0, 0);
  my (@essenceFiles, @extraEssenceFiles);
- my ($ok, $extraOk) = (1, defined $extraDestRoot);
+ my ($ftpOk, $ok, $extraOk) = (1, 1, defined $extraDestRoot);
  my @files = sort readdir $handle; #sorting useful for verbose option
  while (@files && ($ok || $extraOk)) {
 	my $srcName = shift @files;
@@ -585,10 +601,18 @@ sub Scan {
 	#check for existing copies and generate copy details
 	(my $altName = $srcName) =~ s/(.*)(\.[^.]+)/$1_dup$2/; #will always succeed due to check above
 	my $copied = $ctime <= $ctimeCleared; #already copied if ctime indicates it
-	my @checkDest = CheckDest($srcDir, $destDir, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
-	$ok &= $checkDest[0];
-	Report(($copied ? 'c' : ' ') . ($checkDest[1] ? 's' : ' ') . " $srcName\n", 0, $share) if $opts{v};
-	$copied |= $checkDest[1];
+	my @checkDest;
+	if ($ftpOk) {
+		@checkDest = CheckDest($srcDir, $destDir, $srcName, $size, $altName, $share, $ftpFileList); #even if this dir has been abandoned, still check for a copy to see if we can delete the source file
+		$ftpOk = $checkDest[1]; #will always be 1 if not using FTP
+	}
+	else {
+		#don't make repeated FTP attempts as it can get very slow...
+		@checkDest = (0, 0, 0);
+	}
+	$ok &= $checkDest[1];
+	Report(($copied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName\n", 0, $share) if $opts{v};
+	$copied |= $checkDest[2];
 	if ($ok & !$copied) {
 		push @essenceFiles, {
 			name => $srcName,
@@ -606,9 +630,9 @@ sub Scan {
 	if (defined $extraDestDir) {
 		$extraCopied = $ctime <= $extraCtimeCleared; #already copied if ctime indicates it
 		@checkDest = CheckDest($srcDir, $extraDestDir, $srcName, $size, $altName, $share); #never use ftp; even if this dir has been abandoned, still check for a copy to see if we can delete the source file
-		$extraOk &= $checkDest[0];
-		Report(($extraCopied ? 'c' : ' ') . ($checkDest[1] ? 's' : ' ') . " $srcName (extra)\n", 0, $share) if $opts{v};
-		$extraCopied |= $checkDest[1];
+		$extraOk &= $checkDest[1];
+		Report(($extraCopied ? 'c' : ' ') . ($checkDest[2] ? 's' : ' ') . " $srcName (extra)\n", 0, $share) if $opts{v};
+		$extraCopied |= $checkDest[2];
 		if ($extraOk & !$extraCopied) {
 			push @extraEssenceFiles, {
 				name => $srcName,
@@ -660,7 +684,12 @@ sub Scan {
  return $ok, $extraOk, $latestCtime, $totalToCopy, $extraTotalToCopy, $totalSize + $extraTotalSize, @essenceFiles, @extraEssenceFiles; #arrays will be concatenated
 }
 
-#checks to see if a destination file already exists; if so and it's the same size, indicate that it's already copied; if not the same size, try to move it out of the way by renaming
+#Checks to see if a destination file already exists; if so and it's the same size, indicate that it's already copied; if not the same size, try to move it out of the way by renaming
+#If $ftpFileList and $opts{f} are defined, uses FTP to get a listing of the destination directory if $ftpFileList does not have a key for $destDir; populates $ftpFileList with the complete directory contents for re-use, to reduce the number of FTP calls needed.
+#returns:
+# directory readable (will always be 1 unless using FTP),
+# file OK (will always be 0 unless directory readable),
+# file copied (will always be 0 unless file OK)
 sub CheckDest
 {
  my ($srcDir, $destDir, $name, $size, $altName, $share, $ftpFileList) = @_;
@@ -673,8 +702,8 @@ sub CheckDest
 		my $cmd = "$curl -s -S --ftp-create-dirs $url 2>&1"; #allow creation of dirs to prevent an error if directory doesn't exist; FIXME: doesn't detect if it fails to open the directory
 		my @listing = `$cmd`;
 		if ($?) {
-			Report("WARNING: couldn't get listing of '$url':\n@{listing}Abandoning this directory\n", 0, $share); #$! doesn't work
-			return 0, 0;
+			Report("WARNING: couldn't get listing of '$url':\n@{listing}Abandoning this destination directory\n", 0, $share); #$! doesn't work
+			return 0, 0, 0;
 		}
 		foreach (@listing) {
 			next unless (/^-(\S+\s+){4}(\d+).*?(\S+)$/); #ignore directories and messages from stderr; this is compatible with a vsftpd listing
@@ -688,13 +717,13 @@ sub CheckDest
 		else {
 			Report("WARNING: '$fullDest' exists and is a different size ($$ftpFileList{$destDir}{$name}) from the same file in '$srcDir' ($size): may be a filename conflict: renaming to '$altName'.\n", 0, $share);
 			if (exists $$ftpFileList{$destDir}{$altName} && $$ftpFileList{$destDir}{$altName}) {
-				Report("WARNING: '$altName' already exists: abandoning this directory\n", 0, $share);
-				return 0, 0;
+				Report("WARNING: '$altName' already exists: abandoning this destination directory\n", 0, $share);
+				return 1, 0, 0;
 			}
 			else {
 				if (system "$curl --quote '-RNFR $name' --quote '-RNTO $altName' $url 2>/dev/null") { # FIXME: can't handle spaces in paths
-					Report("WARNING: Failed to rename file in '$url': $!: abandoning this directory\n", 0, $share);
-					return 0, 0;
+					Report("WARNING: Failed to rename file in '$url': $!: abandoning this destination directory\n", 0, $share);
+					return 1, 0, 0;
 				}
 				#now the entry in %$ftpFileList for this file is wrong, but doesn't matter as it won't be looked at again
 			}
@@ -708,16 +737,16 @@ sub CheckDest
 	else {
 		Report("WARNING: '$fullDest' exists and is a different size (" . (-s $fullDest) . ") from the same file in '$srcDir' ($size): may be a filename conflict: renaming to '$altName'.\n", 0, $share);
 		if (-s "$destDir/$altName") {
-			Report("WARNING: '$altName' already exists: abandoning this directory\n", 0, $share);
-			return 0, 0;
+			Report("WARNING: '$altName' already exists: abandoning this destination directory\n", 0, $share);
+			return 1, 0, 0;
 		}
 		elsif (!rename $fullDest, "$destDir/$altName") {
-			Report("WARNING: Failed to rename file: $!: abandoning this directory\n", 0, $share);
-			return 0, 0;
+			Report("WARNING: Failed to rename file: $!: abandoning this destination directory\n", 0, $share);
+			return 1, 0, 0;
 		}
 	}
  }
- return 1, $copied;
+ return 1, 1, $copied;
 }
 
 sub childLoop {
@@ -849,10 +878,11 @@ sub childLoop {
 		$transfers->{current}{totalSize} = $totalSize;
 		my $prevFile;
 
-		#copy the files at this priority, oldest first
-		foreach my $essenceFile (sort { $a->{ctime} <=> $b->{ctime} } @essenceFiles) { #NB share locked at this point
-			if (exists $transfers->{staleFrom} && $transfers->{staleFrom} < $priority) {
+		#copy the files at this priority, oldest first, optionally with extras taking priority
+		foreach my $essenceFile (sort $byAge @essenceFiles) { #NB share locked at this point
+			if (exists $transfers->{staleFrom} && ($transfers->{staleFrom} < $priority || $transfers->{staleFrom} == 1 && $opts{g})) {
 				#retry as new files of a higher priority may have appeared
+				#in the case of $opts{g}, must rescan even if copying priority 1 files, because all new priority 1 files must be copied to extra destination first
 				$interrupting = 1;
 				last;
 			}
@@ -901,6 +931,7 @@ sub childLoop {
 			$share->unlock;
 			my $childMsgs;
 			my $cpPid;
+			$? = 0; #prevent suppression of messages from successful copying process if FTP directory listing failed
 			if (!$opts{f} || $essenceFile->{extra}) { # block limits scope of signal handlers
 				local $SIG{INT} = sub { kill 'INT', $cpPid; };
 				local $SIG{TERM} = sub { kill 'TERM', $cpPid; };
