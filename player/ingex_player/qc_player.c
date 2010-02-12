@@ -1,5 +1,5 @@
 /*
- * $Id: qc_player.c,v 1.12 2010/01/12 16:32:33 john_f Exp $
+ * $Id: qc_player.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -148,6 +148,7 @@ typedef struct
     char userName[256];
     char hostName[256];
     int vtrErrorLevel;
+    int showVTRErrorLevel;
 } Options;
 
 static const Options g_defaultOptions =
@@ -170,7 +171,7 @@ static const Options g_defaultOptions =
     {{{0,{0},0}},0},
     1,
     1,
-    1,
+    0,
     NULL,
     NULL,
     "/dev/nst0",
@@ -188,6 +189,7 @@ static const Options g_defaultOptions =
     {0},
     {0},
     VTR_ALMOST_GOOD_LEVEL,
+    0
 };
 
 
@@ -664,7 +666,7 @@ static int play_balls(QCPlayer* player, Options* options)
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
-
+    
 
     /* reconnect the X11 display keyboard and mouse input */
 
@@ -874,11 +876,12 @@ static int play_archive_mxf_file(QCPlayer* player, int argc, const char** argv, 
     osd_set_mark_display(msk_get_osd(player->mediaSink), &player->markConfigs);
 
     ply_enable_clip_marks(player->mediaPlayer, options->clipMarkType);
-
+    
     ply_set_qc_quit_validator(player->mediaPlayer, validate_player_quit, player);
     
     mc_set_vtr_error_level(ply_get_media_control(player->mediaPlayer), (VTRErrorLevel)options->vtrErrorLevel);
     ply_register_vtr_error_source(player->mediaPlayer, mxfs_get_vtr_error_source(mxfSource));
+    mc_show_vtr_error_level(ply_get_media_control(player->mediaPlayer), options->showVTRErrorLevel);
 
 
     /* restore the marks from the selected session file */
@@ -1362,8 +1365,9 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --src-buf  <size>        Size of the media source buffer (default is %d)\n", g_defaultOptions.srcBufferSize);
     fprintf(stderr, "  --no-pse-fails           Don't add marks for PSE failures recorded in the archive MXF file\n");
     fprintf(stderr, "  --no-vtr-errors          Don't add marks for VTR playback errors recorded in the archive MXF file\n");
-    fprintf(stderr, "  --no-digi-dropouts       Don't add marks for DigiBeta dropouts recorded in the archive MXF file\n");
+    fprintf(stderr, "  --mark-digi-dropouts     Add marks for DigiBeta dropouts recorded in the archive MXF file\n");
     fprintf(stderr, "  --vtr-error-level <val>  Set the initial minimum VTR error level. 0 means no errors. Max value is %d (default 1)\n", VTR_NO_GOOD_LEVEL);
+    fprintf(stderr, "  --show-vtr-error-level   Show the VTR error level in the OSD\n");
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
@@ -1594,9 +1598,9 @@ int main(int argc, const char **argv)
             options.markVTRErrors = 0;
             cmdlnIndex += 1;
         }
-        else if (strcmp(argv[cmdlnIndex], "--no-digi-dropouts") == 0)
+        else if (strcmp(argv[cmdlnIndex], "--mark-digi-dropouts") == 0)
         {
-            options.markDigiBetaDropouts = 0;
+            options.markDigiBetaDropouts = 1;
             cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--vtr-error-level") == 0)
@@ -1615,6 +1619,11 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--show-vtr-error-level") == 0)
+        {
+            options.showVTRErrorLevel = 1;
+            cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--pixel-aspect") == 0)
         {
@@ -1934,7 +1943,7 @@ int main(int argc, const char **argv)
             {M4_MARK_TYPE, "cyan", CYAN_COLOUR},
             {VTR_ERROR_MARK_TYPE, "yellow (VTR)", YELLOW_COLOUR},
             {PSE_FAILURE_MARK_TYPE, "orange (PSE)", ORANGE_COLOUR},
-            {DIGIBETA_DROPOUT_MARK_TYPE, "light-grey (DigiB dropout)", LIGHT_GREY_COLOUR},
+            /*{DIGIBETA_DROPOUT_MARK_TYPE, "light-grey (DigiB dropout)", LIGHT_GREY_COLOUR},*/
         };
         memcpy(&g_player.markConfigs.configs, configs, sizeof(configs));
         g_player.markConfigs.numConfigs = sizeof(configs) / sizeof(MarkConfig);

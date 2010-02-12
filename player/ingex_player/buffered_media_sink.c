@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_sink.c,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: buffered_media_sink.c,v 1.7 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -606,6 +606,13 @@ static void bms_osd_show_field_symbol(void* data, int enable)
     osd_show_field_symbol(osds_get_osd(bufSink->osdState), enable);
 }
 
+static void bms_osd_show_vtr_error_level(void* data, int enable)
+{
+    BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
+
+    osd_show_vtr_error_level(osds_get_osd(bufSink->osdState), enable);
+}
+
 static void bms_osd_set_mark_display(void* data, const MarkConfigs* markConfigs)
 {
     BufferedMediaSink* bufSink = (BufferedMediaSink*)data;
@@ -755,6 +762,7 @@ int bms_create(MediaSink** targetSink, int size, int dropFrameWhenFull, Buffered
     newBufSink->bufOSD.set_audio_level_visibility = bms_osd_set_audio_level_visibility;
     newBufSink->bufOSD.toggle_audio_level_visibility = bms_osd_toggle_audio_level_visibility;
     newBufSink->bufOSD.show_field_symbol = bms_osd_show_field_symbol;
+    newBufSink->bufOSD.show_vtr_error_level = bms_osd_show_vtr_error_level;
     newBufSink->bufOSD.set_mark_display = bms_osd_set_mark_display;
     newBufSink->bufOSD.create_marks_model = bms_osd_create_marks_model;
     newBufSink->bufOSD.free_marks_model = bms_osd_free_marks_model;

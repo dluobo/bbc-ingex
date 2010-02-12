@@ -1,5 +1,5 @@
 /*
- * $Id: dual_sink.c,v 1.10 2009/12/17 15:57:40 john_f Exp $
+ * $Id: dual_sink.c,v 1.11 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -404,6 +404,16 @@ static void dusk_osd_show_field_symbol(void* data, int enable)
 
     osd_show_field_symbol(msk_get_osd(dualSink->x11Sink), enable);
     osd_show_field_symbol(msk_get_osd(dualSink->dvsSink), enable);
+}
+
+static void dusk_osd_show_vtr_error_level(void* data, int enable)
+{
+    DualSink* dualSink = (DualSink*)data;
+
+    CHK_ORETV(check_dvs_is_open(dualSink));
+
+    osd_show_vtr_error_level(msk_get_osd(dualSink->x11Sink), enable);
+    osd_show_vtr_error_level(msk_get_osd(dualSink->dvsSink), enable);
 }
 
 static void dusk_osd_set_mark_display(void* data, const MarkConfigs* markConfigs)
@@ -888,6 +898,7 @@ int dusk_open(int reviewDuration, int dvsCard, int dvsChannel, SDIVITCSource sdi
     newDualSink->dualOSD.set_audio_level_visibility = dusk_osd_set_audio_level_visibility;
     newDualSink->dualOSD.toggle_audio_level_visibility = dusk_osd_toggle_audio_level_visibility;
     newDualSink->dualOSD.show_field_symbol = dusk_osd_show_field_symbol;
+    newDualSink->dualOSD.show_vtr_error_level = dusk_osd_show_vtr_error_level;
     newDualSink->dualOSD.set_mark_display = dusk_osd_set_mark_display;
     newDualSink->dualOSD.create_marks_model = dusk_osd_create_marks_model;
     newDualSink->dualOSD.free_marks_model = dusk_osd_free_marks_model;

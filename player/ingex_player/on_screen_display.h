@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.h,v 1.6 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: on_screen_display.h,v 1.7 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -172,6 +172,8 @@ typedef struct
     void (*free_marks_model)(void* data, OSDMarksModel** model);
     void (*set_marks_model)(void* data, int updateMask, OSDMarksModel* model);
     void (*set_second_marks_model)(void* data, int updateMask, OSDMarksModel* model);
+    
+    void (*show_vtr_error_level)(void* data, int enable);
 
     void (*set_progress_bar_visibility)(void* data, int visible);
     float (*get_position_in_progress_bar)(void* data, int x, int y);
@@ -218,6 +220,7 @@ void osd_set_audio_stream_level(OnScreenDisplay* osd, int streamId, double level
 void osd_set_audio_level_visibility(OnScreenDisplay* osd, int visible);
 void osd_toggle_audio_level_visibility(OnScreenDisplay* osd);
 void osd_show_field_symbol(OnScreenDisplay* osd, int enable);
+void osd_show_vtr_error_level(OnScreenDisplay* osd, int enable);
 void osd_set_mark_display(OnScreenDisplay* osd, const MarkConfigs* markConfigs);
 int osd_create_marks_model(OnScreenDisplay* osd, OSDMarksModel** model);
 void osd_free_marks_model(OnScreenDisplay* osd, OSDMarksModel** model);
@@ -290,6 +293,7 @@ struct OnScreenDisplayState
     int timecodeIndex;
     int timecodeStreamId;
     int showFieldSymbol;
+    int showVTRErrorLevel;
 
     /* used to set the screen when adding the OSD to the image */
     int screenSet;

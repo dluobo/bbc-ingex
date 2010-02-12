@@ -1,5 +1,5 @@
 /*
- * $Id: media_player.c,v 1.13 2010/01/12 16:32:25 john_f Exp $
+ * $Id: media_player.c,v 1.14 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -71,6 +71,8 @@ typedef struct UserMark
 
     int64_t position;
     int type;
+    
+    uint8_t vtrErrorCode;
 } UserMark;
 
 typedef struct
@@ -555,6 +557,25 @@ static int _get_current_mark_type(MediaPlayer* player, int64_t position)
     return markType;
 }
 
+static uint8_t _get_current_mark_vtr_error_code(MediaPlayer* player, int64_t position)
+{
+    int i;
+
+    /* there should only be at most one vtr mark with an error code */
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        if (player->userMarks[i].current != NULL &&
+            player->userMarks[i].current->position == position &&
+            (player->userMarks[i].current->type & VTR_ERROR_MARK_TYPE) &&
+            player->userMarks[i].current->vtrErrorCode != 0)
+        {
+            return player->userMarks[i].current->vtrErrorCode;
+        }
+    }
+
+    return 0;
+}
+
 static int64_t find_next_mark(MediaPlayer* player, int markSelection, int64_t currentPosition)
 {
     int64_t position = -1;
@@ -693,14 +714,15 @@ static void remove_mark(MediaPlayer* player, int markSelection, int64_t position
 
 /* caller must lock the user marks mutex */
 /* mark is removed if the resulting type == 0 */
-static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, int type, int toggle)
+static int _add_mark(MediaPlayer* player, int markSelection, int64_t position, int type, int toggle, UserMark **addedMarkOut)
 {
     UserMark* mark;
     UserMark* newMark;
+    UserMark* addedMark = NULL;
 
     if (position < 0 || type == 0)
     {
-        return;
+        return 0;
     }
 
     /* find the insertion point */
@@ -810,6 +832,12 @@ static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, 
             {
                 update_mark_and_model(player, markSelection, mark, mark->type | (type & ALL_MARK_TYPE));
             }
+            
+            if (mark->type & type)
+            {
+                /* mark was added or was already present and !toggle */
+                addedMark = mark;
+            }
 
             /* remove mark if type == 0 */
             if (mark->type == 0)
@@ -825,6 +853,8 @@ static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, 
         CALLOC_OFAIL(newMark, UserMark, 1);
         newMark->type = 0;
         newMark->position = position;
+        
+        addedMark = newMark;
 
         update_mark_and_model(player, markSelection, newMark, type);
 
@@ -909,17 +939,35 @@ static void _add_mark(MediaPlayer* player, int markSelection, int64_t position, 
         player->userMarks[markSelection].count++;
     }
 
-    return;
+
+    *addedMarkOut = addedMark;
+    
+    return 1;
 
 fail:
-    return;
+    return 0;
 }
 
 /* mark is removed if the resulting type == 0 */
 static void add_mark(MediaPlayer* player, int markSelection, int64_t position, int type, int toggle)
 {
+    UserMark* addedMark;
+    
     PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
-    _add_mark(player, markSelection, position, type, toggle);
+    _add_mark(player, markSelection, position, type, toggle, &addedMark);
+    PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
+}
+
+/* mark is removed if the resulting type == 0 */
+static void add_vtr_error_mark(MediaPlayer* player, int markSelection, int64_t position, int toggle, uint8_t errorCode)
+{
+    UserMark* addedMark = NULL;
+    
+    PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
+    if (_add_mark(player, markSelection, position, VTR_ERROR_MARK_TYPE, toggle, &addedMark) && addedMark != NULL)
+    {
+        addedMark->vtrErrorCode = errorCode;
+    }
     PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
 }
 
@@ -1610,6 +1658,39 @@ static void ply_next_vtr_error_level(void* data)
     switch_source_info_screen(player);
 
     PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_mark_vtr_error(void* data, int64_t position, int toggle, uint8_t errorCode)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+    int i;
+    int selectionType;
+
+    PTHREAD_MUTEX_LOCK(&player->stateMutex)
+
+    for (i = 0; i < player->numMarkSelections; i++)
+    {
+        selectionType = VTR_ERROR_MARK_TYPE & player->userMarksTypeMask[i];
+        if (selectionType != 0)
+        {
+            add_vtr_error_mark(player, i, position, toggle, errorCode);
+        }
+    }
+    player->state.refreshRequired = 1;
+
+    PTHREAD_MUTEX_UNLOCK(&player->stateMutex)
+}
+
+static void ply_show_vtr_error_level(void* data, int enable)
+{
+    MediaPlayer* player = (MediaPlayer*)data;
+
+    if (!player->state.locked)
+    {
+        osd_show_vtr_error_level(msk_get_osd(player->mediaSink), enable);
+        
+        switch_source_info_screen(player);
+    }
 }
 
 static void ply_set_osd_screen(void* data, OSDScreen screen)
@@ -2780,6 +2861,8 @@ int ply_create_player(MediaSource* mediaSource, MediaSink* mediaSink,
     newPlayer->control.next_active_mark_selection = ply_next_active_mark_selection;
     newPlayer->control.set_vtr_error_level = ply_set_vtr_error_level;
     newPlayer->control.next_vtr_error_level = ply_next_vtr_error_level;
+    newPlayer->control.mark_vtr_error = ply_mark_vtr_error;
+    newPlayer->control.show_vtr_error_level = ply_show_vtr_error_level;
     newPlayer->control.set_osd_screen = ply_set_osd_screen;
     newPlayer->control.next_osd_screen = ply_next_osd_screen;
     newPlayer->control.set_osd_timecode = ply_set_osd_timecode;
@@ -2939,6 +3022,7 @@ int ply_start_player(MediaPlayer* player, int startPaused)
     int isRepeat;
     int sourceProcessingCompleted = 0;
     int currentMarkType;
+    int currentMarkVTRErrorCode;
     int doStartPause = startPaused;
     int muteAudio = 0;
 
@@ -3230,10 +3314,12 @@ int ply_start_player(MediaPlayer* player, int startPaused)
                 PTHREAD_MUTEX_LOCK(&player->userMarksMutex)
                 _update_current_mark(player, currentState.nextPosition);
                 currentMarkType = _get_current_mark_type(player, currentState.nextPosition);
+                currentMarkVTRErrorCode = _get_current_mark_vtr_error_code(player, currentState.nextPosition);
                 if (currentMarkType != 0)
                 {
                     player->frameInfo.isMarked = 1;
                     player->frameInfo.markType = currentMarkType;
+                    player->frameInfo.vtrErrorCode = currentMarkVTRErrorCode;
                 }
                 PTHREAD_MUTEX_UNLOCK(&player->userMarksMutex)
                 player->frameInfo.vtrErrorLevel = player->vtrErrorLevel;

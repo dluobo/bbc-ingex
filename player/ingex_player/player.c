@@ -1,5 +1,5 @@
 /*
- * $Id: player.c,v 1.22 2010/01/12 16:32:29 john_f Exp $
+ * $Id: player.c,v 1.23 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -811,6 +811,7 @@ static void usage(const char* cmd)
     fprintf(stderr, "  --mark-vtr-errors        Add marks for VTR playback errors recorded in the archive MXF file\n");
     fprintf(stderr, "  --mark-digi-dropouts     Add marks for DigiBeta dropouts recorded in the archive MXF file\n");
     fprintf(stderr, "  --vtr-error-level <val>  Set the initial minimum VTR error level. 0 means no errors. Max value is %d (default 1)\n", VTR_NO_GOOD_LEVEL);
+    fprintf(stderr, "  --show-vtr-error-level   Show the VTR error level in the OSD\n");
     fprintf(stderr, "  --pixel-aspect <W:H>     Video pixel aspect ratio of the display (default 1:1)\n");
     fprintf(stderr, "  --monitor-aspect <W:H>   Pixel aspect ratio is calculated using the screen resolution and this monitor aspect ratio\n");
     fprintf(stderr, "  --source-aspect <W:H>    Force the video aspect ratio (currently only works for the X11 Xv extension output)\n");
@@ -1011,6 +1012,7 @@ int main(int argc, const char **argv)
     VTRErrorSource* vtrErrorSources[MAX_INPUTS];
     int numVTRErrorSources = 0;
     int vtrErrorLevel = 1;
+    int showVTRErrorLevel = 0;
 
     memset(inputs, 0, sizeof(inputs));
     memset(&markConfigs, 0, sizeof(markConfigs));
@@ -1463,6 +1465,11 @@ int main(int argc, const char **argv)
                 return 1;
             }
             cmdlnIndex += 2;
+        }
+        else if (strcmp(argv[cmdlnIndex], "--show-vtr-error-level") == 0)
+        {
+            showVTRErrorLevel = 1;
+            cmdlnIndex += 1;
         }
         else if (strcmp(argv[cmdlnIndex], "--pixel-aspect") == 0)
         {
@@ -2905,6 +2912,7 @@ int main(int argc, const char **argv)
     /* set the VTR error level and register the VTR error sources */
     
     mc_set_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), (VTRErrorLevel)vtrErrorLevel);
+    mc_show_vtr_error_level(ply_get_media_control(g_player.mediaPlayer), showVTRErrorLevel);
 
     for (i = 0; i < numVTRErrorSources; i++)
     {

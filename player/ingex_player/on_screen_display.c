@@ -1,5 +1,5 @@
 /*
- * $Id: on_screen_display.c,v 1.12 2009/12/17 15:57:40 john_f Exp $
+ * $Id: on_screen_display.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -156,6 +156,7 @@ struct DefaultOnScreenDisplay
     timecode_data timecodeTextData;
     char_set_data timecodeTypeData;
     char_set_data numberData;
+    char_set_data vtrErrorCodeData;
     /* pointers to global bitmaps */
     overlay* osdPlaySymbol;
     overlay* osdFastForwardSymbol;
@@ -591,6 +592,8 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
     overlay* tcTypeOvly;
     char numberString[17];
     int numberStringLen;
+    char vtrErrorCodeString[6];
+    int vtrErrorCodeStringLen;
     int i, k;
     int timecodeXPos;
     int timecodeYPos;
@@ -759,7 +762,39 @@ static int add_play_state_screen(DefaultOnScreenDisplay* osdd, const FrameInfo* 
             xPos += osdd->markOverlay.w + MARK_OVERLAY_SPACING;
         }
     }
+    
+    
+    /* vtr error level */
+    
+    if (osdd->state->showVTRErrorLevel && frameInfo->isMarked && frameInfo->vtrErrorCode > 0)
+    {
+        txtY = g_rec601YUVColours[LIGHT_WHITE_COLOUR].Y;
+        txtU = g_rec601YUVColours[LIGHT_WHITE_COLOUR].U;
+        txtV = g_rec601YUVColours[LIGHT_WHITE_COLOUR].V;
+        box = 80;
+        
+        sprintf(vtrErrorCodeString, "%d+%d", frameInfo->vtrErrorCode & 0x0f, (frameInfo->vtrErrorCode >> 4) & 0x0f);
+        vtrErrorCodeStringLen = strlen(vtrErrorCodeString);
 
+        xPos = (width - (osdd->vtrErrorCodeData.cs_ovly[0].w * vtrErrorCodeStringLen)) / 2;
+        yPos = (height * 8) / 16 - osdd->vtrErrorCodeData.cs_ovly[0].h / 2;
+        
+        for (i = 0; i < vtrErrorCodeStringLen; i++)
+        {
+            if (vtrErrorCodeString[i] == '+')
+            {
+                k = 10;
+            }
+            else
+            {
+                k = vtrErrorCodeString[i] - '0';
+            }
+            
+            CHK_ORET(apply_overlay(&osdd->vtrErrorCodeData.cs_ovly[k],
+                image, osdd->videoFormat, width, height, xPos, yPos, txtY, txtU, txtV, box, &osdd->workspace));
+            xPos += osdd->vtrErrorCodeData.cs_ovly[k].w;
+        }
+    }
 
 
     /* timecode type and timecode */
@@ -1770,6 +1805,7 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         free_timecode(&osdd->timecodeTextData);
         free_char_set(&osdd->timecodeTypeData);
         free_char_set(&osdd->numberData);
+        free_char_set(&osdd->vtrErrorCodeData);
         free_overlay(&osdd->markOverlay);
         free_overlay(&osdd->droppedFrameOverlay);
     }
@@ -1782,6 +1818,9 @@ static int osdd_initialise(void* data, const StreamInfo* streamInfo, const Ratio
         48 * fontScale, aspectRatio->num, aspectRatio->den) == YUV_OK);
 
     CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->numberData, "0123456789",
+        "Ariel", 34 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
+
+    CHK_ORET(char_set_to_overlay(&osdd->p_info, &osdd->vtrErrorCodeData, "0123456789+",
         "Ariel", 34 * fontScale, aspectRatio->num, aspectRatio->den) >= 0);
 
     /* the message if "FRAME REPEAT" instead of "FRAME DROPPED" because the DVS card repeats the last frame
@@ -2145,6 +2184,13 @@ static void osdd_show_field_symbol(void* data, int enable)
     osd_show_field_symbol(osds_get_osd(osdd->state), enable);
 }
 
+static void osdd_show_vtr_error_level(void* data, int enable)
+{
+    DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
+
+    osd_show_vtr_error_level(osds_get_osd(osdd->state), enable);
+}
+
 static void osdd_set_mark_display(void* data, const MarkConfigs* markConfigs)
 {
     DefaultOnScreenDisplay* osdd = (DefaultOnScreenDisplay*)data;
@@ -2424,6 +2470,7 @@ static void osdd_free(void* data)
     free_timecode(&osdd->timecodeTextData);
     free_char_set(&osdd->timecodeTypeData);
     free_char_set(&osdd->numberData);
+    free_char_set(&osdd->vtrErrorCodeData);
     free_overlay(&osdd->droppedFrameOverlay);
 
     /* TODO and NOTE: FcConfigDestroy in free_info_rec doesn't free all memory and
@@ -2654,6 +2701,14 @@ void osd_show_field_symbol(OnScreenDisplay* osd, int enable)
     }
 }
 
+void osd_show_vtr_error_level(OnScreenDisplay* osd, int enable)
+{
+    if (osd && osd->show_vtr_error_level)
+    {
+        osd->show_vtr_error_level(osd->data, enable);
+    }
+}
+
 void osd_set_mark_display(OnScreenDisplay* osd, const MarkConfigs* markConfigs)
 {
     if (osd && osd->set_mark_display)
@@ -2798,6 +2853,7 @@ int osdd_create(OnScreenDisplay** osd)
     newOSDD->osd.set_audio_level_visibility = osdd_set_audio_level_visibility;
     newOSDD->osd.toggle_audio_level_visibility = osdd_toggle_audio_level_visibility;
     newOSDD->osd.show_field_symbol = osdd_show_field_symbol;
+    newOSDD->osd.show_vtr_error_level = osdd_show_vtr_error_level;
     newOSDD->osd.set_mark_display = osdd_set_mark_display;
     newOSDD->osd.create_marks_model = osdd_create_marks_model;
     newOSDD->osd.free_marks_model = osdd_free_marks_model;
@@ -3403,6 +3459,13 @@ static void osds_show_field_symbol(void* data, int enable)
     state->showFieldSymbol = enable;
 }
 
+static void osds_show_vtr_error_level(void* data, int enable)
+{
+    OnScreenDisplayState* state = (OnScreenDisplayState*)data;
+
+    state->showVTRErrorLevel = enable;
+}
+
 static void osds_set_mark_display(void* data, const MarkConfigs* markConfigs)
 {
     OnScreenDisplayState* state = (OnScreenDisplayState*)data;
@@ -3512,6 +3575,7 @@ int osds_create(OnScreenDisplayState** state)
     newState->osd.register_audio_stream = osds_register_audio_stream;
     newState->osd.set_audio_stream_level = osds_set_audio_stream_level;
     newState->osd.show_field_symbol = osds_show_field_symbol;
+    newState->osd.show_vtr_error_level = osds_show_vtr_error_level;
     newState->osd.set_mark_display = osds_set_mark_display;
     newState->osd.set_label = osds_set_label;
 

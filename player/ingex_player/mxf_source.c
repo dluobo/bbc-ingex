@@ -1,5 +1,5 @@
 /*
- * $Id: mxf_source.c,v 1.12 2010/01/12 16:32:29 john_f Exp $
+ * $Id: mxf_source.c,v 1.13 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -233,7 +233,7 @@ static void mark_vtr_errors(MXFFileSource* source, MediaSource* rootSource, Medi
             videoErrorCode >= (uint8_t)source->vtrErrorLevel)
         {
             convertedPosition = msc_convert_position(rootSource, source->vtrErrors[i].position, &source->mediaSource);
-            mc_mark_position(mediaControl, convertedPosition, VTR_ERROR_MARK_TYPE, 0);
+            mc_mark_vtr_error(mediaControl, convertedPosition, 0, source->vtrErrors[i].errorCode);
             numMarked++;
         }
     }
@@ -1276,7 +1276,7 @@ int mxfs_open(const char* filename, int forceD3MXF, int markPSEFailures, int mar
                 }
                 else
                 {
-                    CHK_OFAIL(mxf_equals_ul(&track->codecLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
+                    CHK_OFAIL(mxf_equals_ul(&track->pictureEssenceCodingLabel, &MXF_CMDEF_L(UNC_10B_422_INTERLEAVED)));
                     outputStream->streamInfo.format = UYVY_10BIT_FORMAT;
                 }
             }

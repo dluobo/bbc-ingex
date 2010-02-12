@@ -1,5 +1,5 @@
 /*
- * $Id: media_control.c,v 1.9 2010/01/12 16:32:25 john_f Exp $
+ * $Id: media_control.c,v 1.10 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -208,6 +208,22 @@ void mc_next_vtr_error_level(MediaControl* control)
     if (control && control->next_vtr_error_level)
     {
         control->next_vtr_error_level(control->data);
+    }
+}
+
+void mc_mark_vtr_error(MediaControl* control, int64_t position, int toggle, uint8_t errorCode)
+{
+    if (control && control->mark_vtr_error)
+    {
+        control->mark_vtr_error(control->data, position, toggle, errorCode);
+    }
+}
+
+void mc_show_vtr_error_level(MediaControl* control, int enable)
+{
+    if (control && control->show_vtr_error_level)
+    {
+        control->show_vtr_error_level(control->data, enable);
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * $Id: frame_info.h,v 1.12 2010/01/12 16:32:22 john_f Exp $
+ * $Id: frame_info.h,v 1.13 2010/02/12 14:00:06 philipn Exp $
  *
  *
  *
@@ -215,6 +215,7 @@ typedef struct
     VTRErrorLevel vtrErrorLevel;
     int isMarked;
     int markType;
+    uint8_t vtrErrorCode;
 
     /* all timecodes are only present when all streams in the frame have been read */
     TimecodeInfo timecodes[64];
