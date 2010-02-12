@@ -1,8 +1,8 @@
 #! /usr/bin/perl -w
 
-#  $Id: import_db_infod.pl,v 1.2 2009/11/06 12:11:10 john_f Exp $
+#  $Id: import_db_infod.pl,v 1.3 2010/02/12 14:51:05 john_f Exp $
 #
-# Copyright (C) 2009  British Broadcasting Corporation.
+# Copyright (C) 2009-2010  British Broadcasting Corporation.
 # All Rights Reserved.
 # Author: Matthew Marks
 #
@@ -49,7 +49,7 @@ my $xmlImport = '/usr/local/bin/import_cuts';
 
 use constant WATCH_MASK => IN_CREATE | IN_MOVED_TO;
 
-openlog 'import_db_infod', 'perror', 'user'; #'perror' echos output to stderr (if using -n option)
+openlog 'import_db_infod', 'perror', 'user'; #'perror' echoes output to stderr (if using -n option)
 # check arguments
 my %opts;
 &usage_exit unless getopts('cnv', \%opts);
@@ -59,7 +59,7 @@ sub usage_exit() {
 Usage: $0 [-c] [-n] [-v]
  -c to clear stored times (i.e. import all data)
  -n to prevent daemonising
- -v to be more verbose (reporting individual file imports)
+ -v to be more verbose (reporting individual successful file imports)
 END
 }
 
@@ -68,6 +68,7 @@ die "$ROOT/ does not exist\n" unless -d $ROOT;
 # daemonise and create notifier
 Proc::Daemon::Init unless $opts{n};
 Report("Started: PID=$$"); #do this after daemonising or it'll report the wrong PID
+Report("Not reporting successful file imports (use -v option to change this)") unless $opts{v};
 my $notifier = Linux::Inotify2->new() or Die("Unable to create notify object: $!");
 
 my $ugid = join ':', (stat $ROOT)[4,5] if `whoami` =~ /^root$/; #if we can, change owner/group of new files to that of $ROOT

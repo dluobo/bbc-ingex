@@ -1,8 +1,8 @@
 #! /usr/bin/perl -w
 
-#  $Id: export_for_avidd.pl,v 1.1 2009/10/12 10:58:41 john_f Exp $
+#  $Id: export_for_avidd.pl,v 1.2 2010/02/12 14:51:05 john_f Exp $
 #
-# Copyright (C) 2009  British Broadcasting Corporation.
+# Copyright (C) 2009-10  British Broadcasting Corporation.
 # All Rights Reserved.
 # Authors: Matthew Marks, David Kirby
 #
@@ -64,7 +64,7 @@ my %videoRoots = (
       '/store/mxf_offline', '_offline',
 );
 
-openlog 'export_for_avidd', 'perror', 'user'; #'perror' is supposed to echo output to stderr but doesn't seem to
+openlog 'export_for_avidd', 'perror', 'user'; #'perror' echoes output to stderr (when script is run with -n)
 # check arguments
 my %opts;
 &usage_exit unless getopts('n', \%opts);
