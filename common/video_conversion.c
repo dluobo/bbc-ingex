@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.c,v 1.5 2009/06/03 09:25:46 john_f Exp $
+ * $Id: video_conversion.c,v 1.6 2010/02/12 14:04:46 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -35,7 +35,7 @@
 // Convert UYVY -> Planar YUV 4:2:0 (fourcc=I420 or YV12)
 // U0 Y0 V0 Y1   U2 Y2 V2 Y3   ->   Y0 Y1 Y2... U0 U2... V0 V2...
 // but U and V are skipped every second line
-void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	int i;
 
@@ -68,7 +68,7 @@ void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t
 
 // Convert UYVY -> Planar YUV 4:2:2 (fourcc=YV16)
 // U0 Y0 V0 Y1   U2 Y2 V2 Y3   ->   Y0 Y1 Y2... U0 U2... V0 V2...
-void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	int i;
 
@@ -96,11 +96,11 @@ void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t
 
 #ifdef __MMX__
 
-void uyvy_to_yuv422(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv422(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	__m64 chroma_mask = _mm_set_pi8(255, 0, 255, 0, 255, 0, 255, 0);
 	__m64 luma_mask = _mm_set_pi8(0, 255, 0, 255, 0, 255, 0, 255);
-	uint8_t *orig_input = input;
+	const uint8_t *orig_input = input;
 	uint8_t *y_comp = output;
 	uint8_t *u_comp = output + width * height;
 	uint8_t *v_comp = u_comp + (int)((width * height)/2);	// 4:2:2
@@ -175,11 +175,11 @@ void uyvy_to_yuv422(int width, int height, int shift_picture_down, uint8_t *inpu
 	_mm_empty();        // Clear aliased fp register state
 }
 
-void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv420(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	__m64 chroma_mask = _mm_set_pi8(255, 0, 255, 0, 255, 0, 255, 0);
 	__m64 luma_mask = _mm_set_pi8(0, 255, 0, 255, 0, 255, 0, 255);
-	uint8_t *orig_input = input;
+	const uint8_t *orig_input = input;
 	uint8_t *y_comp = output;
 	uint8_t *u_comp = output + width * height;
 	uint8_t *v_comp = u_comp + (int)((width * height)/4);	// 4:2:0
@@ -261,7 +261,7 @@ void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *inpu
 
 #else		// no MMX
 
-void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv420(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	uyvy_to_yuv420_nommx(width, height, shift_picture_down, input, output);
 }
@@ -269,10 +269,10 @@ void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *inpu
 #endif		// __MMX__
 
 #ifdef __MMX__
-void yuv422_to_uyvy(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output)
+void yuv422_to_uyvy(int width, int height, int shift_picture_up, const uint8_t *input, uint8_t *output)
 {
 	int i, j, start_line;
-	uint8_t *y, *u, *v;
+	const uint8_t *y, *u, *v;
 
 	y = input;
 	u = input + width*height;
@@ -336,10 +336,10 @@ void yuv422_to_uyvy(int width, int height, int shift_picture_up, uint8_t *input,
 
 // Convert YUV444 (planar) to UYVY (packed 4:2:2) using naive conversion where
 // alternate UV samples are simply discarded.
-void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output)
+void yuv444_to_uyvy(int width, int height, const uint8_t *input, uint8_t *output)
 {
 	int i, j;
-	uint8_t *y, *u, *v;
+	const uint8_t *y, *u, *v;
 	y = input;
 	u = y + width * height;
 	v = y + width * height * 2;
@@ -380,7 +380,7 @@ void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output)
 * Page 92, Digital video and HDTV: algorithms and interfaces, by Charles A. Poynton, 2003.
 * Page 24, Video demystified: a handbook for the digital engineer, by Keith Jack, 2005.
 */
-static void downconvert_chroma_component(uint8_t *C_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
+static void downconvert_chroma_component(const uint8_t *C_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
 {
 	int start_line;
 	int i_y;
@@ -413,7 +413,7 @@ static void downconvert_chroma_component(uint8_t *C_in, int height, uint8_t *C_o
 	}
 }
 
-void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	int i;
 
@@ -423,8 +423,8 @@ void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down,
 		output[i] = input[i];
 	}
 
-	uint8_t *U_in = input + width * height;
-	uint8_t *V_in = U_in + width * height / 2;
+	const uint8_t *U_in = input + width * height;
+	const uint8_t *V_in = U_in + width * height / 2;
 
 	uint8_t *U_out = output + width * height;
 	uint8_t *V_out = U_out + width * height / 4;
@@ -449,7 +449,7 @@ void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down,
 * is_V       - Flag to indicate if the Chroma component is U or V.
 *            - 0 if chroma is U component, 1 if chroma is V component
 */
-static void downconvert_chroma_component_uyvy(uint8_t *fr_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
+static void downconvert_chroma_component_uyvy(const uint8_t *fr_in, int height, uint8_t *C_out, int width2, int height2, int is_V)
 {
 	int start_line;
 	int i_y;
@@ -492,7 +492,7 @@ static void downconvert_chroma_component_uyvy(uint8_t *fr_in, int height, uint8_
 	}
 }
 
-void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output)
+void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output)
 {
 	int i;
 	uint8_t *U_out = output + width * height;

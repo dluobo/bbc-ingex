@@ -1,5 +1,5 @@
 /*
- * $Id: video_conversion.h,v 1.4 2009/06/03 09:25:47 john_f Exp $
+ * $Id: video_conversion.h,v 1.5 2010/02/12 14:04:46 philipn Exp $
  *
  * MMX optimised video format conversion functions
  *
@@ -33,19 +33,19 @@ extern "C"
 
 // MMX optimised video format conversion functions
 
-void uyvy_to_yuv422(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
-void yuv422_to_uyvy(int width, int height, int shift_picture_up, uint8_t *input, uint8_t *output);
+void uyvy_to_yuv422(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
+void yuv422_to_uyvy(int width, int height, int shift_picture_up, const uint8_t *input, uint8_t *output);
 
 // UYVY to YUV 4:2:0 conversion
 // The _nommx function is provided for testing and to workaround problem with odd sizes in mmx version
-void uyvy_to_yuv420(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
-void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
-void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
+void uyvy_to_yuv420(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
+void uyvy_to_yuv420_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
+void uyvy_to_yuv422_nommx(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
 
-void yuv444_to_uyvy(int width, int height, uint8_t *input, uint8_t *output);
+void yuv444_to_uyvy(int width, int height, const uint8_t *input, uint8_t *output);
 
-void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
-void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, uint8_t *input, uint8_t *output);
+void yuv422_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
+void uyvy_to_yuv420_DV_sampling(int width, int height, int shift_picture_down, const uint8_t *input, uint8_t *output);
 
 #ifdef __cplusplus
 }

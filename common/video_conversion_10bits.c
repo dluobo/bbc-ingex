@@ -62,7 +62,7 @@ YUV data into 10-bit v210 format.
 #define MAX_10	0x03ff
 
 // Routine to unpack 16 bytes of 10-bit input to 12 unsigned shorts
-static void unpack12(uint8_t* pIn, unsigned short* pOut)
+static void unpack12(const uint8_t* pIn, unsigned short* pOut)
 {
 	int		i;
 
@@ -105,13 +105,13 @@ static unsigned short Err0[] =
 #endif
 #define Err0Len (sizeof(Err0) / sizeof(Err0[0]))
 
-void DitherFrame(uint8_t* pOutFrame, uint8_t* pInFrame,
+void DitherFrame(uint8_t* pOutFrame, const uint8_t* pInFrame,
 				 const int StrideOut, const int StrideIn,
 				 const int xLen, const int yLen)
 {
 	int				Err0Idx;
-	uint8_t*			pIn;
-	uint8_t*			pOut;
+	const uint8_t*	pIn;
+	uint8_t*		pOut;
 	pixels10		in10[3];
 	unsigned short	Yerr, Uerr, Verr;
 	int				i, x, y;
@@ -177,11 +177,11 @@ static void pack12(unsigned short* pIn, uint8_t* pOut)
 	}
 }
 
-void ConvertFrame10to8(uint8_t* pOutFrame, uint8_t* pInFrame,
+void ConvertFrame10to8(uint8_t* pOutFrame, const uint8_t* pInFrame,
                        const int StrideOut, const int StrideIn,
                        const int xLen, const int yLen)
 {
-	uint8_t*			pIn;
+	const uint8_t*		pIn;
 	uint8_t*			pOut;
 	pixels10		in10[3];
 	int				i, x, y;
@@ -209,11 +209,11 @@ void ConvertFrame10to8(uint8_t* pOutFrame, uint8_t* pInFrame,
 	}
 }
 
-void ConvertFrame8to10(uint8_t* pOutFrame, uint8_t* pInFrame,
+void ConvertFrame8to10(uint8_t* pOutFrame, const uint8_t* pInFrame,
                        const int StrideOut, const int StrideIn,
                        const int xLen, const int yLen)
 {
-	uint8_t*			pIn;
+	const uint8_t*		pIn;
 	uint8_t*			pOut;
 	pixels10		out10[3];
 	int				i, x, y;

@@ -22,7 +22,7 @@ extern "C" {
  * i.e. how many *bytes* separate the start of two adjacent lines.
  * xLen and yLen are the image dimensions in pixels and lines.
  */
-void DitherFrame(uint8_t *pOutFrame, uint8_t *pInFrame,
+void DitherFrame(uint8_t *pOutFrame, const uint8_t *pInFrame,
 				 const int StrideOut, const int StrideIn,
 				 const int xLen, const int yLen);
 
@@ -30,7 +30,7 @@ void DitherFrame(uint8_t *pOutFrame, uint8_t *pInFrame,
  * This does the same as above, but with no error feedback to mask
  * quantisation error.
  */
-void ConvertFrame10to8(uint8_t *pOutFrame, uint8_t *pInFrame,
+void ConvertFrame10to8(uint8_t *pOutFrame, const uint8_t *pInFrame,
                        const int StrideOut, const int StrideIn,
                        const int xLen, const int yLen);
 
@@ -39,7 +39,7 @@ void ConvertFrame10to8(uint8_t *pOutFrame, uint8_t *pInFrame,
  * Zeros are inserted as required. Converting an 8-bit frame to 10-bit and back
  * should have no overall effect.
 */
-void ConvertFrame8to10(uint8_t *pOutFrame, uint8_t *pInFrame,
+void ConvertFrame8to10(uint8_t *pOutFrame, const uint8_t *pInFrame,
                        const int StrideOut, const int StrideIn,
                        const int xLen, const int yLen);
 
