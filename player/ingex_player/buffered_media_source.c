@@ -1,5 +1,5 @@
 /*
- * $Id: buffered_media_source.c,v 1.5 2009/01/29 07:10:26 stuart_hc Exp $
+ * $Id: buffered_media_source.c,v 1.6 2010/02/17 15:58:10 philipn Exp $
  *
  *
  *
@@ -160,8 +160,6 @@ static int bmsrc_allocate_buffer(void* data, int streamId, unsigned char** buffe
         stream->bufferSize = bufferSize;
     }
 
-    stream->dataSize = bufferSize;
-
     *buffer = stream->buffer;
     return 1;
 }
@@ -182,6 +180,7 @@ static int bmsrc_receive_frame(void* data, int streamId, unsigned char* buffer, 
         return 0;
     }
 
+    stream->dataSize = bufferSize;
     stream->isPresent = 1;
 
     return 1;
