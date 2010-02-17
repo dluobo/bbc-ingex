@@ -1,5 +1,5 @@
 /*
- * $Id: File.h,v 1.3 2010/02/12 13:52:49 philipn Exp $
+ * $Id: File.h,v 1.4 2010/02/17 16:04:24 philipn Exp $
  *
  * 
  *
@@ -40,6 +40,8 @@ public:
     static File* openRead(std::string filename);
     static File* openModify(std::string filename);
 
+public:
+    File(::MXFFile* _cFile);
     ~File();
     
     void setMinLLen(uint8_t llen);
@@ -63,7 +65,7 @@ public:
     bool eof();
 
     
-    uint32_t write(unsigned char* data, uint32_t count);
+    uint32_t write(const unsigned char* data, uint32_t count);
     
     void writeUInt8(uint8_t value);
     void writeUInt16(uint16_t value);
@@ -89,8 +91,6 @@ public:
     ::MXFFile* getCFile() const { return _cFile; }
 
 private:
-    File(::MXFFile* _cFile);
-    
     std::vector<Partition*> _partitions;
     
     ::MXFFile* _cFile;

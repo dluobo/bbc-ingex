@@ -1,5 +1,5 @@
 /*
- * $Id: File.cpp,v 1.3 2010/02/12 13:52:49 philipn Exp $
+ * $Id: File.cpp,v 1.4 2010/02/17 16:04:24 philipn Exp $
  *
  * 
  *
@@ -199,7 +199,7 @@ bool File::eof()
 }
 
 
-uint32_t File::write(unsigned char* data, uint32_t count)
+uint32_t File::write(const unsigned char* data, uint32_t count)
 {
     return mxf_file_write(_cFile, data, count);
 }

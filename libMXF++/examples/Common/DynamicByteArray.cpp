@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.cpp,v 1.5 2010/02/12 13:52:47 philipn Exp $
+ * $Id: DynamicByteArray.cpp,v 1.6 2010/02/17 16:04:23 philipn Exp $
  *
  * 
  *
@@ -57,6 +57,11 @@ void DynamicByteArray::setAllocIncrement(uint32_t increment)
 unsigned char* DynamicByteArray::getBytes() const
 {
     return _bytes;
+}
+
+uint32_t DynamicByteArray::getAllocatedSize() const
+{
+    return _allocatedSize;
 }
 
 uint32_t DynamicByteArray::getSize() const

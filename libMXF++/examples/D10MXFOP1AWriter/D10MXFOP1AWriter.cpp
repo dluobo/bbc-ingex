@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.cpp,v 1.1 2010/02/12 13:52:49 philipn Exp $
+ * $Id: D10MXFOP1AWriter.cpp,v 1.2 2010/02/17 16:04:24 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -51,7 +51,7 @@ static const uint32_t SYSTEM_ITEM_METADATA_PACK_SIZE = 7 + 16 + 17 + 17;
 
 
 
-static void convert_timecode_to_12m(Timecode *t, bool drop_frame, unsigned char *t12m)
+static void convert_timecode_to_12m(Timecode tc, bool drop_frame, unsigned char *t12m)
 {
     // the format follows the specification of the TimecodeArray property
     // defined in SMPTE 405M, table 2, which follows section 8.2 of SMPTE 331M 
@@ -60,10 +60,10 @@ static void convert_timecode_to_12m(Timecode *t, bool drop_frame, unsigned char 
     memset(t12m, 0, 8);
     if (drop_frame)
         t12m[0] = 0x40; // set drop-frame flag
-    t12m[0] |= ((t->frame % 10) & 0x0f) | (((t->frame / 10) & 0x3) << 4);
-    t12m[1] = ((t->sec % 10) & 0x0f) | (((t->sec / 10) & 0x7) << 4);
-    t12m[2] = ((t->min % 10) & 0x0f) | (((t->min / 10) & 0x7) << 4);
-    t12m[3] = ((t->hour % 10) & 0x0f) | (((t->hour / 10) & 0x3) << 4);
+    t12m[0] |= ((tc.frame % 10) & 0x0f) | (((tc.frame / 10) & 0x3) << 4);
+    t12m[1] = ((tc.sec % 10) & 0x0f) | (((tc.sec / 10) & 0x7) << 4);
+    t12m[2] = ((tc.min % 10) & 0x0f) | (((tc.min / 10) & 0x7) << 4);
+    t12m[3] = ((tc.hour % 10) & 0x0f) | (((tc.hour / 10) & 0x3) << 4);
     
 }
 
@@ -139,9 +139,8 @@ private:
 
 
 
-D10MXFOP1AWriter::D10MXFOP1AWriter(string filename)
+D10MXFOP1AWriter::D10MXFOP1AWriter()
 {
-    mFilename = filename;
     SetSampleRate(D10_SAMPLE_RATE_625_50I);
     SetAudioChannelCount(4);
     SetAudioQuantizationBits(24);
@@ -149,10 +148,13 @@ D10MXFOP1AWriter::D10MXFOP1AWriter(string filename)
     SetStartTimecode(0, false);
     mStartPosition = 0; // calculated in PrepareFile()
     SetBitRate(D10_BIT_RATE_50, mMaxEncodedImageSize);
+    mxf_generate_umid(&mFileSourcePackageUID);
+    mxf_generate_umid(&mMaterialPackageUID);
     
     mSystemItemSize = 0;
     mVideoItemSize = 0;
     mAudioItemSize = 0;
+    memset(&mEssenceContainerUL, 0, sizeof(mEssenceContainerUL));
     
     mMXFFile = 0;
     mDataModel = 0;
@@ -238,11 +240,200 @@ void D10MXFOP1AWriter::SetBitRate(D10BitRate rate, uint32_t encoded_image_size)
     mEncodedImageSize = encoded_image_size;
 }
 
-void D10MXFOP1AWriter::PrepareFile()
+void D10MXFOP1AWriter::SetMaterialPackageUID(mxfUMID uid)
+{
+    mMaterialPackageUID = uid;
+}
+
+void D10MXFOP1AWriter::SetFileSourcePackageUID(mxfUMID uid)
+{
+    mFileSourcePackageUID = uid;
+}
+
+bool D10MXFOP1AWriter::CreateFile(string filename)
+{
+    try
+    {
+        mMXFFile = File::openNew(filename);
+        CreateFile();
+    }
+    catch (...)
+    {
+        return false;
+    }
+    
+    return true;
+}
+
+bool D10MXFOP1AWriter::CreateFile(File **file)
+{
+    try
+    {
+        mMXFFile = *file;
+        CreateFile();
+    }
+    catch (...)
+    {
+        mMXFFile = 0;
+        return false;
+    }
+    
+    *file = 0;
+    return true;
+}
+
+void D10MXFOP1AWriter::SetUserTimecode(Timecode user_timecode)
+{
+    MXFPP_ASSERT(mMXFFile);
+    
+    mContentPackage.mUserTimecode = user_timecode;
+}
+
+Timecode D10MXFOP1AWriter::GenerateUserTimecode()
+{
+    MXFPP_ASSERT(mMXFFile);
+    
+    Timecode user_timecode;
+    int64_t tc_count = mStartPosition + mDuration;
+    
+    if (mDropFrameTimecode && mSampleRate == D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I) {
+        // first 2 frame numbers shall be omitted at the start of each minute,
+        //   except minutes 0, 10, 20, 30, 40 and 50
+        
+        int hour, min;
+        int64_t prev_skipped_count = -1;
+        int64_t skipped_count = 0;
+        while (prev_skipped_count != skipped_count)
+        {
+            prev_skipped_count = skipped_count;
+            
+            hour = (tc_count + skipped_count) / (60 * 60 * mRoundedTimecodeBase);
+            min = ((tc_count + skipped_count) % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
+    
+            // add frames skipped
+            skipped_count = (60-6) * 2 * hour;      // every whole hour
+            skipped_count += (min / 10) * 9 * 2;    // every whole 10 min
+            skipped_count += (min % 10) * 2;        // every whole min, except min 0
+        }
+        
+        tc_count += skipped_count;
+    }
+    
+    user_timecode.hour = tc_count / (60 * 60 * mRoundedTimecodeBase);
+    user_timecode.min = (tc_count % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
+    user_timecode.sec = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) / mRoundedTimecodeBase;
+    user_timecode.frame = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) % mRoundedTimecodeBase;
+    
+    return user_timecode;
+}
+
+void D10MXFOP1AWriter::SetVideo(const unsigned char *data, uint32_t size)
+{
+    MXFPP_ASSERT(mMXFFile);
+    MXFPP_CHECK(size > 0 && size <= mEncodedImageSize);
+    
+    mContentPackage.mVideoBytes.setBytes(data, size);
+    
+    if (size < mEncodedImageSize)
+        mContentPackage.mVideoBytes.appendZeros(mEncodedImageSize - size);
+}
+
+uint32_t D10MXFOP1AWriter::GetAudioSampleCount()
+{
+    return mAudioSequence[mAudioSequenceIndex];
+}
+
+void D10MXFOP1AWriter::SetAudio(uint32_t channel, const unsigned char *data, uint32_t size)
+{
+    MXFPP_ASSERT(mMXFFile);
+    MXFPP_ASSERT(channel < mChannelCount);
+    MXFPP_CHECK(size == mAudioSequence[mAudioSequenceIndex] * mAudioBytesPerSample);
+    
+    mContentPackage.mAudioBytes[channel].setBytes(data, size);
+}
+
+void D10MXFOP1AWriter::WriteContentPackage()
+{
+    MXFPP_CHECK(mContentPackage.IsComplete(mChannelCount));
+
+    WriteContentPackage(&mContentPackage);
+
+    mContentPackage.Reset();
+}
+
+void D10MXFOP1AWriter::WriteContentPackage(const D10ContentPackage *content_package)
+{
+    MXFPP_ASSERT(mMXFFile);
+    
+    // write system item
+    
+    uint32_t element_size = WriteSystemItem(content_package);
+    mMXFFile->writeFill(mSystemItemSize - element_size);
+    
+    
+    // write video item
+    
+    mMXFFile->writeFixedKL(&VIDEO_ELEMENT_KEY, LLEN, content_package->GetVideoSize());
+    MXFPP_CHECK(mMXFFile->write(content_package->GetVideo(), content_package->GetVideoSize()) ==
+                content_package->GetVideoSize());
+    mMXFFile->writeFill(mVideoItemSize - mxfKey_extlen - LLEN - content_package->GetVideoSize());
+    
+    
+    // write audio item
+    
+    element_size = WriteAES3AudioElement(content_package);
+    mMXFFile->writeFill(mAudioItemSize - element_size);
+    
+
+    mDuration++;
+    mAudioSequenceIndex = (mAudioSequenceIndex + 1) % mAudioSequenceCount;
+}
+
+int64_t D10MXFOP1AWriter::GetFileSize() const
+{
+    return mMXFFile->size();
+}
+
+void D10MXFOP1AWriter::CompleteFile()
+{
+    MXFPP_ASSERT(mMXFFile);
+
+    // write the footer partition pack
+    Partition &footer_partition = mMXFFile->createPartition();
+    footer_partition.setKey(&MXF_PP_K(ClosedComplete, Footer));
+    footer_partition.write(mMXFFile);
+    footer_partition.fillToKag(mMXFFile);
+    
+    
+    // update metadata sets and index with duration
+    size_t i;
+    for (i = 0; i < mSetsWithDuration.size(); i++)
+        mSetsWithDuration[i]->UpdateDuration(mDuration);
+    mIndexSegment->setIndexDuration(mDuration);
+
+    
+    // re-write the header metadata
+    mMXFFile->seek(mHeaderMetadataStartPos, SEEK_SET);
+    KAGFillerWriter kag_filler_writer(mHeaderPartition);
+    mHeaderMetadata->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
+    
+
+    // re-write the header index table segment
+    mIndexSegment->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
+
+
+    // update the partition packs
+    mMXFFile->updatePartitions();
+    
+    
+    // done with the file
+    delete mMXFFile;
+    mMXFFile = 0;
+}
+
+void D10MXFOP1AWriter::CreateFile()
 {
     mxfTimestamp now;
-    mxfUMID file_package_uid;
-    mxfUMID material_package_uid;
     mxfUUID uuid;
     mxfUL picture_essence_coding_ul = g_Null_UL;
     uint32_t i;
@@ -253,8 +444,6 @@ void D10MXFOP1AWriter::PrepareFile()
     CalculateStartPosition();
     
     mxf_get_timestamp_now(&now);
-    mxf_generate_umid(&file_package_uid);
-    mxf_generate_umid(&material_package_uid);
     if (mSampleRate == D10_SAMPLE_RATE_625_50I) {
         switch (mD10BitRate)
         {
@@ -299,11 +488,6 @@ void D10MXFOP1AWriter::PrepareFile()
     }
     
     
-    // open file
-    
-    mMXFFile = File::openNew(mFilename);
-    
-    
     // set minimum llen
     
     mMXFFile->setMinLLen(LLEN);
@@ -346,7 +530,7 @@ void D10MXFOP1AWriter::PrepareFile()
     // Preface - ContentStorage - EssenceContainerData
     EssenceContainerData *ess_container_data = new EssenceContainerData(mHeaderMetadata);
     content_storage->appendEssenceContainerData(ess_container_data);
-    ess_container_data->setLinkedPackageUID(file_package_uid);
+    ess_container_data->setLinkedPackageUID(mFileSourcePackageUID);
     ess_container_data->setBodySID(1);
     ess_container_data->setIndexSID(2);
     
@@ -354,7 +538,7 @@ void D10MXFOP1AWriter::PrepareFile()
     // Preface - ContentStorage - MaterialPackage
     MaterialPackage *material_package = new MaterialPackage(mHeaderMetadata);
     content_storage->appendPackages(material_package);
-    material_package->setPackageUID(material_package_uid);
+    material_package->setPackageUID(mMaterialPackageUID);
     material_package->setPackageCreationDate(now);
     material_package->setPackageModifiedDate(now);
 
@@ -416,7 +600,7 @@ void D10MXFOP1AWriter::PrepareFile()
         source_clip->setDuration(-1); // updated when writing completed
         source_clip->setStartPosition(0);
         source_clip->setSourceTrackID(i + 2);
-        source_clip->setSourcePackageID(file_package_uid);
+        source_clip->setSourcePackageID(mFileSourcePackageUID);
         mSetsWithDuration.push_back(new StructComponentSet(source_clip));
     }
 
@@ -424,7 +608,7 @@ void D10MXFOP1AWriter::PrepareFile()
     // Preface - ContentStorage - SourcePackage
     SourcePackage *file_source_package = new SourcePackage(mHeaderMetadata);
     content_storage->appendPackages(file_source_package);
-    file_source_package->setPackageUID(file_package_uid);
+    file_source_package->setPackageUID(mFileSourcePackageUID);
     file_source_package->setPackageCreationDate(now);
     file_source_package->setPackageModifiedDate(now);
 
@@ -600,144 +784,6 @@ void D10MXFOP1AWriter::PrepareFile()
     mIndexSegment->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
 }
 
-void D10MXFOP1AWriter::SetTimecode(Timecode ltc)
-{
-    MXFPP_ASSERT(mMXFFile);
-    
-    mContentPackage.mLTC = ltc;
-}
-
-void D10MXFOP1AWriter::GenerateTimecode()
-{
-    MXFPP_ASSERT(mMXFFile);
-    
-    Timecode ltc;
-    int64_t tc_count = mStartPosition + mDuration;
-    
-    if (mDropFrameTimecode && mSampleRate == D10MXFOP1AWriter::D10_SAMPLE_RATE_525_60I) {
-        // first 2 frame numbers shall be omitted at the start of each minute,
-        //   except minutes 0, 10, 20, 30, 40 and 50
-        
-        int hour, min;
-        int64_t prev_skipped_count = -1;
-        int64_t skipped_count = 0;
-        while (prev_skipped_count != skipped_count)
-        {
-            prev_skipped_count = skipped_count;
-            
-            hour = (tc_count + skipped_count) / (60 * 60 * mRoundedTimecodeBase);
-            min = ((tc_count + skipped_count) % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
-    
-            // add frames skipped
-            skipped_count = (60-6) * 2 * hour;      // every whole hour
-            skipped_count += (min / 10) * 9 * 2;    // every whole 10 min
-            skipped_count += (min % 10) * 2;        // every whole min, except min 0
-        }
-        
-        tc_count += skipped_count;
-    }
-    
-    ltc.hour = tc_count / (60 * 60 * mRoundedTimecodeBase);
-    ltc.min = (tc_count % (60 * 60 * mRoundedTimecodeBase)) / (60 * mRoundedTimecodeBase);
-    ltc.sec = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) / mRoundedTimecodeBase;
-    ltc.frame = ((tc_count % (60 * 60 * mRoundedTimecodeBase)) % (60 * mRoundedTimecodeBase)) % mRoundedTimecodeBase;
-    
-    SetTimecode(ltc);
-}
-
-void D10MXFOP1AWriter::SetVideo(const unsigned char *data, uint32_t size)
-{
-    MXFPP_ASSERT(mMXFFile);
-    MXFPP_CHECK(size > 0 && size <= mEncodedImageSize);
-    
-    mContentPackage.mVideoBytes.setBytes(data, size);
-    
-    if (size < mEncodedImageSize)
-        mContentPackage.mVideoBytes.appendZeros(mEncodedImageSize - size);
-}
-
-uint32_t D10MXFOP1AWriter::GetAudioSampleCount()
-{
-    return mAudioSequence[mAudioSequenceIndex];
-}
-
-void D10MXFOP1AWriter::SetAudio(uint32_t channel, const unsigned char *data, uint32_t size)
-{
-    MXFPP_ASSERT(mMXFFile);
-    MXFPP_ASSERT(channel < mChannelCount);
-    MXFPP_CHECK(size == mAudioSequence[mAudioSequenceIndex] * mAudioBytesPerSample);
-    
-    mContentPackage.mAudioBytes[channel].setBytes(data, size);
-}
-
-void D10MXFOP1AWriter::WriteContentPackage()
-{
-    MXFPP_ASSERT(mMXFFile);
-    MXFPP_CHECK(mContentPackage.IsComplete(mChannelCount));
-    
-    // write system item
-    
-    uint32_t element_size = WriteSystemItem();
-    mMXFFile->writeFill(mSystemItemSize - element_size);
-    
-    
-    // write video item
-    
-    mMXFFile->writeFixedKL(&VIDEO_ELEMENT_KEY, LLEN, mContentPackage.mVideoBytes.getSize());
-    MXFPP_CHECK(mMXFFile->write(mContentPackage.mVideoBytes.getBytes(), mContentPackage.mVideoBytes.getSize()) ==
-                mContentPackage.mVideoBytes.getSize());
-    mMXFFile->writeFill(mVideoItemSize - mxfKey_extlen - LLEN - mContentPackage.mVideoBytes.getSize());
-    
-    
-    // write audio item
-    
-    element_size = WriteAES3AudioElement();
-    mMXFFile->writeFill(mAudioItemSize - element_size);
-    
-
-    mDuration++;
-    
-    mContentPackage.Reset();
-    mAudioSequenceIndex = (mAudioSequenceIndex + 1) % mAudioSequenceCount;
-}
-
-void D10MXFOP1AWriter::CompleteFile()
-{
-    MXFPP_ASSERT(mMXFFile);
-
-    // write the footer partition pack
-    Partition &footer_partition = mMXFFile->createPartition();
-    footer_partition.setKey(&MXF_PP_K(ClosedComplete, Footer));
-    footer_partition.write(mMXFFile);
-    footer_partition.fillToKag(mMXFFile);
-    
-    
-    // update metadata sets and index with duration
-    size_t i;
-    for (i = 0; i < mSetsWithDuration.size(); i++)
-        mSetsWithDuration[i]->UpdateDuration(mDuration);
-    mIndexSegment->setIndexDuration(mDuration);
-
-    
-    // re-write the header metadata
-    mMXFFile->seek(mHeaderMetadataStartPos, SEEK_SET);
-    KAGFillerWriter kag_filler_writer(mHeaderPartition);
-    mHeaderMetadata->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
-    
-
-    // re-write the header index table segment
-    mIndexSegment->write(mMXFFile, mHeaderPartition, &kag_filler_writer);
-
-
-    // update the partition packs
-    mMXFFile->updatePartitions();
-    
-    
-    // done with the file
-    delete mMXFFile;
-    mMXFFile = 0;
-}
-
 void D10MXFOP1AWriter::CalculateStartPosition()
 {
     int hour, min;
@@ -757,7 +803,7 @@ void D10MXFOP1AWriter::CalculateStartPosition()
     }
 }
 
-uint32_t D10MXFOP1AWriter::WriteSystemItem()
+uint32_t D10MXFOP1AWriter::WriteSystemItem(const D10ContentPackage *content_package)
 {
     // System Metadata Pack
     
@@ -782,9 +828,9 @@ uint32_t D10MXFOP1AWriter::WriteSystemItem()
     memset(bytes, 0, sizeof(bytes));
     MXFPP_CHECK(mMXFFile->write(bytes, sizeof(bytes)) == sizeof(bytes));
     
-    // User date / time stamp (LTC)
+    // User date / time stamp
     bytes[0] = 0x81; // SMPTE 12-M timecode
-    convert_timecode_to_12m(&mContentPackage.mLTC, mDropFrameTimecode, &bytes[1]);
+    convert_timecode_to_12m(content_package->GetUserTimecode(), mDropFrameTimecode, &bytes[1]);
     MXFPP_CHECK(mMXFFile->write(bytes, sizeof(bytes)) == sizeof(bytes));
     
     
@@ -795,7 +841,7 @@ uint32_t D10MXFOP1AWriter::WriteSystemItem()
     return mxfKey_extlen + LLEN + SYSTEM_ITEM_METADATA_PACK_SIZE + mxfKey_extlen + LLEN;
 }
 
-uint32_t D10MXFOP1AWriter::WriteAES3AudioElement()
+uint32_t D10MXFOP1AWriter::WriteAES3AudioElement(const D10ContentPackage *content_package)
 {
     uint32_t s, c;
     unsigned char bytes[4];
@@ -816,21 +862,21 @@ uint32_t D10MXFOP1AWriter::WriteAES3AudioElement()
             bytes[0] = (unsigned char)c; // channel number
             
             if (mAudioBytesPerSample == 3) { // 24-bit
-                bytes[0] |= (mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] << 4) & 0xf0;
-                bytes[1] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] >> 4) & 0x0f) |
-                           ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 1] << 4) & 0xf0);
-                bytes[2] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 1] >> 4) & 0x0f) |
-                           ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 2] << 4) & 0xf0);
-                bytes[3] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 2] >> 4) & 0x0f);
+                bytes[0] |= (content_package->GetAudio(c)[s * mAudioBytesPerSample] << 4) & 0xf0;
+                bytes[1] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] >> 4) & 0x0f) |
+                           ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] << 4) & 0xf0);
+                bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] >> 4) & 0x0f) |
+                           ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 2] << 4) & 0xf0);
+                bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 2] >> 4) & 0x0f);
             } else if (mAudioBytesPerSample == 2) { // 16-bit
-                bytes[1] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] << 4) & 0xf0);
-                bytes[2] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] >> 4) & 0x0f) |
-                           ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 1] << 4) & 0xf0);
-                bytes[3] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample + 1] >> 4) & 0x0f);
+                bytes[1] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] << 4) & 0xf0);
+                bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] >> 4) & 0x0f) |
+                           ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] << 4) & 0xf0);
+                bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample + 1] >> 4) & 0x0f);
             } else { // 8-bit
                 bytes[1] = 0x00;
-                bytes[2] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] << 4) & 0xf0);
-                bytes[3] = ((mContentPackage.mAudioBytes[c][s * mAudioBytesPerSample] >> 4) & 0x0f);
+                bytes[2] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] << 4) & 0xf0);
+                bytes[3] = ((content_package->GetAudio(c)[s * mAudioBytesPerSample] >> 4) & 0x0f);
             }
             
             mAES3Block.append(bytes, 4);

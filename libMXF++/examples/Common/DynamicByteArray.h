@@ -1,5 +1,5 @@
 /*
- * $Id: DynamicByteArray.h,v 1.5 2010/02/12 13:52:47 philipn Exp $
+ * $Id: DynamicByteArray.h,v 1.6 2010/02/17 16:04:23 philipn Exp $
  *
  * 
  *
@@ -37,6 +37,7 @@ public:
     
     unsigned char* getBytes() const;
     uint32_t getSize() const;
+    uint32_t getAllocatedSize() const;
 
     void setBytes(const unsigned char* bytes, uint32_t size);
     

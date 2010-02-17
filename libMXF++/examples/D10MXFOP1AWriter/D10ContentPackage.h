@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.h,v 1.1 2010/02/12 13:52:49 philipn Exp $
+ * $Id: D10ContentPackage.h,v 1.2 2010/02/17 16:04:24 philipn Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -33,17 +33,41 @@
 #define MAX_CP_AUDIO_TRACKS     8
 
 
+
 class D10ContentPackage
 {
 public:
-    D10ContentPackage();
-    ~D10ContentPackage();
+    virtual Timecode GetUserTimecode() const = 0;
+
+    virtual const unsigned char* GetVideo() const = 0;
+    virtual unsigned int GetVideoSize() const = 0;
+    
+    virtual uint32_t GetNumAudioTracks() const = 0;
+    virtual const unsigned char* GetAudio(int index) const = 0;
+    virtual unsigned int GetAudioSize() const = 0;
+};
+
+
+class D10ContentPackageInt : public D10ContentPackage
+{
+public:
+    D10ContentPackageInt();
+    ~D10ContentPackageInt();
 
     void Reset();
-    bool IsComplete(uint32_t num_audio_tracks);
+    bool IsComplete(uint32_t num_audio_tracks) const;
     
 public:
-    Timecode mLTC;
+    // from D10ContentPackage
+    virtual Timecode GetUserTimecode() const;
+    virtual const unsigned char* GetVideo() const;
+    virtual unsigned int GetVideoSize() const;
+    virtual uint32_t GetNumAudioTracks() const;
+    virtual const unsigned char* GetAudio(int index) const;
+    virtual unsigned int GetAudioSize() const;
+    
+public:
+    Timecode mUserTimecode;
     DynamicByteArray mVideoBytes;
     DynamicByteArray mAudioBytes[MAX_CP_AUDIO_TRACKS];
 };

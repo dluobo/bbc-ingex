@@ -1,5 +1,5 @@
 /*
- * $Id: D10ContentPackage.cpp,v 1.1 2010/02/12 13:52:49 philipn Exp $
+ * $Id: D10ContentPackage.cpp,v 1.2 2010/02/17 16:04:23 philipn Exp $
  *
  * D10 MXF OP-1A content package
  *
@@ -29,26 +29,25 @@
 
 #include "D10ContentPackage.h"
 
-
 using namespace std;
 using namespace mxfpp;
 
 
-D10ContentPackage::D10ContentPackage()
+D10ContentPackageInt::D10ContentPackageInt()
 {
     Reset();
 }
 
-D10ContentPackage::~D10ContentPackage()
+D10ContentPackageInt::~D10ContentPackageInt()
 {
 }
 
-void D10ContentPackage::Reset()
+void D10ContentPackageInt::Reset()
 {
-    mLTC.hour = 0;
-    mLTC.min = 0;
-    mLTC.sec = 0;
-    mLTC.frame = 0;
+    mUserTimecode.hour = 0;
+    mUserTimecode.min = 0;
+    mUserTimecode.sec = 0;
+    mUserTimecode.frame = 0;
     
     mVideoBytes.setSize(0);
     uint32_t i;
@@ -56,17 +55,49 @@ void D10ContentPackage::Reset()
         mAudioBytes[i].setSize(0);
 }
 
-bool D10ContentPackage::IsComplete(uint32_t num_audio_tracks)
+bool D10ContentPackageInt::IsComplete(uint32_t num_audio_tracks) const
 {
     if (mVideoBytes.getSize() == 0)
         return false;
     
+    return GetNumAudioTracks() >= num_audio_tracks;
+}
+
+Timecode D10ContentPackageInt::GetUserTimecode() const
+{
+    return mUserTimecode;
+}
+
+const unsigned char* D10ContentPackageInt::GetVideo() const
+{
+    return mVideoBytes.getBytes();
+}
+
+unsigned int D10ContentPackageInt::GetVideoSize() const
+{
+    return mVideoBytes.getSize();
+}
+
+uint32_t D10ContentPackageInt::GetNumAudioTracks() const
+{
     uint32_t i;
-    for (i = 0; i < num_audio_tracks; i++) {
+    for (i = 0; i < MAX_CP_AUDIO_TRACKS; i++) {
         if (mAudioBytes[i].getSize() == 0)
-            return false;
+            break;
     }
+
+    return i;
+}
+
+const unsigned char* D10ContentPackageInt::GetAudio(int index) const
+{
+    MXFPP_ASSERT(index >= 0 && index < MAX_CP_AUDIO_TRACKS);
     
-    return true;
+    return mAudioBytes[index].getBytes();
+}
+
+unsigned int D10ContentPackageInt::GetAudioSize() const
+{
+    return mAudioBytes[0].getSize();
 }
 

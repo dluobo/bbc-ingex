@@ -1,5 +1,5 @@
 /*
- * $Id: D10MXFOP1AWriter.h,v 1.1 2010/02/12 13:52:49 philipn Exp $
+ * $Id: D10MXFOP1AWriter.h,v 1.2 2010/02/17 16:04:24 philipn Exp $
  *
  * D10 MXF OP-1A writer
  *
@@ -55,25 +55,30 @@ public:
     } D10SampleRate;
 
 public:
-    D10MXFOP1AWriter(std::string filename);
+    D10MXFOP1AWriter();
     ~D10MXFOP1AWriter();
     
-    // prepare
-    void SetSampleRate(D10SampleRate sample_rate); // default D10_SAMPLE_RATE_625_50I
-    void SetAudioChannelCount(uint32_t count); // default is 4
-    void SetAudioQuantizationBits(uint32_t bits); // default is 24; alternative is 16
-    void SetAspectRatio(mxfRational aspect_ratio); // default is 16:9; alternative is 4:3
-    void SetStartTimecode(int64_t count, bool drop_frame); // default 0, false
-    void SetBitRate(D10BitRate rate, uint32_t encoded_picture_size); // default D10_BIT_RATE_50, 250000
-    void PrepareFile();
+    // configure and create file
+    
+    void SetSampleRate(D10SampleRate sample_rate);                      // default D10_SAMPLE_RATE_625_50I
+    void SetAudioChannelCount(uint32_t count);                          // default is 4
+    void SetAudioQuantizationBits(uint32_t bits);                       // default is 24; alternative is 16
+    void SetAspectRatio(mxfRational aspect_ratio);                      // default is 16:9; alternative is 4:3
+    void SetStartTimecode(int64_t count, bool drop_frame);              // default 0, false
+    void SetBitRate(D10BitRate rate, uint32_t encoded_picture_size);    // default D10_BIT_RATE_50, 250000
+    void SetMaterialPackageUID(mxfUMID uid);                            // default generated
+    void SetFileSourcePackageUID(mxfUMID uid);                          // default generated
+    
+    bool CreateFile(std::string filename);
+    bool CreateFile(mxfpp::File **file);
     
     
     // write content package data
     
-    // LTC timecode written to the system item in the essence container
-    void SetTimecode(Timecode ltc);
-    // SetTimecode using a timecode calculated from the start timecode and duration
-    void GenerateTimecode();
+    // user timecode written to the system item in the essence container
+    void SetUserTimecode(Timecode user_timecode);
+    // timecode calculated from the start timecode and duration
+    Timecode GenerateUserTimecode();
     
     // MPEG video data
     void SetVideo(const unsigned char *data, uint32_t size);
@@ -86,17 +91,26 @@ public:
     
     void WriteContentPackage();
     
+    void WriteContentPackage(const D10ContentPackage *content_package);
+    
+    
+    // file info
+    int64_t GetDuration() const { return mDuration; }
+    int64_t GetFileSize() const;
+    mxfUMID GetMaterialPackageUID() const { return mMaterialPackageUID; }
+    mxfUMID GetFileSourcePackageUID() const { return mFileSourcePackageUID; }
+    
     
     // complete writing file
     void CompleteFile();
     
 private:
+    void CreateFile();
     void CalculateStartPosition();
-    uint32_t WriteSystemItem();
-    uint32_t WriteAES3AudioElement();
+    uint32_t WriteSystemItem(const D10ContentPackage *content_package);
+    uint32_t WriteAES3AudioElement(const D10ContentPackage *content_package);
 
 private:
-    std::string mFilename;
     D10SampleRate mSampleRate;
     mxfRational mVideoSampleRate;
     uint16_t mRoundedTimecodeBase;
@@ -116,6 +130,9 @@ private:
     uint32_t mVideoItemSize;
     uint32_t mAudioItemSize;
     mxfUL mEssenceContainerUL;
+    
+    mxfUMID mMaterialPackageUID;
+    mxfUMID mFileSourcePackageUID;
 
     mxfpp::File *mMXFFile;
     mxfpp::DataModel *mDataModel;
@@ -125,7 +142,7 @@ private:
     int64_t mHeaderMetadataStartPos;
     std::vector<SetWithDuration*> mSetsWithDuration;
     
-    D10ContentPackage mContentPackage;
+    D10ContentPackageInt mContentPackage;
     DynamicByteArray mAES3Block;
     uint32_t mAudioSequence[5];
     int mAudioSequenceCount;

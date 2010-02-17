@@ -1,5 +1,5 @@
 /*
- * $Id: test_d10mxfop1awriter.cpp,v 1.1 2010/02/12 13:52:49 philipn Exp $
+ * $Id: test_d10mxfop1awriter.cpp,v 1.2 2010/02/17 16:04:24 philipn Exp $
  *
  * Test D10 MXF OP-1A writer
  *
@@ -98,7 +98,7 @@ int main(int argc, const char** argv)
     int64_t start_timecode = 0;
     const char *start_timecode_str = 0;
     bool drop_frame = false;
-    mxfRational aspect_ratio;
+    mxfRational aspect_ratio = {16, 9};
     int value, num, den;
     int cmdln_index;
     
@@ -296,7 +296,7 @@ int main(int argc, const char** argv)
     
     try
     {
-        auto_ptr<D10MXFOP1AWriter> writer(new D10MXFOP1AWriter(out_filename));
+        auto_ptr<D10MXFOP1AWriter> writer(new D10MXFOP1AWriter());
 
         writer->SetSampleRate(sample_rate);
         writer->SetAudioChannelCount(num_audio_files);
@@ -304,7 +304,8 @@ int main(int argc, const char** argv)
         writer->SetAspectRatio(aspect_ratio);
         writer->SetStartTimecode(start_timecode, drop_frame);
         writer->SetBitRate(video_bit_rate, video_frame_size);
-        writer->PrepareFile();
+        if (!writer->CreateFile(out_filename))
+            throw MXFException("Failed to create file %s", out_filename);
         
         unsigned char video[250000];
         unsigned char audio[1920*3];
@@ -312,7 +313,7 @@ int main(int argc, const char** argv)
         
         int64_t frame_count = 0;
         while (true) {
-            writer->GenerateTimecode();
+            writer->SetUserTimecode(writer->GenerateUserTimecode());
             
             if (fread(video, video_frame_size, 1, video_file) != 1) {
                 if (ferror(video_file))
